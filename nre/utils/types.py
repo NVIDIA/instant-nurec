@@ -193,67 +193,6 @@ class HalfClosedInterval:
         return value + self.start
 
 
-@dataclass(kw_only=True)
-class NamedSerialized:
-    filename: str
-    serialized: str | bytes
-
-    def save(self, out_dir: Path):
-        out_dir.mkdir(parents=True, exist_ok=True)
-        mode = "wb" if isinstance(self.serialized, bytes) else "w"
-        with open(out_dir / self.filename, mode) as f:
-            f.write(self.serialized)
-        logging.info(f"Saved file: {out_dir / self.filename}")
-
-    def save_to_zip(self, zip_file: zipfile.ZipFile):
-        zip_file.writestr(self.filename, self.serialized)
-
-    @classmethod
-    def from_config(cls, config: DictConfig, filename: str = "parsed_config.yaml") -> Self:
-        return cls(filename=filename, serialized=OmegaConf.to_yaml(config))
-
-
-@dataclass(kw_only=True)
-class NamedUSDStage:
-    filename: str
-    stage: Usd.Stage
-
-    def save(self, out_dir: Path, preserve_references: bool = False):
-        out_dir.mkdir(parents=True, exist_ok=True)
-        out_path = str(out_dir / self.filename)
-        if preserve_references:
-            # Export root layer only - preserves reference arcs
-            self.stage.GetRootLayer().Export(out_path)
-        else:
-            # Flatten and export composed result
-            self.stage.Export(out_path)
-        logging.info(f"Saved file: {out_dir / self.filename}")
-
-    def save_to_zip(self, zip_file: zipfile.ZipFile):
-        with tempfile.NamedTemporaryFile(mode="wb", suffix=self.filename, delete=False) as temp_file:
-            temp_file_path = temp_file.name
-        self.stage.GetRootLayer().Export(temp_file_path)
-        with open(temp_file_path, "rb") as file:
-            usd_data = file.read()
-        zip_file.writestr(self.filename, usd_data)
-        os.unlink(temp_file_path)
-
-
-ArtifactContents: TypeAlias = List[NamedSerialized | NamedUSDStage]
-
-
-@dataclass
-class SequenceChunk:
-    """Represents a chunk (given by time-range) within a sequence"""
-
-    sequence_id: str
-    time_range_us: HalfClosedInterval
-
-    def time_length_us(self) -> int:
-        return self.time_range_us.length
-
-    def time_length_sec(self) -> float:
-        return self.time_length_us() / 1e6
 
 
 class CameraFrustum:
@@ -661,14 +600,6 @@ PointCloudColorType: TypeAlias = Optional[Literal["camera-rgb", "semantics", "ge
 AxisType: TypeAlias = Literal["X", "Y", "Z"]
 
 
-@dataclass(slots=True, kw_only=True)
-class TrackPointCloud:
-    """Represents a 3d point cloud associated with a track"""
-
-    track_id: str
-    point_cloud: PointCloud
-
-
 class RayFlags(IntFlag):
     """Bitmask flags of per-ray properties (note: limited to 32 variants)"""
 
@@ -836,97 +767,6 @@ class ModelParametersList(TorchChunkable, Generic[ModelType]):
         for c in batch:
             collated.extend(c.data)
         return cls(data=collated)
-
-
-class RadianceEmbeddingType(IntEnum):
-    """Type enumeration for the concrete type of radiance-embedding features"""
-
-    RGB = auto()  # directly represent RBG radiance values K=3
-    EMPTY = auto()  # Empty radiance. K=0. Required for e.g. Lidar-only processes and simulation
-
-
-@dataclass(slots=True)
-class ModelInput:
-    """
-    Contains:
-        - xyzs: x,z,y coordinates of the samples along all rays [float] (n_samples, 3)
-        - xyzs_unit_cube: x,z,y coordinates of the samples along all rays contracted to the unit cube [0,1]^3 [float] (n_samples, 3)
-        - dirs: dirs direction vector for each of the samples  [float] (n_samples, 3)
-        - ts: distance along the ray for each sample [float] (n_samples,)
-        - deltas: step size for each sample [float] (n_samples,)
-        - pack_info: packed auxiliary tensor containing starting indices and num samples for each pack [int] (n_packs, 2)
-
-        - levels: per-sample level value for LoD behavior, within range [-inf, n_levels] [float] (n_samples,)
-        - normals: per-sample surface normals [float] (n_samples,)
-
-        - timestamps_us: per-sample time-of-measurement in microseconds [float] (n_samples, )
-        - time_emb: per-sample temporal embedding [float] (n_samples, some_embedding_dim)
-
-        - instance_idx: per-sample local instance indices ("local" meaning in the current object_layer) [long] (n_samples, )
-        - global_instance_idx: per-sample global instance indices ("global" meaning within all the tracks in scenes) [long] (n_samples, )
-        - instance_emb: per-sample instance embedding [float] (n_samples, some_embedding_dim)
-    """
-
-    xyzs: Optional[torch.Tensor] = None
-    xyzs_unit_cube: Optional[torch.Tensor] = None
-    dirs: Optional[torch.Tensor] = None
-    ts: Optional[torch.Tensor] = None
-    deltas: Optional[torch.Tensor] = None
-    pack_info: Optional[torch.Tensor] = None
-
-    levels: Optional[torch.Tensor] = None
-    normals: Optional[torch.Tensor] = None
-
-    timestamps_us: Optional[torch.Tensor] = None
-    time_emb: Optional[torch.Tensor] = None
-
-    instance_idx: Optional[torch.Tensor] = None
-    global_instance_idx: Optional[torch.Tensor] = None  # TODO: [JG] Always store?
-    instance_emb: Optional[torch.Tensor] = None
-
-    def detach(self):
-        return replace(self, **{k: v.detach() if isinstance(v, torch.Tensor) else v for k, v in dataclass_items(self)})
-
-
-@dataclass(slots=True, kw_only=True)
-class VolumeRenderingReturn:
-    """
-    Contains:
-        - n_vr_samples: total number samples used in volume rendering across all rays [int] (1,)
-        - sample_weights: weights of each sample along the ray [float] (n_samples,)
-        - sample_transmittance: transmittance of each sample along the ray [float] (n_samples,)
-        - pack_info: packed auxiliary tensor containing starting indices and num samples for each ray [int] (n_rays, 2)
-        - vr_samples: number of samples used in volume rendering per ray [int] (n_rays,)
-        - opacity: accumulated opacity along each ray [float] (n_rays,)
-        - distance: integral across distances along the ray for each ray [float] (n_rays,)
-        - radiance_embedding_type: concrete type of the features stored in 'radiance_embedding', from which final radiance values can be decoded
-        - radiance_embedding: alpha composited features targeting radiance computation with type-specific dimension K for each ray [float] (n_rays, K)
-        - extra_ray_signals: optional extra signal per ray, see ExtraSignal (e.g., DINOv2 features or semantic logits)
-    """
-
-    # Sample-wise data
-    n_vr_samples: int
-    sample_weights: Optional[torch.Tensor]
-    sample_transmittance: Optional[torch.Tensor]
-
-    # Ray-wise data
-    pack_info: torch.Tensor
-    vr_samples: torch.Tensor
-    opacity: torch.Tensor
-    distance: torch.Tensor
-
-    radiance_embedding_type: RadianceEmbeddingType
-    radiance_embedding: torch.Tensor
-
-    extra_ray_signals: Optional[ExtraSignal] = None
-
-    @property
-    def rgb(self) -> torch.Tensor:
-        # TODO: [JG] Allow for radiance embedding type fallback/decode callback?
-        assert self.radiance_embedding_type == RadianceEmbeddingType.RGB, (
-            f"Can not get RGB from current radiance embedding type {self.radiance_embedding_type}"
-        )
-        return self.radiance_embedding
 
 
 @dataclass(slots=True, kw_only=True)
@@ -1413,93 +1253,6 @@ class AABB3D(torch.nn.Module):
 
     def __len__(self):
         return len(self.blb)
-
-
-class SceneContractor(torch.nn.Module):
-    """Provides methods to contract the points from the aabb to the contracted space or vice versa:
-
-    - aabb: axis aligned bounding box
-    - degree: degree of the norm used for space contraction (2.0 - sphere as in MipNerf360, float("inf") bounds the space to a cube)
-    - is_single: indicates if it represents a single scene or multiple instances/objects
-    - is_merf: indicates if it is uses MERF's contraction (eq. 7 of the paper)
-
-    """
-
-    aabb: AABB3D
-    degree: float | None
-    is_single: bool = True
-
-    def __init__(self, degree: float | None, aabb: AABB3D, is_single: bool = True, is_merf: bool = False):
-        super().__init__()
-
-        assert (not is_merf) or degree == float("inf"), "MERF contraction should only be used with infinity norm"
-        self.aabb = aabb
-        self.degree = degree
-        self.is_single = is_single
-        self.is_merf = is_merf
-
-    @torch.no_grad()
-    def is_coord_in_warped_distant(self, points: torch.Tensor) -> torch.Tensor:
-        points = self.aabb.points_to_unit_cube(points)
-        if self.degree is None:
-            mask = (points < 0).any(dim=-1) | (points > 1).any(dim=-1)
-        else:
-            norm = torch.linalg.norm(points, ord=self.degree, dim=-1)
-            mask = norm > 1
-        return mask
-
-    def to_contracted_space(self, points: torch.Tensor) -> torch.Tensor:
-        points = self.aabb.points_to_unit_cube(points)
-
-        if self.degree is None:
-            return points
-
-        points = 2 * points - 1  # points in [-1,1]
-        norm = torch.linalg.norm(points, ord=self.degree, dim=-1, keepdim=True)
-        if self.is_merf:
-            scale = norm.clamp_min(1)  # Only affects points with a norm larger than 1
-            is_largest_coord = points.abs() == norm
-            contracted_points = torch.where(is_largest_coord, (points / scale) * (2 - 1 / scale), points / scale)
-        else:
-            contracted_points = torch.where(norm < 1, points, (2 - 1 / norm) * (points / norm))
-
-        return contracted_points * 0.25 + 0.5  # [-inf, inf] is at [0, 1]
-
-    def from_contracted_space(self, contracted_points: torch.Tensor) -> torch.Tensor:
-        if self.degree is not None:
-            contracted_points = (contracted_points - 0.5) * 4  # [0, 1]^3 -> [-2, 2]^3
-
-            norm = torch.linalg.norm(contracted_points, ord=self.degree, dim=-1, keepdim=True)
-
-            if self.is_merf:
-                largest_coord = (1.0 / (2.0 - contracted_points.abs() + 1e-10)).max(dim=-1, keepdim=True)[0]
-                scale = largest_coord.clamp_min(1)
-                is_largest_contracted_coord = contracted_points.abs() == norm
-                points = torch.where(
-                    is_largest_contracted_coord,
-                    (contracted_points / (2.0 - 1.0 / scale)) * scale,
-                    contracted_points * scale,
-                )
-            else:
-                points = torch.where(
-                    norm < 1, contracted_points, contracted_points / (2.0 * norm - torch.square(norm) + 1e-10)
-                )
-
-            points = points * 0.5 + 0.5
-        else:
-            points = contracted_points
-
-        return self.aabb.points_from_unit_cube(points)
-
-    @property
-    def device(self) -> torch.device:
-        return self.aabb.device
-
-    def __getitem__(self, index: torch.Tensor) -> SceneContractor:
-        # We only assert on the shape to be 1 here such that the dimensions agree, other asserting will be done by the default indexing operation
-        assert len(index.shape) == 1
-
-        return SceneContractor(degree=self.degree, aabb=self.aabb[index], is_merf=self.is_merf)
 
 
 class TrackFlags(IntFlag):
