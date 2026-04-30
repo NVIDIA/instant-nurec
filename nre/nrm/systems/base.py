@@ -32,7 +32,6 @@ from nre.utils.batch import NRMDataBatch
 from nre.utils.log import BatchMediaLogger
 from nre.utils.misc import unpack_optional
 from nre.utils.profiling import ScopedTimer
-from nre.utils.trainer import BroadcastExceptions
 from nre.utils.types import Checkpoint
 
 

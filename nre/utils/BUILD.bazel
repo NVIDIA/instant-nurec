@@ -365,7 +365,6 @@ pytest_test(
 
 py_library(
     name = "pylib_trainer",
-    srcs = ["trainer.py"],
     deps = [
         "//nre/config:pylib_scopedtimer",
         "//nre/config:pylib_trainer_config",
