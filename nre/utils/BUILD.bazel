@@ -323,15 +323,6 @@ pytest_test(
     ],
 )
 
-py_library(
-    name = "pylib_custom_metrics",
-    srcs = ["custom_metrics.py"],
-    deps = [
-        pip_requirement("torch"),
-        pip_requirement("torchmetrics"),
-    ],
-)
-
 pytest_test(
     name = "batch_test",
     timeout = "long",

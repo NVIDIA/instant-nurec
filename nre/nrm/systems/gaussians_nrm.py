@@ -40,7 +40,6 @@ from nre.nrm.primitives.base import BaseNRMPrimitive
 from nre.nrm.systems.base import BaseNRMSystem
 from nre.nrm.utils.trajectory import SensorOverride, pad_rig_timestamps
 from nre.utils.batch import DataAndRenderingBatch, NRMDataBatch
-from nre.utils.custom_metrics import AbsRelError, Delta1Accuracy
 from nre.utils.geometry import se3_matrix_to_tquat
 from nre.utils.misc import unpack_optional
 from nre.utils.types import (
