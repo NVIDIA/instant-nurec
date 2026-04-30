@@ -288,38 +288,6 @@ py_library(
     ],
 )
 
-py_library(
-    name = "sensor_models",
-    srcs = [
-        "models/__init__.py",
-        # cameras subpackage
-        "models/cameras/__init__.py",
-        "models/cameras/camera_model.py",
-        "models/cameras/fisheye.py",
-        "models/cameras/ftheta.py",
-        "models/cameras/image_frame.py",
-        "models/cameras/pinhole.py",
-        # lidars subpackage
-        "models/lidars/__init__.py",
-        "models/lidars/lidar_frame.py",
-        "models/lidars/lidar_model.py",
-        "models/lidars/row_offset_structured_spinning.py",
-        # common subpackage
-        "models/common/__init__.py",
-        "models/common/frame.py",
-        "models/common/return_types.py",
-        "models/common/utils.py",
-    ],
-    visibility = ["//:core_package_group"],
-    deps = [
-        ":camera_kernels",
-        ":kernels_common",
-        ":lidar_kernels",
-        "//libs/geometry/kernels:pylib",
-        pip_requirement("numpy"),
-        pip_requirement("torch"),
-    ],
-)
 
 py_library(
     name = "pylib_slang",
@@ -335,7 +303,6 @@ py_library(
         ":lidar_kernels",
         ":lidar_slang_cc",
         ":pose_calib_kernels",
-        ":sensor_models",
         "//libs/geometry/kernels:pylib",
         "//libs/slang_utils:pylib_utils",
         pip_requirement("torch"),
@@ -430,96 +397,3 @@ pytest_test(
     ],
 )
 
-# ============================================================================
-# Layer 2 Model Tests
-# ============================================================================
-
-# Camera model tests
-pytest_test(
-    name = "camera_model_test",
-    srcs = ["models/cameras/camera_model_test.py"],
-    deps = [
-        ":kernels_common",
-        ":pylib_slang",
-        ":sensor_models",
-        "//libs/geometry/kernels:pylib",
-        pip_requirement("numpy"),
-        pip_requirement("torch"),
-    ],
-)
-
-pytest_test(
-    name = "pinhole_camera_test",
-    srcs = ["models/cameras/pinhole_test.py"],
-    deps = [
-        ":kernels_common",
-        ":pylib_slang",
-        ":sensor_models",
-        "//libs/geometry/kernels:pylib",
-        pip_requirement("numpy"),
-        pip_requirement("torch"),
-    ],
-)
-
-pytest_test(
-    name = "fisheye_camera_test",
-    srcs = ["models/cameras/fisheye_test.py"],
-    deps = [
-        ":kernels_common",
-        ":pylib_slang",
-        ":sensor_models",
-        "//libs/geometry/kernels:pylib",
-        pip_requirement("numpy"),
-        pip_requirement("torch"),
-    ],
-)
-
-pytest_test(
-    name = "ftheta_camera_test",
-    srcs = ["models/cameras/ftheta_test.py"],
-    deps = [
-        ":kernels_common",
-        ":pylib_slang",
-        ":sensor_models",
-        "//libs/geometry/kernels:pylib",
-        pip_requirement("numpy"),
-        pip_requirement("torch"),
-    ],
-)
-
-# LiDAR model tests
-pytest_test(
-    name = "lidar_model_test",
-    srcs = ["models/lidars/lidar_model_test.py"],
-    deps = [
-        ":kernels_common",
-        ":pylib_slang",
-        ":sensor_models",
-        "//libs/geometry/kernels:pylib",
-        pip_requirement("numpy"),
-        pip_requirement("torch"),
-    ],
-)
-
-pytest_test(
-    name = "row_offset_structured_spinning_lidar_test",
-    srcs = ["models/lidars/row_offset_structured_spinning_test.py"],
-    deps = [
-        ":kernels_common",
-        ":pylib_slang",
-        ":sensor_models",
-        "//libs/geometry/kernels:pylib",
-        pip_requirement("numpy"),
-        pip_requirement("torch"),
-    ],
-)
-
-# Common return types test
-pytest_test(
-    name = "models_return_types_test",
-    srcs = ["models/common/return_types_test.py"],
-    deps = [
-        ":sensor_models",
-        pip_requirement("torch"),
-    ],
-)

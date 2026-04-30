@@ -38,10 +38,9 @@ Example usage:
     )
 """
 
-from libs.sensors import kernels, models
+from libs.sensors import kernels
 
 
 __all__ = [
     "kernels",
-    "models",
 ]
