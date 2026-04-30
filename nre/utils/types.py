@@ -20,8 +20,6 @@ from typing import (
     Any,
     Callable,
     ClassVar,
-    Generic,
-    Iterable,
     List,
     Literal,
     Optional,
@@ -93,33 +91,8 @@ class HalfClosedInterval:
     start: int
     end: int
 
-    @staticmethod
-    def from_series(sorted_series: np.ndarray | torch.Tensor) -> HalfClosedInterval:
-        """
-        Creates the shortest HalfClosedInterval which covers a *sorted* series (not validated) of integer values
-        """
-        if isinstance(sorted_series, torch.Tensor):
-            return HalfClosedInterval.from_series(sorted_series.numpy())
-
-        assert np.issubdtype(sorted_series.dtype, np.integer), sorted_series.dtype
-        assert sorted_series.ndim == 1, sorted_series.ndim
-
-        return HalfClosedInterval(
-            int(sorted_series[0]),
-            # make sure that the final value is included in the new interval
-            int(sorted_series[-1]) + 1,
-        )
-
     def __post_init__(self) -> None:
         assert self.start <= self.end
-
-    def __contains__(self, item: int | HalfClosedInterval) -> bool:
-        if isinstance(item, int):
-            return self.start <= item < self.end
-        elif isinstance(item, HalfClosedInterval):
-            return (self.start <= item.start) and (item.end <= self.end)
-        else:
-            raise TypeError(f"Expected int or HalfClosedInterval, got {type(item).__name__}")
 
     def intersection(self, other: HalfClosedInterval) -> Optional[HalfClosedInterval]:
         """Computes the intersection of two half-closed interval"""
@@ -128,60 +101,9 @@ class HalfClosedInterval:
 
         return HalfClosedInterval(max(self.start, other.start), min(self.end, other.end))
 
-    @staticmethod
-    def union(intervals: Iterable[HalfClosedInterval]) -> HalfClosedInterval:
-        """Creates the shortest HalfClosedInterval which contains all elements of `intervals`"""
-        iterator = iter(intervals)
-        try:
-            first = next(iterator)
-        except StopIteration:
-            raise ValueError("intervals needs to contain at least one element.")
-
-        start = first.start
-        end = first.end
-
-        for interval in iterator:
-            start = min(start, interval.start)
-            end = max(end, interval.end)
-
-        return HalfClosedInterval(start, end)
-
-    def overlaps(self, other: HalfClosedInterval) -> bool:
-        """Checks if the interval has a non-zero overlap with an other closed interval"""
-        return self.intersection(other) is not None
-
-    def cover_range(self, sorted_series: np.ndarray) -> range:
-        """Given a set of *sorted* series (not validated), return the corresponding range for samples
-        that are within the interval"""
-        assert np.any(self.start <= sorted_series), "All elements in the series are before the start of the range"
-        assert np.any(sorted_series < self.end), "All elements in the series are after the end of the range"
-
-        cover_range_start = np.argmax(self.start <= sorted_series).item()
-        cover_range_stop = (
-            np.argmin(sorted_series < self.end).item() if self.end < sorted_series[-1] else len(sorted_series)
-        )  # full range of frames
-
-        return range(cover_range_start, cover_range_stop)
-
-    def restricted(self, sorted_series: np.ndarray) -> HalfClosedInterval:
-        """Returns a restricted version of the interval that guarantees to cover a *sorted* series (not validated)"""
-        return HalfClosedInterval.from_series(sorted_series[self.cover_range(sorted_series)])
-
     @property
     def length(self) -> int:
         return self.end - self.start
-
-    def to_local(self, value: int) -> int:
-        """Maps from [start, end) to [0, self.length)"""
-        if not value in self:
-            raise ValueError(f"{value} is outside [start={self.start}, end={self.end})")
-        return value - self.start
-
-    def to_global(self, value: int) -> int:
-        """Maps from [0, self.length) to [start, end)"""
-        if not (0 <= value < self.length):
-            raise ValueError(f"{value} is outside [0, length={self.length})")
-        return value + self.start
 
 
 
@@ -575,36 +497,6 @@ class FrameConversion(dataclasses_json.DataClassJsonMixin):
     #: field_numpy_array(np.float32, ...) and always decodes as float32; for f64 use-cases construct in-memory.
     matrix: npt.NDArray[np.floating] = field_numpy_array(np.float32, (4, 4))
 
-    @classmethod
-    def from_origin_scale_axis(
-        cls,
-        target_origin: npt.NDArray[np.floating],
-        target_scale: float,
-        target_axis: list[int],
-        dtype: npt.DTypeLike = np.float32,
-    ):
-        """Construct FrameConversion from
-        - target_origin: origin of the target frame relative to the source frame (in source-frame units)
-        - target_scale: uniform scale of the target frame relative to the source frame
-        - target_axis: The target's frame axis order relative to the source frame using axis indices.
-                       For instance, an axis conversion of xyz[source] -> yzx[target] would be represented by [1, 2, 0]
-        - dtype: Floating dtype of the resulting matrix; becomes the output dtype of all transforms (default: float32)
-        """
-        # Construct homogeneous transformation matrix from translation / scale / orientation components
-        matrix = np.eye(4, dtype=dtype)
-
-        # translation
-        matrix[:3, 3] = -target_origin
-
-        # scale
-        matrix[3, 3] = 1 / target_scale
-
-        # axis swap
-        assert len(np.unique(target_axis)) == 3
-        matrix = matrix[target_axis + [3]]
-
-        return cls(matrix=matrix)
-
     def __post_init__(self):
         assert self.matrix.shape == (4, 4)
         if not np.issubdtype(self.matrix.dtype, np.floating):
@@ -616,11 +508,6 @@ class FrameConversion(dataclasses_json.DataClassJsonMixin):
     def dtype(self) -> np.dtype:
         """Returns the declared output dtype of this conversion, taken from the underlying matrix."""
         return self.matrix.dtype
-
-    @property
-    def target_origin(self) -> npt.NDArray[np.floating]:
-        """The origin of the target frame relative to the source frame (in source-frame units)"""
-        return -self.matrix[:3, 3]
 
     @property
     def target_scale(self) -> float:
@@ -658,19 +545,6 @@ class FrameConversion(dataclasses_json.DataClassJsonMixin):
 
         return (T, S)
 
-    @cached_property
-    def rotation_quat_tuple(self) -> tuple[float, float, float, float]:
-        """Rotation as quaternion (x, y, z, w) format"""
-        from nre.utils.geometry import so3_matrix_to_quat
-
-        quat = so3_matrix_to_quat(self.matrix[:3, :3])
-        return tuple(quat.tolist())
-
-    @cached_property
-    def translation_tuple(self) -> tuple[float, float, float]:
-        """Translation component as tuple"""
-        return tuple(self.matrix[:3, 3].tolist())
-
     def transform_poses(
         self,
         T_poses_source: np.ndarray,
@@ -693,41 +567,6 @@ class FrameConversion(dataclasses_json.DataClassJsonMixin):
 
         # unbatch dimensions conditionally
         return T_poses.squeeze()  # (N,4,4) or (4,4)
-
-    def transform_points(
-        self,
-        points_source: np.ndarray,
-    ) -> np.ndarray:
-        """Transforms points in the source frame to points in the target frame.
-
-        Returned points have target frame units and dtype == self.dtype. Inputs are cast to self.dtype
-        before the matmul so the computation itself happens in the declared dtype.
-
-        Support boths singular (3,) and batched (N, 3) input points `points_source`.
-        """
-        # Cast to self.dtype first so the matmul runs in the declared dtype.
-        points = points_source.astype(self.dtype, copy=False).reshape((-1, 3))  # (N, 3)
-        src2tgt, _ = self.get_transformation_matrices()
-        aug_points = np.hstack((points, np.ones((points.shape[0], 1), dtype=self.dtype)))
-        points = (src2tgt @ aug_points.T)[:3, :].T
-        return points.squeeze()  # (N, 3) or (3,)
-
-    def inverse(self) -> FrameConversion:
-        """Return the FrameConversion from target to source.
-
-        Homogeneous target -> source transformation of the form
-        ⎡ inv(R)      inv(R) @ o * s ⎤
-        ⎣   0                s       ⎦
-
-        dtype is preserved: the returned FrameConversion has the same dtype as self.
-        """
-        matrix = np.eye(4, dtype=self.dtype)
-        o = -self.matrix[:3, 3:]
-        s = self.target_scale
-        matrix[:3, :3] = (inv_R := self.matrix[:3, :3].T)
-        matrix[:3, 3:] = inv_R @ o * s
-        matrix[3, 3] = s
-        return FrameConversion(matrix=matrix)
 
 
 @dataclass(slots=True, kw_only=True)
