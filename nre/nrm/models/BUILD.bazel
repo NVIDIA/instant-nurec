@@ -32,7 +32,6 @@ py_library(
         "activations.py",
         "base.py",
         "kelvin_model.py",
-        "legacy_tokengs_to_kelvin_ckpt.py",
         "post_processing.py",
         "tokenizer.py",
     ],

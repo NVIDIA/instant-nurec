@@ -24,10 +24,6 @@ from nre.nrm.models.kelvin_backbone.base import KelvinNRMSupervisionPack
 from nre.nrm.models.kelvin_backbone.decoders import KelvinDPTDecoder, make_decoder
 from nre.nrm.models.kelvin_backbone.encoders import make_encoder
 from nre.nrm.models.kelvin_backbone.sky import make_sky
-from nre.nrm.models.legacy_tokengs_to_kelvin_ckpt import (
-    convert_legacy_tokengs_state_dict_to_kelvin,
-    is_legacy_tokengs_format_state_dict,
-)
 from nre.nrm.models.post_processing import PerCameraAffinePostProcessing
 from nre.nrm.primitives.kelvin_primitive import KelvinNRMPrimitive
 from nre.nrm.utils.cubemap import layout_sky_cubemap, unproject_to_sky_cubemap
@@ -253,9 +249,6 @@ class KelvinNRM(BaseNRM[KelvinNRMPrimitive, KelvinNRMSupervisionPack]):
                     ckpt = torch.load(local_path, map_location="cpu", weights_only=False)
                     init_state_dict = ckpt.get("state_dict", ckpt)
             init_state_dict = {k.replace("model.", ""): v for k, v in init_state_dict.items()}
-            if is_legacy_tokengs_format_state_dict(init_state_dict):
-                init_state_dict = convert_legacy_tokengs_state_dict_to_kelvin(init_state_dict)
-                logger.info("Converted legacy TokenGS checkpoint keys to Kelvin encoder/decoder format.")
             # Always re-init GS head.
             if isinstance(self.decoder, KelvinDPTDecoder):
                 init_state_dict = {
