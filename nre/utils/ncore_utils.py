@@ -219,13 +219,6 @@ class AuxShardDataLoader:
 
                 self.aux_shard_stores.append(aux_shard_store)
 
-    def reload_store_resources(self) -> None:
-        """Trigger a reload of the resources of each shard store - useful to, e.g., re-open file objects in multi-process settings"""
-        for aux_shard_store in self.aux_shard_stores:
-            # only need to reload itar-based stores
-            if isinstance(aux_shard_store, ncore_data_stores.IndexedTarStore):
-                aux_shard_store.reload_resources()
-
     def _has_base_group(self, base_group_id: str, sensor_id: str | None = None) -> bool:
         """Check if base_group_id-typed aux group / signal exists. If sensor_id is provided, additionally check if the requested signal is available for the given sensor."""
         has_base_group = base_group_id in self.base_groups
@@ -360,10 +353,6 @@ class AuxShardDataLoader:
 
         # no mask found
         raise KeyError(f"No ego-mask found for {camera_id}")
-
-    def get_aggregated_egomask(self, camera_id: str) -> np.ndarray:
-        """Retrieve the aggregated super ego-mask (binary numpy array) for a given camera."""
-        return self.get_egomask(camera_id, 0)  # aggregated mask is stored at special timestamp '0'
 
 
 def get_mask_image(
