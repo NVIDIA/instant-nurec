@@ -46,15 +46,6 @@ py_venv_binary(
     deps = [":pylib"],
 )
 
-# This utility is designed for use in mGPU scenarios on SLURM, it requires a build-time venv
-# even though it's not a deliverable.
-py_venv_binary(
-    name = "probe_cluster_env",
-    srcs = ["probe_cluster_env.py"],
-    main = "probe_cluster_env.py",
-    deps = [":pylib"],
-)
-
 pytest_test(
     name = "nrm_test",
     timeout = "long",

@@ -13,7 +13,6 @@ from __future__ import annotations
 from typing import Any, List, Literal, Optional, Tuple
 
 from nre.config.base_schema import BaseConfigSchema, Field
-from nre.config.difix import DifixModelConfig
 from nre.config.model import BaseRendererConfig, RendererConfigType
 
 

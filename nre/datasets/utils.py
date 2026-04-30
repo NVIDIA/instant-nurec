@@ -41,13 +41,6 @@ import nre.utils.ncore_utils as ncore_utils
 from libs.vren.interface import (  # type: ignore
     world_points_to_image_points_shutter_pose,
 )
-from nre.config import (
-    CuboidTracksConfig,
-    ValidPixelsCuboidTrackConfig,
-    ValidPixelsFrameMaskConfig,
-    ValidPixelsSceneFlowConfig,
-    ValidPixelsTrafficLightConfig,
-)
 from nre.datasets.tracks import CuboidTracks, TrackFlags
 from nre.utils.batch import RectSubsampled
 from nre.utils.geometry import (
