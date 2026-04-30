@@ -34,7 +34,6 @@ py_library(
     deps = [
         "//libs/losses:pylib",
         "//nre/config:pylib",
-        "//nre/datamodules:pylib",
         "//nre/datasets:pylib_tracks",
         "//nre/nrm/datasets:pylib",
         "//nre/nrm/models:pylib",

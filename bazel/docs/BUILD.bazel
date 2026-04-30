@@ -28,7 +28,6 @@ py_binary(
         "@nre_repo//libs/ray_utils:pylib_cc",
         "@nre_repo//libs/tracy_utils:pylib",
         "@nre_repo//libs/vren:pylib_cc",
-        "@nre_repo//nre/datamodules:pylib",
         "@nre_repo//nre/datasets:pylib",
         "@nre_repo//nre/datasets/samplers:pylib",
         "@nre_repo//nre/grpc:pylib",
