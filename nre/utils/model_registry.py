@@ -582,61 +582,10 @@ class NgcModelRegistry(ModelRegistry):
             return self._request_session_token_from_legacy_api_key(potential_session_token, org, team)
 
 
-class GitLabModelRegistry(ModelRegistry):
-    """Implementation for downloading models from NVIDIA's GitLab registry.
-
-    This class handles downloading models from NVIDIA's GitLab registry. It supports
-    caching downloaded models to avoid redundant downloads.
-
-    Attributes:
-        api_key (str): API key for authenticating with GitLab. If not provided, it will be
-            retrieved from the .netrc file.
-    """
-
-    GITLAB_DOMAIN = "gitlab-master.nvidia.com"
-    API_KEY_HINT = "GitLab Personal Access Token with read rights (see https://gitlab-master.nvidia.com/-/user_settings/personal_access_tokens)"
-
-    @property
-    def domain(self) -> str:
-        return self.GITLAB_DOMAIN
-
-    @staticmethod
-    def api_key_hint() -> str:
-        return GitLabModelRegistry.API_KEY_HINT
-
-
 def create_model_registry(model_url: str, model_cache_dir: Path, api_key: Optional[str] = None) -> ModelRegistry:
-    """Factory function to create the appropriate model registry based on the URL.
-
-    Args:
-        model_url: URL where the model can be downloaded from.
-        model_cache_dir: Directory where downloaded models should be cached.
-        api_key: Optional API key to authenticate with the registry.
-            For NgcModelRegistry: If not provided, the API key will be retrieved from
-            the NGC_API_KEY environment variable or from the .netrc file.
-            For other registries: If not provided, the API key will be retrieved from
-            the .netrc file.
-
-    Returns:
-        ModelRegistry: An instance of the appropriate model registry.
-
-    Raises:
-        ModelRegistryError: If the URL does not match any supported registry.
-    """
+    """Factory: only the NGC registry domain is supported in the standalone."""
     parsed_url = urlparse(model_url)
     domain = parsed_url.netloc
-
-    logger.debug("Determining registry type for domain: %s", domain)
-
-    # Check for NGC domain
     if domain == NgcModelRegistry.NGC_DOMAIN:
-        logger.debug("Creating NgcModelRegistry for domain: %s", domain)
         return NgcModelRegistry(model_url=model_url, model_cache_dir=model_cache_dir, api_key=api_key)
-
-    # Check for GitLab domain
-    if domain == GitLabModelRegistry.GITLAB_DOMAIN:
-        logger.debug("Creating GitLabModelRegistry for domain: %s", domain)
-        return GitLabModelRegistry(model_url=model_url, model_cache_dir=model_cache_dir, api_key=api_key)
-
-    # No matching registry found
     log_and_raise(ModelRegistryError, "Unsupported model registry domain: %s", domain)
