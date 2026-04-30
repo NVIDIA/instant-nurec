@@ -5,11 +5,10 @@
 # nre.datasets.utils. The full dataset/sampler/registry surface is
 # training-only and removed.
 
-from nre.datasets.tracks import CuboidTracks, RayIntersectionTransformFilter, TrackFlags
+from nre.datasets.tracks import CuboidTracks, TrackFlags
 
 
 __all__ = [
     "TrackFlags",
-    "RayIntersectionTransformFilter",
     "CuboidTracks",
 ]
