@@ -235,24 +235,3 @@ class NRMDataModule(LightningDataModule):
         )
 
 
-class ResumableDataModuleCallback(Callback):
-    """Tracks the current batch idx loaded for the datamodule, for mid-epoch resume.
-    Works by assigning _next_train_batch_idx and _next_val_batch_idx, so that the datamodule can
-    store these values in the state_dict and load them back on resume.
-
-    Right now the only place where mid-epoch checkpoint is saved is in the preemption callback,
-    so this callback should be put **before** that one, to make sure batch idx is properly updated.
-    """
-
-    def __init__(self, datamodule: NRMDataModule):
-        self.datamodule = weakref.ref(datamodule)
-
-    def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx: int) -> None:
-        # If a run gets preempted multiple times, batch_idx is still the global one.
-        if (datamodule := self.datamodule()) is not None:
-            datamodule._next_train_batch_idx = batch_idx + 1
-
-    def on_train_epoch_end(self, trainer, pl_module) -> None:
-        # One can also set this at epoch start (which is not executed when resuming).
-        if (datamodule := self.datamodule()) is not None:
-            datamodule._next_train_batch_idx = 0
