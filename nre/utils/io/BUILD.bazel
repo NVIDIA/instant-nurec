@@ -82,6 +82,5 @@ pytest_test(
     ],
     deps = [
         ":pylib",
-        "//nre/artifact:pylib",
     ],
 )
