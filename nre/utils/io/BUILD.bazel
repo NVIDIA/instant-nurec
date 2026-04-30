@@ -1,79 +1,27 @@
 # SPDX-FileCopyrightText: Copyright (c) 2023-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: LicenseRef-NvidiaProprietary
-#
-# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
-# property and proprietary rights in and to this material, related
-# documentation and any modifications thereto. Any use, reproduction,
-# disclosure or distribution of this material and related documentation
-# without an express license agreement from NVIDIA CORPORATION or
-# its affiliates is strictly prohibited.
 
 load("@nre_pip_deps//:requirements.bzl", pip_requirement = "requirement")
 load("@rules_python//python:defs.bzl", "py_library")
-load("//bazel/pytest:defs.bzl", "pytest_test")
 
-package(default_visibility = [
-    "//:core_package_group",
-    # Add visibility for nvhuman animation scripts
-])
+package(default_visibility = ["//:core_package_group"])
 
 filegroup(
     name = "py_files",
     srcs = glob(["**/*.py"]),
-    visibility = [
-    ],
+    visibility = [],
 )
 
 py_library(
     name = "pylib",
     srcs = [
-        "sequence_tracks.py",
-        "usd_default_layer.py",
-        "usd_nrend.py",
+        "__init__.py",
         "utils.py",
     ],
     deps = [
-        "//nre/datasets:pylib",
-        "//nre/models/base:pylib",
-        "//nre/nrm/config:pylib",
-        "//nre/utils:pylib",
         "//nre/utils:pylib_types",
         pip_requirement("torch"),
         pip_requirement("numpy"),
         pip_requirement("pillow"),
-        pip_requirement("point-cloud-utils"),
-        pip_requirement("poisson_recon"),
-        pip_requirement("scipy"),
-        pip_requirement("usd-core"),
-    ],
-)
-
-pytest_test(
-    name = "ground_mesh_test",
-    srcs = [
-        "ground_mesh_test.py",
-    ],
-    deps = [
-        ":pylib",
-    ],
-)
-
-pytest_test(
-    name = "mesh_test",
-    srcs = [
-        "mesh_test.py",
-    ],
-    deps = [
-        ":pylib",
-    ],
-)
-
-pytest_test(
-    name = "sequence_tracks_test",
-    srcs = [
-        "sequence_tracks_test.py",
-    ],
-    deps = [
-        ":pylib",
     ],
 )

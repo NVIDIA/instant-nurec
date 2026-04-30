@@ -1,5 +1,8 @@
 # Plan: Extract NRM Kelvin predict-mode into a standalone repo
 
+## Communication
+Send me a slack message with the latest status and updates every commit or every hour, what ever comes first.
+
 ## Context
 
 `/storage/projects/instant-nurec` is currently empty (only `CLAUDE.md`, baselines, prior planning docs). The goal is to make a single entrypoint of `/storage/projects/nre` — **NRM Kelvin model in predict mode only** — fully standalone here, with no NRE dependency, no Bazel, no Hydra, no PyTorch Lightning, and no non-torch CUDA libraries (no `nvdiffrast`, `torch_scatter`, `gsplat`).
