@@ -25,17 +25,13 @@ from nre.models.nn_extensions import TypedModuleList
 from nre.nrm.config.models import (
     KelvinDAv3EncoderConfig,
     KelvinModelConfig,
-    KelvinTokenGSEncoderConfig,
 )
 from nre.nrm.models.blocks.aa_vit import AlternateAttentionVisionTransformer
-from nre.nrm.models.blocks.attention import AttentionBlock
 from nre.nrm.models.blocks.dav3 import CameraEncoder, convert_dav3_state_dict_to_nrm
 from nre.nrm.models.blocks.embeds import PatchEmbed
 from nre.nrm.models.kelvin_backbone.base import (
-    KelvinFeatureLatent,
     KelvinLatent,
     KelvinMultiscaleFeaturesLatent,
-    _tokengs_init_weights,
 )
 from nre.nrm.utils.motion import TimeRemapping
 from nre.nrm.utils.sensor import to_simple_pinhole_model_parameters
@@ -78,91 +74,6 @@ class KelvinEncoderBase(nn.Module, ABC):
     def get_potential_unused_parameters(self) -> Iterator[nn.Parameter]:
         return iter([])
 
-
-class KelvinTokenGSEncoder(KelvinEncoderBase):
-    def __init__(self, config: KelvinTokenGSEncoderConfig, model_config: KelvinModelConfig):
-        super().__init__()
-        self.num_latent_heads = config.n_heads
-        dim = config.embed_dim
-
-        self.rgb_normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225], inplace=False)
-        self.patch_embed_img = PatchEmbed(
-            patch_shape=model_config.patch_shape,
-            input_dim=3,
-            embed_dim=dim,
-            norm=True,
-        )
-        self.patch_embed_ray = PatchEmbed(patch_shape=model_config.patch_shape, input_dim=6, embed_dim=dim, norm=False)
-
-        self.blocks = TypedModuleList(
-            [
-                AttentionBlock(
-                    dim,
-                    config.n_heads,
-                    mlp_ratio=4.0,
-                    qkv_bias=True,
-                    layer_scale_init_values=config.layer_scale_init_values,
-                    qk_norm=config.use_qk_norm,
-                )
-                for _ in range(config.depth)
-            ]
-        )
-
-    def initialize_weights(self, loaded_state_dicts: dict[str, dict[str, torch.Tensor]]):
-        self.apply(_tokengs_init_weights)
-
-    def encode(
-        self,
-        batches: list[DataAndRenderingBatch],
-        time_remappings: list[TimeRemapping],
-        scene_rescale: float = 1.0,
-        media_logger: BatchMediaLogger | None = None,
-    ) -> KelvinLatent:
-        batch_rgbs: list[torch.Tensor] = []
-        batch_pluckers: list[torch.Tensor] = []
-
-        for batch in batches:
-            data = unpack_optional(batch.data.camera)
-            rendering = unpack_optional(unpack_optional(batch.rendering).camera)
-
-            rays = rendering.rays
-            rays_cam_o, rays_cam_d = rays[..., :3], rays[..., 3:]
-            num_imgs, img_height, img_width = rays.shape[:3]
-
-            rgb = unpack_optional(data.labels.rgb)
-            batch_rgbs.append(rgb)
-
-            # Compute plucker embedding (dxo, d)
-            plucker = torch.cat([torch.cross(rays_cam_o * scene_rescale, rays_cam_d, dim=-1), rays_cam_d], dim=-1)
-            assert plucker.shape == (
-                num_imgs,
-                img_height,
-                img_width,
-                6,
-            ), f"Plucker shape must be (num_imgs, img_height, img_width, 6), but got {plucker.shape}"
-            batch_pluckers.append(plucker)
-
-        rgbs_in = rearrange(torch.stack(batch_rgbs, dim=0), "B V H W C -> (B V) C H W")
-        pluckers_in = rearrange(torch.stack(batch_pluckers, dim=0), "B V H W C -> (B V) C H W")
-
-        # Patch embed: proj_img(rgb) + proj_ray(plucker), then a single LayerNorm on the sum.
-        emb_img = self.patch_embed_img.proj(self.rgb_normalize(rgbs_in))
-        emb_ray = self.patch_embed_ray.proj(pluckers_in)
-        combined = emb_img + emb_ray
-        combined = rearrange(combined, "B C h w -> B h w C")
-        image_tokens = self.patch_embed_img.norm(combined)
-
-        B = len(batches)
-        batch_v, patch_h, patch_w, _ = image_tokens.shape
-        num_views = batch_v // B
-        image_tokens = rearrange(image_tokens, "(B V) h w C -> B (V h w) C", B=B, V=num_views)
-
-        for block in self.blocks:
-            image_tokens = block(image_tokens)
-
-        # Reshape to image
-        feature = rearrange(image_tokens, "B (V h w) C -> B V h w C", V=num_views, h=patch_h, w=patch_w)
-        return KelvinFeatureLatent(feature=feature)
 
 
 class KelvinDAv3Encoder(KelvinEncoderBase):
@@ -285,9 +196,6 @@ class KelvinDAv3Encoder(KelvinEncoderBase):
 
 
 def make_encoder(config: KelvinModelConfig) -> KelvinEncoderBase:
-    if isinstance(config.encoder, KelvinTokenGSEncoderConfig):
-        return KelvinTokenGSEncoder(config.encoder, config)
-    elif isinstance(config.encoder, KelvinDAv3EncoderConfig):
+    if isinstance(config.encoder, KelvinDAv3EncoderConfig):
         return KelvinDAv3Encoder(config.encoder, config)
-    else:
-        raise ValueError(f"Unsupported encoder config: {config.encoder}")
+    raise ValueError(f"Unsupported encoder config: {config.encoder}")

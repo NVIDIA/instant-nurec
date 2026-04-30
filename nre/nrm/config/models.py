@@ -84,17 +84,6 @@ class GaussiansActivationConfig(BaseConfigSchema):
 
 
 
-class KelvinTokenGSEncoderConfig(BaseConfigSchema):
-    name: Literal["token-gs-encoder"]
-    depth: int
-    n_heads: int
-    embed_dim: int
-    use_qk_norm: bool = Field(default=True)
-    layer_scale_init_values: Optional[float] = Field(
-        default=1e-4, description="The initial values for the layer scale. If None, no layer scale is used."
-    )
-
-
 class KelvinDAv3EncoderConfig(BaseConfigSchema):
     name: Literal["dav3-encoder"]
     depth: int
@@ -142,12 +131,6 @@ class KelvinSkyCubemapDecoderConfig(BaseConfigSchema):
     checkpointing: bool = Field(default=False, description="Whether to use checkpointing for the cubemap decoder")
 
 
-class KelvinSkySolidColorConfig(BaseConfigSchema):
-    name: Literal["solid-color"]
-    color: tuple[float, float, float]
-    cubemap_size: int
-
-
 class KelvinPostProcessingConfig(BaseConfigSchema):
     enabled: bool = Field(
         default=True,
@@ -184,11 +167,11 @@ class KelvinModelConfig(BaseModelConfig):
         description="If True, freeze encoder parameters (requires_grad=False); train decoder/sky/post-processing only.",
     )
 
-    sky: KelvinSkyCubemapDecoderConfig | KelvinSkySolidColorConfig = Field(discriminator="name")
+    sky: KelvinSkyCubemapDecoderConfig = Field(discriminator="name")
 
     patch_shape: Tuple[int, int] = Field(default=(8, 8))
 
-    encoder: KelvinTokenGSEncoderConfig | KelvinDAv3EncoderConfig = Field(discriminator="name")
+    encoder: KelvinDAv3EncoderConfig = Field(discriminator="name")
     decoder: KelvinDPTDecoderConfig = Field(discriminator="name")
     post_processing: KelvinPostProcessingConfig = Field(default_factory=KelvinPostProcessingConfig)
     init_weights_paths: dict[str, str] = Field(

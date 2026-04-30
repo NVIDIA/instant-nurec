@@ -22,7 +22,6 @@ from nre.models.nn_extensions import TypedModuleList
 from nre.nrm.config.models import (
     KelvinModelConfig,
     KelvinSkyCubemapDecoderConfig,
-    KelvinSkySolidColorConfig,
 )
 from nre.nrm.models.blocks.attention import CrossAttentionBlock, KVProjector
 from nre.nrm.models.blocks.dpt import DPTFusionHead, DPTReassembleBlock
@@ -49,22 +48,6 @@ class KelvinSkyBase(nn.Module, ABC):
         Returns:
             The sky cubemap. [6, cubemap_size, cubemap_size, 3]
         """
-
-
-class SolidColorSky(KelvinSkyBase):
-    def __init__(self, config: KelvinSkySolidColorConfig, model_config: KelvinModelConfig):
-        super().__init__()
-        self.cubemap_size = config.cubemap_size
-        self.color = nn.Buffer(torch.tensor(config.color))
-
-    def initialize_weights(self, loaded_state_dicts: dict[str, dict[str, torch.Tensor]]):
-        pass
-
-    def decode(self, encoded_latent: KelvinLatent, batches: list[DataAndRenderingBatch]) -> torch.Tensor:
-        batch_size = encoded_latent.batch_size
-        return repeat(
-            self.color, "C -> B 6 SH SW C", B=batch_size, SH=self.cubemap_size, SW=self.cubemap_size
-        ).contiguous()
 
 
 class CubemapDecoderSky(KelvinSkyBase):
@@ -275,7 +258,4 @@ class CubemapDecoderSky(KelvinSkyBase):
 def make_sky(config: KelvinModelConfig) -> KelvinSkyBase:
     if isinstance(config.sky, KelvinSkyCubemapDecoderConfig):
         return CubemapDecoderSky(config.sky, config)
-    elif isinstance(config.sky, KelvinSkySolidColorConfig):
-        return SolidColorSky(config.sky, config)
-    else:
-        raise ValueError(f"Unsupported sky config: {config.sky}")
+    raise ValueError(f"Unsupported sky config: {config.sky}")
