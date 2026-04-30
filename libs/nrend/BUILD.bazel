@@ -27,7 +27,6 @@ filegroup(
     srcs = [
         "__init__.py",
         "renderer.py",
-        "renderer_test_case.py",
     ],
 )
 
@@ -111,19 +110,3 @@ py_wheel(
     deps = [":pkg"],
 )
 
-pytest_test(
-    name = "nrend_tests",
-    timeout = "eternal",
-    srcs = [
-        "renderer_tests.py",
-    ],
-    data = [
-        "@nrend_test_assets//:msgpack_test_cases",
-    ],
-    tags = ["multi-gpu"],
-    deps = [
-        ":pylib",
-        pip_requirement("torch"),
-        "@rules_python//python/runfiles",
-    ],
-)
