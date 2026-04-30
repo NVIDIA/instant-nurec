@@ -17,7 +17,6 @@ from dataclasses import dataclass, field
 from typing import Generic, Type, cast
 
 import torch  # type: ignore
-import torch_scatter  # type: ignore
 
 from ncore.data import ConcreteCameraModelParametersUnion  # type: ignore
 from ncore.sensors import CameraModel  # type: ignore
@@ -25,7 +24,6 @@ from nre.nrm.config.models import PrimitiveExportPreprocessConfig
 from nre.nrm.config.predict import PrimitiveMergeConfig
 from nre.nrm.primitives.base import BaseNRMPrimitive, NRMPrimitiveType
 from nre.nrm.primitives.kelvin_primitive import KelvinDynamicLayer, KelvinNRMPrimitive, KelvinStaticLayer
-from nre.nrm.utils.covariance import merge_covariances_kl_optimal
 from nre.nrm.utils.cubemap import unproject_to_sky_cubemap
 from nre.nrm.utils.trajectory import merge_rig_trajectories, transform_rig_trajectories
 from nre.utils.batch import CameraFreePoseViewGeometry, DataAndRenderingBatch, DataBatch, NRMDataBatch, RenderingBatch
@@ -85,97 +83,6 @@ class CameraFrustum:
         # Use stored CPU copy to avoid GPU->CPU sync
         return int(self.timestamps_startend_us_cpu[1].item())
 
-
-def voxelize_with_fusion(
-    pts3d: torch.Tensor,
-    features: dict[str, torch.Tensor],
-    voxel_size: float,
-    conf: torch.Tensor | None = None,
-    fusion_mode: str = "average",
-) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
-    """
-    Voxelize points and features using confidence-weighted fusion.
-
-    Args:
-        pts3d: Point positions [N, 3]
-        features: Dictionary of feature vectors [N, F]
-        voxel_size: Size of voxels
-        conf: Confidence scores [N, 1] or None
-        fusion_mode: 'average' for weighted averaging of all attributes (existing behavior),
-            'kl_optimal' for moment-matching of position/rotation/scale.
-
-    Returns:
-        voxel_pts: Voxelized positions [M, 3]
-        voxel_feats: Dictionary of voxelized features [M, F]
-    """
-    if conf is None:
-        conf = torch.ones(pts3d.shape[0], 1, device=pts3d.device, dtype=pts3d.dtype)
-
-    # Drop Gaussians with NaN/inf in positions, scales, or rotations.
-    valid = torch.isfinite(pts3d).all(dim=1) & torch.isfinite(conf).all(dim=1)
-    for feat in features.values():
-        if feat is not None:
-            valid = valid & torch.isfinite(feat).all(dim=1)
-    n_bad = (~valid).sum().item()
-    if n_bad > 0:
-        import logging
-
-        logging.getLogger(__name__).warning(
-            "[voxelize_with_fusion] %d/%d Gaussians have NaN/inf; dropping.", n_bad, pts3d.shape[0]
-        )
-        pts3d = pts3d[valid]
-        conf = conf[valid]
-        features = {k: v[valid] if v is not None else None for k, v in features.items()}
-
-    # Compute voxel indices
-    voxel_indices = (pts3d / voxel_size).round().int()  # [N, 3]
-    unique_voxels, inverse_indices, counts = torch.unique(voxel_indices, dim=0, return_inverse=True, return_counts=True)
-
-    # Flatten confidence scores
-    conf_flat = conf.flatten()  # [N]
-
-    # Compute softmax weights per voxel
-    conf_voxel_max, _ = torch_scatter.scatter_max(conf_flat, inverse_indices, dim=0)
-    conf_exp = torch.exp(conf_flat - conf_voxel_max[inverse_indices])
-    voxel_weights = torch_scatter.scatter_add(conf_exp, inverse_indices, dim=0)  # [num_unique_voxels]
-    weights = (conf_exp / (voxel_weights[inverse_indices] + 1e-6)).unsqueeze(-1)  # [N, 1]
-
-    # Compute weighted average of positions
-    voxel_pts = torch_scatter.scatter_add(pts3d * weights, inverse_indices, dim=0)  # [num_unique_voxels, 3]
-
-    if fusion_mode == "kl_optimal" and "rotations" in features and "scales" in features:
-        # KL-optimal merge for spatial parameters
-        rotations_wxyz = features["rotations"]
-        scales = features["scales"]
-        rotations_merged, scales_merged = merge_covariances_kl_optimal(
-            pts3d, rotations_wxyz, scales, weights, inverse_indices, voxel_pts
-        )
-        # Average remaining features
-        voxel_feats: dict[str, torch.Tensor] = {}
-        for feat_name, feat in features.items():
-            if feat_name in ("rotations", "scales"):
-                continue
-            if feat is None:
-                voxel_feats[feat_name] = None  # type: ignore[assignment]
-                continue
-            voxel_feats[feat_name] = torch_scatter.scatter_add(feat * weights, inverse_indices, dim=0)
-        voxel_feats["rotations"] = rotations_merged
-        voxel_feats["scales"] = scales_merged
-    else:
-        # Average all features
-        voxel_feats = {}
-        for feat_name, feat in features.items():
-            if feat is None:
-                voxel_feats[feat_name] = None  # type: ignore[assignment]
-                continue
-            voxel_feats[feat_name] = torch_scatter.scatter_add(
-                feat * weights, inverse_indices, dim=0
-            )  # [num_unique_voxels, feat_dim]
-
-    if "rotations" in voxel_feats:
-        voxel_feats["rotations"] = torch.nn.functional.normalize(voxel_feats["rotations"], dim=1)
-
-    return voxel_pts, voxel_feats
 
 
 def merge_context_batch(
