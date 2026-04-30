@@ -28,7 +28,6 @@ from nre.config.base_schema import config_to_primitive
 from nre.nrm.config.nrm import BaseNRMSystemConfig, NRMConfig
 from nre.nrm.datasets.datamodule import NRMDataModule
 from nre.nrm.models.base import BaseNRM
-from nre.nrm.utils.optim import ProgressBasedLRScheduler, configure_optimizers
 from nre.utils.batch import NRMDataBatch
 from nre.utils.log import BatchMediaLogger
 from nre.utils.misc import unpack_optional

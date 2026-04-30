@@ -25,7 +25,6 @@ from nre import __version__
 from nre.config import BaseConfigSchema
 from nre.utils.batch import DataAndRenderingBatch
 from nre.utils.misc import map_optional, strip_none_from_config
-from nre.utils.optim import OptimizerLRSchedulerConfig
 
 
 class BaseModel(nn.Module):
@@ -137,11 +136,6 @@ class BaseModel(nn.Module):
             }
 
         return json_dict
-
-    def configure_optimizers(self, name_prefix: str = "") -> list[OptimizerLRSchedulerConfig]:
-        """Returns a list of module-owned configured optimizers (optimizers paired with an optional LR scheduler),
-        which will be stepped in the main training loop, allowing the module to interact with it's owned optimizers"""
-        return []
 
     def get_base_model_children(self) -> Iterator[BaseModel]:
         """Yields all children that are instances of BaseModel"""
