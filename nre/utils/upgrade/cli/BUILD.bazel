@@ -19,7 +19,6 @@ filegroup(
     name = "py_files",
     srcs = glob(["**/*.py"]),
     visibility = [
-        "//internal/scripts/pycena:__pkg__",
     ],
 )
 

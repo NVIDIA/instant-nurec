@@ -21,7 +21,6 @@ filegroup(
     name = "py_files",
     srcs = glob(["**/*.py"]),
     visibility = [
-        "//internal/scripts/pycena:__pkg__",
     ],
 )
 
@@ -200,7 +199,6 @@ filegroup(
     name = "slang_files",
     srcs = COMMON_SLANG_FILES + CAMERA_SLANG_FILES + LIDAR_SLANG_FILES + POSE_CALIB_SLANG_FILES,
     visibility = [
-        "//internal/scripts/pycena/runtime:__pkg__",
     ],
 )
 

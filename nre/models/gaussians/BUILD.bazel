@@ -15,14 +15,12 @@ load("//bazel/pytest:defs.bzl", "pytest_test")
 package(default_visibility = [
     "//:core_package_group",
     # Add visibility for nvhuman animation scripts
-    "//internal/scripts/experimental/models/gaussian:__subpackages__",
 ])
 
 filegroup(
     name = "py_files",
     srcs = glob(["**/*.py"]),
     visibility = [
-        "//internal/scripts/pycena:__pkg__",
     ],
 )
 
@@ -32,8 +30,6 @@ py_library(
     visibility = [
         "//apps/asset_harvester:__pkg__",
         "//bazel/typing:__pkg__",
-        "//internal/scripts/pycena:__pkg__",
-        "//internal/scripts/pycena/runtime:__pkg__",
         "//nre/models/gaussians:__pkg__",
     ],
     deps = select({
@@ -58,7 +54,6 @@ py_library(
     visibility = [
         "//:core_package_group",
         "//apps/asset_harvester:__pkg__",
-        "//internal/scripts/experimental/models/gaussian:__subpackages__",
     ],
     deps = [
         pip_requirement("nvidia-ncore"),

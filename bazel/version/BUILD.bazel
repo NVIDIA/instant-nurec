@@ -174,7 +174,6 @@ genrule(
         "//apps/asset_harvester:__pkg__",
 
         # Add visibility for //internal/scripts/pycena/runtime:pycena_run_test
-        "//internal/scripts/pycena/runtime:__pkg__",
 
         # Add visibility for //nre/grpc:pylib
         "//nre/grpc:__pkg__",
@@ -183,13 +182,10 @@ genrule(
         "//nre/render:__pkg__",
 
         # Add visibility for //apps:nre_tools
-        "//internal/scripts:__pkg__",
 
         # Add visibility for //internal/scripts/ds_to_ncore:__pkg__
-        "//internal/scripts/ds_to_ncore:__pkg__",
 
         # Add visibility for //internal/scripts/test_data:generate_test_data
-        "//internal/scripts/test_data:__pkg__",
     ],
 )
 
@@ -212,7 +208,6 @@ pkg_tar(
 
         # Add visibility for tools image
         "//apps:__pkg__",
-        "//internal/scripts:__pkg__",
 
         # Add visibility for NRM image
         "//nre/nrm:__pkg__",
@@ -224,6 +219,5 @@ exports_files(
     ["VERSION_FILE"],
     visibility = [
         # Add visibility for //internal/scripts/release:__pkg__
-        "//internal/scripts/release:__pkg__",
     ],
 )

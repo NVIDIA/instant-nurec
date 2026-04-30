@@ -21,7 +21,6 @@ filegroup(
     name = "py_files",
     srcs = glob(["**/*.py"]),
     visibility = [
-        "//internal/scripts/pycena:__pkg__",
     ],
 )
 
@@ -46,7 +45,6 @@ py_library(
         "//:__pkg__",
         # Add visibility for //apps
         "//apps:__pkg__",
-        "//internal/scripts:__subpackages__",
     ],
     deps = [
         ":pylib_reporoot",
@@ -55,7 +53,7 @@ py_library(
         "//nre/utils:pylib_misc",
         "//nre/utils/debug:pylib",
     ] + select({
-        "@//bazel/conditions:internal": ["//nre/internal:pylib"],
+        "@//bazel/conditions:internal": [],
         "//conditions:default": [],
     }),
 )
@@ -75,7 +73,7 @@ py_library(
         "//nre/utils:pylib_misc_tracy",
         "//nre/utils/debug:pylib",
     ] + select({
-        "@//bazel/conditions:internal": ["//nre/internal:pylib"],
+        "@//bazel/conditions:internal": [],
         "//conditions:default": [],
     }),
 )
@@ -95,7 +93,7 @@ py_library(
         "//nre/utils:pylib_misc_tracy_gpu",
         "//nre/utils/debug:pylib",
     ] + select({
-        "@//bazel/conditions:internal": ["//nre/internal:pylib"],
+        "@//bazel/conditions:internal": [],
         "//conditions:default": [],
     }),
 )

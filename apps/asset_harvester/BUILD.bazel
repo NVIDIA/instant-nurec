@@ -20,7 +20,6 @@ filegroup(
     name = "py_files",
     srcs = glob(["**/*.py"]),
     visibility = [
-        "//internal/scripts/pycena:__pkg__",
     ],
 )
 
@@ -34,7 +33,6 @@ filegroup(
         "utils.py",
     ],
     visibility = [
-        "//internal/scripts/pycena:__subpackages__",
     ],
 )
 
@@ -98,7 +96,6 @@ py_library(
     data = ASSET_HARVESTER_DATA,
     visibility = [
         "//apps:__pkg__",
-        "//internal/scripts/pycena/runtime:__pkg__",
     ],
 )
 
@@ -119,9 +116,7 @@ py_binary(
     main = "asset_harvest.py",
     visibility = [
         # Add visibility for //internal/scripts/ci:python_absolute_path_check
-        "//internal/scripts/ci:__pkg__",
         # Add visibility for SQA tests
-        "//internal/sqa:__pkg__",
     ],
     deps = ASSET_HARVESTER_DEPS,
 )
@@ -148,7 +143,6 @@ py_library(
         "rendering.py",
     ],
     visibility = [
-        "//internal/scripts/experimental/models/gaussian:__subpackages__",
         "//nre/utils:__pkg__",
     ],
     deps = [
@@ -197,7 +191,6 @@ py_library(
     ],
     visibility = [
         "//apps:__pkg__",
-        "//internal/scripts/pycena/runtime:__pkg__",
     ],
     deps = ASSET_HARVESTER_DEPS,
 )

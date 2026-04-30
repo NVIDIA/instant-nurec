@@ -21,7 +21,6 @@ load("//bazel/rules_oci:default_layer_groups.bzl", "default_layer_groups")
 filegroup(
     name = "tools_list",
     srcs = ["tools.yaml"],
-    visibility = ["//internal/scripts/pycena:__pkg__"],
 )
 
 # by default, install all tools
@@ -92,7 +91,6 @@ pkg_tar(
 # not Python-specific, so we can use it with the "pycena_nre_tools" target.
 py_image_layer(
     name = "pycena_nre_tools_image_layer",
-    binary = "//internal/scripts/pycena/runtime:pycena_nre_tools",
     compressor = "@pigz//:pigz",
     compressor_args = "-n",
     layer_groups = default_layer_groups(),
@@ -226,9 +224,7 @@ py_venv_binary(
     data = NRE_TOOLS_DATA,
     main = "entrypoint.py",
     visibility = [
-        "//internal/scripts/ci:__pkg__",
         # Add visibility for SQA tests
-        "//internal/sqa:__pkg__",
     ],
     deps = NRE_TOOLS_DEPS,
 )
@@ -274,5 +270,4 @@ run_binary(
         "//conditions:default": [],
     }),
     tool = ":gen_entrypoint_tool",
-    visibility = ["//internal/scripts/pycena:__pkg__"],
 )

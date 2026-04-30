@@ -15,14 +15,12 @@ DEFAULT_VISIBILITY = [
     # Broader visibility so renderer could take this
     "//:core_package_group",
     # Asset Harvester requires NRM primitive to initiate training
-    "//internal/scripts/asset_harvesting:__subpackages__",
 ]
 
 filegroup(
     name = "py_files",
     srcs = glob(["**/*.py"]),
     visibility = [
-        "//internal/scripts/pycena:__pkg__",
     ],
 )
 

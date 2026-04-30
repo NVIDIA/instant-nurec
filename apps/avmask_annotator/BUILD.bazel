@@ -22,7 +22,6 @@ filegroup(
     srcs = glob(["**/*.py"]),
     visibility = [
         "//apps:__subpackages__",
-        "//internal/scripts/pycena:__pkg__",
     ],
 )
 
@@ -58,7 +57,6 @@ py_library(
     ],
     visibility = [
         "//apps:__pkg__",
-        "//internal/scripts/pycena/runtime:__pkg__",
     ],
     deps = MASK_ANNOTATOR_DEPS,
 )
@@ -90,7 +88,6 @@ py_binary(
     main = "mask_annotator.py",
     visibility = [
         "//apps:__pkg__",
-        "//internal/scripts/pycena:__pkg__",
     ],
     deps = MASK_ANNOTATOR_DEPS,
 )

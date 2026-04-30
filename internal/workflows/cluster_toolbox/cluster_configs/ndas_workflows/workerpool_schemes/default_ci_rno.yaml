@@ -1,9 +1,0 @@
-# @package _global_
-# Mirror of default_ci_sjc but rooted at RNO. Swap the base config's scheme
-# include from `workerpool_schemes/default_ci_sjc` to `workerpool_schemes/default_ci_rno`
-# to move every pool to RNO at once. Per-task overrides in workflow configs still apply.
-
-default_compute_target: rno
-default_gpu: a40
-
-tasks: {}

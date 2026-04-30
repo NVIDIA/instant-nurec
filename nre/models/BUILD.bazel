@@ -17,14 +17,12 @@ package(default_visibility = [
     "//:core_package_group",
     "//bazel/docs:__pkg__",
     # Add visibility for ppisp_report package
-    "//internal/scripts/experimental/ppisp_report:__pkg__",
 ])
 
 filegroup(
     name = "py_files",
     srcs = glob(["**/*.py"]),
     visibility = [
-        "//internal/scripts/pycena:__pkg__",
     ],
 )
 

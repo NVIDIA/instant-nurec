@@ -19,7 +19,6 @@ filegroup(
     name = "py_files",
     srcs = glob(["**/*.py"]),
     visibility = [
-        "//internal/scripts/pycena:__pkg__",
     ],
 )
 
@@ -106,7 +105,6 @@ py_library(
     ],
     visibility = [
         "//apps:__pkg__",
-        "//internal/scripts/pycena/runtime:__pkg__",
     ],
     deps = NCORE_AUX_DATA_DEPS,
 )
@@ -124,7 +122,6 @@ py_binary(
     main = "ncore_aux_data.py",
     visibility = [
         # Add visibility for //internal/scripts/ci:python_absolute_path_check
-        "//internal/scripts/ci:__pkg__",
     ],
     deps = NCORE_AUX_DATA_DEPS,
 )

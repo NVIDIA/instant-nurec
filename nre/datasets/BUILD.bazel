@@ -23,7 +23,6 @@ filegroup(
     name = "py_files",
     srcs = glob(["**/*.py"]),
     visibility = [
-        "//internal/scripts/pycena:__pkg__",
     ],
 )
 
@@ -41,10 +40,7 @@ py_library(
     ],
     visibility = DEFAULT_VISIBILITY + [
         # Add visibility for //internal/scripts/experimental:ncore_to_ngp
-        "//internal/scripts/experimental:__pkg__",
         # Allow scripts (including asset_harvester) to depend on datasets pylib
-        "//internal/scripts:__pkg__",
-        "//internal/scripts:__subpackages__",
     ],
     deps = [
         pip_requirement("scipy"),

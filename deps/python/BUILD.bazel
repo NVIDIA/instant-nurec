@@ -13,7 +13,6 @@ load("@rules_uv//uv:pip.bzl", "pip_compile")
 
 exports_files(
     ["requirements_3_11_x86_64.txt"],
-    visibility = ["//internal/scripts/deps:__pkg__"],
 )
 
 # Check that our compiled pip requirements are up-to-date
@@ -95,7 +94,6 @@ multirun(
         ":requirements_3_11_internal_x86_64",  # depends on requirements_3_11_x86_64, needs to be executed afterward
         ":requirements_3_11_aarch64",
         ":requirements_3_11_docs",  # depends on requirements_3_11_x86_64 for constraints
-        "//internal/scripts/deps:generate_lock",  # uv.lock at repo root for Black Duck (uv tree --no-dedupe --frozen)
     ],
     jobs = 1,  # Enforce sequential execution
     keep_going = False,  # Fail on error

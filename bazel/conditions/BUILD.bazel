@@ -13,8 +13,6 @@ config_setting(
     flag_values = {"//bazel/flags:internal": "True"},
     visibility = [
         "//deps/docker:__pkg__",
-        "//internal/scripts/pycena:__pkg__",
-        "//internal/scripts/pycena/runtime:__pkg__",
         "//libs/nrend:__pkg__",
         "//nre:__pkg__",
     ],
@@ -41,8 +39,6 @@ config_setting(
     visibility = [
         "//apps:__pkg__",
         "//deps/docker:__pkg__",
-        "//internal/scripts/pycena:__pkg__",
-        "//internal/scripts/pycena/runtime:__pkg__",
     ],
 )
 
@@ -53,8 +49,6 @@ config_setting(
     visibility = [
         "//apps:__pkg__",
         "//deps/docker:__pkg__",
-        "//internal/scripts/pycena:__pkg__",
-        "//internal/scripts/pycena/runtime:__pkg__",
     ],
 )
 
@@ -64,8 +58,6 @@ config_setting(
     visibility = [
         "//apps:__pkg__",
         "//deps/docker:__pkg__",
-        "//internal/scripts/pycena:__pkg__",
-        "//internal/scripts/pycena/runtime:__pkg__",
     ],
 )
 
@@ -75,8 +67,6 @@ config_setting(
     visibility = [
         "//apps:__pkg__",
         "//deps/docker:__pkg__",
-        "//internal/scripts/pycena:__pkg__",
-        "//internal/scripts/pycena/runtime:__pkg__",
     ],
 )
 
@@ -89,8 +79,6 @@ config_setting(
     visibility = [
         "//apps:__pkg__",
         "//deps/docker:__pkg__",
-        "//internal/scripts/pycena:__pkg__",
-        "//internal/scripts/pycena/runtime:__pkg__",
     ],
 )
 
@@ -103,8 +91,6 @@ config_setting(
     visibility = [
         "//apps:__pkg__",
         "//deps/docker:__pkg__",
-        "//internal/scripts/pycena:__pkg__",
-        "//internal/scripts/pycena/runtime:__pkg__",
     ],
 )
 
@@ -117,8 +103,6 @@ config_setting(
     visibility = [
         "//apps:__pkg__",
         "//deps/docker:__pkg__",
-        "//internal/scripts/pycena:__pkg__",
-        "//internal/scripts/pycena/runtime:__pkg__",
     ],
 )
 
@@ -127,7 +111,6 @@ config_setting(
     flag_values = {"//bazel/flags:run_grpc_only": "True"},
     visibility = [
         "//:__pkg__",
-        "//internal/scripts/pycena:__subpackages__",
     ],
 )
 

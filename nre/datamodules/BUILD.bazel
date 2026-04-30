@@ -23,7 +23,6 @@ filegroup(
     name = "py_files",
     srcs = glob(["**/*.py"]),
     visibility = [
-        "//internal/scripts/pycena:__pkg__",
     ],
 )
 
@@ -36,7 +35,6 @@ py_library(
     ],
     visibility = DEFAULT_VISIBILITY + [
         # Add visibility for //internal/scripts/ncore_vis:ncore_vis
-        "//internal/scripts/ncore_vis:__pkg__",
     ],
     deps = [
         "//nre/config:pylib",

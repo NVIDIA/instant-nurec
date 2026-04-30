@@ -23,7 +23,6 @@ filegroup(
     name = "py_files",
     srcs = glob(["**/*.py"]),
     visibility = [
-        "//internal/scripts/pycena:__pkg__",
     ],
 )
 
@@ -35,7 +34,6 @@ py_library(
     ],
     visibility = DEFAULT_VISIBILITY + [
         # add visibility to //internal/scripts/experimental:grpc_control_actors
-        "//internal/scripts/experimental:__pkg__",
     ],
     deps = [
         pip_requirement("pyyaml"),

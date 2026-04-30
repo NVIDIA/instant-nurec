@@ -36,27 +36,20 @@ filegroup(
         "//:__pkg__",
 
         # Add visibility for //internal/scripts/experimental:ncore_to_ngp
-        "//internal/scripts/experimental:__pkg__",
 
         # Add visibility for //internal/workflows/cluster_toolbox/benchmark:run_benchmark
-        "//internal/workflows/cluster_toolbox/benchmark:__pkg__",
 
         # Add visibility for //internal/sqa/test_cases
-        "//internal/sqa/test_cases:__pkg__",
 
         # Add visibility for //apps/asset_harvester
         "//apps/asset_harvester:__pkg__",
 
         # Add visibility for //internal/scripts
-        "//internal/scripts:__pkg__",
 
         # Add visibility for scripts/test_data generation
-        "//internal/scripts/test_data:__pkg__",
 
         # Add visibility for nvhuman animation scripts
-        "//internal/scripts/experimental/models/gaussian:__subpackages__",
 
         # Add visibility for //internal/scripts/nrm_data
-        "//internal/scripts/nrm_data:__pkg__",
     ],
 )

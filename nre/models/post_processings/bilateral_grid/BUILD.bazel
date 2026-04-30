@@ -14,14 +14,12 @@ load("//bazel/pytest:defs.bzl", "pytest_test")
 
 package(default_visibility = [
     "//:core_package_group",
-    "//internal/scripts/pycena:__pkg__",
 ])
 
 filegroup(
     name = "py_files",
     srcs = glob(["**/*.py"]),
     visibility = [
-        "//internal/scripts/pycena:__pkg__",
     ],
 )
 
