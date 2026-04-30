@@ -274,40 +274,6 @@ class BaseRendererConfig(BaseConfigSchema):
     antialiasing: AntialiasingConfig = Field(default_factory=AntialiasingConfig)
 
 
-class GSplatRendererConfig(BaseRendererConfig):
-    """GSplat renderer configuration."""
-
-    name: Literal["3dgs-gsplat", "3dgut-gsplat"]
-
-    tiling: CameraLidarTilingConfig = Field(default_factory=CameraLidarTilingConfig)  # type: ignore[assignment]
-
-    rasterize_mode: Literal["classic", "antialiased"] = "classic"
-
-    log_level: int | str = 3  # type: ignore[assignment]
-    sparse_grad: bool = False
-    absgrad: bool = False
-    packed: bool = False
-    radius_clip: float = 0.0
-    use_rays: bool = False
-
-    @model_validator(mode="before")
-    @classmethod
-    def validate_use_rays(cls, config: dict[str, Any] | DictConfig):
-        if config.get("name") == "3dgut-gsplat" and "use_rays" not in config:
-            config["use_rays"] = True  # Should be True by default for 3dgut-gsplat
-        return config
-
-    @model_validator(mode="after")
-    def validate_3dgut_rasterize_mode(self) -> "GSplatRendererConfig":
-        if self.name == "3dgut-gsplat" and self.rasterize_mode == "antialiased":
-            raise ValueError(
-                "3dgut-gsplat does not support rasterize_mode='antialiased': "
-                "3DGUT should use rasterize_mode='classic' to match nRend's opacity behavior "
-                "when min_projected_ray_radius dilation is enabled."
-            )
-        return self
-
-
 class NRendRendererConfig(BaseRendererConfig):
     """NRend renderer configuration (all NRend variants)."""
 
@@ -330,8 +296,7 @@ class NRendRendererConfig(BaseRendererConfig):
     backward: dict[str, Any] | None = None
 
 
-# Discriminated union of all renderer types
-RendererConfigType = GSplatRendererConfig | NRendRendererConfig
+RendererConfigType = NRendRendererConfig
 
 
 class BaseStrategyConfig(BaseConfigSchema):
