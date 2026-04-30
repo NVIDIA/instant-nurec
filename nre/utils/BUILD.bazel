@@ -116,23 +116,6 @@ pytest_test(
 )
 
 py_library(
-    name = "pylib_metrics",
-    srcs = ["metrics.py"],
-    visibility = [
-        # Add visibility for //internal/scripts/kratos
-    ],
-    deps = [
-        ":pylib_trainer",
-        ":pylib_types",
-        "//nre/config:pylib_version",
-        pip_requirement("torch"),
-        pip_requirement("pydantic"),
-        pip_requirement("omegaconf"),
-        pip_requirement("pyyaml"),
-    ],
-)
-
-py_library(
     name = "pylib_fields",
     srcs = ["fields.py"],
     deps = [
@@ -252,7 +235,6 @@ py_library(
         ":pylib_colored_exceptions",
         ":pylib_geometry",
         ":pylib_knn",
-        ":pylib_metrics",
         ":pylib_misc",
         ":pylib_packed_ops",
         ":pylib_profiling",
@@ -441,7 +423,6 @@ py_library(
     ],
     visibility = DEFAULT_VISIBILITY + ["//:__pkg__"],
     deps = [
-        ":pylib_metrics",
         ":pylib_packed_ops",
         ":pylib_types",
         "//libs/tracy_utils:pylib",  # Default Tracy (CPU-only)
@@ -476,7 +457,6 @@ py_library(
     ],
     visibility = DEFAULT_VISIBILITY + ["//:__pkg__"],
     deps = [
-        ":pylib_metrics",
         ":pylib_packed_ops",
         ":pylib_types",
         "//libs/tracy_utils:pylib_gpu",  # GPU Tracy
