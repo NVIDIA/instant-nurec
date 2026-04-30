@@ -88,12 +88,6 @@ class GaussiansNRMSystem(BaseNRMSystem):
         )
         return primitives, [], []
 
-    def training_losses(self, batch: NRMDataBatch, batch_local_idx: int) -> "LossAggregatorBatchReturn":
-        # Predict-only standalone: training is removed but the abstract method on
-        # BaseNRMSystem must still resolve. This stub is never reached because
-        # run.py refuses any non-predict mode.
-        raise NotImplementedError("Predict-only standalone: training_losses is not implemented.")
-
     def predict_step(
         self, batch: NRMDataBatch, batch_local_idx: int
     ) -> dict[str, list[BaseNRMPrimitive] | NRMDataBatch]:
