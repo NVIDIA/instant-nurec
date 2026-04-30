@@ -10,58 +10,9 @@
 
 from __future__ import annotations
 
-import json
-
-import numpy as np
-import torch
-
-from omegaconf import DictConfig, ListConfig, OmegaConf
-
 import ncore.data
 import ncore.data.v4
 import ncore_internal.data.v3
-
-from libs.vren.lidars import (  # type: ignore
-    preprocess_lidar_raygen_only,
-)
-from ncore.sensors import LidarModel
-from nre.utils.misc import unpack_optional
-
-
-class LidarModelBundle:
-    """
-    Wrapper around the meta data for rendering of a Lidar model.
-    """
-
-    @classmethod
-    def load_from_config(cls, lidar_config: dict) -> LidarModelBundle:
-        # Handle the case where lidar_config is a dictionary, but might contain OmegaConf objects
-        processed_config = {}
-
-        for key, value in lidar_config.items():
-            if isinstance(value, (ListConfig, DictConfig)):
-                processed_config[key] = OmegaConf.to_container(value, resolve=True)
-            else:
-                processed_config[key] = value
-
-        data = json.dumps(processed_config)
-
-        lidar_parameters = ncore.data.RowOffsetStructuredSpinningLidarModelParameters.from_json(data)
-        return cls(lidar_parameters)
-
-    def __init__(self, lidar_parameters: ncore.data.ConcreteLidarModelParametersUnion):
-        self.lidar_parameters = lidar_parameters
-        self.lidar_model = unpack_optional(LidarModel.maybe_from_parameters(lidar_parameters))
-        # This model is just for converting elements to world rays, hard code the parameters for tile.
-        self.vren_lidar = preprocess_lidar_raygen_only(lidar_parameters, device=torch.device("cuda"))
-        self.elements = np.stack(
-            np.meshgrid(
-                np.arange(lidar_parameters.n_rows, dtype=np.uint16),
-                np.arange(lidar_parameters.n_columns, dtype=np.uint16),
-                indexing="ij",
-            ),
-            axis=-1,
-        ).reshape((-1, 2))
 
 
 def get_lidar_model_parameters_with_fallbacks(
