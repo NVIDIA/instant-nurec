@@ -46,7 +46,6 @@ from nre.models.gaussians.gaussians_composite import GaussiansComposite
 from nre.models.gaussians.renderers import BaseGaussianRenderer
 from nre.models.gaussians.utils import Asset
 from nre.nrm.primitives.base import BaseNRMPrimitive
-from nre.nrm.primitives.celsius_primitive import CelsiusNRMPrimitive
 from nre.nrm.primitives.kelvin_primitive import KelvinNRMPrimitive
 from nre.render.actors import ActorsSnapshot, ActorTracks
 from nre.render.utils import camera_model_to_parameters, frame_transform_poses, transform_intrinsics_to_resolution
@@ -574,7 +573,7 @@ class RenderableModel:
         match untyped_config.model.name:
             case "gaussians_primitive" | "gaussians-composite":
                 return cls._load_model_gaussians_composite_and_upgrade(untyped_config, artifact, orig_untyped_config)
-            case "celsius" | "kelvin":
+            case "kelvin":
                 return cls._load_model_nrm_and_upgrade(untyped_config, artifact, orig_untyped_config)
             case _:
                 raise TypeError(f"Unsupported model name '{untyped_config.model.name}'")
@@ -619,10 +618,8 @@ class RenderableModel:
     ) -> BaseNRMPrimitive:
         model_name = untyped_config.model.name
         checkpoint: Checkpoint = torch.load(artifact.checkpoint, weights_only=False)
-        primitive: CelsiusNRMPrimitive | KelvinNRMPrimitive
-        if model_name == "celsius":
-            primitive = CelsiusNRMPrimitive.load_from_checkpoint(checkpoint)
-        elif model_name == "kelvin":
+        primitive: KelvinNRMPrimitive
+        if model_name == "kelvin":
             primitive = KelvinNRMPrimitive.load_from_checkpoint(checkpoint)
         else:
             raise ValueError(f"Unknown model name: {model_name}")

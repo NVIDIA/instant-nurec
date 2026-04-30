@@ -20,7 +20,6 @@ import torch
 from libs.losses.orchestration.config import LossAggregatorBatchReturn
 from nre.datasets.tracks import CuboidTracks
 from nre.nrm.primitives.base import BaseNRMPrimitive
-from nre.nrm.primitives.celsius_primitive import CelsiusNRMPrimitive
 from nre.utils.batch import NRMDataBatch, RenderingBatch
 from nre.utils.misc import unpack_optional
 from nre.utils.types import FrameConversion, HalfClosedInterval, PointCloud
@@ -162,8 +161,6 @@ def postprocess_nrm_batch_and_primitive(
     Postprocess NRM batch and primitive for visualization.
     For compatible models, Enable sky mask for visualization by default.
     """
-    if isinstance(nrm_primitive, CelsiusNRMPrimitive):
-        nrm_primitive.set_sky_mask_enabled(True)
     return batch, nrm_primitive
 
 

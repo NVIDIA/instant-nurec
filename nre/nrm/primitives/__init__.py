@@ -9,15 +9,10 @@
 # its affiliates is strictly prohibited.
 
 from nre.nrm.primitives.base import BaseGaussiansNRMPrimitive
-from nre.nrm.primitives.celsius_primitive import CelsiusNRMPrimitive
 from nre.nrm.primitives.kelvin_primitive import KelvinNRMPrimitive
 
 
-# These imports in __all__ are only used for documentation and shouldn't
-# be used for relative imports. This is a temporary solution until
-# we can make the autodiscovery of the modules work with sphinx
 __all__ = [
     "BaseGaussiansNRMPrimitive",
-    "CelsiusNRMPrimitive",
     "KelvinNRMPrimitive",
 ]

@@ -30,7 +30,6 @@ py_library(
     name = "pylib",
     srcs = [
         "base.py",
-        "celsius_primitive.py",
         "kelvin_primitive.py",
     ],
     visibility = DEFAULT_VISIBILITY,

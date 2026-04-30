@@ -32,7 +32,6 @@ from libs.losses.orchestration.config import LossAggregatorBatchReturn, LossAggr
 from nre.datasets.tracks import CuboidTracks
 from nre.nrm.config.nrm import NRMConfig
 from nre.nrm.models.base import BaseNRMSupervisionPack
-from nre.nrm.models.celsius_model import CelsiusNRM, CelsiusNRMSupervisionPack
 from nre.nrm.models.kelvin_backbone.base import KelvinNRMSupervisionPack
 from nre.nrm.models.kelvin_model import KelvinNRM
 from nre.nrm.predict.export_ply import export_ply
@@ -62,9 +61,7 @@ class GaussiansNRMSystem(BaseNRMSystem):
     def __init__(self, config: NRMConfig) -> None:
         super().__init__(config)
 
-        if config.model.name == "celsius":
-            self.model = CelsiusNRM(config.model)
-        elif config.model.name == "kelvin":
+        if config.model.name == "kelvin":
             self.model = KelvinNRM(config.model)
         else:
             raise ValueError(f"Unknown config name {config.model.name}.")
@@ -156,10 +153,7 @@ class GaussiansNRMSystem(BaseNRMSystem):
         if gt_distance is None:
             return None, None, None
         pred_distance: torch.Tensor | None = None
-        if isinstance(supervision_pack, CelsiusNRMSupervisionPack):
-            if supervision_pack.context_distance is not None:
-                pred_distance = supervision_pack.context_distance
-        elif isinstance(supervision_pack, KelvinNRMSupervisionPack):
+        if isinstance(supervision_pack, KelvinNRMSupervisionPack):
             if supervision_pack.context_depth is not None and context.rendering is not None:
                 scale = unpack_optional(context.rendering.camera).distance_to_depth_scale
                 pred_distance = supervision_pack.context_depth / scale

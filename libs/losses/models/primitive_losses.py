@@ -21,11 +21,25 @@ from libs.losses.models.utils import get_mask_semantic
 from libs.losses.orchestration.config import LossItemConfig, LossReturn
 from nre.models.base import BaseModel
 from nre.nrm.models.base import BaseNRMSupervisionPack
-from nre.nrm.models.celsius_model import CelsiusNRM, CelsiusNRMSupervisionPack
 from nre.nrm.models.kelvin_backbone.base import KelvinNRMSupervisionPack
 from nre.nrm.primitives.base import BaseNRMPrimitive
-from nre.nrm.primitives.celsius_primitive import CelsiusNRMPrimitive
 from nre.nrm.primitives.kelvin_primitive import KelvinNRMPrimitive, KelvinSemanticClass
+
+
+# Phase 1 step 4.1 stubs: the Celsius model has been removed but this file's
+# match/case patterns still mention the old class names. Stubs keep the patterns
+# parseable; they never match anything since no Celsius instances exist anymore.
+# The whole loss tree is deleted in Phase 1 step 4.3.
+class CelsiusNRM:  # pragma: no cover
+    pass
+
+
+class CelsiusNRMSupervisionPack:  # pragma: no cover
+    pass
+
+
+class CelsiusNRMPrimitive:  # pragma: no cover
+    pass
 from nre.utils.batch import CameraFrameLabels, DataAndRenderingBatch
 from nre.utils.misc import unpack_optional
 from nre.utils.trainer import TrainerConfig

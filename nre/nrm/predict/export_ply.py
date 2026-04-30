@@ -21,7 +21,6 @@ from nre.models.gaussians.utils import RGB2SH, write_ply_3dgs
 from nre.models.utils import get_activation
 from nre.nrm.config.predict import PrimitivePLYExportConfig
 from nre.nrm.primitives.base import BaseNRMPrimitive
-from nre.nrm.primitives.celsius_primitive import CelsiusNRMPrimitive
 from nre.nrm.primitives.kelvin_primitive import KelvinNRMPrimitive, KelvinSemanticClass
 from nre.utils.types import RigTrajectories
 
@@ -108,70 +107,6 @@ def get_gaussian_shape_pruning_mask(
     return mask
 
 
-def export_celsius_ply(config: PrimitivePLYExportConfig, primitives: CelsiusNRMPrimitive) -> PLYExportGaussians:
-    """
-    Notes: This is a work in progress and will change. Currently only static layers are handled (dynamic
-    gaussians are filted out via the maximum velocity param). Because we do not yet export the affine matrix,
-    we apply this directly to the RGB values when exporting a single camera.
-    """
-
-    if config.falloff_sigma_timestamp_us is None:
-        densities = primitives.densities
-    else:
-        min_timestamp = torch.min(primitives.timestamps_us).cpu().item()
-        if config.falloff_sigma_timestamp_us == -1:
-            timestamp_us = torch.max(primitives.timestamps_us).cpu().item()
-        else:
-            timestamp_us = min_timestamp + config.falloff_sigma_timestamp_us
-        timestamps_us = torch.Tensor([timestamp_us, timestamp_us]).to(torch.uint64).unsqueeze(0)
-        gaussians = primitives.get_gaussian_parameters(timestamps_us)
-        densities = gaussians["densities"]
-
-    mask = get_gaussian_shape_pruning_mask(config, densities, primitives.scales)
-
-    if primitives.dynamic_bbox_mask is not None:
-        logger.info(
-            f"Filter (dynamic bbox mask) removed {torch.sum(mask & (primitives.dynamic_bbox_mask > 0.5))} gaussians"
-        )
-        mask = mask & (primitives.dynamic_bbox_mask <= 0.5)
-
-    if primitives.forward_speed_mps is not None and config.maximum_velocity is not None:
-        logger.info(
-            f"Filter (forward speed mps :3) removed {torch.sum(mask & (torch.norm(primitives.forward_speed_mps[..., :3], dim=1) > config.maximum_velocity).unsqueeze(1))} gaussians"
-        )
-        mask = mask & (torch.norm(primitives.forward_speed_mps[..., :3], dim=1) <= config.maximum_velocity).unsqueeze(1)
-        logger.info(
-            f"Filter (forward speed mps 3:) removed {torch.sum(mask & (torch.norm(primitives.forward_speed_mps[..., 3:], dim=1) > config.maximum_velocity).unsqueeze(1))} gaussians"
-        )
-        mask = mask & (torch.norm(primitives.forward_speed_mps[..., 3:], dim=1) <= config.maximum_velocity).unsqueeze(1)
-
-    mask = mask.squeeze()
-    logger.info(f"After filtering, {torch.sum(mask)} gaussians remaining.")
-
-    rgb = primitives.rgb[mask].float()
-    # Temporary hack to apply affine matrix in the single camera case
-    if primitives.affine_matrix is not None and primitives.affine_bias is not None:
-        if config.apply_affine_mtx:
-            if len(primitives.affine_matrix) == 1:
-                rgb = torch.einsum("n p, q p -> n q", rgb, primitives.affine_matrix[0])
-                rgb = torch.clamp(rgb + primitives.affine_bias[0], min=0.0, max=1.0)
-                logger.info("Applying affine matrix to RGB values.")
-            else:
-                logger.warning("Skipping application affine matrix. This only works with a single camera.")
-
-    return PLYExportGaussians(
-        positions=primitives.positions[mask],
-        rotations=primitives.rotations[mask],
-        scales=primitives.scales[mask],
-        densities=densities[mask],
-        rgb=rgb,
-        road_mask=primitives.road_mask[mask].squeeze(-1).to(dtype=torch.uint8)
-        if primitives.road_mask is not None
-        else None,
-        sky_mask=primitives.sky_mask[mask].squeeze(-1).float() if primitives.sky_mask is not None else None,
-    )
-
-
 def export_kelvin_ply(config: PrimitivePLYExportConfig, primitives: KelvinNRMPrimitive) -> PLYExportGaussians:
     """Export the ply file, static layer only."""
     static_layer = primitives.static_layer
@@ -210,9 +145,7 @@ def export_ply(
     primitives = primitives.rigid_transform(rig_trajectories.T_world_base.to(dtype=torch.float32))
 
     # Then compute the gaussians to be exported
-    if isinstance(primitives, CelsiusNRMPrimitive):
-        gaussians_ply = export_celsius_ply(config, primitives)
-    elif isinstance(primitives, KelvinNRMPrimitive):
+    if isinstance(primitives, KelvinNRMPrimitive):
         gaussians_ply = export_kelvin_ply(config, primitives)
     else:
         raise ValueError(f"Unsupported primitive type: {type(primitives)}")

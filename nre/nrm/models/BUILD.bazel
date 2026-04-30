@@ -32,7 +32,6 @@ py_library(
         "__init__.py",
         "activations.py",
         "base.py",
-        "celsius_model.py",
         "kelvin_model.py",
         "legacy_tokengs_to_kelvin_ckpt.py",
         "post_processing.py",

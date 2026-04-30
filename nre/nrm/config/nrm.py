@@ -32,7 +32,7 @@ from nre.config.trainer import TrainerConfig, infer_slurm_environment
 from nre.config.version import Version, get_version
 from nre.config.viewer import ViewerConfig
 from nre.nrm.config.dataset import NRMSplitsConfig
-from nre.nrm.config.models import CelsiusModelConfig, KelvinModelConfig
+from nre.nrm.config.models import KelvinModelConfig
 from nre.nrm.config.predict import PredictConfig, SensorOverrideConfig
 from nre.repo_root import __reporoot__
 from nre.utils.model_registry import create_model_registry
@@ -231,7 +231,7 @@ class NRMConfig(BaseConfigSchema):
     system: Union[GaussiansNRMSystemConfig, TestDataNRMSystemConfig] = Field(discriminator="name")
     dataset: NRMSplitsConfig = Field(discriminator="name")
 
-    model: CelsiusModelConfig | KelvinModelConfig = Field(discriminator="name")
+    model: KelvinModelConfig = Field(discriminator="name")
     loss: LossConfig
 
     # Predict configuration
