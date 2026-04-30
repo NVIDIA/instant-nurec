@@ -34,15 +34,6 @@ py_library(
 )
 
 py_library(
-    name = "pylib_tests",
-    srcs = ["tests.py"],
-    deps = [
-        pip_requirement("torch"),
-        pip_requirement("numpy"),
-    ],
-)
-
-py_library(
     name = "pylib_morph",
     srcs = ["morph.py"],
     deps = [
@@ -54,7 +45,6 @@ py_library(
     name = "pylib_prober",
     srcs = ["prober.py"],
     deps = [
-        ":pylib_tests",
         "//nre/config:pylib",
         "@rules_python//python/runfiles",
         pip_requirement("torch"),
