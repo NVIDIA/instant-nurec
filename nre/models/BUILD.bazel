@@ -120,7 +120,6 @@ py_library(
         ":pylib_utils",
         "//nre/models/post_processings:pylib_bilateral_grid",
         "//nre/models/post_processings:pylib_ppisp",
-        "//libs/gaussian_mcmc:pylib_cc",
         "//libs/nrend:pylib",
         "//libs/slang_gaussians:pylib",
         "//libs/vren:pylib",
@@ -132,7 +131,6 @@ py_library(
         "//nre/utils:pylib_optim",
         "//nre/utils:pylib_prober",
         "//nre/utils:pylib_types",
-        "//nre/visualdebugger:pylib",
     ],
 )
 

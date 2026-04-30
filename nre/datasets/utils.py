@@ -63,7 +63,11 @@ from nre.utils.misc import (
     unpack_optional,
 )
 from nre.utils.types import AABB3D, CuboidTracksData, HalfClosedInterval, PointCloud, TracksData
-from nre.visualdebugger import get_visualdebugger
+def get_visualdebugger():
+    class _Null:
+        def __getattr__(self, _n):
+            return lambda *a, **k: None
+    return _Null()
 
 
 Tensor = TypeVar("Tensor", np.ndarray, torch.Tensor)

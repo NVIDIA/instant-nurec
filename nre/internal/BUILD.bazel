@@ -27,6 +27,5 @@ py_library(
     ],
     visibility = ["//visibility:public"],
     deps = [
-        "//nre/internal/visualdebugger:pylib",
     ],
 )

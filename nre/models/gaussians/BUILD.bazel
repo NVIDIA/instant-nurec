@@ -70,7 +70,6 @@ py_library(
         ":pylib_cc_gsplat",
         "//libs/gaussian_mcmc:pylib_cc",
         "//libs/geometry/kernels:pylib",
-        "//libs/nrend:pylib",
         "//nre/datasets:pylib",
         "//nre/models:pylib",
         "//nre/models/base:pylib",
@@ -79,7 +78,6 @@ py_library(
         "//nre/utils:pylib_optim",
         "//nre/utils:pylib_types",
         "//nre/utils/io:pylib",
-        "//nre/visualdebugger:pylib",
     ],
 )
 
@@ -148,7 +146,6 @@ pytest_test(
         pip_requirement("numpy"),
         pip_requirement("nvidia-ncore"),
         pip_requirement("torch"),
-        "//libs/nrend:pylib",
         "//nre/models:pylib",
         "//nre/models/base:pylib",
         "//nre/utils:pylib",

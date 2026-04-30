@@ -1,13 +1,34 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: LicenseRef-NvidiaProprietary
 #
-# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
-# property and proprietary rights in and to this material, related
-# documentation and any modifications thereto. Any use, reproduction,
-# disclosure or distribution of this material and related documentation
-# without an express license agreement from NVIDIA CORPORATION or
-# its affiliates is strictly prohibited.
+# Phase 1 step 4.3 stub: the polyscope-backed visual debugger has no role in
+# the standalone predict pipeline. Production code calls
+# `get_visualdebugger()` and conditionally invokes the returned object's
+# methods; we return a NullDebugger that swallows everything so the call sites
+# don't need editing. The real subtree was deleted; this 30-LOC stub replaces
+# nre/internal/visualdebugger entirely.
 
-"""VisualDebugger module for rendering 3D geometry and other visualizations."""
+from __future__ import annotations
 
-from nre.visualdebugger.interface import VisualDebugger, get_visualdebugger  # noqa
+from typing import Any
+
+
+class _NullDebugger:
+    """No-op visual debugger used in place of the polyscope-backed one."""
+
+    def __getattr__(self, _name: str):
+        return self._noop
+
+    @staticmethod
+    def _noop(*_args: Any, **_kwargs: Any) -> None:
+        return None
+
+
+_INSTANCE = _NullDebugger()
+
+
+def get_visualdebugger() -> _NullDebugger:
+    return _INSTANCE
+
+
+VisualDebugger = _NullDebugger

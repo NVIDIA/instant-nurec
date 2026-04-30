@@ -76,7 +76,14 @@ from nre.utils.misc import (
     flatten_list,
     unpack_optional,
 )
-from nre.visualdebugger import get_visualdebugger
+# visualdebugger is replaced by an inline no-op at the only call site below
+# (PointCloud.visualize); kept as a stub so polyscope is not in the predict
+# image at all.
+def get_visualdebugger():
+    class _NullDebugger:
+        def __getattr__(self, _name):
+            return lambda *a, **k: None
+    return _NullDebugger()
 
 
 M = TypeVar("M", bound=torch.nn.Module)

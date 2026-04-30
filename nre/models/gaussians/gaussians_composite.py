@@ -72,7 +72,11 @@ from nre.utils.types import (
     GaussiansRenderReturn,
     SceneContractor,
 )
-from nre.visualdebugger import get_visualdebugger
+def get_visualdebugger():
+    class _Null:
+        def __getattr__(self, _n):
+            return lambda *a, **k: None
+    return _Null()
 
 
 log = logging.getLogger(__name__)

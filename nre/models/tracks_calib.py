@@ -35,7 +35,11 @@ from nre.utils.geometry import so3_matrix_to_quat
 from nre.utils.optim import OptimizerLRSchedulerConfig, configure_optimizers
 from nre.utils.packed_ops import packed_max, packed_min
 from nre.utils.trainer import adjust_step_for_world_size
-from nre.visualdebugger import get_visualdebugger
+def get_visualdebugger():
+    class _Null:
+        def __getattr__(self, _n):
+            return lambda *a, **k: None
+    return _Null()
 
 
 log = logging.getLogger(__name__)

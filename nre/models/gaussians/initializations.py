@@ -53,7 +53,11 @@ from nre.utils.knn import knn_points
 from nre.utils.misc import sync_objects_or_raise, to_numpy, to_torch, unpack_optional
 from nre.utils.profiling import ScopedTimer
 from nre.utils.types import PointCloud
-from nre.visualdebugger import get_visualdebugger
+def get_visualdebugger():
+    class _Null:
+        def __getattr__(self, _n):
+            return lambda *a, **k: None
+    return _Null()
 
 
 log = logging.getLogger(__name__)

@@ -67,7 +67,6 @@ py_library(
         pip_requirement("simplejpeg"),
         pip_requirement("cuml-cu12"),
         ":pylib_tracks",
-        "//libs/ray_utils:pylib_cc",
         "//libs/vren:pylib",
         "//libs/vren:pylib_cc",
         "//nre/config:pylib",
@@ -75,7 +74,6 @@ py_library(
         "//nre/utils:pylib",
         "//nre/utils:pylib_morph",
         "//nre/utils:pylib_ncore_utils",
-        "//nre/visualdebugger:pylib",
     ],
 )
 
@@ -99,7 +97,6 @@ py_library(
         "//libs/vren:pylib_cc",
         "//nre/utils:pylib",
         "//nre/utils:pylib_fields",
-        "//nre/visualdebugger:pylib",
     ],
 )
 

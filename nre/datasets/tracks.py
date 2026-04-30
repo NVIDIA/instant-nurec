@@ -27,7 +27,11 @@ from nre.utils.geometry import se3_matrix_to_tquat, tquat_to_se3_matrix
 from nre.utils.misc import get_pack_info_from_n
 from nre.utils.packed_ops import linstep_interleave
 from nre.utils.types import CuboidTracksData, CuboidTracksDataPack, FrameConversion, TrackFlags, TracksData
-from nre.visualdebugger import get_visualdebugger
+def get_visualdebugger():
+    class _Null:
+        def __getattr__(self, _n):
+            return lambda *a, **k: None
+    return _Null()
 
 
 @dataclass(kw_only=True, slots=True)

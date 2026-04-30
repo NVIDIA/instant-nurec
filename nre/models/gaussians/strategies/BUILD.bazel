@@ -47,7 +47,6 @@ py_library(
         pip_requirement("torch"),
         pip_requirement("omegaconf"),
         pip_requirement("tqdm"),
-        "//libs/gaussian_mcmc:pylib_cc",
         "//libs/slang_gaussians:pylib",
         "//nre/datasets:pylib",
         "//nre/models/base:pylib",
