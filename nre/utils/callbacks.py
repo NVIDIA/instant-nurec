@@ -38,7 +38,18 @@ from pytorch_lightning.trainer import Trainer
 from nre.config.base_schema import config_to_primitive
 from nre.config.logger import DummyLoggerConfig, LoggerConfigType, TensorboardLoggerConfig, WandbLoggerConfig
 from nre.config.nre import NREConfig
-from nre.systems.base import BaseSystem, BaseSystemSO
+# Phase 1 step 4.3: nre/systems was deleted (not on the predict path). The
+# callback classes below still reference BaseSystem / BaseSystemSO inside
+# isinstance() checks; stubs keep the references resolvable at module-load
+# time. None of those callbacks fire during predict, so the stubs never match.
+class BaseSystem:  # pragma: no cover
+    pass
+
+
+class BaseSystemSO:  # pragma: no cover
+    pass
+
+
 from nre.utils.misc import rank_zero_only, unpack_optional
 from nre.utils.trainer import BroadcastExceptions
 

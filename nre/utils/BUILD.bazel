@@ -386,7 +386,6 @@ py_library(
         ":pylib",
         ":pylib_types",
         "//nre/config:pylib",
-        "//nre/systems:pylib",
         pip_requirement("torch"),
         pip_requirement("omegaconf"),
         pip_requirement("pytorch_lightning"),

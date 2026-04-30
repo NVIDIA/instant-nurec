@@ -43,7 +43,6 @@ py_library(
         "//nre/nrm/primitives:pylib",
         "//nre/nrm/utils:pylib",
         "//nre/nrm/utils:pylib_trajectory",
-        "//nre/systems:pylib",
         "//nre/utils:pylib",
         "//nre/utils:pylib_custom_metrics",
         "//nre/utils:pylib_geometry",
