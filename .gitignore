@@ -1,0 +1,58 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Virtual envs
+.venv/
+venv/
+env/
+
+# Editor / OS
+.idea
+.idea/
+.vscode
+.vscode/
+.cursor/
+.DS_Store
+
+# Tooling caches
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.test_cache/
+.coverage
+htmlcov/
+
+# Bazel (Phase 0-2 only; whole bazel system is removed in Phase 3)
+bazel-out/
+bazel-bin/
+bazel-testlogs/
+bazel-nre/
+bazel-instant-nurec/
+
+# Large generated artifacts
+*.pt
+*.ckpt
+kelvin_full.pt
+
+# Reference baselines (2.7 GB of PLYs); kept out of git, used only locally
+baselines/
+
+# Stray shell/profile dotfiles that landed in the working dir
+.bash_profile
+.bashrc
+.gitconfig
+.gitmodules
+.mcp.json
+.profile
+.ripgreprc
+.zprofile
+.zshrc
+
+# Prior-agent prompt history
+prompts.yaml
