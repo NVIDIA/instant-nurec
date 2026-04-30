@@ -27,6 +27,5 @@ py_library(
     name = "pylib_ppisp",
     srcs = ["__init__.py"],
     deps = [
-        "//nre/models/post_processings/ppisp:pylib",
     ],
 )

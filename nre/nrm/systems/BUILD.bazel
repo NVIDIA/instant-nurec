@@ -32,7 +32,7 @@ py_library(
     ],
     visibility = DEFAULT_VISIBILITY,
     deps = [
-        "//libs/losses:pylib",
+        "//libs/losses:pylib_orchestration_config",
         "//nre/config:pylib",
         "//nre/datasets:pylib_tracks",
         "//nre/nrm/datasets:pylib",

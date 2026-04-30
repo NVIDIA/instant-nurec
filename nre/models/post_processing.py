@@ -31,7 +31,23 @@ from nre.models.base import BaseModel
 from nre.models.nn_extensions import module_call_type
 from nre.models.post_processings.bilateral_grid.bilateral_grid import BilateralGrid
 from nre.models.post_processings.bilateral_grid.bilateral_grid_cuda import BilateralGridCUDA
-from nre.models.post_processings.ppisp import PPISP, BasePPISP, PPISPSlang
+# Phase 1 step 4.3: ppisp post-processing was deleted (not in parsed.yaml).
+# Stubs let PPISPPostProcessing parse; the constructor raises if anyone
+# actually selects it.
+class BasePPISP:  # pragma: no cover
+    pass
+
+
+class PPISP(BasePPISP):  # pragma: no cover
+    def __init__(self, *args, **kwargs):
+        raise NotImplementedError("ppisp post-processing removed in standalone")
+
+
+class PPISPSlang(BasePPISP):  # pragma: no cover
+    def __init__(self, *args, **kwargs):
+        raise NotImplementedError("ppisp post-processing removed in standalone")
+
+
 from nre.utils.misc import unpack_optional
 from nre.utils.optim import OptimizerLRSchedulerConfig, configure_optimizers
 from nre.utils.types import ExtraSignal, GaussiansCompositeReturn

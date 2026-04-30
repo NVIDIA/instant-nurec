@@ -32,7 +32,7 @@ py_library(
     ],
     deps = [
         pip_requirement("torch"),
-        "//libs/losses/kernel:def_constants",
+        "//libs/losses/kernel:pylib_constants",
         "//nre/models/base:pylib",
         "//nre/models/post_processings/bilateral_grid/cuda:pylib_cc",
         "//nre/utils:pylib",
@@ -46,8 +46,6 @@ pytest_test(
     ],
     deps = [
         ":pylib",
-        "//libs/losses/kernel:def_constants",
-        "//libs/losses/models:pylib",
     ],
 )
 
@@ -61,7 +59,6 @@ pytest_test(
     ],
     deps = [
         ":pylib",
-        "//libs/losses/kernel:def_constants",
         "//nre/utils:pylib_prober",
     ],
 )

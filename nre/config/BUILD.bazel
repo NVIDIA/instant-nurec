@@ -94,7 +94,7 @@ py_library(
         "//:asset_harvester_package_group",
     ],
     deps = [
-        "//libs/losses/orchestration:pylib_config",
+        "//libs/losses:pylib_orchestration_config",
         pip_requirement("pydantic"),
         pip_requirement("omegaconf"),
         pip_requirement("shortuuid"),
