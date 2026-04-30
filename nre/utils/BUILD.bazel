@@ -236,7 +236,6 @@ py_library(
     srcs = [
         "__init__.py",
         "lidar_model.py",
-        "lidar_post_processing.py",
         "log.py",
         "model_registry.py",
         "visualize.py",
@@ -253,7 +252,6 @@ py_library(
         ":pylib_colored_exceptions",
         ":pylib_geometry",
         ":pylib_knn",
-        ":pylib_lpips_network",
         ":pylib_metrics",
         ":pylib_misc",
         ":pylib_packed_ops",
@@ -293,15 +291,6 @@ pytest_test(
         ":pylib_prober",
         pip_requirement("numpy"),
         pip_requirement("scipy"),
-        pip_requirement("torch"),
-    ],
-)
-
-pytest_test(
-    name = "lidar_post_processing_test",
-    srcs = ["lidar_post_processing_test.py"],
-    deps = [
-        ":pylib",
         pip_requirement("torch"),
     ],
 )
@@ -432,20 +421,6 @@ py_library(
         ":pylib_trainer",
         "//nre/config:pylib_trainer_config",
         pip_requirement("omegaconf"),
-    ],
-)
-
-py_library(
-    name = "pylib_lpips_network",
-    srcs = [
-        "lpips_network.py",
-    ],
-    data = [
-        "@lpips_vgg_weights//:weights",
-    ],
-    visibility = DEFAULT_VISIBILITY,
-    deps = [
-        pip_requirement("torch"),
     ],
 )
 
