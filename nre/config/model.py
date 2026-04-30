@@ -1,53 +1,12 @@
 # Copyright (c) 2025 NVIDIA CORPORATION.  All rights reserved.
 
 from contextlib import nullcontext
-from enum import Enum
 from typing import Any, Literal, Optional
 
 from omegaconf import DictConfig, open_dict
 from pydantic import model_validator
 
 from nre.config.base_schema import BaseConfigSchema, Field
-from nre.config.optim import OptimizerConfig, SchedulerConfig
-
-
-class RendererBackend(Enum):
-    """Renderer backend selection for serving and rendering.
-
-    DEFAULT: Use the artifact's trained renderer as-is (PyTorch forward pass).
-    GSPLAT:  Force GSplatRenderer override regardless of artifact configuration.
-    NREND:   Use the fast NRendWrapper (direct C++/CUDA JIT, bypasses PyTorch forward).
-    """
-
-    DEFAULT = "default"
-    GSPLAT = "gsplat"
-    NREND = "nrend"
-
-
-class SensorCalibConfig(BaseConfigSchema):
-    """Sensor-specific calibration configuration."""
-
-    enabled: bool
-
-
-class CalibConfig(BaseConfigSchema):
-    """Calibration component configuration."""
-
-    name: str
-
-    # Common fields
-    enabled: bool = False
-    start_global_step: int = 250
-    skip_first_pose_delta: bool = True
-    enable_torch_compile: bool = True
-
-    # Sensor-specific configs
-    lidar: SensorCalibConfig
-    camera: SensorCalibConfig
-
-    # Optimizer and scheduler configs
-    optimizer: OptimizerConfig | None = None
-    scheduler: SchedulerConfig | None = None
 
 
 class BaseBackgroundConfig(BaseConfigSchema):
