@@ -200,26 +200,6 @@ def merge_rig_trajectories(
     return final_rig_trajectories, old_idx_to_new_idx
 
 
-def keep_only_first_camera(rig_trajectories: RigTrajectories) -> RigTrajectories:
-    """
-    Keep only the first camera in the rig trajectory (mainly used for visualization purposes).
-    """
-    main_camera_idx, main_camera_calibration = sorted(
-        rig_trajectories.camera_calibrations.items(), key=lambda x: x[1].unique_sensor_idx
-    )[0]
-    return replace(
-        rig_trajectories,
-        rig_trajectories=[
-            replace(
-                rig_trajectory,
-                cameras_frame_timestamps_us={
-                    main_camera_idx: rig_trajectory.cameras_frame_timestamps_us[main_camera_idx]
-                },
-            )
-            for rig_trajectory in rig_trajectories.rig_trajectories
-        ],
-        camera_calibrations=OrderedDict([(main_camera_idx, main_camera_calibration)]),
-    )
 
 
 def pad_rig_timestamps(
