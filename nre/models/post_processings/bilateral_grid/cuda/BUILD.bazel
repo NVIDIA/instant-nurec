@@ -83,7 +83,6 @@ pytest_test(
     srcs = ["bilateral_grid_cuda_test.py"],
     deps = [
         ":pylib_cc",
-        "//nre/utils:pylib_tests",
         pip_requirement("torch"),
         pip_requirement("numpy"),
     ],

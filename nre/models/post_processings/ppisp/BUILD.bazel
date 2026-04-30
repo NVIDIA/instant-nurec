@@ -67,6 +67,5 @@ pytest_test(
     deps = [
         ":pylib",
         "//nre/utils:pylib_prober",
-        "//nre/utils:pylib_tests",
     ],
 )

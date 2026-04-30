@@ -34,6 +34,23 @@ py_library(
 )
 
 py_library(
+    name = "pylib_tests",
+    srcs = ["tests.py"],
+    deps = [
+        pip_requirement("torch"),
+        pip_requirement("numpy"),
+    ],
+)
+
+py_library(
+    name = "pylib_morph",
+    srcs = ["morph.py"],
+    deps = [
+        pip_requirement("torch"),
+    ],
+)
+
+py_library(
     name = "pylib_prober",
     srcs = ["prober.py"],
     deps = [
@@ -87,7 +104,6 @@ pytest_test(
         "@test_data_ncore//:ncore_1sec",
     ],
     deps = [
-        ":pylib_tests",
         ":pylib_types",
         "//nre/datasets:pylib",
         pip_requirement("lietorch"),
@@ -141,24 +157,6 @@ py_library(
     ],
 )
 
-pytest_test(
-    name = "cli_test",
-    srcs = ["cli_test.py"],
-    deps = [
-        ":pylib_cli",
-    ],
-)
-
-py_library(
-    name = "pylib_morph",
-    srcs = ["morph.py"],
-    visibility = DEFAULT_VISIBILITY + [
-    ],
-    deps = [
-        pip_requirement("torch"),
-    ],
-)
-
 py_library(
     name = "pylib_ncore_utils",
     srcs = ["ncore_utils.py"],
@@ -176,17 +174,6 @@ py_library(
         pip_requirement("torchvision"),
         pip_requirement("universal-pathlib"),
         pip_requirement("zarr"),
-    ],
-)
-
-py_library(
-    name = "pylib_tests",
-    srcs = [
-        "tests.py",
-    ],
-    deps = [
-        pip_requirement("torch"),
-        pip_requirement("numpy"),
     ],
 )
 
@@ -241,21 +228,6 @@ py_library(
         pip_requirement("torch"),
         ":pylib_trainer",
         "//nre/config:pylib",
-    ],
-)
-
-py_library(
-    name = "pylib_cli",
-    srcs = [
-        "cli.py",
-    ],
-    visibility = DEFAULT_VISIBILITY + [
-        # Add visibility for aux_gen (ScopedTimer CLI options)
-    ],
-    deps = [
-        ":pylib_profiling",
-        "//nre/config:pylib",
-        pip_requirement("click"),
     ],
 )
 
@@ -402,7 +374,6 @@ pytest_test(
     ],
     deps = [
         ":pylib_geometry",
-        ":pylib_tests",
         ":pylib_types",
         "//nre/datasets:pylib",
         pip_requirement("numpy"),
@@ -418,7 +389,6 @@ pytest_test(
     srcs = ["prober_test.py"],
     deps = [
         ":pylib_prober",
-        ":pylib_tests",
         # nre is needed to allow debugpy to work
         "//nre:pylib",
         pip_requirement("torch"),

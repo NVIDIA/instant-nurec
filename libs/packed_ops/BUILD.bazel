@@ -97,6 +97,5 @@ pytest_test(
         "//libs:pylib",
         "//nre/utils:pylib_misc",
         "//nre/utils:pylib_packed_ops",
-        "//nre/utils:pylib_tests",
     ],
 )

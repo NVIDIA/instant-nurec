@@ -124,7 +124,6 @@ pytest_test(
     deps = [
         ":pylib",
         pip_requirement("torch"),
-        "//nre/utils:pylib_tests",
         "@rules_python//python/runfiles",
     ],
 )

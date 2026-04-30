@@ -154,7 +154,6 @@ pytest_test(
         ":pylib",
         "//nre/config:pylib",
         "//nre/datasets:pylib",
-        "//nre/utils:pylib_tests",
         "@rules_python//python/runfiles",
     ],
 )

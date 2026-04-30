@@ -50,7 +50,6 @@ py_library(
         "//nre/config:pylib_version",
         "//nre/utils:pylib_colored_exceptions",
         "//nre/utils:pylib_misc",
-        "//nre/utils/debug:pylib",
     ] + select({
         "@//bazel/conditions:internal": [],
         "//conditions:default": [],
@@ -70,7 +69,6 @@ py_library(
         ":pylib_reporoot",
         "//nre/config:pylib_version",
         "//nre/utils:pylib_misc_tracy",
-        "//nre/utils/debug:pylib",
     ] + select({
         "@//bazel/conditions:internal": [],
         "//conditions:default": [],
@@ -90,7 +88,6 @@ py_library(
         ":pylib_reporoot",
         "//nre/config:pylib_version",
         "//nre/utils:pylib_misc_tracy_gpu",
-        "//nre/utils/debug:pylib",
     ] + select({
         "@//bazel/conditions:internal": [],
         "//conditions:default": [],

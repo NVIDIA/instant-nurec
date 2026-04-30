@@ -23,7 +23,8 @@ from importlib import import_module
 from nre.config.version import get_version
 from nre.repo_root import __reporoot__
 from nre.utils.colored_exceptions import enable_colored_exceptions
-from nre.utils.debug.remote_debug import breakpoint_env
+def breakpoint_env() -> None:
+    return None  # remote-debug stub for predict-only standalone
 from nre.utils.misc import is_env_true
 
 

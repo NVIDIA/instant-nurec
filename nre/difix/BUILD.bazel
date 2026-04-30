@@ -35,7 +35,6 @@ py_library(
     deps = [
         "//nre/config:pylib",
         "//nre/utils:pylib",
-        "//nre/utils:pylib_schedulers",
         "//nre/utils:pylib_types",
         pip_requirement("torch"),
         pip_requirement("einops"),

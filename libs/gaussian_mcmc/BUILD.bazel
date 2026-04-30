@@ -97,6 +97,5 @@ pytest_test(
         pip_requirement("parameterized"),
         "//libs:pylib",
         "//nre/utils:pylib_geometry",
-        "//nre/utils:pylib_tests",
     ],
 )

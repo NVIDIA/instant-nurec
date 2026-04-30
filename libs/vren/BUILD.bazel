@@ -177,7 +177,6 @@ pytest_test(
         pip_requirement("numpy"),
         "//libs:pylib",
         "//nre/models:pylib_custom_modules",
-        "//nre/utils:pylib_tests",
     ],
 )
 
@@ -189,7 +188,6 @@ pytest_test(
         pip_requirement("torch"),
         pip_requirement("numpy"),
         "//libs:pylib",
-        "//nre/utils:pylib_tests",
     ],
 )
 
@@ -211,7 +209,6 @@ pytest_test(
         "//libs:pylib",
         "//nre/utils:pylib_geometry",
         "//nre/utils:pylib_misc",
-        "//nre/utils:pylib_tests",
         "@rules_python//python/runfiles",
     ],
 )
@@ -234,7 +231,6 @@ pytest_test(
         pip_requirement("parameterized"),
         "//libs:pylib",
         "//nre/utils:pylib",
-        "//nre/utils:pylib_tests",
     ],
 )
 
