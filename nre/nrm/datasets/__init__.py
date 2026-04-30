@@ -16,22 +16,15 @@ from nre.nrm.datasets.nrm_base import (
     DummyNRMDataset,
     MixedNRMDataset,
 )
-from nre.nrm.datasets.nrm_dataverse import DataverseNRMDataset
 from nre.nrm.datasets.nrm_ncore import NCoreNRMDataset
-from nre.nrm.datasets.nrm_ncore_websocket import WebSocketNCoreNRMDataset
 from nre.nrm.datasets.registry import make, register
 
 
-# These imports in __all__ are only used for documentation and shouldn't
-# be used for relative imports. This is a temporary solution until
-# we can make the autodiscovery of the modules work with sphinx
 __all__ = [
     "NRMDataModule",
     "BaseNRMDataset",
     "BaseNRMIndexableDataset",
     "BaseNRMIterableDataset",
-    "DataverseNRMDataset",
-    "WebSocketNCoreNRMDataset",
     "NCoreNRMDataset",
     "DummyNRMDataset",
     "MixedNRMDataset",

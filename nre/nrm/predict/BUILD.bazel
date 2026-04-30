@@ -49,7 +49,6 @@ py_library(
     name = "pylib",
     srcs = [
         "export_ply.py",
-        "export_usdz.py",
     ],
     visibility = DEFAULT_VISIBILITY,
     deps = [
