@@ -42,7 +42,6 @@ filegroup(
         # Add visibility for //internal/sqa/test_cases
 
         # Add visibility for //apps/asset_harvester
-        "//apps/asset_harvester:__pkg__",
 
         # Add visibility for //internal/scripts
 

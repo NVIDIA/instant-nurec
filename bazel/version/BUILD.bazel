@@ -168,10 +168,8 @@ genrule(
         "//:__pkg__",
 
         # Add visibility for //apps/aux_gen:ncore_aux_data_image
-        "//apps/aux_gen:__pkg__",
 
         # Add visibility for //apps/asset_harvester:__pkg__
-        "//apps/asset_harvester:__pkg__",
 
         # Add visibility for //internal/scripts/pycena/runtime:pycena_run_test
 
@@ -207,7 +205,6 @@ pkg_tar(
         "//:__pkg__",
 
         # Add visibility for tools image
-        "//apps:__pkg__",
 
         # Add visibility for NRM image
         "//nre/nrm:__pkg__",

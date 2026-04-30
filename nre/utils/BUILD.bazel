@@ -56,7 +56,6 @@ py_library(
         # Add visibility for //internal/scripts/experimental:grpc_control_actors and :ncore_to_ngp
         # Add visibility for nvhuman animation scripts
         # Add visibility for aux_gen ncore_aux_data
-        "//apps/aux_gen:__pkg__",
     ],
     deps = [
         ":pylib_fields",
@@ -220,7 +219,6 @@ py_library(
     visibility = DEFAULT_VISIBILITY + [
         # Add visibility for nvhuman animation scripts
         # Add visibility for aux_gen estimators
-        "//apps/aux_gen:__pkg__",
     ],
     deps = [
         ":pylib_knn",
@@ -253,7 +251,6 @@ py_library(
     ],
     visibility = DEFAULT_VISIBILITY + [
         # Add visibility for aux_gen (ScopedTimer CLI options)
-        "//apps/aux_gen:__pkg__",
     ],
     deps = [
         ":pylib_profiling",
@@ -279,7 +276,6 @@ py_library(
         # Add visibility for //internal/scripts/ngc:download_model
         # Add visibility for //internal/scripts/ds2ncore
         # Add visibility for //apps/asset_harvester
-        "//apps/asset_harvester:__subpackages__",
     ],
     deps = [
         ":pylib_colored_exceptions",
@@ -374,7 +370,6 @@ py_library(
         "files.py",
     ],
     visibility = DEFAULT_VISIBILITY + [
-        "//apps/aux_gen:__pkg__",
     ],
     deps = [
         pip_requirement("universal-pathlib"),
@@ -588,7 +583,6 @@ py_library(
     ],
     deps = [
         ":pylib_geometry",
-        "//apps/asset_harvester:rendering_lib",
         "//nre/models/gaussians:pylib",
         pip_requirement("imageio"),
         pip_requirement("kiui"),

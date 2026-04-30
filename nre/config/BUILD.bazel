@@ -34,7 +34,6 @@ py_library(
         # Add visibility for //:run
         "//:__pkg__",
         # Add visibility for //apps
-        "//apps:__pkg__",
         # Add visibility for //internal/scripts/kratos
         # Add visibility for //internal/workflows
     ],

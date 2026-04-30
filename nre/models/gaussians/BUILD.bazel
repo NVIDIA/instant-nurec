@@ -28,7 +28,6 @@ filegroup(
 py_library(
     name = "pylib_cc_gsplat",
     visibility = [
-        "//apps/asset_harvester:__pkg__",
         "//bazel/typing:__pkg__",
         "//nre/models/gaussians:__pkg__",
     ],
@@ -53,7 +52,6 @@ py_library(
     ],
     visibility = [
         "//:core_package_group",
-        "//apps/asset_harvester:__pkg__",
     ],
     deps = [
         pip_requirement("nvidia-ncore"),

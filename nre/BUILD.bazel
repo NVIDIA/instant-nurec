@@ -44,7 +44,6 @@ py_library(
         # Add visibility for //:run
         "//:__pkg__",
         # Add visibility for //apps
-        "//apps:__pkg__",
     ],
     deps = [
         ":pylib_reporoot",
