@@ -20,7 +20,6 @@ import hydra
 from omegaconf import DictConfig, OmegaConf, open_dict
 
 from nre.config.base_schema import BaseConfigSchema, config_to_primitive
-from nre.config.nre import NREConfig
 from nre.repo_root import __reporoot__
 from nre.utils.misc import rank_zero_only
 
@@ -44,18 +43,6 @@ OmegaConf.register_new_resolver("int", lambda a: int(a))
 OmegaConf.register_new_resolver("load_json", lambda path: OmegaConf.create(json.load(open(path))))
 
 
-# Returns the *single* non-None value (it's an error if none or both values are set)
-def xor(a: Optional[str], b: Optional[str]) -> str:
-    assert (a is None) != (b is None), f"error resolving xor value, both values are either set or missing [{a} / {b}]"
-    match a:
-        case None:
-            assert isinstance(b, str), "[xor] either a or b (but not both) need to be of type str"
-            return b
-        case str():
-            return a
-
-
-OmegaConf.register_new_resolver("xor", lambda a, b: xor(a, b))
 OmegaConf.register_new_resolver("and_then", lambda condition, then, or_else: then if condition else or_else)
 OmegaConf.register_new_resolver("len", lambda p: len(p))
 OmegaConf.register_new_resolver("invalid_key", lambda p, k: k not in p)
@@ -142,7 +129,3 @@ def assert_no_out_dir_override_in_resume(hydra_args: list[str]) -> None:
         raise AssertionError("out_dir cannot be changed when resuming training")
 
 
-def parse_typed_config(config_name: str, hydra_args: list[str], config_dir: str = "./configs") -> NREConfig:
-    untyped_config = parse_untyped_config(config_name, hydra_args, config_dir=config_dir)
-    typed_config = NREConfig.model_validate(untyped_config, context={"config_name": config_name})
-    return typed_config

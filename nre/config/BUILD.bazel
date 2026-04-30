@@ -79,7 +79,6 @@ py_library(
         "difix.py",
         "logger.py",
         "model.py",
-        "nre.py",
         "optim.py",
         "parse.py",
         "prober.py",
