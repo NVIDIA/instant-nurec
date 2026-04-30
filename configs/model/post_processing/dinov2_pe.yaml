@@ -1,9 +1,0 @@
-defaults:
-  - base
-
-name: dinov2-pe-post-processing
-
-test_no_pe_map: true
-pe_height: 128
-pe_width: 256
-n_dims: 64

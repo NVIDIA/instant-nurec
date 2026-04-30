@@ -1,6 +1,0 @@
-# @package _global_
-# Owner: Mu Li
-
-defaults:
-  - car2sim_lidarfree
-  - override /model/gaussians/renderer@model.renderer: 3dgut_gsplat

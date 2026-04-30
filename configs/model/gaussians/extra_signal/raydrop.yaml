@@ -1,4 +1,0 @@
-raydrop:
-  n_signal_dim: 2
-  sensor_type: lidar # camera or lidar
-  activation: softmax-channel-0

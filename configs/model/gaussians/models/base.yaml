@@ -1,5 +1,0 @@
-# Base gaussian models configuration that all gaussian models inherit from
-
-# Hidden flag for nearest neighbor track selection (LiDAR only)
-# When true, uses nearest neighbor instead of other track selection methods for lidar
-nearest_neighbor_track_for_lidar: false

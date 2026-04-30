@@ -1,7 +1,0 @@
-defaults:
-  - base
-
-name: sfm-point-cloud
-
-scale_factor: 0.01
-default_density: ${eval:'0.5 if ("${model.strategy.name}"=="mcmc") else 0.01'}

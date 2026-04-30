@@ -1,9 +1,0 @@
-enabled: true
-name: "tensorboard"
-
-run_name: null # Will be remapped to name during init to adhere to wadb paramater list
-save_dir: "${out_dir}" 
-run_id: "<generate>" # leave as <generate> to generate a new one or set manually
-log_graph: false
-default_hp_metric: true
-prefix: ""

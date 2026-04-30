@@ -1,5 +1,0 @@
-# @package _global_
-
-defaults:
-  - car2sim
-  - override /model/gaussians/renderer@model.renderer: 3dgut_gsplat

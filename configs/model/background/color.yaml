@@ -1,4 +1,0 @@
-name: background-color
-color: random # Must be one of [white, black, random]
-random_eval_color: [0, 0, 0] # rgb values between 0 and 1 - used during evaluation when training color is random
-composite_in_linear_space: false

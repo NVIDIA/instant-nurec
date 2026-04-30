@@ -1,7 +1,0 @@
-# @package _global_
-
-_no_post_processing: ${eval:'"${invalid_key:${model},post_processing}"'}
-
-model:
-  # TODO : to enforce saturate radiance when post-processing is on use : ${eval:'"${.._no_post_processing}"'}
-  saturate_radiance: true 

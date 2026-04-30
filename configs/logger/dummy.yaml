@@ -1,4 +1,0 @@
-enabled: false
-name: "dummy"
-
-run_id: "<generate>" # leave as <generate> to generate a new one or set manually

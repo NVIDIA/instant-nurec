@@ -1,6 +1,0 @@
-# @package _global_
-
-defaults:
-  - /apps/prod/Hyperion-8.1/car2sim
-  - override /model/gaussians/initialization@model.layers.background.initialization: nrm_ply
-  - override /model/gaussians/initialization@model.layers.road.initialization: nrm_road_ply

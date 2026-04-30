@@ -1,7 +1,0 @@
-# @package _global_
-# Owner: Haithem Turki
-
-defaults:
-  - 3dgut_static_road_semantic.yaml
-  - /apps/AV/module_mixins/_mcmc_mixin.yaml
-  - override /model/gaussians/strategy@strategy: mcmc

@@ -1,9 +1,0 @@
-# @package _global_
-
-defaults:
-  - override /difix: difix
-
-difix:
-  inference:
-    # Enable the inference-time diffusion difix call to improve image quality after rendering
-    enabled: true

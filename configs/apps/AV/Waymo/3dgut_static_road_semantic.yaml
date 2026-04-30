@@ -1,7 +1,0 @@
-# @package _global_
-# Owner: Haithem Turki
-
-defaults:
-  - /apps/AV/_base_3dgut_static_road_semantic.yaml
-  - _waymo_mixin.yaml
-

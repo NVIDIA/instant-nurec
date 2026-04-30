@@ -1,7 +1,0 @@
-defaults:
-  - base
-
-name: sd-difix
-model_resolution: [544, 960]
-model_url: "https://gitlab-master.nvidia.com/api/v4/projects/85874/packages/generic/difix_pretrained_models/3.0/difix_pretrained_model-e4253f9f.tar.gz"
-model_filename: "sd_difix.pt"

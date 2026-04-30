@@ -1,7 +1,0 @@
-# @package _global_
-
-checkpoint:
-  artifact:
-    mesh:
-      generic:
-        enabled: false

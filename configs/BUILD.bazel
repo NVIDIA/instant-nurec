@@ -1,54 +1,8 @@
 # SPDX-FileCopyrightText: Copyright (c) 2024-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: LicenseRef-NvidiaProprietary
-#
-# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
-# property and proprietary rights in and to this material, related
-# documentation and any modifications thereto. Any use, reproduction,
-# disclosure or distribution of this material and related documentation
-# without an express license agreement from NVIDIA CORPORATION or
-# its affiliates is strictly prohibited.
-
-config_setting(
-    name = "include_customer_configs",
-    define_values = {
-        "include_customer_configs": "true",
-    },
-)
 
 filegroup(
     name = "configs",
-    srcs = select({
-        ":include_customer_configs": glob(["**/*.yaml"]),
-        "//conditions:default": glob(
-            [
-                "**/*.yaml",
-                "**/*.json",
-            ],
-            exclude = [
-                "apps/AV/Tesla/**/*.yaml",
-            ],
-        ),
-    }),
-    visibility = [
-        "//:core_package_group",
-
-        # Add visibility for //:run
-        "//:__pkg__",
-
-        # Add visibility for //internal/scripts/experimental:ncore_to_ngp
-
-        # Add visibility for //internal/workflows/cluster_toolbox/benchmark:run_benchmark
-
-        # Add visibility for //internal/sqa/test_cases
-
-        # Add visibility for //apps/asset_harvester
-
-        # Add visibility for //internal/scripts
-
-        # Add visibility for scripts/test_data generation
-
-        # Add visibility for nvhuman animation scripts
-
-        # Add visibility for //internal/scripts/nrm_data
-    ],
+    srcs = glob(["**/*.yaml"]),
+    visibility = ["//visibility:public"],
 )
