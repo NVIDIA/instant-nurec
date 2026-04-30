@@ -1,0 +1,126 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+load("@aspect_rules_py//py:defs.bzl", "py_binary")
+load("@nre_pip_deps//:requirements.bzl", pip_requirement = "requirement")
+load("@rules_python//python:defs.bzl", "py_library")
+
+# Expose python sources for obfuscation aggregation
+filegroup(
+    name = "py_files",
+    srcs = glob(["**/*.py"]),
+    visibility = [
+        "//internal/scripts/pycena:__pkg__",
+    ],
+)
+
+# Deps list shared across tools
+ASSET_HARVESTER_DEPS = [
+    pip_requirement("torch"),
+    pip_requirement("numpy"),
+    pip_requirement("pillow"),
+    pip_requirement("opencv-python"),
+    pip_requirement("imageio"),
+    pip_requirement("imageio-ffmpeg"),
+    pip_requirement("setuptools"),
+    pip_requirement("pyyaml"),
+    pip_requirement("hydra-core"),
+    pip_requirement("click"),
+    pip_requirement("click-default-group"),
+    "//nre/config:pylib",
+    "//nre/utils:pylib",
+    "//nre/utils/debug:pylib",
+]
+
+ASSET_HARVESTER_DATA = [
+    "//configs",
+    # Templates and example mapping packaged with the CLI
+    "class_exemplars.example.yaml",
+    "template_deformation_network_difix.yaml",
+    ":asset_bank_files",
+    "run_pipeline.sh",
+]
+
+py_library(
+    name = "asset_harvester_data_lib",
+    data = ASSET_HARVESTER_DATA,
+    visibility = ["//visibility:public"],
+)
+
+# Library for reuse
+py_library(
+    name = "pylib",
+    srcs = [
+        "__init__.py",
+        "generate_asset_harvester_training_yaml.py",
+        "plan_tracks.py",
+    ],
+    visibility = ["//visibility:public"],
+    deps = ASSET_HARVESTER_DEPS,
+)
+
+py_binary(
+    name = "generate_asset_harvester_training_yaml",
+    srcs = [
+        "generate_asset_harvester_training_yaml.py",
+    ],
+    data = [
+        "class_exemplars.example.yaml",
+        "template_deformation_network_difix.yaml",
+        ":asset_bank_files",
+    ],
+    main = "generate_asset_harvester_training_yaml.py",
+    deps = [
+        pip_requirement("pyyaml"),
+        ":pylib",
+    ],
+)
+
+# Shared library exposing planning functionality
+py_library(
+    name = "plan_tracks_lib",
+    srcs = [
+        "plan_tracks.py",
+    ],
+    data = ["//configs"],
+    visibility = ["//visibility:public"],
+    deps = [
+        pip_requirement("torch"),
+        pip_requirement("numpy"),
+        pip_requirement("omegaconf"),
+        "//nre:pylib",
+        "//nre/config:pylib_version",
+        "//nre/datasets:pylib",
+    ],
+)
+
+# Example asset bank packaged under the new location (optional)
+filegroup(
+    name = "asset_bank_files",
+    srcs = glob(
+        [
+            "asset_bank/**",
+        ],
+        allow_empty = True,
+    ),
+    visibility = ["//visibility:public"],
+)
+
+py_binary(
+    name = "plan_tracks",
+    srcs = [
+        "plan_tracks.py",
+    ],
+    data = ["//configs"],
+    main = "plan_tracks.py",
+    deps = [
+        ":plan_tracks_lib",
+    ],
+)

@@ -1,0 +1,14 @@
+# @package _global_
+# Owner: Haithem Turki
+
+defaults:
+  - 3dgut_static_road_semantic.yaml
+  - /apps/AV/module_mixins/_mcmc_mixin.yaml
+  - override /model/gaussians/strategy@model.strategy: mcmc
+
+dataset:
+  n_samples_per_epoch: 30000
+
+trainer:
+  max_epochs: 1
+  check_val_every_n_epoch: 1

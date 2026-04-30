@@ -1,0 +1,33 @@
+# @package _global_
+
+# Switch below between static and dynamic model
+defaults:
+  - /nrm/apps/kelvin_base: _base
+  - /nrm/model@model: kelvin_dav3_base
+  - /nrm/dataset/trisplit: _ncore_local_low_res
+  - override /loss/nrm@loss: kelvin_dav3_context
+
+out_dir: /nrm_debug/out
+
+system:
+  log_every_n_steps: 5
+  log_media_every_n_steps: 15
+  log_media_every_n_steps_val: 1
+  log_media_subsample: 2
+  warmup_steps: 50
+  enable_render_global_step: 1000000
+
+# Edit this to control the number of overfitting iterations
+# Potential resolutions: 392x224, 784x448, 1176x672
+shared_config:
+  n_samples_per_sequence: 1000
+  frame_width: 504
+  frame_height: 280
+  supervision_frame_width: 1296
+  supervision_frame_height: 720
+  n_frames_per_sample: 8
+  supervision_frames_per_sample: 6
+
+model:
+  init_weights_paths:
+    dav3: /nrm_debug/dav3/base.safetensors

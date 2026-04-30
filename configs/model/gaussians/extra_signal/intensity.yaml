@@ -1,0 +1,4 @@
+intensity:
+  n_signal_dim: 1
+  sensor_type: lidar # camera or lidar
+  activation: none

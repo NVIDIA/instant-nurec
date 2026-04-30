@@ -1,0 +1,34 @@
+# @package _global_
+# Layer-on scheme for "xlarge" runs: bumps worker counts to a 100 floor and
+# moves heavy tasks to RNO. Apply by adding `scheme/xlarge` to a config's
+# defaults list AFTER ndas_workflow_base. Tasks not present in a workflow's
+# spec are silently ignored, so this single scheme works for both lidar and
+# lidarfree configs.
+
+# Example for moving a task: <task>: { compute_target: rno, gpu: a100_80gb, workers: 100 }
+tasks:
+  # Worker count floors for the dedicated PPP. Each entry bumps its source pool
+  # to at least 100 workers (only raises, never lowers).
+  # Lidar (eval + tot_spec source workflows):
+  reconstruction: { workers: 100 }
+  nre-serializer: { workers: 100 }
+  render_nre: { workers: 100 }
+  psnr-analyzer: { workers: 100 }
+  iq_metrics-analyzer: { compute_target: rno, workers: 100 }    # bumps analyzer-gpu-pool
+
+  # Lidarfree car2sim (best-effort mapping; lidar configs ignore these):
+  initial-pose: { workers: 100 }
+  session-converter: { workers: 100 }
+  patch-rig: { workers: 100 }
+  segmentation: { workers: 100 }
+  sfm: { workers: 100 }
+  depth-fusion: { workers: 100 }
+  moge2-depth: { workers: 100 }
+  depth-distort: { workers: 100 }
+  sauron-vis-cuboid-on-camera: { workers: 100 }
+  sauron-vis-cuboid-on-demovideo: { workers: 100 }
+  nre-aux-data: { workers: 100 }
+  nre-out: { workers: 100 }
+  nre-render: { workers: 100 }
+  nre-run: { workers: 100 }
+  patch-match-depth: { workers: 100 }

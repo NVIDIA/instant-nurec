@@ -1,0 +1,9 @@
+# @package _global_
+
+# order in which configs override each other (/* - denotes a relative search path)
+defaults:
+  - local_ncore
+  - override /nrm/model@model: celsius_mamba
+
+model:
+  init_weights_path: /nrm_debug/model_7m1t.ckpt

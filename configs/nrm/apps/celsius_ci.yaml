@@ -1,0 +1,61 @@
+# @package _global_
+# Owner: jiahuih
+# This config is an integration test to be used in the CI pipeline.
+
+# order in which configs override each other (/* - denotes a relative search path)
+defaults:
+  - celsius_base: _static_full
+  - /nrm/dataset@dataset.train: ncore
+  - /nrm/dataset@dataset.val: ncore
+  - /nrm/dataset@dataset.test: ncore
+
+# Our test data are with front camera only, and has a short timespan.
+# You can obtain the test data by running:
+#   wget https://gitlab-master.nvidia.com/api/v4/projects/85874/packages/generic/test_data_ncore/0.4/test_data_ncore.tar.gz -O /tmp/test_data_ncore.tar.gz
+#   tar -xzf /tmp/test_data_ncore.tar.gz -C /tmp
+#   echo "/tmp/cf5ff7f6-5c82-11ed-806f-00044bf655de_1667597307250262_1667597318349978_1667597307250262_1667597308250262.json" > /tmp/celsius_ci_train.lst
+dataset:
+  train:
+    ncore_json_list_path: /tmp/celsius_ci_train.lst
+    context_camera_ids:
+      - camera_front_wide_120fov
+    supervision_camera_ids:
+      - camera_front_wide_120fov
+    camera_subsampler:
+      frame_width: 40
+      frame_height: 32
+    frame_batch_samplers:
+      uniform:
+        frame_gap_timestamp_us: 30000
+  val:
+    ncore_json_list_path: /tmp/celsius_ci_train.lst
+    context_camera_ids:
+      - camera_front_wide_120fov
+    supervision_camera_ids:
+      - camera_front_wide_120fov
+    camera_subsampler:
+      frame_width: 40
+      frame_height: 32
+    frame_batch_samplers:
+      uniform:
+        frame_gap_timestamp_us: 30000
+  test:
+    ncore_json_list_path: /tmp/celsius_ci_train.lst
+
+# test >1 epochs for checking validation
+system:
+  max_epochs: 2
+  device_count: 1
+  num_nodes: 1
+
+# Smoke test LPIPS loss
+loss:
+  lpips:
+    fn: lpips
+    reduce:
+      name: mean
+    lambda_: 0.2
+
+  # We have to disable this since we don't have metric depth data
+  primitive_distance:
+    lambda_: 0.0

@@ -1,0 +1,164 @@
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+load("@aspect_rules_py//py:defs.bzl", "py_binary")
+load("@nre_pip_deps//:requirements.bzl", pip_requirement = "requirement")
+load("@rules_python//python:defs.bzl", "py_library")
+load("//bazel/pytest:defs.bzl", "pytest_test")
+
+################################################################
+# Filegroups
+################################################################
+
+filegroup(
+    name = "py_files",
+    srcs = glob(["**/*.py"]),
+    visibility = [
+        "//apps:__subpackages__",
+        "//internal/scripts/pycena:__pkg__",
+    ],
+)
+
+################################################################
+# Deps list
+################################################################
+
+MASK_ANNOTATOR_DEPS = [
+    pip_requirement("numpy"),
+    pip_requirement("opencv-python"),
+    pip_requirement("pillow"),
+    pip_requirement("pyside6-essentials"),
+    pip_requirement("click"),
+    pip_requirement("tqdm"),
+    pip_requirement("requests"),
+    pip_requirement("torch"),
+    pip_requirement("torchvision"),
+    pip_requirement("matplotlib"),
+    pip_requirement("hydra-core"),
+    pip_requirement("sam2"),
+    pip_requirement("shiboken6"),
+]
+
+################################################################
+# Library rule for module access
+################################################################
+
+py_library(
+    name = "pylib",
+    srcs = [
+        "__init__.py",
+        "mask_annotator.py",
+    ],
+    visibility = [
+        "//apps:__pkg__",
+        "//internal/scripts/pycena/runtime:__pkg__",
+    ],
+    deps = MASK_ANNOTATOR_DEPS,
+)
+
+################################################################
+# Checkpoints
+################################################################
+
+# Define checkpoints path consistent with workspace structure
+filegroup(
+    name = "checkpoints_files",
+    srcs = glob(
+        ["checkpoints/**"],
+        allow_empty = True,
+    ),
+)
+
+################################################################
+# Main binary rule
+################################################################
+
+# Default mode (no arguments)
+py_binary(
+    name = "mask_annotator",
+    srcs = [
+        "mask_annotator.py",
+    ],
+    data = [":checkpoints_files"],
+    main = "mask_annotator.py",
+    visibility = [
+        "//apps:__pkg__",
+        "//internal/scripts/pycena:__pkg__",
+    ],
+    deps = MASK_ANNOTATOR_DEPS,
+)
+
+################################################################
+# Convenient aliases
+################################################################
+
+# CPU mode
+py_binary(
+    name = "mask_annotator_cpu",
+    srcs = [
+        "mask_annotator.py",
+    ],
+    args = [
+        "--device",
+        "cpu",
+    ],
+    data = [":checkpoints_files"],
+    main = "mask_annotator.py",
+    visibility = ["//apps:__pkg__"],
+    deps = MASK_ANNOTATOR_DEPS,
+)
+
+# CUDA mode with larger window
+py_binary(
+    name = "mask_annotator_gpu",
+    srcs = [
+        "mask_annotator.py",
+    ],
+    args = [
+        "--device",
+        "cuda",
+        "--window-size",
+        "1920x1080",
+    ],
+    data = [":checkpoints_files"],
+    main = "mask_annotator.py",
+    visibility = ["//apps:__pkg__"],
+    deps = MASK_ANNOTATOR_DEPS,
+)
+
+################################################################
+# Test rules
+################################################################
+
+pytest_test(
+    name = "mask_annotator_test",
+    srcs = ["mask_annotator_test.py"],
+    deps = [
+        ":pylib",
+    ] + MASK_ANNOTATOR_DEPS,
+)
+
+pytest_test(
+    name = "mask_annotator_gui_test",
+    srcs = ["mask_annotator_gui_test.py"],
+    args = [
+        "-m",
+        "gui",
+    ],
+    tags = ["manual"],  # TODO: Decide if we want to run this in CI. Don't include it for now.
+    deps = [
+        ":pylib",
+        pip_requirement("pytest-qt"),
+    ] + MASK_ANNOTATOR_DEPS,
+)
+
+################################################################
+# Formatting
+################################################################

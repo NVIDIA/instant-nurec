@@ -1,0 +1,53 @@
+# @package _global_
+# Owner: Jiahui Huang
+
+defaults:
+  - _self_
+  - /logger: wandb
+  - /nrm/system@system: base
+  - override /hydra/hydra_logging: disabled
+  - override /hydra/job_logging: disabled
+
+seed: 38
+mode: trainval
+
+resume: auto
+resume_weights_only: false
+verbose: false
+force_validate: false
+preempt_on_interrupt: false
+
+# Default output path on docker-ORD.
+out_dir: /results
+
+checkpoint:
+  save_top_k: 2
+  monitor: 'val/psnr'
+  mode: 'max'
+
+viewer:
+  enabled: false
+  port: 8080
+  host: 'auto'  # external IP address since we usually validate on cluster
+  remain_after_trainer_loop: false
+  force_update_scene: false
+  ray_subsampling_step:
+    high_resolution: 1
+    low_resolution: 1
+  n_lidar_frames_displayed: 15
+
+profiling:
+  enabled: false
+
+# Indicate that the dataset should be a tri-split (train/val/test)
+dataset:
+  name: 'nrm'
+
+hydra:
+  output_subdir: null
+  job:
+    chdir: false
+  run:
+    dir: .
+
+

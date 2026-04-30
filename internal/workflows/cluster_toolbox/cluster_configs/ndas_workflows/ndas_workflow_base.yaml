@@ -1,0 +1,213 @@
+# @package _global_
+
+defaults:
+  - ../maglev
+  - workerpool
+  - workerpool_schemes/default_ci_sjc
+  - _self_
+
+name: ndas_workflows
+workflow_name_prefix: nurec-cicd-reconstruct
+require_nre_docker_images: true
+
+global:
+  retention:
+    default: "3d"
+
+# ppp comes from workerpool.yaml (default_compute_target's ppp); set `ppp: ...` here
+# only to override.
+cost_center: av_sim_car2sim-cicd
+auto_fix_cuda_compat: true
+
+docker:
+  build_push: false
+  image: nvcr.io/nvidian/ct-toronto-ai/nre-run-dev
+  tools_image: nvcr.io/nvidian/ct-toronto-ai/nre_tools
+  clipgt_ncore_image: null
+  nrm_image: nvcr.io/nvidian/ct-toronto-ai/nre_nrm_run
+  sauron_image: null
+
+replace_nre_images_that_contain_substrings:
+  - nre_run
+  - nre_obfuscated_run
+  - nre-reproducibility-run-image
+  - pacsim_nre
+
+replace_tools_images_that_contain_substrings:
+  - nre_ncore_aux_data
+  - nre_tools
+
+replace_clipgt_ncore_images_that_contain_substrings:
+  - clipgt_ncore_task_image
+
+replace_nrm_images_that_contain_substrings:
+  - nre_nrm_run
+
+replace_sauron_images_that_contain_substrings:
+  - sauron-inference
+  - sauron-detection-integration
+
+generic_wf_components: {}
+
+car2sim:
+  enabled: true
+  # training_config and gpu_world_size take precedence over reconstruction_args. training_config requires config-name pattern in reconstruction_args.
+  training_config: configs/apps/prod/Hyperion-8.1/car2sim_6cam.yaml
+  gpu_world_size: 1
+
+  retention:
+    default: "14d"
+    reconstruction: "45d"
+    nre-out: "45d"
+    nre-aux-data: "45d"
+    clipgt-ncore: "45d"
+
+  reconstruction_args:
+    - --config-name=configs/apps/prod/Hyperion-8.1/car2sim_6cam.yaml
+    - out_dir=$WORK_RECONSTRUCTION_DIR
+    - mode=train
+    - logger.name=dummy
+    - dataset.path=$DATASET_FILE
+    - dataset.seek_offset_sec=0.0
+    - dataset.duration_sec=$DURATION
+    - dataset.aux_data=True
+    - dataset.lidar_ids=$LIDAR_ID_LIST
+    - dataset.samplers.batch_sampler.camera_pixel_sampler.subsample=2
+    - dataset.cuboid_tracks_params.track_label_sources=[AUTOLABEL]
+
+  source_wf: josliu-car2sim-tot-parallel-nre-aux-template/latest-success
+  save_artifacts_in_s3: false
+  cut:
+    - nre-aux-data
+    - reconstruction
+
+  full_pipeline:
+    enabled: false
+    clipgt_ids: ""
+
+amo_cle:
+  enabled: false
+  source_wf: ragu-source-wf-amo-cle/latest-success
+  shim_source_wf: josliu-nurec-cicd-amo-cle-shim/latest
+  renderer_args: "--no-enable-nrend"
+  cut:
+    - base-pacsim-replay
+
+nurec_cicd_amo_cle:
+  enabled: false
+  source_wf: josliu-maglev-gitlab-trigger-3/latest
+
+nre_eval:
+  enabled: true
+  cut: []
+  source_wf: josliu-nre-eval-0326/latest
+
+  retention:
+    mux_videos: "45d"
+    psnr-semantic_labelmaps-videos: "45d"
+    real-rclog-extraction: "45d"
+    generated-rclog-extraction: "45d"
+
+failure_reason:
+  enabled: true
+  source_wf: nurec-run-failure-reason-upload/latest-success
+  cut:
+    - upload-pacsim-failure-reason-to-kratos
+
+nre_eval_regression:
+  enabled: false
+  cut:
+    - create_test_pb
+    - aggregate_results
+  source_wf: lkelly-nre-regression-cones-test/2025.09.26-1411-0wcz3m2glmady
+
+switchboard:
+  delete_connections:
+    amo_cle_extra_download_scenes:
+      target_task: base-pacsim-replay
+      remove_input_name: download-scenes
+
+  connections:
+    car2sim_to_nre_eval:
+      force_enable: false
+      target_task: create_clips_parallel_structure
+      replace_input_task: [post-processing, reconstruction, nre-out]
+      with_internal_input: reconstruction
+      fallback_external_wf: ${car2sim.source_wf}
+
+    car2sim_to_nre_eval_psnr_semantic_labelmap_images_1:
+      force_enable: false
+      target_task: psnr-semantic-labelmap-images
+      replace_input_task: [clipgt-ncore]
+      with_internal_input: clipgt-ncore
+      exact_match: true
+      fallback_external_wf: ${car2sim.source_wf}
+
+    car2sim_to_nre_eval_psnr_semantic_labelmap_images_2:
+      force_enable: false
+      target_task: psnr-semantic-labelmap-images
+      replace_input_task: [post-processing, nre-aux-data]
+      with_internal_input: nre-aux-data
+      fallback_external_wf: ${car2sim.source_wf}
+
+    shim_to_amo_cle:
+      force_enable: false
+      target_task: base-pacsim-replay
+      replace_input_task: [join-and-filter-logs]
+      with_internal_input: combine-with-roadcast
+
+    car2sim_to_shim:
+      force_enable: false
+      target_task: restructure-usdz
+      replace_input_task: [post-processing, reconstruction]
+      with_internal_input: reconstruction
+
+    cached_amo_cle_to_shim:
+      force_enable: false
+      target_task: combine-with-roadcast
+      replace_input_task: [join-and-filter-logs]
+      with_external_wf: ${amo_cle.source_wf}
+
+    amo_cle_to_failure_reason:
+      force_enable: false
+      target_task: upload-pacsim-failure-reason-to-kratos
+      replace_input_task: [base-pacsim-replay]
+      with_internal_input: base-pacsim-replay
+
+    nre_eval_to_nre_eval_regression:
+      force_enable: false
+      target_task: evaluate_results
+      replace_input_task: [rr_entrypoint_synth]
+      with_internal_input: rr_entrypoint_synth
+      exact_match: true
+
+    car2sim_to_nre_eval_nvrq:
+      force_enable: false
+      target_task: nvrq-multiplex-ncore
+      replace_input_task: [clipgt-ncore]
+      with_internal_input: clipgt-ncore
+      exact_match: true
+      fallback_external_wf: ${car2sim.source_wf}
+
+reconstruction_run_binary_tasks:
+  - reconstruction
+  - nre-run
+  - render_nre
+  - psnr-semantic-labelmap-images
+  - base-pacsim-replay
+
+nre_tools_run_binary_tasks:
+  - nre-aux-data
+
+reconstruction_run_binary: /app/run
+reconstruction_repo_path: /app/run.runfiles/_main
+nre_tools_run_binary: /app/apps/nre_tools
+nre_tools_repo_path: /app/apps/nre_tools.runfiles/_main
+
+publish_dataconditions_at_launch:
+  enabled: false
+
+swiftstack_version_suffix: null
+swiftstack_version_suffix_tasks:
+  - swiftstack-mount-nre
+  - swiftstack-uploader-nre

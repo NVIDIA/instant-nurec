@@ -1,0 +1,15 @@
+# @package _global_
+
+defaults:
+  - /nrm/apps/experimental/kelvin_tokengs_dataverse
+  - override /nrm/dataset/concrete@dataset.train: dv_mixed3_local_small
+  - override /nrm/dataset/concrete@dataset.val: dv_mixed3_local_small
+  - override /nrm/dataset/concrete@dataset.test: dv_mixed3_local_small
+
+out_dir: /nrm_debug/out
+
+system:
+  log_every_n_steps: 5
+  log_media_every_n_steps: 5
+  log_media_every_n_steps_val: 1
+  warmup_steps: 50

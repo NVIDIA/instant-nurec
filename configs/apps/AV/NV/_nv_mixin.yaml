@@ -1,0 +1,9 @@
+# @package _global_
+# Owner: Haithem Turki
+
+dataset:
+  samplers:
+    batch_sampler:
+      camera_pixel_sampler:
+        crop_type: full_image
+        subsample: 4

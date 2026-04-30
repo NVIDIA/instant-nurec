@@ -1,0 +1,4 @@
+defaults:
+  - ncore_c2_gen3c
+
+ncore_json_list_path: /lustre/fsw/portfolios/nvr/users/jiahuih/nre_experiments/data/data_split/celsius2_l3_55k_720p/gen3c-small.lst

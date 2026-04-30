@@ -1,0 +1,59 @@
+# Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+method: grid
+metric:
+  goal: maximize
+  name: train/psnr
+parameters:
+  culling:
+    values:
+      - true
+      - false
+
+  scene:
+    values:
+      - "6b0e39fb-f4fe-43d4-8459-73582af55b90"
+      - "7d3a40a2-502c-4bb6-bcc5-f54a818ab6c7"
+      - "86ad21f0-5c8e-4733-9e48-585b3b3c0607"
+      - "b52c247a-fe42-4fb6-8119-84eeafaf327e"
+
+command:
+  - /bin/bash
+  - -euxc
+  - |
+    # $0 is "culling=<value>"
+    # $1 is "scene=<value>"
+    eval "$0"
+    eval "$1"
+
+    uuid=$(python -c "import shortuuid; print(shortuuid.uuid())")
+
+    data_path=/lustre/fsw/portfolios/nvr/users/hturki/15-clip-smoketest/${scene}/clipgt-${scene}.json
+
+    bazel run //:run -- --config-name=configs/apps/prod/Hyperion-8.1/car2sim_quality_mcmc.yaml \
+      mode=train out_dir=/results \
+      dataset.path=${data_path} dataset.val_camera=true dataset.val_lidar=true \
+      dataset.camera_ids=[camera_front_wide_120fov,camera_front_tele_30fov,camera_cross_right_120fov,camera_cross_left_120fov] \
+      dataset.lidar_ids=[lidar_gt_top_p128] \
+      dataset.cuboid_tracks_params.track_label_sources=[AUTOLABEL] \
+      dataset.seek_offset_sec=0.0 dataset.duration_sec=20.0 dataset.aux_data=true \
+      checkpoint.artifact.enabled=false \
+      checkpoint.artifact.checkpoint.enabled=false \
+      checkpoint.artifact.nrend.enabled=false \
+      checkpoint.artifact.rig_trajectories.enabled=false \
+      checkpoint.artifact.sequence_tracks.enabled=false \
+      logger=wandb logger.entity=<<wandb_entity>> logger.project=<<wandb_project>> logger.tags=<<wandb_tags>> \
+      logger.run_name=clipgt/${scene}/filtered-culling-${culling} logger.run_id=${uuid} \
+      model.renderer.tiling.lidar.tile_size_elevation=8 \
+      model.renderer.tiling.lidar.tile_size_azimuth=8 \
+      model.renderer.tiling.lidar.n_bins_elevation=16 \
+      model.renderer.culling.enable_ray_based_culling=${culling}
+
+    bazel run //:run -- --config-name=/results/${uuid}/config/parsed.yaml \
+      mode=val resume=last dataset.val_lidar=true dataset.val_camera=true \
+      system.name=nrend-test-gaussians-system system.test.nrend.create_test_case=false \
+      model.renderer.profiling.frequency=1.0
+
+    unset NRE_ENV_RUN_ID
+
+  # Substituted by the W&B sweep controller and does not work directly inside the script above. Use "$@" to pass to script above
+  - ${args_no_hyphens}

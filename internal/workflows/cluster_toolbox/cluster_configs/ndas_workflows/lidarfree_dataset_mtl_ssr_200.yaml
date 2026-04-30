@@ -1,0 +1,272 @@
+# @package _global_
+
+defaults:
+  - ndas_workflow_base
+  - workerpool_schemes/xlarge
+  - _self_
+
+workflow_name_prefix: nurec-cicd-reconstruct-lidarfree-mtl-ssr-200
+
+publish_dataconditions_at_launch:
+  enabled: true
+
+amo_cle:
+  enabled: false
+
+default_gpu: l4
+
+tasks:
+  nre-aux-data: { gpu: a40 }
+  nre-run: { gpu: a40 }
+  patch-match-depth: { gpu: a40 }
+  rr_entrypoint_real: { gpu: a40 }
+  rr_entrypoint_synth: { gpu: a40 }
+  iq_metrics-analyzer: { gpu: a40 }
+
+car2sim:
+  cut: []
+  save_artifacts_in_s3: true
+  nurec_task_name: nre-run
+  reconstruction_args: null
+  training_config: configs/apps/prod/Hyperion-8.1/car2sim_lidarfree.yaml
+  source_wf: chienlungc-lidarfree-car2sim-tot-sauron-detection/latest-success
+  full_pipeline:
+    clipgt_ids:
+      - 2ba0a42e-f82e-4f04-8220-6a248309dbef
+      - 05714ad3-621c-498e-8fd9-6119e0d93a6b
+      - 3bb89795-0383-4282-8250-bfb7031eec66
+      - 6021bdd4-fbe3-4322-b1e0-9e20b68a886c
+      - 075b32ce-1e13-46c2-bb13-0fea04eabef8
+      - 88a3e0af-f2ca-4c25-85b1-50c05fee162a
+      - c043477c-b99f-4ca5-9b3d-9bc2289c16c0
+      - 7d4de4cc-aff7-493f-b8b8-b01955d27356
+      - aff581a8-4d14-4291-8306-14ff9158eb8a
+      - 34a694c6-50ea-4e4a-be07-bba2475d5019
+      - 18e8dc9e-16a9-4722-af60-000b895091cf
+      - 877abc49-df48-49f9-8254-6314a600a111
+      - 81e4ea84-1be1-4bf6-8ec1-945927bac84d
+      - f2a2e77a-0c85-4d87-8166-aeb2e2ccaf61
+      - a9653892-7137-4780-b2f2-1e6f50ea8a03
+      - 18eb017d-b658-418b-908b-9f824aa69a21
+      - 1b5f9065-a48e-46c8-9829-a8760a22a8a3
+      - 73ca3a5c-a7c3-4bbc-9254-6967dcbc2d76
+      - 07c4f2d8-42fe-493b-be2c-d13bddf3a5e5
+      - 4b0b8df0-3af9-4019-a451-e866adbc5cff
+      - bb9f38cf-e2b4-45cf-9afe-172ff4181179
+      - 065da13e-a7ba-45af-88f3-aa3db2e9b3a6
+      - 7d29031b-a758-45a7-8d18-f442b27e2516
+      - bfd98fc7-be2c-4a12-8cef-832c58d9b667
+      - 7061bf09-3ed9-49f9-b715-4458677c2416
+      - 35a136f1-f2f0-400d-a895-86fd517f4476
+      - f36b855a-fc27-474b-918c-4f9d9e78d4ed
+      - 7ec3220c-1099-47ca-8ef9-eba5a63dcde4
+      - a0f1c231-3430-4de6-8a04-190681104b95
+      - ac0462c4-7c63-49dc-907b-39f3bf868fdf
+      - 432dfb8d-4c69-43b4-9ffa-f04523a9224c
+      - faafcddb-f787-4c69-8c80-bd9627cc4c0d
+      - 9cca51c7-194b-4069-a5c9-17370f59755d
+      - b4df2bbe-e15f-4b69-a9e6-9da65603bfdf
+      - e8241723-a6d2-4632-9d02-d60cd2a2380d
+      - c2f28a07-d108-4c1e-bc3c-0c7a4e8bda5e
+      - a4f68515-2263-4124-8fe6-c119b796900e
+      - 472fed22-2854-4dd4-8887-7f3c951ddd70
+      - d41020c1-c644-412f-b4c7-ddeb5a5d345b
+      - 00c5e86c-90b4-4f96-936e-ce740818f2e3
+      - 44b421bb-b3dc-4282-b1e8-2fb9929088c2
+      - 705abe7f-22d6-4165-935b-98384c0115dc
+      - f690a042-b656-4a31-9bcc-aead14385e2d
+      - 57f1b5f1-4b1e-4c93-9022-f3945bf49859
+      - d4ecf45f-5ed2-4b91-bf1b-8f44a66d5ab4
+      - b6a39e25-6428-4ceb-b0af-58fa824a02b5
+      - cc1fddec-3baa-40cf-b7be-b91cdf9f127f
+      - 2f827a0e-7b99-42c1-ac7c-5e9b36cd521c
+      - 5c75d769-8036-49fe-8b7d-8eb98751babd
+      - d3b8dc2a-b6e3-4b19-96f1-3f8ab2f9e4a2
+      - ff76bc38-e5a9-49ca-b129-acace74104f6
+      - 6ac93c6e-1741-4f6c-a1c8-4da1ee31e4a0
+      - ecca895f-0bc5-44bc-87c4-2b656caf2637
+      - 6d46fc7c-ba68-4d01-814f-c285734500de
+      - afd39942-7433-42b5-8f1c-862e3c975f9a
+      - 87184317-9d23-4047-bc23-4cb2c247f159
+      - 93d57d5f-b234-4abe-a218-03f3c2658343
+      - bb4bc86e-39ac-46c2-92a9-91b2c906e976
+      - ec5226d9-74c8-4fbd-a674-79d9d2fba7d9
+      - e8cb341d-b6ec-4c29-b05c-10d8fdef221b
+      - 5f547894-4cfe-4f5d-ad1b-85bb7c542062
+      - 265db2be-c8d4-444d-b69f-35e167c6702b
+      - 91a485af-17b8-42ac-ae7c-91c994e273f1
+      - fb8f5779-0c14-4ba6-b747-ce87f0b95b82
+      - 6af8a5b5-e219-4ce5-bae1-ee0ec7e616ff
+      - 272f58d9-62a0-4532-bd5e-3527e3264e56
+      - 78ad1cc4-ad96-4b61-99ce-148f21f2bc44
+      - 6a1ac668-a3a5-454e-872c-6c2199e7b8ba
+      - bfa7f8aa-1312-4f8a-ba32-d8d8365fe653
+      - 51caf560-ac0c-472d-af54-c832e074897b
+      - 10921496-750f-493e-8378-7288c2370bec
+      - b5fdf464-f915-4329-97e0-acfd640ff724
+      - 23df64a5-4e97-4b50-b474-546a04649c68
+      - da30451a-3761-4c3b-8016-a7817161bd4a
+      - 1f8184ef-8ee2-4d07-a9b0-f7aa9b6fdd6c
+      - ca3e0afb-29f7-4dd4-8ef9-2aadf111b00e
+      - da69b937-7d3e-4f2d-a9cf-1473852c652b
+      - 0d7926d9-614d-4682-a73f-41fe1435b2ee
+      - 35801c36-8a3f-436b-9cfa-50e16418ffc9
+      - 0cc5006f-f673-4feb-b995-d4439d874a5e
+      - 8b907134-5cf2-4f33-8d0b-8ef5481190de
+      - 84a47d0a-8969-4135-8b99-aa56fe12007f
+      - 9164e2ae-f19c-45bf-98d0-860a39e62da2
+      - 04582eba-2911-4429-a88a-b0eba60e8836
+      - 10d0c2bd-4da8-466b-922b-17bfaf3ee708
+      - 315cd875-63e7-44cd-aa4c-9a3833f29bb9
+      - ca37d9fd-129c-4d72-a5e2-0cc5702a7acf
+      - d0700640-aebf-44c6-bff2-b42d449e49af
+      - 9fff2c25-389c-48e7-87b1-bd5fb8e9c29e
+      - c3dbdbbf-d647-48f7-a694-093e81955c56
+      - 4554cf00-61ed-4a1b-9ecc-492dead79f08
+      - 3d5ea849-daac-4430-8fc7-4987bf39b736
+      - 8f1cc812-a87b-40ea-9b92-824f9e0b9489
+      - 5674692f-c963-40ec-8752-bed1f1de7c0b
+      - fc23af96-7a60-4ce5-9267-7e9adb498f61
+      - 970ed94b-2637-4e0d-be00-2709aab9895f
+      - df8b3d2d-4ffb-4e67-bc8a-ef7f2701815d
+      - 651f6bb4-0e73-487b-93bb-3747849df26f
+      - 6a3e985c-2d08-4097-9605-d912fd1b36b2
+      - 23fa30dc-b74a-4523-9220-20a7b9f87c3c
+      - f3ac1253-3483-4209-8e65-c56f98a163f2
+      - f5218d4c-043b-47c8-9ed2-36195cd9a639
+      - 615c5214-321f-4999-8296-f2fcb430a617
+      - 7455d48e-f419-435e-89ff-b7652807bc94
+      - 942480ab-f626-4e29-b782-1caa25b8701b
+      - 2badc651-15bd-46f8-9c9c-8650a2c2dedd
+      - 4bb96da4-bae4-45c4-bd9d-09b94fea34e3
+      - 02c411ad-a21f-45fb-8866-931f3cc80012
+      - 3cfe67f7-6ce3-459d-bdf3-c808fb0700cd
+      - a6effde4-ae6a-461a-a1cd-9641cbe38f55
+      - 75682b1e-8f75-4bda-a383-3a65005ec58f
+      - 4590b5c7-0584-44e6-aeb1-c587ce49a07f
+      - 2729327f-b549-4b1e-acb0-fc1044487430
+      - 111af17f-7744-44c7-aea3-20b81d4b17b1
+      - 4a990835-a38d-4fdb-9d80-27ff08d4b439
+      - 22cc6a5e-eb59-4633-959c-594baa0977a7
+      - 0f66496f-4c18-46a1-bc54-e571592d15a7
+      - c76644cd-a598-4a1b-9b85-69179080386b
+      - 047a8786-bc82-4ff1-85a6-ba7052eb522f
+      - a5c0189b-f6f9-4ef6-8cd1-2913780d68ed
+      - 74871948-3cf2-42f9-ad34-5307b8effa28
+      - 46e5b794-5386-4b30-b903-03589b196350
+      - 7273d074-d45c-488d-ae60-933dd00c5b78
+      - 01b38dd4-9c9e-49c5-afe7-0d053112086a
+      - 6437c434-b139-413b-9edb-d024e91fcd75
+      - 7aa48a21-b9de-4150-979f-f879f8d3850f
+      - 4990763a-9306-4f1e-9e7f-1ec7110ec2d6
+      - 4791f5d9-03ff-4fe4-87c8-effb5bec298a
+      - ad3a9693-d023-4018-ba6c-a36d36835a8d
+      - 5752e68a-5646-476a-ad9a-c605a8a1e659
+      - 935c0aa6-ce05-43e5-8bf4-8e191ba75a2c
+      - 5973acee-26d0-40bd-b9d6-9f3321619c32
+      - dd6b5184-29e1-4add-93be-9fd919fa0414
+      - fa674924-9a2c-4fa3-97b2-abb8b06354e6
+      - 3fe525fe-61bf-46a0-9257-edfa5f0ce600
+      - 440fbe9e-63da-4c2e-90af-4594cb9f6223
+      - 515aa02a-ee54-4ea0-aaf6-0412f3dc29fe
+      - 9bd379fe-6672-41b9-9a99-aedca0285dec
+      - 2f67648b-2daa-4574-b59a-28f13f200e84
+      - 1e2b577a-e5f5-4ef8-a587-815a78f945cd
+      - 2214203f-d933-42b3-9ee1-f5edc9985a61
+      - 537e7ecd-9359-414f-ab70-3fcfcb70e42a
+      - a19976ec-d6b0-47db-946b-c580b4763cec
+      - fb36b1f4-0d8c-4caa-b49f-44ec4517884d
+      - 272c3f63-d26c-4406-a706-e7fc29e53262
+      - 1d3c9e17-f03a-422e-b5bc-7fdca3e02da2
+      - 088fa3fe-f9e0-4d2d-ad6a-c79af753ca9e
+      - bcb9e5d0-d751-4e70-8f43-9ca1831f1d23
+      - 4ebc852b-8b32-408f-ae2e-8173c291ba30
+      - 817f9ebd-5f3d-404e-81ac-6036fe859e90
+      - 5debd792-d75d-4076-ab88-343d57d0316f
+      - 31168461-632f-4ad2-b914-79fd9db27195
+      - b7b96b13-be78-4193-ad6a-8937eb09b850
+      - 66a1b7bb-0eaf-4637-a749-c5ece86792ce
+      - 03a41b99-1838-4a8e-be88-7558f5bc8874
+      - 57af550f-a213-47f8-af5e-a729f36084e0
+      - 645f8fd9-fce6-4c9f-9ff7-ffec22d37625
+      - 2ba7ec08-293c-4f79-b8c1-c366e9294383
+      - f9987555-cb9a-450d-942b-86503dbcbc49
+      - 152943d8-b716-4ba0-9e0b-0f8e7b18a12b
+      - 435381ba-77e9-4a1e-ad85-f2d283097aa9
+      - 9cf63343-eb03-493d-a34c-81e0806fe329
+      - b5ef5668-bf63-49b7-bb51-b22424dbe05b
+      - 830b292f-4db2-4482-b8d2-09174151d8b5
+      - 23be6a6a-f2ce-4f7c-bf48-56af5f9a7cff
+      - ae675ed2-0259-47ee-8642-1b9857ac3862
+      - 9a561bc3-6a99-45d7-99a9-2831ee054713
+      - c015ab22-a715-40f6-8835-4b048180ffe9
+      - 6ab29ff0-9fe0-4667-a2bc-9599786d93d4
+      - 2bc9dc55-d6ac-4a48-850d-36991d6a1d59
+      - c9e4b85c-64cb-4b72-be67-04e131941779
+      - 9999873c-ed85-4d1c-9421-985907333274
+      - fbdbbfcb-4ad5-46ca-a4aa-61913b219900
+      - 2e8afcc7-9513-4e3a-a964-a5dc30fa694e
+      - d6c9e56f-ae16-4ece-9bad-f7d8283408bd
+      - c84d00fb-1cda-42b5-86f5-b6c2719c945a
+      - 8b102c0c-4a36-4a1b-9c6a-08ab36f00e5c
+      - 9e99297c-7db8-4275-9a8f-e5a9f16dd77e
+      - 39563d73-d500-4df1-92e6-a6ac321ab1c7
+      - e05e9ade-3eef-4de0-af14-f7d3a3806b7b
+      - 061a389b-7874-4969-ac76-e6d4e7035458
+      - 42167fd8-c9e3-4f22-b4c7-e56a3d666b9a
+      - cd9d250a-1399-4a42-add1-63aa49c4e988
+      - 38a00b8c-9fd6-4ed0-ac10-102ae5d53a86
+      - 55c2be64-e4c4-4a96-a407-78c9bdbabdf7
+      - 0c0d029e-02b3-4fe0-90ec-7ad741ef07ee
+      - 8e130882-8a3c-4b02-82b0-4aef26ac155f
+      - d00f8230-8d8f-4e11-954a-6ef6df894c1e
+      - 932f6049-6e34-4fe8-b01a-5de3a56e4f3c
+      - a9b1cc6b-6311-4d0a-80b1-82f215187a7b
+      - d0d7757d-8b4c-41c7-8396-4584dca183ca
+      - 933e7867-d8a8-4981-b45d-bc3f02f00d3b
+      - ff93e883-3559-44eb-bb70-4e82b209e422
+      - e879c073-2b7b-4b1f-b551-251317f46f37
+      - f90a71b4-bb7d-4263-9bc2-2c32e7cca8a8
+      - e9f0c332-3136-438c-88ba-d67d881dbbe2
+      - bae112e9-0385-4bbd-98bb-1564d33bd827
+      - f16ead22-ca24-4cf4-8bdb-2f2a3b5a5d2f
+      - 18e3b6bb-b90c-49df-a0b0-56c95d2f8679
+      - 9e0becb6-12c7-40e9-9824-84c6908cf99a
+
+nurec_cicd_amo_cle:
+  enabled: true
+
+switchboard:
+  connections:
+    car2sim_to_nre_eval:
+      with_internal_input: nre-out
+    car2sim_to_shim:
+      with_internal_input: nre-out
+    car2sim_to_nurec_cicd_amo_cle:
+      force_enable: true
+      target_task: trigger-gitlab-pipeline
+      replace_input_task: [reconstruction]
+      with_internal_input: nre-out
+    car2sim_to_nurec_cicd_amo_cle_2:
+      force_enable: true
+      target_task: trigger-gitlab-pipeline
+      replace_input_task: [swiftstack-uploader]
+      with_internal_input: swiftstack-uploader-nre
+    car2sim_to_nre_eval_nvrq:
+      force_enable: true
+      target_task: nvrq-multiplex-ncore
+      replace_input_task: [clipgt-ncore]
+      with_external_wf: ${car2sim.source_wf}
+      with_external_input: [sauron-ncore-export]
+
+reconstruction_run_binary_tasks:
+- nre-run
+- nre-out
+- render_nre
+- psnr-semantic-labelmap-images
+- base-pacsim-replay
+
+swiftstack_version_suffix: '$WORKFLOW_NAME'
+swiftstack_version_suffix_tasks:
+  - swiftstack-mount-nre
+  - swiftstack-uploader-nre

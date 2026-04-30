@@ -1,0 +1,158 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+load("@nre_pip_deps//:requirements.bzl", pip_requirement = "requirement")
+load("@rules_python//python:defs.bzl", "py_library")
+load("//bazel/pytest:defs.bzl", "pytest_test")
+load("//bazel/slang:defs.bzl", "slangtorch_library")
+
+package(default_visibility = ["//:core_package_group"])
+
+filegroup(
+    name = "py_files",
+    srcs = glob(["**/*.py"]),
+)
+
+filegroup(
+    name = "slang_files",
+    srcs = glob(["*.slang"]),
+)
+
+filegroup(
+    name = "transform_slang_files",
+    srcs = ["transform.slang"],
+)
+
+# Compile the Quaternion Slang module into a SlangTorch C++ CUDA extension
+slangtorch_library(
+    name = "quaternion_slang_cc",
+    srcs = ["quaternion_kernels.slang"],
+    extra_cmd_args = "-I$$(dirname $(location quaternion.slang)) -I$$(dirname $$(dirname $$(dirname $(location quaternion.slang))))",
+    deps = [
+        "quaternion.slang",
+        "//libs/geometry/kernels:slang_files",
+        "//libs/slang_utils:extensions_slang",
+    ],
+)
+
+# Compile the Pose Slang module into a SlangTorch C++ CUDA extension
+slangtorch_library(
+    name = "pose_kernels_slang_cc",
+    srcs = ["pose_kernels.slang"],
+    extra_cmd_args = (
+        "-I$$(dirname $$(dirname $$(dirname $(location pose.slang)))) " +
+        "-I$$(dirname $$(dirname $(location //libs/slang_utils:extensions_slang))) " +
+        "-I$$(dirname $$(dirname $(location //libs/slang_utils:constants_slang)))"
+    ),
+    deps = [
+        "pose.slang",
+        "quaternion.slang",
+        "transform.slang",
+        "//libs/geometry/kernels:slang_files",
+        "//libs/slang_utils:constants_slang",
+        "//libs/slang_utils:extensions_slang",
+    ],
+)
+
+py_library(
+    name = "interface",
+    srcs = ["interface.py"],
+    deps = [
+        ":pose_kernels_slang_cc",
+        ":quaternion_slang_cc",
+        pip_requirement("torch"),
+    ],
+)
+
+py_library(
+    name = "quaternion_utils",
+    srcs = ["quaternion.py"],
+    deps = [
+        ":interface",
+        "//libs/slang_utils:pylib_utils",
+        pip_requirement("torch"),
+    ],
+)
+
+py_library(
+    name = "pose_utils",
+    srcs = ["pose.py"],
+    deps = [
+        ":interface",
+        pip_requirement("torch"),
+    ],
+)
+
+py_library(
+    name = "pylib",
+    srcs = [
+        "__init__.py",
+    ],
+    deps = [
+        ":interface",
+        ":pose_kernels_slang_cc",
+        ":pose_utils",
+        ":quaternion_slang_cc",
+        ":quaternion_utils",
+        "//libs/slang_utils:pylib_utils",
+        pip_requirement("torch"),
+    ],
+)
+
+pytest_test(
+    name = "quaternion_test",
+    srcs = ["quaternion_test.py"],
+    deps = [
+        ":pylib",
+        ":quaternion_utils",
+    ],
+)
+
+pytest_test(
+    name = "pose_test",
+    srcs = ["pose_test.py"],
+    deps = [
+        ":pose_utils",
+        ":pylib",
+    ],
+)
+
+# Compile the transform tests Slang source into a SlangTorch C++ CUDA extension
+slangtorch_library(
+    name = "transform_test_slang_cc",
+    srcs = ["transform_test.slang"],
+    extra_cmd_args = (
+        "-I$$(dirname $$(dirname $$(dirname $(location transform.slang)))) " +
+        "-I$$(dirname $$(dirname $(location //libs/slang_utils:extensions_slang))) " +
+        "-I$$(dirname $$(dirname $(location //libs/slang_utils:constants_slang)))"
+    ),
+    deps = [
+        "quaternion.slang",
+        "transform.slang",
+        "//libs/slang_utils:constants_slang",
+        "//libs/slang_utils:extensions_slang",
+    ],
+)
+
+pytest_test(
+    name = "transform_test",
+    srcs = [
+        "transform_test.py",
+    ],
+    deps = [
+        ":pylib",
+        ":transform_test_slang_cc",
+        "//libs/slang_utils:pylib_utils",
+        pip_requirement("lietorch"),
+        pip_requirement("numpy"),
+        pip_requirement("slangtorch"),
+        pip_requirement("torch"),
+    ],
+)

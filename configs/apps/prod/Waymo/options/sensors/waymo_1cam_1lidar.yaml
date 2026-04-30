@@ -1,0 +1,12 @@
+# @package _global_
+
+defaults:
+  - override /model/post_processing@model.post_processing.b: null # bilarf per camera, should be disabled in single-cam session
+
+dataset:
+  camera_ids:
+    - camera_front_50fov
+  lidar_ids:
+    - lidar_top
+  lidar_model:
+    enabled: false

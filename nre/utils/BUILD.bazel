@@ -1,0 +1,626 @@
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+load("@aspect_rules_py//py:defs.bzl", "py_binary")
+load("@nre_pip_deps//:requirements.bzl", pip_requirement = "requirement")
+load("@rules_python//python:defs.bzl", "py_library")
+load("//bazel/pytest:defs.bzl", "pytest_test")
+
+DEFAULT_VISIBILITY = ["//:core_package_group"]
+
+package(default_visibility = DEFAULT_VISIBILITY)
+
+filegroup(
+    name = "py_files",
+    srcs = glob(["**/*.py"]),
+    visibility = [
+        "//internal/scripts/pycena:__pkg__",
+    ],
+)
+
+py_library(
+    name = "pylib_packed_ops",
+    srcs = ["packed_ops.py"],
+    deps = [
+        pip_requirement("torch"),
+        "//libs/packed_ops:pylib_cc",
+    ],
+)
+
+py_library(
+    name = "pylib_prober",
+    srcs = ["prober.py"],
+    deps = [
+        ":pylib_tests",
+        "//nre/config:pylib",
+        "@rules_python//python/runfiles",
+        pip_requirement("torch"),
+        pip_requirement("hydra-core"),
+        pip_requirement("omegaconf"),
+    ],
+)
+
+py_library(
+    name = "pylib_types",
+    srcs = [
+        "batch.py",
+        "types.py",
+    ],
+    visibility = DEFAULT_VISIBILITY + [
+        # Add visibility for //internal/scripts/experimental:grpc_control_actors and :ncore_to_ngp
+        "//internal/scripts/experimental:__pkg__",
+        # Add visibility for nvhuman animation scripts
+        "//internal/scripts/experimental/models/gaussian/nvhuman:__pkg__",
+        # Add visibility for aux_gen ncore_aux_data
+        "//apps/aux_gen:__pkg__",
+    ],
+    deps = [
+        ":pylib_fields",
+        ":pylib_geometry",
+        ":pylib_misc",
+        ":pylib_prober",
+        ":pylib_torch_compile",
+        "//libs/geometry/kernels:pylib",
+        "//libs/sensors:pylib_slang",
+        "//nre/utils/sensors:pylib",
+        "//nre/utils/sensors:pylib_ncore_sensors_converters",
+        "//nre/visualdebugger:pylib",
+        pip_requirement("dataclasses-json"),
+        pip_requirement("numpy"),
+        pip_requirement("opencv-python"),
+        pip_requirement("nvidia-ncore"),
+        pip_requirement("torch"),
+        pip_requirement("usd-core"),
+        pip_requirement("lietorch"),
+        pip_requirement("omegaconf"),
+    ],
+)
+
+pytest_test(
+    name = "types_test",
+    timeout = "long",
+    srcs = ["types_test.py"],
+    data = [
+        "//configs",
+        "@test_data_ncore//:ncore_1sec",
+    ],
+    deps = [
+        ":pylib_tests",
+        ":pylib_types",
+        "//nre/datasets:pylib",
+        pip_requirement("lietorch"),
+        pip_requirement("hydra-core"),
+        pip_requirement("numpy"),
+        pip_requirement("parameterized"),
+        pip_requirement("nvidia-ncore"),
+        "@rules_python//python/runfiles",
+    ],
+)
+
+py_library(
+    name = "pylib_metrics",
+    srcs = ["metrics.py"],
+    visibility = [
+        # Add visibility for //internal/scripts/kratos
+        "//internal/scripts/kratos:__pkg__",
+    ],
+    deps = [
+        ":pylib_trainer",
+        ":pylib_types",
+        "//nre/config:pylib_version",
+        pip_requirement("torch"),
+        pip_requirement("pydantic"),
+        pip_requirement("omegaconf"),
+        pip_requirement("pyyaml"),
+    ],
+)
+
+py_library(
+    name = "pylib_fields",
+    srcs = ["fields.py"],
+    deps = [
+        pip_requirement("dataclasses-json"),
+        pip_requirement("numpy"),
+        pip_requirement("nvidia-ncore"),
+        pip_requirement("torch"),
+    ],
+)
+
+py_library(
+    name = "pylib_misc",
+    srcs = ["misc.py"],
+    visibility = DEFAULT_VISIBILITY + [
+        # Add visibility for //internal/workflows
+        "//internal/workflows/cluster_toolbox:__pkg__",
+        # Add visibility for nvhuman animation scripts
+        "//internal/scripts/experimental/models/gaussian/nvhuman:__pkg__",
+    ],
+    deps = [
+        pip_requirement("numpy"),
+        pip_requirement("torch"),
+        pip_requirement("pytorch_lightning"),
+    ],
+)
+
+pytest_test(
+    name = "cli_test",
+    srcs = ["cli_test.py"],
+    deps = [
+        ":pylib_cli",
+    ],
+)
+
+py_library(
+    name = "pylib_morph",
+    srcs = ["morph.py"],
+    visibility = DEFAULT_VISIBILITY + [
+        "//internal/scripts/aux_tools:__pkg__",
+        "//internal/scripts/ds_to_ncore:__pkg__",
+        "//internal/scripts/experimental:__pkg__",
+        "//internal/scripts/ncore_vis:__pkg__",
+    ],
+    deps = [
+        pip_requirement("torch"),
+    ],
+)
+
+py_library(
+    name = "pylib_ncore_utils",
+    srcs = ["ncore_utils.py"],
+    visibility = [
+        "//:aux_package_group",
+        "//:core_package_group",
+        "//internal/scripts/aux_tools:__pkg__",
+        "//internal/scripts/ds_to_ncore:__pkg__",
+        "//internal/scripts/experimental:__pkg__",
+        "//internal/scripts/ncore_vis:__pkg__",
+    ],
+    deps = [
+        ":pylib_morph",
+        ":pylib_types",
+        pip_requirement("nvidia-ncore"),
+        pip_requirement("numpy"),
+        pip_requirement("pillow"),
+        pip_requirement("torch"),
+        pip_requirement("torchvision"),
+        pip_requirement("universal-pathlib"),
+        pip_requirement("zarr"),
+    ],
+)
+
+py_library(
+    name = "pylib_tests",
+    srcs = [
+        "tests.py",
+    ],
+    deps = [
+        pip_requirement("torch"),
+        pip_requirement("numpy"),
+    ],
+)
+
+py_library(
+    name = "pylib_colored_exceptions",
+    srcs = [
+        "colored_exceptions.py",
+    ],
+    deps = [
+    ],
+)
+
+py_library(
+    name = "pylib_knn",
+    srcs = [
+        "knn.py",
+    ],
+    visibility = DEFAULT_VISIBILITY,
+    deps = [
+        pip_requirement("torch"),
+        "//libs/pytorch3d_knn:pylib_cc",
+    ],
+)
+
+py_library(
+    name = "pylib_geometry",
+    srcs = [
+        "geometry.py",
+    ],
+    visibility = DEFAULT_VISIBILITY + [
+        # Add visibility for nvhuman animation scripts
+        "//internal/scripts/experimental/models/gaussian:__subpackages__",
+        # Add visibility for aux_gen estimators
+        "//apps/aux_gen:__pkg__",
+    ],
+    deps = [
+        ":pylib_knn",
+        ":pylib_profiling",
+        pip_requirement("torch"),
+        pip_requirement("lietorch"),
+        pip_requirement("numpy"),
+        pip_requirement("scipy"),
+        pip_requirement("nvidia-ncore"),
+        pip_requirement("nvidia-ncore-internal"),
+    ],
+)
+
+py_library(
+    name = "pylib_profiling",
+    srcs = [
+        "profiling.py",
+    ],
+    deps = [
+        pip_requirement("torch"),
+        ":pylib_trainer",
+        "//nre/config:pylib",
+    ],
+)
+
+py_library(
+    name = "pylib_cli",
+    srcs = [
+        "cli.py",
+    ],
+    visibility = DEFAULT_VISIBILITY + [
+        # Add visibility for aux_gen (ScopedTimer CLI options)
+        "//apps/aux_gen:__pkg__",
+    ],
+    deps = [
+        ":pylib_profiling",
+        "//nre/config:pylib",
+        pip_requirement("click"),
+    ],
+)
+
+py_library(
+    name = "pylib",
+    srcs = [
+        "__init__.py",
+        "lidar_model.py",
+        "lidar_post_processing.py",
+        "log.py",
+        "model_registry.py",
+        "visualize.py",
+    ],
+    visibility = DEFAULT_VISIBILITY + [
+        # Add visibility for //internal/scripts/ncore_vis:ncore_vis
+        "//internal/scripts/ncore_vis:__pkg__",
+        # Add visibility for //internal/scripts/ncore:ncore_sequence_chunks
+        "//internal/scripts/ncore:__pkg__",
+        # Add visibility for //internal/scripts/experimental:render
+        "//internal/scripts/experimental:__pkg__",
+        # Add visibility for //internal/scripts/ngc:download_model
+        "//internal/scripts/ngc:__pkg__",
+        # Add visibility for //internal/scripts/ds2ncore
+        "//internal/scripts/ds_to_ncore:__pkg__",
+        # Add visibility for //apps/asset_harvester
+        "//apps/asset_harvester:__subpackages__",
+    ],
+    deps = [
+        ":pylib_colored_exceptions",
+        ":pylib_geometry",
+        ":pylib_knn",
+        ":pylib_lpips_network",
+        ":pylib_metrics",
+        ":pylib_misc",
+        ":pylib_packed_ops",
+        ":pylib_profiling",
+        ":pylib_types",
+        "//nre:pylib",
+        "//nre/config:pylib",
+        "//nre/utils/upgrade:pylib",
+        "//nre/visualdebugger:pylib",
+        pip_requirement("dataclasses-json"),
+        pip_requirement("torch"),
+        pip_requirement("nvidia-ncore"),
+        pip_requirement("numpy"),
+        pip_requirement("matplotlib"),
+        pip_requirement("flow_vis"),
+        pip_requirement("scipy"),
+        pip_requirement("lietorch"),
+        pip_requirement("hydra-core"),
+        pip_requirement("shortuuid"),
+        pip_requirement("tensorboardx"),
+        pip_requirement("pydantic"),
+        pip_requirement("pillow"),
+        pip_requirement("wandb"),
+        pip_requirement("pytorch-lightning"),
+        pip_requirement("pyyaml"),
+        pip_requirement("requests"),
+        pip_requirement("tqdm"),
+        pip_requirement("tinycudann"),
+        "//libs/packed_ops:pylib_cc",
+        "//libs/pytorch3d_knn:pylib_cc",
+        "//libs/vren:pylib",
+        "//libs/vren:pylib_cc",
+    ],
+)
+
+pytest_test(
+    name = "geometry_test",
+    srcs = ["geometry_test.py"],
+    deps = [
+        ":pylib_geometry",
+        ":pylib_prober",
+        pip_requirement("numpy"),
+        pip_requirement("scipy"),
+        pip_requirement("torch"),
+    ],
+)
+
+pytest_test(
+    name = "lidar_post_processing_test",
+    srcs = ["lidar_post_processing_test.py"],
+    deps = [
+        ":pylib",
+        pip_requirement("torch"),
+    ],
+)
+
+py_library(
+    name = "pylib_optim",
+    srcs = [
+        "optim.py",
+    ],
+    deps = [
+        pip_requirement("apex"),
+        pip_requirement("torch"),
+        pip_requirement("numpy"),
+        pip_requirement("omegaconf"),
+        pip_requirement("lietorch"),
+        "//nre/config:pylib",
+        "//nre/utils:pylib_trainer",
+    ],
+)
+
+py_library(
+    name = "pylib_callbacks",
+    srcs = ["callbacks.py"],
+    deps = [
+        ":pylib",
+        ":pylib_types",
+        "//nre/config:pylib",
+        "//nre/systems:pylib",
+        pip_requirement("torch"),
+        pip_requirement("omegaconf"),
+        pip_requirement("pytorch_lightning"),
+    ],
+)
+
+py_library(
+    name = "pylib_files",
+    srcs = [
+        "files.py",
+    ],
+    visibility = DEFAULT_VISIBILITY + [
+        "//apps/aux_gen:__pkg__",
+    ],
+    deps = [
+        pip_requirement("universal-pathlib"),
+    ],
+)
+
+pytest_test(
+    name = "model_registry_test",
+    srcs = ["model_registry_test.py"],
+    deps = [
+        ":pylib",
+    ],
+)
+
+py_library(
+    name = "pylib_custom_metrics",
+    srcs = ["custom_metrics.py"],
+    deps = [
+        pip_requirement("torch"),
+        pip_requirement("torchmetrics"),
+    ],
+)
+
+pytest_test(
+    name = "batch_test",
+    timeout = "long",
+    srcs = ["batch_test.py"],
+    data = [
+        "//configs",
+        "@test_data_ncore//:ncore_clipgt_1sec",
+    ],
+    deps = [
+        ":pylib_geometry",
+        ":pylib_tests",
+        ":pylib_types",
+        "//nre/datasets:pylib",
+        pip_requirement("numpy"),
+        pip_requirement("nvidia-ncore"),
+        pip_requirement("torch"),
+        pip_requirement("pillow"),
+        "@rules_python//python/runfiles",
+    ],
+)
+
+pytest_test(
+    name = "prober_test",
+    srcs = ["prober_test.py"],
+    deps = [
+        ":pylib_prober",
+        ":pylib_tests",
+        # nre is needed to allow debugpy to work
+        "//nre:pylib",
+        pip_requirement("torch"),
+    ],
+)
+
+pytest_test(
+    name = "scopedtimer_test",
+    srcs = ["scopedtimer_test.py"],
+    deps = [
+        ":pylib",
+        "//nre/config:pylib_scopedtimer",
+    ],
+)
+
+pytest_test(
+    name = "misc_test",
+    srcs = ["misc_test.py"],
+    deps = [
+        ":pylib_misc",
+        pip_requirement("numpy"),
+        pip_requirement("pytest"),
+    ],
+)
+
+py_library(
+    name = "pylib_trainer",
+    srcs = ["trainer.py"],
+    deps = [
+        "//nre/config:pylib_scopedtimer",
+        "//nre/config:pylib_trainer_config",
+        pip_requirement("torch"),
+        pip_requirement("pytorch-lightning"),
+    ],
+)
+
+py_library(
+    name = "pylib_schedulers",
+    srcs = ["schedulers.py"],
+    deps = [
+        ":pylib_trainer",
+        "//nre/config:pylib_trainer_config",
+        pip_requirement("omegaconf"),
+    ],
+)
+
+py_library(
+    name = "pylib_lpips_network",
+    srcs = [
+        "lpips_network.py",
+    ],
+    data = [
+        "@lpips_vgg_weights//:weights",
+    ],
+    visibility = DEFAULT_VISIBILITY,
+    deps = [
+        pip_requirement("torch"),
+    ],
+)
+
+# Tracy default variant (CPU-only)
+py_library(
+    name = "pylib_misc_tracy",
+    srcs = [
+        "__init__.py",
+        "geometry.py",
+        "knn.py",
+        "lidar_model.py",
+        "log.py",
+        "misc.py",
+        "model_registry.py",
+        "profiling.py",
+        "trainer.py",
+        "visualize.py",
+    ],
+    visibility = DEFAULT_VISIBILITY + ["//:__pkg__"],
+    deps = [
+        ":pylib_metrics",
+        ":pylib_packed_ops",
+        ":pylib_types",
+        "//libs/tracy_utils:pylib",  # Default Tracy (CPU-only)
+        "//nre:pylib",
+        "//nre/config:pylib",
+        "//nre/utils/upgrade:pylib",
+        "//nre/visualdebugger:pylib",
+        pip_requirement("dataclasses-json"),
+        pip_requirement("torch"),
+        pip_requirement("nvidia-ncore"),
+        pip_requirement("nvidia-ncore-internal"),
+        pip_requirement("numpy"),
+        pip_requirement("lietorch"),
+        pip_requirement("hydra-core"),
+        pip_requirement("omegaconf"),
+        pip_requirement("pytorch_lightning"),
+    ],
+)
+
+# Tracy GPU variant
+py_library(
+    name = "pylib_misc_tracy_gpu",
+    srcs = [
+        "__init__.py",
+        "geometry.py",
+        "knn.py",
+        "lidar_model.py",
+        "log.py",
+        "misc.py",
+        "model_registry.py",
+        "profiling.py",
+        "trainer.py",
+        "visualize.py",
+    ],
+    visibility = DEFAULT_VISIBILITY + ["//:__pkg__"],
+    deps = [
+        ":pylib_metrics",
+        ":pylib_packed_ops",
+        ":pylib_types",
+        "//libs/tracy_utils:pylib_gpu",  # GPU Tracy
+        "//nre:pylib",
+        "//nre/config:pylib",
+        "//nre/utils/upgrade:pylib",
+        "//nre/visualdebugger:pylib",
+        pip_requirement("dataclasses-json"),
+        pip_requirement("torch"),
+        pip_requirement("nvidia-ncore"),
+        pip_requirement("numpy"),
+        pip_requirement("lietorch"),
+        pip_requirement("hydra-core"),
+        pip_requirement("omegaconf"),
+        pip_requirement("pytorch_lightning"),
+    ],
+)
+
+py_binary(
+    name = "ffmpeg_wrap",
+    srcs = [
+        "ffmpeg_wrap.py",
+    ],
+    main = "ffmpeg_wrap.py",
+    deps = [
+        pip_requirement("imageio-ffmpeg"),
+        pip_requirement("setuptools"),
+    ],
+)
+
+py_library(
+    name = "pylib_torch_compile",
+    srcs = [
+        "torch_compile.py",
+    ],
+    visibility = DEFAULT_VISIBILITY,
+    deps = [
+        pip_requirement("torch"),
+    ],
+)
+
+py_library(
+    name = "pylib_gaussian_render",
+    srcs = [
+        "gaussian_render.py",
+    ],
+    visibility = DEFAULT_VISIBILITY + [
+        "//internal/scripts/experimental/models/gaussian:__subpackages__",
+    ],
+    deps = [
+        ":pylib_geometry",
+        "//apps/asset_harvester:rendering_lib",
+        "//nre/models/gaussians:pylib",
+        pip_requirement("imageio"),
+        pip_requirement("kiui"),
+        pip_requirement("numpy"),
+        pip_requirement("torch"),
+    ],
+)

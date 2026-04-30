@@ -1,0 +1,20 @@
+defaults:
+  - _kelvin_dav3
+
+encoder:
+  depth: 24
+  n_heads: 16
+  embed_dim: 2048  # 1024 * 2
+  take_block_indices: [11, 15, 19, 23]
+  aa_start_block_idx: 8
+  ffn_type: "mlp"
+
+decoder:
+  dpt_dim: 256
+  dpt_reassemble_hidden_dims: [256, 512, 1024, 1024]
+
+sky:
+  embed_dim: 384
+
+init_weights_paths:
+  dav3: s3@pdx-team-ncore://nrm-training-data/init-ckpt/dav3/large.safetensors

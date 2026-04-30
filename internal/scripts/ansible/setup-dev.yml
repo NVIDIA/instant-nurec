@@ -1,0 +1,319 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+---
+# Include the common setup playbook
+- import_playbook: setup-common.yml
+
+- name: Development Machine Post-Setup
+  hosts: all
+  become: yes
+  vars:
+    # CUDA configuration
+    cuda_version: "12.8.0"
+    cuda_version_short: "12-8"
+    ubuntu_version: "ubuntu2204"
+    cuda_deb_name: "cuda-repo-ubuntu2204-12-8-local_12.8.0-570.86.10-1_amd64.deb"
+    cuda_deb_url: "https://developer.download.nvidia.com/compute/cuda/12.8.0/local_installers/cuda-repo-ubuntu2204-12-8-local_12.8.0-570.86.10-1_amd64.deb"
+
+    # cuDNN configuration (local deb repo per https://developer.nvidia.com/cudnn-downloads)
+    cudnn_version: "9.19.0"
+    cudnn_deb_name: "cudnn-local-repo-ubuntu2204-{{ cudnn_version }}_1.0-1_amd64.deb"
+    cudnn_deb_url: "https://developer.download.nvidia.com/compute/cudnn/{{ cudnn_version }}/local_installers/{{ cudnn_deb_name }}"
+
+    # Authentication tokens (pass via command line: -e gitlab_token=xxx -e urm_token=xxx -e nvidia_username=xxx)
+    gitlab_token: ""
+    urm_token: ""
+    nvidia_username: ""
+
+    # Target user - the actual user who should own the files (not root)
+    target_user: "{{ ansible_user if ansible_user is defined else (lookup('env', 'SUDO_USER') if lookup('env', 'SUDO_USER') else lookup('env', 'USER')) }}"
+  vars_files:
+    - vars-ansible.yml
+
+  tasks:
+    - name: Install git-lfs (needed for NRE repository cloning)
+      apt:
+        name:
+          - git-lfs
+        state: present
+      register: git_lfs_install
+
+    - name: Install build dependencies (needed for NRE compilation & Ninja for slang runtime)
+      apt:
+        name:
+          - gcc-11
+          - g++-11
+          # Ninja was needed for previous NRE versions (<= v25.09) using slang, it is deprecated and remains in the setup to be able to test previous versions, this can be removed from v25.11 and onwards
+          - ninja-build
+        state: present
+      register: build_deps_install
+
+    - name: Check if CUDA {{ cuda_version_short }} is already installed
+      shell: dpkg -s cuda-toolkit-{{ cuda_version_short }} cuda-tools-{{ cuda_version_short }}
+      register: cuda_check
+      changed_when: false
+      failed_when: false
+
+    - name: Download CUDA repository pin file
+      get_url:
+        url: "https://developer.download.nvidia.com/compute/cuda/repos/{{ ubuntu_version }}/x86_64/cuda-{{ ubuntu_version }}.pin"
+        dest: "/etc/apt/preferences.d/cuda-repository-pin-600"
+        mode: "0644"
+      when: cuda_check.rc != 0
+
+    - name: Download CUDA DEB package ({{ cuda_version }})
+      get_url:
+        url: "{{ cuda_deb_url }}"
+        dest: "/tmp/{{ cuda_deb_name }}"
+        mode: "0644"
+      when: cuda_check.rc != 0
+      register: cuda_deb_download
+
+    - name: Install CUDA DEB package
+      apt:
+        deb: "/tmp/{{ cuda_deb_name }}"
+        state: present
+      when: cuda_check.rc != 0 and cuda_deb_download.changed
+
+    - name: Copy CUDA GPG keyring
+      shell: cp /var/cuda-repo-{{ ubuntu_version }}-{{ cuda_version_short }}-local/cuda-*-keyring.gpg /usr/share/keyrings/
+      when: cuda_check.rc != 0 and cuda_deb_download.changed
+
+    - name: Update package cache after CUDA repository
+      apt:
+        update_cache: yes
+      when: cuda_check.rc != 0 and cuda_deb_download.changed
+
+    - name: Install CUDA toolkit and tools {{ cuda_version }}
+      apt:
+        name: 
+          - cuda-toolkit-{{ cuda_version_short }}
+          - cuda-tools-{{ cuda_version_short }}
+        state: present
+      when: cuda_check.rc != 0
+      register: cuda_install
+
+    - name: Check if CUDA PATH is already in bashrc
+      shell: grep -q "export PATH=/usr/local/cuda/bin" ~/.bashrc
+      register: cuda_path_check
+      changed_when: false
+      failed_when: false
+      become: no
+
+    - name: Add CUDA environment variables to bashrc
+      lineinfile:
+        path: "~/.bashrc"
+        line: "{{ item }}"
+        create: yes
+        backup: yes
+      loop:
+        - "# CUDA"
+        - "export PATH=/usr/local/cuda/bin${PATH:+:${PATH}}"
+        - "export LD_LIBRARY_PATH=/usr/local/cuda/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+      when: cuda_path_check.rc != 0
+      become: no
+
+    - name: Clean up CUDA DEB package
+      file:
+        path: "/tmp/{{ cuda_deb_name }}"
+        state: absent
+      when: cuda_deb_download is defined and cuda_deb_download.changed
+
+    # cuDNN 9 for CUDA 12 via local deb repo (https://developer.nvidia.com/cudnn-downloads, Deb local)
+    - name: Check if cuDNN 9 is already installed
+      shell: dpkg -s libcudnn9-cuda-12
+      register: cudnn_check
+      changed_when: false
+      failed_when: false
+
+    - name: Download cuDNN local repo DEB package ({{ cudnn_version }})
+      get_url:
+        url: "{{ cudnn_deb_url }}"
+        dest: "/tmp/{{ cudnn_deb_name }}"
+        mode: "0644"
+      when: cudnn_check.rc != 0
+      register: cudnn_deb_download
+
+    - name: Enable cuDNN local repository
+      apt:
+        deb: "/tmp/{{ cudnn_deb_name }}"
+        state: present
+      when: cudnn_check.rc != 0
+
+    - name: Import cuDNN GPG key
+      shell: cp /var/cudnn-local-*/cudnn-*-keyring.gpg /usr/share/keyrings/
+      when: cudnn_check.rc != 0
+
+    - name: Update package cache after cuDNN repository
+      apt:
+        update_cache: yes
+      when: cudnn_check.rc != 0
+
+    - name: Install cuDNN 9 for CUDA 12
+      apt:
+        name:
+          - cudnn9-cuda-12
+          - libcudnn9-cuda-12
+          - libcudnn9-dev-cuda-12
+        state: present
+      when: cudnn_check.rc != 0
+      register: cudnn_install
+
+    - name: Clean up cuDNN DEB package
+      file:
+        path: "/tmp/{{ cudnn_deb_name }}"
+        state: absent
+      when: cudnn_deb_download is defined and cudnn_deb_download.changed
+
+    - name: Check if Bazel is already installed
+      stat:
+        path: /usr/local/bin/bazel
+      register: bazel_check
+
+    - name: Install Bazel (Bazelisk) from GitHub releases
+      get_url:
+        url: "https://github.com/bazelbuild/bazelisk/releases/latest/download/bazelisk-linux-amd64"
+        dest: "/usr/local/bin/bazel"
+        mode: "0755"
+        owner: root
+        group: root
+      when: not bazel_check.stat.exists
+
+    - name: Create .netrc file with proper permissions
+      file:
+        path: "~/.netrc"
+        state: touch
+        mode: "0600"
+      become: no
+
+    - name: Check if GitLab entry exists in .netrc
+      shell: grep -q "machine gitlab-master.nvidia.com" ~/.netrc
+      register: gitlab_netrc_check
+      changed_when: false
+      failed_when: false
+      become: no
+
+    - name: Add GitLab entry to .netrc (if token provided and entry doesn't exist)
+      blockinfile:
+        path: "~/.netrc"
+        block: |
+          machine gitlab-master.nvidia.com
+            login oauth2
+            password {{ gitlab_token }}
+        marker: "# {mark} ANSIBLE MANAGED BLOCK - GitLab"
+        create: yes
+        mode: "0600"
+      when: gitlab_token != "" and gitlab_netrc_check.rc != 0
+      become: no
+      no_log: true
+
+    - name: Check if URM entry exists in .netrc
+      shell: grep -q "machine urm.nvidia.com" ~/.netrc
+      register: urm_netrc_check
+      changed_when: false
+      failed_when: false
+      become: no
+
+    - name: Add URM entry to .netrc (if token and username provided and entry doesn't exist)
+      blockinfile:
+        path: "~/.netrc"
+        block: |
+          machine urm.nvidia.com
+            login {{ nvidia_username }}
+            password {{ urm_token }}
+        marker: "# {mark} ANSIBLE MANAGED BLOCK - URM"
+        create: yes
+        mode: "0600"
+      when: urm_token != "" and nvidia_username != "" and urm_netrc_check.rc != 0
+      become: no
+      no_log: true
+
+    - name: Check if {{ target_user }} is already in docker group
+      shell: groups {{ target_user }} | grep -q "\bdocker\b"
+      register: user_in_docker_group
+      changed_when: false
+      failed_when: false
+
+    - name: Add {{ target_user }} to docker group (for Docker access without sudo)
+      shell: usermod -aG docker {{ target_user }}
+      when: user_in_docker_group.rc != 0
+      register: docker_group_add
+
+    - name: Login to GitLab Container Registry (if GitLab token provided)
+      shell: echo "{{ gitlab_token }}" | docker login gitlab-master.nvidia.com:5005 -u oauth2 --password-stdin
+      when: gitlab_token != ""
+      become: no
+      no_log: true
+
+    - name: Reboot the system (skip for localhost)
+      reboot:
+        msg: "Rebooting after development setup"
+        reboot_timeout: 3600
+        pre_reboot_delay: 0
+        post_reboot_delay: 30
+      when: ansible_connection != "local"
+
+    - name: Notify user about manual reboot (localhost only)
+      debug:
+        msg: |
+          ====================================================
+          LOCALHOST SETUP COMPLETE!
+
+          A reboot is recommended to ensure all drivers and 
+          services are properly loaded. Please reboot manually:
+
+          sudo reboot
+          ====================================================
+      when: ansible_connection == "local"
+
+# This block verifies that NVIDIA GPU drivers and CUDA are working correctly.
+# If verification fails (e.g., due to GPU Fabric Probe issues), it applies a fix
+# by disabling the fabric probe and triggers a reboot to restore functionality.
+    - name: Include reboot and NVIDIA/CUDA verification tasks
+      when: ansible_connection != "local"
+      block:
+        - name: Verify NVIDIA GPU drivers are installed and active with nvidia-smi
+          shell: nvidia-smi
+          register: nvidia_smi_check
+          changed_when: false
+          failed_when: nvidia_smi_check.rc != 0
+
+        - name: Check CUDA device query command
+          shell: /usr/local/cuda/bin/__nvcc_device_query
+          register: cuda_device_query_check
+          changed_when: false
+          failed_when: false
+
+        - name: Disable GPU Fabric Probe
+          when: cuda_device_query_check.rc != 0
+          block:
+            - name: Add NVreg_RegistryDwords option to nvidia.conf
+              lineinfile:
+                path: /etc/modprobe.d/nvidia.conf
+                line: 'options nvidia NVreg_RegistryDwords="RmGpuFabricProbe=0x0"'
+                create: yes
+                backup: yes
+
+            - name: Update initramfs after nvidia.conf modification
+              shell: update-initramfs -u
+
+            - name: Reboot system after initramfs update
+              reboot:
+                msg: "Rebooting after initramfs update"
+                reboot_timeout: 3600
+                pre_reboot_delay: 0
+                post_reboot_delay: 30
+
+            - name: Final verification after second reboot (CUDA device query)
+              shell: /usr/local/cuda/bin/__nvcc_device_query
+              register: final_cuda_device_query_check
+              changed_when: false
+              failed_when: final_cuda_device_query_check.rc != 0

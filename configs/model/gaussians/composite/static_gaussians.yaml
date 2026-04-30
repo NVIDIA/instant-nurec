@@ -1,0 +1,12 @@
+defaults:
+  - /model/gaussians/composite/_saturate_radiance_mixin
+  - /model/gaussians/strategy@strategy: gsplat
+  - /model/gaussians/models@layers.background: sh_gaussians
+  - /model/gaussians/renderer@renderer: 3dgut_nrend
+  - /model/gaussians/initialization@layers.background.initialization: lidar_rig_trajectory
+
+name: gaussians_primitive # aka static "gaussians-composite"
+debug_viz: false
+
+train_num_rays: 9999999999 # TODO refactor, add compatibility check
+log_to_prog_bar: true # if enabled, include statistics on the Gaussians in the console log

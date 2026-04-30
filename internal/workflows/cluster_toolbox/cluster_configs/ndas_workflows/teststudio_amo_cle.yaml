@@ -1,0 +1,53 @@
+# @package _global_
+
+defaults:
+  - ndas_workflow_base
+  - _self_
+
+workflow_name_prefix: nurec-cicd-reconstruct-amo-cle
+
+amo_cle:
+  enabled: false
+
+car2sim:
+  cut: []
+  save_artifacts_in_s3: true
+  full_pipeline:
+    clipgt_ids:
+    - 027f86f0-0875-47bc-a8c0-3a9eb995a612
+    - 92172006-4f24-4753-b364-26bbc85ccbc2
+    - acd9ef69-9d11-4438-a882-7a579370eb70
+    - fd53e428-ed2f-4ed3-ab9e-f8680ba28f33
+    - 8f9605dd-de15-40f8-a9b0-dcbf980b7c23
+    - 1a2db24b-2a89-42ee-b866-ddfb7e1c84fa
+    - e2fe9b60-a0b8-473e-b4e5-58dba9499792
+    - 8de6edf7-e229-4874-8be5-471537b59e47
+    - 49b3a7ef-3e6d-43ac-a76f-30d425196331
+    - cceaf229-1218-4954-8dc1-7ba4a806a3b0
+    - 749b0f4b-db25-4a64-a7a3-a82cc0de1ba2
+    - 3a0be2db-2b42-4de5-b3bd-68a834efa6a8
+    - 93feac82-c9f9-4b6a-89b8-f46fc9ae68bd
+    - 7d5740cb-db9b-42ec-90b3-b61ed87c6acf
+    - 43c63077-84b0-449c-9987-1e0c761789c1
+    - c8ba53db-ce41-48e0-b624-38662001bf5d
+
+nurec_cicd_amo_cle:
+  enabled: true
+
+switchboard:
+  connections:
+    car2sim_to_nurec_cicd_amo_cle:
+      force_enable: true
+      target_task: trigger-gitlab-pipeline
+      replace_input_task: [reconstruction]
+      with_internal_input: reconstruction
+    car2sim_to_nurec_cicd_amo_cle_2:
+      force_enable: true
+      target_task: trigger-gitlab-pipeline
+      replace_input_task: [swiftstack-uploader]
+      with_internal_input: swiftstack-uploader
+
+swiftstack_version_suffix: '$WORKFLOW_NAME'
+swiftstack_version_suffix_tasks:
+  - swiftstack-mount-nre
+  - swiftstack-uploader-nre

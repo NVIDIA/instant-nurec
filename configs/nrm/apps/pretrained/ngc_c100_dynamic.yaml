@@ -1,0 +1,23 @@
+# NRM Celsius_1.0.0 dynamic pretrained model living at NGC
+
+model_url: https://api.ngc.nvidia.com/v2/org/nvstaging/team/nre/models/nrm-celsius/versions/dynamic_1.0/files/nrm-celsius-dynamic-1.0.ckpt
+model_config: https://api.ngc.nvidia.com/v2/org/nvstaging/team/nre/models/nrm-celsius/versions/dynamic_1.0/files/nrm-celsius-dynamic-1.0.yaml
+model_config_overrides:
+  - ++out_dir=/nrm_debug/c100_dynamic
+  - +logger=dummy
+  - +loss={}
+  - +nrm/system@system=base
+  - system.precision=16   # Originally trained with fp16
+  - +viewer.ray_subsampling_step.low_resolution=1
+  - +viewer.ray_subsampling_step.high_resolution=1
+  - +checkpoint.save_top_k=0
+  - +checkpoint.monitor=null
+  - +checkpoint.mode=max
+  - +nrm/dataset@dataset=dummy
+  - +model.legacy_mask_input=true
+  - +model.motion_module.unpatch_dim=128
+  - +model.motion_module.bidirectional_flow=false
+  - +model/gaussians/renderer@model.renderer=3dgut_nrend  # Always use the newest renderer configuration.
+  - +model.activations.xyz_type=none
+
+model_cache_dir: ${oc.env:HOME}/.cache/nrm/pretrained_models/c100_dynamic # update as required

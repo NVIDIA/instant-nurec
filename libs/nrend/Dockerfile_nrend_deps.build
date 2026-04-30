@@ -1,0 +1,156 @@
+# Copyright (c) 2025 NVIDIA CORPORATION.  All rights reserved.
+
+FROM nvidia/cuda:11.8.0-devel-ubuntu22.04
+LABEL maintainer="Andre Maximo <amaximo@nvidia.com>"
+
+#
+# Install essential packages for (cross-)compiling: host is x86_64; cross is aarch64
+# Copy aarch64 cmake toolchain to allow cmake to cross-compile
+#
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt update
+RUN apt install -y --no-install-recommends software-properties-common libx11-dev sudo less vim
+RUN apt install -y --no-install-recommends wget git git-lfs build-essential ninja-build gcc-11 g++-11
+RUN apt install -y --no-install-recommends gcc-11-aarch64-linux-gnu g++-11-aarch64-linux-gnu
+RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-11 110 --slave /usr/bin/g++ g++ /usr/bin/g++-11
+RUN update-alternatives --install /usr/bin/aarch64-linux-gnu-gcc aarch64-linux-gnu-gcc /usr/bin/aarch64-linux-gnu-gcc-11 110 \
+    --slave /usr/bin/aarch64-linux-gnu-g++ aarch64-linux-gnu-g++ /usr/bin/aarch64-linux-gnu-g++-11
+
+WORKDIR /
+RUN apt update && apt install -y --no-install-recommends \
+    build-essential zlib1g-dev libncurses5-dev libgdbm-dev \
+    libnss3-dev libssl-dev libsqlite3-dev libreadline-dev libffi-dev wget
+RUN wget -q https://www.python.org/ftp/python/3.11.13/Python-3.11.13.tgz
+RUN tar -xzf Python-3.11.13.tgz && rm Python-3.11.13.tgz
+WORKDIR /Python-3.11.13
+RUN ./configure --enable-optimizations
+RUN make -j$(nproc)
+RUN make altinstall
+
+WORKDIR /usr/local
+RUN wget -q https://cmake.org/files/v3.26/cmake-3.26.6-linux-x86_64.tar.gz
+RUN tar -zxvf cmake-3.26.6-linux-x86_64.tar.gz
+RUN mv cmake-3.26.6-linux-x86_64 cmake
+RUN ln -s /usr/local/cmake/bin/cmake /usr/bin/cmake
+
+# CUDA cross-compilation toolkit for aarch64
+RUN wget -q https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/cross-linux-sbsa/cuda-keyring_1.1-1_all.deb
+RUN dpkg -i cuda-keyring_1.1-1_all.deb
+RUN rm cuda-keyring_1.1-1_all.deb
+
+RUN apt update
+RUN apt install -y cuda-cross-sbsa-11-8
+
+COPY Toolchain_aarch64.cmake /
+
+#
+# Fetch repositories
+#     1. TCNN (tiny-cuda-nn) from gitlab using provided user/token arguments
+#     2. repo_man from OV (omniverse) gitlab using provided user/token arguments
+#     3. Slang from github in a specific branch tag, this leaves the repo in a detached head state returning an error,
+#        turn off the advice
+#
+
+ARG GITLAB_USER
+ARG GITLAB_TOKEN
+ARG SLANG_VERSION
+
+# Use Slang version passed as build argument
+RUN echo "Using Slang version: ${SLANG_VERSION}"
+
+WORKDIR /
+RUN git clone --single-branch --branch publish/nrend \
+    https://${GITLAB_USER}:${GITLAB_TOKEN}@gitlab-master.nvidia.com/nrs/nre_external/tiny-cuda-nn.git
+RUN git clone --depth 1 \
+    https://${GITLAB_USER}:${GITLAB_TOKEN}@gitlab-master.nvidia.com/omniverse/repo/repo_man.git repo_man_temp
+RUN git -c advice.detachedHead=false clone --single-branch --branch ${SLANG_VERSION} \
+    https://github.com/shader-slang/slang.git
+
+#
+# Build TCNN for linux-x86_64
+#
+
+ARG FLAVOUR=Release
+
+WORKDIR /tiny-cuda-nn
+RUN git submodule update --init --recursive
+
+RUN cmake -B build -G Ninja \
+    -DCMAKE_BUILD_TYPE=${FLAVOUR} \
+    -DTCNN_BUILD_WITH_UNALIGNED_PARAMS=ON \
+    -DTCNN_CUDA_ARCHITECTURES="75;80;86;89;90" \
+    -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+    -DTCNN_BUILD_EXAMPLES=OFF \
+    -DTCNN_BUILD_BENCHMARK=OFF \
+    -DTCNN_BUILD_TESTS=OFF .
+
+RUN cmake --build build -j --verbose
+
+#
+# Build TCNN for linux-aarch64
+#     1. Remove the obfuscator executable target, compiling it for aarch64 renders it useless in current host
+#        x86_64 machine, instead use the obfuscator compiled previously for x86_64
+#     2. Generate a different build folder named build-cross
+#     3. Copy obfuscator from previous build to build-cross
+#
+
+RUN sed -i 's/add_executable(obfuscator/#&/' CMakeLists.txt
+RUN sed -i 's/target_link_libraries(obfuscator/#&/' CMakeLists.txt
+
+RUN cmake -B build-cross -G Ninja \
+    -DCMAKE_TOOLCHAIN_FILE=/Toolchain_aarch64.cmake \
+    -DCMAKE_BUILD_TYPE=${FLAVOUR} \
+    -DTCNN_BUILD_WITH_UNALIGNED_PARAMS=ON \
+    -DTCNN_CUDA_ARCHITECTURES="75;80;86;89;90" \
+    -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+    -DTCNN_BUILD_EXAMPLES=OFF \
+    -DTCNN_BUILD_BENCHMARK=OFF \
+    -DTCNN_BUILD_TESTS=OFF .
+
+RUN cp build/obfuscator build-cross/
+
+RUN cmake --build build-cross -j --verbose
+
+#
+# Build Slang for linux-x86_64
+#
+
+WORKDIR /slang
+RUN git submodule update --init --recursive
+
+RUN cmake -B build -G Ninja \
+    -DCMAKE_BUILD_TYPE=${FLAVOUR} \
+    -DSLANG_ENABLE_EXAMPLES=OFF \
+    -DSLANG_SLANG_LLVM_FLAVOR=DISABLE \
+    -DSLANG_ENABLE_SPLIT_DEBUG_INFO=OFF \
+    -DSLANG_ENABLE_RELEASE_DEBUG_INFO=OFF \
+    -DSLANG_LIB_TYPE=STATIC .
+
+RUN cmake --build build -j --verbose
+
+# Create symlink for libslang.a (NRend expects this name)
+RUN cd /slang/build/Release/lib && ln -sf libslang-compiler.a libslang.a
+
+#
+# Build Slang for linux-aarch64
+#     1. Slang has the SLANG_GENERATORS_PATH to allow for cross-compilation by providing the path to previously compiled
+#        generators for the host x86_64 machine, no need to edit its cmake file
+#     2. Generate a different build folder named build-cross
+#
+
+RUN cmake -B build-cross -G Ninja \
+    -DCMAKE_TOOLCHAIN_FILE=/Toolchain_aarch64.cmake \
+    -DCMAKE_BUILD_TYPE=${FLAVOUR} \
+    -DSLANG_GENERATORS_PATH=/slang/build/generators/${FLAVOUR}/bin/ \
+    -DSLANG_ENABLE_EXAMPLES=OFF \
+    -DSLANG_SLANG_LLVM_FLAVOR=DISABLE \
+    -DSLANG_ENABLE_SPLIT_DEBUG_INFO=OFF \
+    -DSLANG_ENABLE_RELEASE_DEBUG_INFO=OFF \
+    -DSLANG_LIB_TYPE=STATIC .
+
+RUN cmake --build build-cross -j --verbose
+
+# Create symlink for libslang.a (NRend expects this name)
+RUN cd /slang/build-cross/Release/lib && ln -sf libslang-compiler.a libslang.a

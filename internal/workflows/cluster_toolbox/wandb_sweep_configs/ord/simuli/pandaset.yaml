@@ -1,0 +1,75 @@
+# Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+method: grid
+metric:
+  goal: maximize
+  name: train/psnr
+parameters:
+  benchmark_dataset:
+    values:
+      - "001"
+      - "011"
+      - "016"
+      - "028"
+      - "053"
+      - "063"
+      - "084"
+      - "106"
+      - "123"
+      - "158"
+
+  benchmark_config:
+    values:
+      - configs/experimental/simuli/pandaset_recon.yaml
+
+command:
+  - /bin/bash
+  - -euxc
+  - |
+    # Wandb currently has a bug where the same preempted run can get dequeued multiple times by different agents
+    # We work around this by logging resumed runs in a thread-safe way and requeuing the job if the preempted run is already running
+    
+    # Create a file descriptor over the given lockfile.
+    exec {FD}<>/wandb_agent_lock/lock && flock $FD 
+
+    if [ -f /wandb_agent_lock/$WANDB_RUN_ID ]; then
+      run_exists=1
+    else
+      run_exists=0
+      if [ -d /results/${WANDB_RUN_ID} ]; then
+        touch /wandb_agent_lock/$WANDB_RUN_ID
+      fi
+    fi
+
+    # Release the lock and close the file descriptor
+    flock -u $FD && exec {FD}<&-
+
+    if [ $run_exists -eq 0 ]; then
+      if [ -d /results/${WANDB_RUN_ID} ]; then
+          echo "Previous run found - resuming"
+          /usr/local/bin/bazelisk run //:run -- --config-name=$(find /results/${WANDB_RUN_ID} -name 'parsed.yaml') mode=trainval resume=auto force_validate=true || rm /wandb_agent_lock/$WANDB_RUN_ID
+      else
+          echo "No previous run found"
+          # $0 is "benchmark_dataset=<value>"
+          # $1 is "benchmark_config=<value>"
+          eval "$0"
+          eval "$1"
+
+          DATA=/lustre/fsw/portfolios/nvr/users/rdelutio/data/nre/lidar-3dgut/PandaSet/v5_rel_lidar_model_14may25
+
+          /usr/local/bin/bazelisk run //:run -- --config-name=${benchmark_config} \
+              mode=trainval \
+              dataset.path=${DATA}/${benchmark_dataset}/${benchmark_dataset}.json \
+              logger.entity=<<wandb_entity>> \
+              logger.project=<<wandb_project>> \
+              logger.tags=<<wandb_tags>> \
+              logger.run_name=simuli_pandaset_${benchmark_dataset} \
+              out_dir=/results/${WANDB_RUN_ID}
+      fi
+    else
+      echo "Preempted run $WANDB_RUN_ID already started - requeuing job"
+      touch $SHOULD_REQUEUE_PATH
+    fi
+
+  # Substituted by the W&B sweep controller and does not work directly inside the script above. Use "$@" to pass to script above
+  - ${args_no_hyphens}
+

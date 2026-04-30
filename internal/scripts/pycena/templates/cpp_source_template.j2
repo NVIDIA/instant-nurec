@@ -1,0 +1,240 @@
+// Copyright (c) 2024 NVIDIA CORPORATION.  All rights reserved.
+
+#include <Python.h>
+#include <marshal.h>
+
+#include <iostream>
+
+#include "{{header_file_name}}"
+
+int main(int argc, char *argv[]) {
+
+    int ret = 0;
+
+    PyStatus status;
+    PyConfig config;
+
+    PyConfig_InitPythonConfig(&config);
+
+    status = PyConfig_SetString(&config, &config.base_executable, L"{{python_run_root}}/bin/python3");
+
+    if (PyStatus_Exception(status))
+    {
+        Py_ExitStatusException(status);
+    }
+
+    status = PyConfig_SetString(&config, &config.executable, L"{{python_run_root}}/bin/python3");
+
+    if (PyStatus_Exception(status))
+    {
+        Py_ExitStatusException(status);
+    }
+
+    status = Py_InitializeFromConfig(&config);
+
+    if (PyStatus_Exception(status))
+    {
+        Py_ExitStatusException(status);
+    }
+
+    PyObject* builtins_module = PyImport_ImportModule("builtins");
+
+    if (!builtins_module)
+    {
+        PyErr_Print();
+        return -1;
+    }
+
+    if (PyObject_SetAttrString(builtins_module, "__PYCENA__", Py_True) < 0)
+    {
+        std::cerr << "Failed to set __PYCENA__ in builtins." << std::endl;
+        Py_DECREF(builtins_module);
+        return -1;
+    }
+
+    Py_DECREF(builtins_module);
+
+    {% for module in module_prefix -%}
+
+        PyObject* {{module}}_pyobject  = PyMarshal_ReadObjectFromString(reinterpret_cast<const char*>(&{{module}}_bytecode[0]), sizeof({{module}}_bytecode));
+        PyObject* {{module}}_import = nullptr;
+
+        if ({{module}}_pyobject != NULL && PyCode_Check({{module}}_pyobject))
+        {
+            {{module}}_import = PyImport_ExecCodeModule({{module}}_module.c_str(), {{module}}_pyobject);
+        }
+
+    {% endfor %}
+
+    PyObject* sys_module = PyImport_ImportModule("sys");
+    if (!sys_module)
+    {
+        PyErr_Print();
+        return -1;
+    }
+
+    PyObject* py_argv = PyList_New(0);
+
+    if (!py_argv)
+    {
+        std::cout << "Failed to create argument list." << std::endl;
+        return -1;
+    }
+
+    for (int i = 0; i < argc; i++)
+    {
+        PyObject* py_arg = PyUnicode_FromString(argv[i]);
+        if (!py_arg || PyList_Append(py_argv, py_arg) < 0)
+        {
+            std::cerr << "Failed to set arguments." << std::endl;
+            return -1;
+        }
+
+        Py_DECREF(py_arg);
+    }
+
+    if (PyObject_SetAttrString(sys_module, "argv", py_argv) < 0)
+    {
+        std::cerr << "Failed setting sys.argv." << std::endl;
+        return -1;
+    }
+
+    PyObject *globals = PyDict_New();
+    if (!globals)
+    {
+        std::cerr << "Failed creating globals." << std::endl;
+        return -1;
+    }
+
+    PyObject* builtins = PyEval_GetBuiltins();
+
+    if (builtins)
+    {
+        if (PyDict_SetItemString(globals, "__builtins__", builtins) < 0)
+        {
+            std::cerr << "Failed to set builtins." << std::endl;
+            return -1;
+        }
+    }
+
+    if (PyDict_SetItemString(globals, "__name__", PyUnicode_FromString("__main__")) < 0)
+    {
+        std::cerr << "Failed to create main." << std::endl;
+        return -1;
+    }
+
+    PyObject* __script___pyobject = PyMarshal_ReadObjectFromString(reinterpret_cast<const char*>(&__script___bytecode[0]), sizeof(__script___bytecode));
+
+    if (__script___pyobject != NULL && PyCode_Check(__script___pyobject))
+    {
+        PyObject *result = PyEval_EvalCode(__script___pyobject, globals, globals);
+
+        if (!result)
+        {
+            // We could be returning
+            // - non-error states: None~Null / SystemExit(0)
+            // - error states: all other cases
+
+            auto system_exit = false;
+
+            PyObject *type, *value, *traceback;
+            PyErr_Fetch(&type, &value, &traceback);
+            PyErr_NormalizeException(&type, &value, &traceback);
+
+            if (type != NULL)
+            {
+                ret = -1; // signal error state, unless exception is a SystemExit(0) exception
+
+                PyObject* exception_type_name = PyObject_GetAttrString(type, "__name__");
+
+                if (exception_type_name != NULL)
+                {
+                    PyObject* execption_type_string = PyUnicode_AsEncodedString(exception_type_name, "utf-8", "strict");
+
+                    if (execption_type_string != NULL)
+                    {
+                        char* type_msg = PyBytes_AS_STRING(execption_type_string);
+                        if (type_msg != NULL)
+                        {
+                            if (std::string(type_msg) == "SystemExit")
+                            {
+                                system_exit = true; // remeber we have a system-exit - print exception type in a deffered way
+                            }
+                            else
+                            {
+                                std::cerr << type_msg << std::endl;
+                            }
+                        }
+                    }
+
+                    Py_XDECREF(execption_type_string);
+                }
+
+                Py_XDECREF(exception_type_name);
+            }
+
+            if (value != NULL)
+            {
+                ret = -1; // signal error state, unless exception is a SystemExit(0) exception
+
+                PyObject* exception_value = PyObject_Str(value);
+
+                if (exception_value != NULL)
+                {
+                    const char* error_msg = PyUnicode_AsUTF8(exception_value);
+                    if (error_msg != NULL)
+                    {
+                        if (system_exit)
+                        {
+                            if (std::string(error_msg) == "0")
+                            {
+                                ret = 0; // signal regular graceful exit
+                            }
+                            else
+                            {
+                                std::cerr << "SystemExit" << std::endl;
+                                std::cerr << error_msg << std::endl;
+                            }
+                        }
+                        else
+                        {
+                            std::string msg_string = std::string(error_msg);
+                            bool missing_module_error = msg_string.find("No module named") != std::string::npos;
+
+                            if (missing_module_error)
+                            {
+                                std::cerr << "To identify missing module enable 'debug: True' in the relevant config in scripts/pycena/configs" << std::endl;
+                                std::cerr << "For additional information consult scripts/pycena/README.md" << std::endl;
+                            }
+
+                            std::cerr << error_msg << std::endl;
+                        }
+                    }
+                    else
+                    {
+                        std::cerr << "Unable to return error message." << std::endl;
+                    }
+                }
+
+                Py_XDECREF(exception_value);
+            }
+
+            Py_XDECREF(type);
+            Py_XDECREF(value);
+            Py_XDECREF(traceback);
+            Py_DECREF(globals);
+        }
+    }
+
+    {% for module in module_prefix -%}
+    if ({{module}}_import  != nullptr)
+    {
+        Py_DECREF({{module}}_import );
+    }
+    {% endfor %}
+
+    // Finalize the Python interpreter
+    Py_Finalize();
+
+    return ret;
+}

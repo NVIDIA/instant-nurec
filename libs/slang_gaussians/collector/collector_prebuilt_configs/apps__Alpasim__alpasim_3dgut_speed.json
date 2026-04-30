@@ -1,0 +1,14 @@
+[
+    [
+        "Collector_Copy<3>",
+        "RotationsCollector_Normalize",
+        "ScalesCollector_Exp",
+        "DensitiesCollector_Sigmoid",
+        "SphericalFeaturesCollector_Copy<3,45>"
+    ],
+    [
+        "PositionsRotationsDensitiesCollector_Tracks",
+        "ScalesCollector_Exp",
+        "SphericalFeaturesCollector_Copy<3,45>"
+    ]
+]

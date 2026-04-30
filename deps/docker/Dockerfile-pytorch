@@ -1,0 +1,68 @@
+# This dockerfile encapsulates the process for building a custom wheel for
+# pytorch, which does these steps:
+#   - download original pytorch wheel
+#   - unzip contents
+#   - copy custom __init__.py
+#   - set custom version number
+#   - repack wheel contents
+#   - upload new wheel to gitlab package registry
+#
+# To run, issue the following command:
+#   DOCKER_BUILDKIT=1 docker image build --tag pytorch:pt270 [--platform linux/arm64 --build-arg ARCH=aarch64] --build-arg GITLAB_TOKEN=$GITLAB_TOKEN -f Dockerfile-pytorch .
+#
+# Once the build is successfully, manually edit the last lines of the file to
+# uncomment and enable the upload step, and then rerun the docker build.
+
+FROM ubuntu:20.04
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && \
+    apt-get upgrade -y && \
+    apt-get install -y wget git zip unzip && \
+    rm -rf /var/lib/apt/lists/*
+ENV PATH="/root/miniconda3/bin:${PATH}"
+ARG ARCH="x86_64"
+RUN wget \
+    https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-${ARCH}.sh \
+    && mkdir /root/.conda \
+    && bash Miniconda3-latest-Linux-${ARCH}.sh -b \
+    && rm -f Miniconda3-latest-Linux-${ARCH}.sh
+ENV TORCH_VERSION="2.7.0"
+ENV CUDA_VERSION="cu128"
+ENV VERSION="$TORCH_VERSION+$CUDA_VERSION"
+RUN conda --version
+RUN conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main --channel https://repo.anaconda.com/pkgs/r
+RUN conda init bash
+RUN conda create -n nre_pytorch_buildenv python=3.11 -y
+SHELL ["conda", "run", "-n", "nre_pytorch_buildenv", "/bin/bash", "-c"]
+RUN pip install twine
+ARG GITLAB_TOKEN
+ARG CACHEBUST=0
+ENV TWINE_USERNAME=deploy_token_username
+###############################################################################################################
+# pytorch
+WORKDIR torch
+RUN git clone https://oauth2:$GITLAB_TOKEN@gitlab-master.nvidia.com/nrs/nre_external/pytorch.git
+ARG COMMIT="c41f6e01287c393761bee9639282f55900bac8b7"
+# arm64 doesn\'t require a patch to load 3rdparty / cuda, so use first parent of the target commit
+RUN if [ "$ARCH" = "x86_64" ]; then \
+    git -C pytorch checkout ${COMMIT}; \
+    else \
+    git -C pytorch checkout ${COMMIT}^1; \
+    fi
+RUN pip download torch==$VERSION --python-version 3.11 --only-binary=:all: --no-deps --extra-index-url https://download.pytorch.org/whl/$CUDA_VERSION
+RUN unzip *.whl -d patched
+RUN rm *.whl
+RUN cp pytorch/torch/__init__.py patched/torch/__init__.py
+RUN GIT_HASH=$(git -C pytorch rev-parse --short HEAD) && \
+    NEW_VERSION="$VERSION.git${GIT_HASH}" && \
+    echo "New version name: $NEW_VERSION" && \
+    sed -i "s/$VERSION/$NEW_VERSION/" patched/torch-$VERSION.dist-info/METADATA && \
+    mv patched/torch-$VERSION.dist-info patched/torch-$NEW_VERSION.dist-info
+RUN python -m wheel pack patched
+WORKDIR /
+# ###############################################################################################################
+# TWINE UPLOADS
+WORKDIR wheels
+RUN mv /torch/torch-*.whl .
+# Uncomment the next line(s) to upload wheels [verify wheels before uploading!]:
+# RUN TWINE_PASSWORD=$GITLAB_TOKEN twine upload --repository-url https://gitlab-master.nvidia.com/api/v4/projects/85874/packages/pypi torch-*.whl --verbose --skip-existing --non-interactive

@@ -1,0 +1,4 @@
+defaults:
+  - 3dgrt_optix_nrend
+
+name: 3dgrt-rejection-optix-nrend

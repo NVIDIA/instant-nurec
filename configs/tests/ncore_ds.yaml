@@ -1,0 +1,32 @@
+# @package _global_
+
+# order in which configs override each other (/* - denotes a relative search path)
+defaults:
+  - /base
+  - /dataset: ncore
+  - /datamodule: so
+  - /trainer: base
+  - /system: gaussians
+  - /difix: disabled
+
+# Mainly to pass pydantic validation
+model:
+  name: gaussians_primitive
+  train_num_rays: 9999999999
+  layers:
+    background:
+      name: sh-gaussians
+      density_activation: sigmoid
+      scale_activation: exp
+      rotation_activation: normalize
+      progressive_training: {}
+      particle: {}
+  renderer:
+    name: 3dgut-nrend
+  strategy:
+    name: gsplat
+
+
+loss: null
+
+out_dir: "."

@@ -1,0 +1,69 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+load("@nre_pip_deps//:requirements.bzl", pip_requirement = "requirement")
+load("@rules_python//python:defs.bzl", "py_library")
+load("//bazel/pytest:defs.bzl", "pytest_test")
+
+package(default_visibility = [
+    "//:core_package_group",
+    "//internal/scripts/pycena:__pkg__",
+])
+
+filegroup(
+    name = "py_files",
+    srcs = glob(["**/*.py"]),
+    visibility = [
+        "//internal/scripts/pycena:__pkg__",
+    ],
+)
+
+py_library(
+    name = "pylib",
+    srcs = [
+        "__init__.py",
+        "bilateral_grid.py",
+        "bilateral_grid_cuda.py",
+    ],
+    deps = [
+        pip_requirement("torch"),
+        "//libs/losses/kernel:def_constants",
+        "//nre/models/base:pylib",
+        "//nre/models/post_processings/bilateral_grid/cuda:pylib_cc",
+        "//nre/utils:pylib",
+    ],
+)
+
+pytest_test(
+    name = "bilateral_grid_test",
+    srcs = [
+        "bilateral_grid_test.py",
+    ],
+    deps = [
+        ":pylib",
+        "//libs/losses/kernel:def_constants",
+        "//libs/losses/models:pylib",
+    ],
+)
+
+pytest_test(
+    name = "bilateral_grid_cuda_test",
+    srcs = [
+        "bilateral_grid_cuda_test.py",
+    ],
+    data = [
+        "@test_data_prober_generated//:bilateral_grid_per_camera",
+    ],
+    deps = [
+        ":pylib",
+        "//libs/losses/kernel:def_constants",
+        "//nre/utils:pylib_prober",
+    ],
+)

@@ -1,0 +1,6 @@
+# @package _global_
+
+defaults:
+  # Configs override each other in the listed order (/ denotes config root)
+  - sqa_default
+  - override /apps/prod/options/difix/3dgut: distill

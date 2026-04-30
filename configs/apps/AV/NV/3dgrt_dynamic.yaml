@@ -1,0 +1,24 @@
+# @package _global_
+# Owner: Haithem Turki
+
+defaults:
+  - 3dgut_dynamic.yaml
+  - override /model/gaussians/renderer@model.renderer: 3dgrt_optix_nrend
+
+model:
+  layers:
+    background:
+      particle:
+        density_kernel_degree: 4
+        density_kernel_min_response: 0.0113
+      transmittance_threshold: 0.001
+    dynamic_deformables:
+      particle:
+        density_kernel_degree: 4
+        density_kernel_min_response: 0.0113
+      transmittance_threshold: 0.001
+    dynamic_rigids:
+      particle:
+        density_kernel_degree: 4
+        density_kernel_min_response: 0.0113
+      transmittance_threshold: 0.001

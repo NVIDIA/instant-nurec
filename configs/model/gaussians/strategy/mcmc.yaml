@@ -1,0 +1,36 @@
+defaults:
+  - base
+
+name: mcmc
+print_stats: true
+binom_n_max: 51 # Default value from MCMC paper (no good reason, just a large number https://github.com/ubc-vision/3dgs-mcmc/issues/8)
+opacity_threshold: 0.005 # Minimum opacity -> used to dermine if a Gaussian is alive or dead
+
+relocate:
+  start_iteration: 500 # Start applying the strategy after start_iteration training iterations
+  end_iteration: 25000 # Stop applying the strategy after end_iteration training iterations
+  frequency: 100 # Apply the strategy every frequency iterations
+  max_invisible_steps: null # Maximum number of invisible steps
+
+# Perturb the location of the gaussians with noise sampled from the covariance of that Gaussian
+# The original 3DGS-MCMC method does it on every iteration until the end of training but we make this configurable.
+perturb:
+  start_iteration: 1 # Start applying the strategy after start_iteration training iterations
+  end_iteration: ${dataset.n_samples_per_epoch} # Run perturbation until the end of training
+  frequency: 1 # Apply perturbation every frequency iterations
+  noise_lr:
+    default: 5000.0 # MCMC samping noise learning rate. Default to 5e3
+    layers:
+      dynamic_rigids: 5000.0
+      dynamic_deformables: 5000.0
+      road: 5000.0
+  move_outside_of_cuboid: false # Move the gaussians outside of the cuboid tracks if they are inside
+
+# Add new Gaussians to the scene until the maximum number is reached
+add:
+  start_iteration: 500 # Start applying the strategy after start_iteration training iterations
+  end_iteration: 25000 # Stop applying the strategy after end_iteration training iterations
+  frequency: 100 # Apply the strategy every frequency iterations
+  max_n_gaussians: 2000000 # Maximum number of Gaussians
+
+exclude_layer_ids: [] # layers to exclude from the strategy (no relocation or perturbation will happen to these layers)

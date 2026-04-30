@@ -1,0 +1,50 @@
+defaults:
+  - ../mixed@_here_
+  - /nrm/dataset@mixture.dataverse-re10k.config: dataverse
+  - /nrm/dataset@mixture.dataverse-dl3dv.config: dataverse
+
+name: nrm-mixed
+
+shared_config: {}
+
+mixture:
+  dataverse-re10k:
+    sample_ratio: 1.0
+    config:
+      frame_batch_samplers:
+        varying_interval:
+          sequence_gap_timestamp_us_min: 45
+          sequence_gap_timestamp_us_max: 192
+          n_samples_per_sequence: 4
+
+      subset_spec:
+        target: "re10k.RealEstate10K"
+        root_path: "/lustre/fsw/portfolios/nvr/projects/nvr_torontoai_holodeck/re10k/data_re10k_camctrl"
+        annotation_json: "/lustre/fsw/portfolios/nvr/users/mtyszkiewicz/datasets/re10k/annotations/train.json"
+
+  # [REMOVED SINCE THIS IS NOT SCENE DATASET]    
+  # dataverse-mvimgnet:
+  #   sample_ratio: 0.
+  #   config:
+  #     frame_batch_samplers:
+  #       varying_interval:
+  #         sequence_gap_timestamp_us_min: 3
+  #         sequence_gap_timestamp_us_max: 100000
+  #         n_samples_per_sequence: 1
+
+  #     subset_spec:
+  #       target: "mvimgnet.MVImgNet"
+  #       root_path: "/lustre/fsw/portfolios/nvr/projects/nvr_torontoai_3dgenfoundation/datasets/mvimgnet/mvimgnet_data"
+
+  dataverse-dl3dv:
+    sample_ratio: 1.0
+    config:
+      frame_batch_samplers:
+        varying_interval:
+          sequence_gap_timestamp_us_min: 15
+          sequence_gap_timestamp_us_max: 30
+          n_samples_per_sequence: 30
+
+      subset_spec:
+        target: "dl3dv.DL3DV10K"
+        root_path: "/lustre/fsw/portfolios/nvr/projects/nvr_torontoai_3dgenfoundation/datasets/dl3dv/DL3DV-ALL-960P"

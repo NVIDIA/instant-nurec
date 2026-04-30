@@ -1,0 +1,22 @@
+# Default batch sampler
+uniform_batch_sampler:
+  name: default # Type of the batch sampler
+  ratio_camera_samples: 1.0 # ratio of the camera samples that will come from the uniform sampler
+  ratio_lidar_samples: 1.0 # ratio of the lidar samples that will come from the uniform sampler
+  update_n_epochs: 0 # Define how often to update the sampler, compulsory field
+  
+  camera_sensor_sampler:
+    name: uniform # Type of the camera sensor sampler one of [uniform, skip]
+    sample_all_sensors: true # If true, a frame from each sensor will be sampled in every batch
+  camera_frame_sampler:
+    name: uniform # Type of the camera frame sampler one of [uniform, timestamp, holdout, skip]
+  camera_pixel_sampler:
+    name: uniform # Type of the camera frame sampler one of [uniform, semantic, image-crop, skip]
+
+  lidar_sensor_sampler:
+    name: uniform # Type of the lidar sensor sampler one of [uniform, skip]
+    sample_all_sensors: true # If true, a frame from each sensor will be sampled in every batch
+  lidar_frame_sampler:
+    name: uniform  # Type of the lidar frame sampler one of [uniform, timestamp, holdout, skip]
+  lidar_point_sampler:
+    name: uniform # Type of the lidar point sampler one of [uniform, semantic, skip, lidar-crop]

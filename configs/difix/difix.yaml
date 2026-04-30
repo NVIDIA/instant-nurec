@@ -1,0 +1,3 @@
+# this config is used as a default difix model
+defaults:
+  - cosmos_difix

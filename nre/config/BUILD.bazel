@@ -1,0 +1,187 @@
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+load("@nre_pip_deps//:requirements.bzl", pip_requirement = "requirement")
+load("@rules_python//python:defs.bzl", "py_library")
+load("//bazel/pytest:defs.bzl", "pytest_test")
+
+DEFAULT_VISIBILITY = ["//:core_package_group"]
+
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "py_files",
+    srcs = glob(["**/*.py"]),
+    visibility = [
+        "//internal/scripts/pycena:__pkg__",
+    ],
+)
+
+# Please see bazel/version/BUILD.bazel for more information on NRE's version determination system
+py_library(
+    name = "pylib_version",
+    srcs = [
+        "version.py",
+    ],
+    data = ["//bazel/version:workspace_status.sh"],
+    visibility = DEFAULT_VISIBILITY + [
+        # Add visibility for //:run
+        "//:__pkg__",
+        # Add visibility for //apps
+        "//apps:__pkg__",
+        # Add visibility for //internal/scripts/kratos
+        "//internal/scripts/kratos:__pkg__",
+        # Add visibility for //internal/workflows
+        "//internal/workflows/cluster_toolbox:__pkg__",
+        "//internal/scripts:__subpackages__",
+    ],
+    deps = [
+        pip_requirement("pydantic"),
+        pip_requirement("pyyaml"),
+    ],
+)
+
+py_library(
+    name = "pylib_trainer_config",
+    srcs = ["trainer.py"],
+    deps = [
+        pip_requirement("pydantic"),
+        ":pylib_base_schema",
+    ],
+)
+
+py_library(
+    name = "pylib_base_schema",
+    srcs = ["base_schema.py"],
+    deps = [
+        pip_requirement("pydantic"),
+    ],
+)
+
+py_library(
+    name = "pylib_scopedtimer",
+    srcs = ["scopedtimer.py"],
+    deps = [
+        ":pylib_base_schema",
+    ],
+)
+
+py_library(
+    name = "pylib",
+    srcs = [
+        "__init__.py",
+        "asset_harvest.py",
+        "base_schema.py",
+        "checkpoint.py",
+        "datamodule.py",
+        "dataset.py",
+        "difix.py",
+        "logger.py",
+        "model.py",
+        "nre.py",
+        "optim.py",
+        "parse.py",
+        "prober.py",
+        "profiling.py",
+        "sensor.py",
+        "systems.py",
+        "viewer.py",
+    ],
+    visibility = DEFAULT_VISIBILITY + [
+        # add visibility to //internal/scripts/experimental:ncore_to_ngp
+        "//internal/scripts/experimental:__pkg__",
+        "//:asset_harvester_package_group",
+    ],
+    deps = [
+        "//libs/losses/orchestration:pylib_config",
+        pip_requirement("pydantic"),
+        pip_requirement("omegaconf"),
+        pip_requirement("shortuuid"),
+        pip_requirement("hydra-core"),
+        pip_requirement("nvidia-ncore"),
+        ":pylib_base_schema",
+        ":pylib_scopedtimer",
+        ":pylib_trainer_config",
+        ":pylib_version",
+        "//nre:pylib_reporoot",
+        "//nre/utils:pylib_misc",
+        "//nre/utils:pylib_trainer",
+    ],
+)
+
+pytest_test(
+    name = "optim_test",
+    srcs = ["optim_test.py"],
+    deps = [
+        ":pylib",
+    ],
+)
+
+pytest_test(
+    name = "schema_test",
+    timeout = "long",
+    srcs = ["schema_test.py"],
+    data = [
+        "//configs",
+    ],
+    shard_count = 8,
+    deps = [
+        ":pylib",
+    ],
+)
+
+pytest_test(
+    name = "config_backward_compat_test",
+    srcs = ["config_backward_compat_test.py"],
+    data = [
+        "//configs",  # so that we depend on any config that might have changed, causing a re-run
+        "@test_config_25_05//:config_data",
+    ],
+    deps = [
+        ":pylib",
+        "//nre/utils:pylib",
+        "@rules_python//python/runfiles",
+    ],
+)
+
+pytest_test(
+    name = "test_version",
+    srcs = ["test_version.py"],
+    deps = [
+        ":pylib_version",
+    ],
+)
+
+pytest_test(
+    name = "test_config_parsing",
+    srcs = ["test_config_parsing.py"],
+    data = [
+        "//configs",
+    ],
+    deps = [
+        ":pylib",
+    ],
+)
+
+pytest_test(
+    name = "renderer_config_test",
+    srcs = ["renderer_config_test.py"],
+    deps = [
+        ":pylib",
+    ],
+)
+
+pytest_test(
+    name = "strategy_config_test",
+    srcs = ["strategy_config_test.py"],
+    deps = [
+        ":pylib",
+    ],
+)

@@ -1,0 +1,250 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+load("@aspect_rules_py//py:defs.bzl", "py_binary")
+load("@mypy_integration//:mypy.bzl", "mypy_test")
+load("@nre_pip_deps//:requirements.bzl", pip_requirement = "requirement")
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
+load("@rules_cuda//cuda:defs.bzl", "cuda_library")
+load("@rules_python//python:defs.bzl", "py_library")
+load("@rules_python//python:packaging.bzl", "py_package", "py_wheel")
+load("//bazel/pytest:defs.bzl", "pytest_test")
+
+DEFAULT_VISIBILITY = ["//:core_package_group"]
+
+package(default_visibility = DEFAULT_VISIBILITY)
+
+cc_library(
+    name = "vren_headers",
+    hdrs = [
+        "include/vren/cameras.cuh",
+        "include/vren/cameras.h",
+        "include/vren/lidars.cuh",
+        "include/vren/lidars.h",
+        "include/vren/overload_visitor.h",
+        "include/vren/rolling_shutter.cuh",
+        "include/vren/rolling_shutter.h",
+    ],
+    includes = [
+        "include",
+    ],
+)
+
+cuda_library(
+    name = "vren_cuda",
+    srcs = [
+        "alpha_compositing.cu",
+        "cameras.cu",
+        "encodings.cu",
+        "ensemble.cu",
+        "intersection.cu",
+        "intersection_timed.cu",
+        "lidars.cu",
+        "poses_interpolation.cu",
+    ],
+    hdrs = [
+        "intersection.cuh",
+        "utils.h",
+    ],
+    copts = [
+        # Flags to be consistent with torch-cuda-extensions
+        "-D__CUDA_NO_HALF_OPERATORS__",
+        "-D__CUDA_NO_HALF_CONVERSIONS__",
+        "-D__CUDA_NO_BFLOAT16_CONVERSIONS__",
+        "-D__CUDA_NO_HALF2_OPERATORS__",
+    ],
+    deps = [
+        ":vren_headers",
+        "//libs/kernel_utils:ku_cuda",
+        "@nre_pip_deps//torch:torch_headers",
+        "@rules_python//python/cc:current_py_cc_headers",
+    ],
+)
+
+cc_binary(
+    name = "vren_cc",
+    srcs = ["binding.cpp"],
+    copts = [
+        # Flags to be consistent with torch-cuda-extensions and to build correct torch-extension bindings
+        "-DTORCH_API_INCLUDE_EXTENSION_H",
+        "-DTORCH_EXTENSION_NAME=libvren_cc",
+    ],
+    linkopts = [
+        "-Wl,--no-undefined",
+        "-Wl,--as-needed",
+    ],
+    linkshared = True,
+    deps = [
+        ":vren_cuda",
+        "//libs/kernel_utils:ku_cc",
+        "@nre_pip_deps//torch:libc10",
+        "@nre_pip_deps//torch:libc10_cuda",
+        "@nre_pip_deps//torch:libtorch_cpu",
+        "@nre_pip_deps//torch:libtorch_python",
+        "@nre_pip_deps//torch:torch_headers",
+        "@rules_python//python/cc:current_py_cc_libs",
+    ],
+)
+
+py_library(
+    name = "pylib_cc",
+    data = [
+        ":vren_cc",
+    ],
+    visibility = DEFAULT_VISIBILITY + [
+        "//bazel/docs:__pkg__",
+    ],
+)
+
+filegroup(
+    name = "py_files",
+    srcs = [
+        "__init__.py",
+        "ensemble.py",
+        "interface.py",
+        "lidars.py",
+    ],
+)
+
+py_library(
+    name = "pylib",
+    srcs = [
+        ":py_files",
+    ],
+    visibility = DEFAULT_VISIBILITY + ["//:aux_package_group"],
+    deps = [
+        ":pylib_cc",
+        pip_requirement("torch"),
+        pip_requirement("nvidia-ncore"),
+        pip_requirement("numpy"),
+        pip_requirement("numba"),
+    ],
+)
+
+py_package(
+    name = "pkg",
+    packages = ["libs/vren"],
+    deps = [":pylib"],
+)
+
+py_wheel(
+    name = "wheel",
+    distribution = "vren",
+    platform = "linux_x86_64",
+    python_tag = "py311",
+    requires = [
+        "torch>=2.7",
+        "numpy",
+        "ncore>=0.16.8",
+        "numba",
+    ],
+    version = "0.1.4",
+    deps = [":pkg"],
+)
+
+py_binary(
+    name = "rm_mask_benchmark",
+    srcs = ["rm_mask_benchmark.py"],
+    main = "rm_mask_benchmark.py",
+    deps = [
+        pip_requirement("torch"),
+        "//libs/vren:pylib",
+        "//nre/models:pylib_custom_modules",
+    ],
+)
+
+mypy_test(
+    name = "rm_mask_benchmark_mypy",
+    timeout = "long",
+    deps = [
+        ":rm_mask_benchmark",
+    ],
+)
+
+pytest_test(
+    name = "alphacompositing_test",
+    srcs = ["alphacompositing_test.py"],
+    deps = [
+        ":pylib",
+        pip_requirement("torch"),
+        pip_requirement("numpy"),
+        "//libs:pylib",
+        "//nre/models:pylib_custom_modules",
+        "//nre/utils:pylib_tests",
+    ],
+)
+
+pytest_test(
+    name = "intersection_test",
+    srcs = ["intersection_test.py"],
+    deps = [
+        ":pylib",
+        pip_requirement("torch"),
+        pip_requirement("numpy"),
+        "//libs:pylib",
+        "//nre/utils:pylib_tests",
+    ],
+)
+
+pytest_test(
+    name = "cameras_test",
+    timeout = "long",
+    srcs = ["cameras_test.py"],
+    data = [
+        "@test_data_ncore//:ncore_1sec",
+    ],
+    tags = ["exclusive"],  # test can potentially timeout (in particular on CI when competing for resources) -> execute in isolation
+    deps = [
+        ":pylib",
+        pip_requirement("torch"),
+        pip_requirement("parameterized"),
+        pip_requirement("numpy"),
+        pip_requirement("nvidia-ncore"),
+        pip_requirement("nvidia-ncore-internal"),
+        "//libs:pylib",
+        "//nre/utils:pylib_geometry",
+        "//nre/utils:pylib_misc",
+        "//nre/utils:pylib_tests",
+        "@rules_python//python/runfiles",
+    ],
+)
+
+pytest_test(
+    name = "lidars_test",
+    srcs = ["lidars_test.py"],
+    data = [
+        "//libs/vren:test_data/row-offset-spinning-lidar-model-parameters.json",
+        "//libs/vren:test_data/row-offset-spinning-lidar-model-parameters-hesai-at128.json",
+        "//libs/vren:test_data/row-offset-spinning-lidar-model-parameters-pandaset.json",
+        "//libs/vren:test_data/row-offset-spinning-lidar-model-parameters-waymo.json",
+    ],
+    deps = [
+        ":pylib",
+        pip_requirement("torch"),
+        pip_requirement("numpy"),
+        pip_requirement("nvidia-ncore"),
+        pip_requirement("scipy"),
+        pip_requirement("parameterized"),
+        "//libs:pylib",
+        "//nre/utils:pylib",
+        "//nre/utils:pylib_tests",
+    ],
+)
+
+pytest_test(
+    name = "ensemble_test",
+    srcs = ["ensemble_test.py"],
+    deps = [
+        ":pylib",
+        pip_requirement("torch"),
+        pip_requirement("numpy"),
+        "//libs:pylib",
+    ],
+)

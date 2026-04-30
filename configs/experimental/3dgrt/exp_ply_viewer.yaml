@@ -1,0 +1,17 @@
+# @package _global_
+# Owner: Zan Gojcic
+
+# order in which configs override each other (/* - denotes a relative search path)
+defaults:
+  - /base
+  - /trainer: base
+  - /dataset: ncore
+  - /datamodule: so
+  - /model: gaussians/composite/static_gaussians
+  - /model/calib: skip
+  - /model/background: skip
+  - /difix: difix
+  - /system: gaussians
+  - /loss: gaussians_av
+  - override /dataset/samplers: image_crop # important for scaling gradients in densification buffers, SSIM loss and performance
+  - override /model/gaussians/renderer@model.renderer: 3dgut_nrend

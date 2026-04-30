@@ -1,0 +1,8 @@
+defaults:
+  - /nrm/apps/options: _long_primitive_merge
+
+model:
+  velocity_from_lidar:
+    enabled: false
+
+out_dir: /nrm_debug/long_primitive_merge_lidarfree

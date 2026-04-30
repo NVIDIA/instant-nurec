@@ -1,0 +1,18 @@
+defaults:
+  - base
+
+# The 'unicycle'-calibration module approximates the cars as unicycles
+
+name: unicycle-tracks-calib
+start_global_step: -1
+
+fix_first_pose: true
+fix_last_pose: true
+
+# Local axes of the cuboid tracks that define how the tracks should be interpreted in the unicycle model.
+# (Note that this should correspond to the track poses in the dataset)
+cuboid_tracks:
+  # Local up direction of the local frame of the cuboid tracks.
+  up_axis: [0.0, 0.0, 1.0]
+  # Local forward direction of the local frame of the cuboid tracks.
+  forward_axis: [1.0, 0.0, 0.0]

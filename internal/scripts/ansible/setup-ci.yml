@@ -1,0 +1,221 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+---
+# Include the common setup playbook first
+- import_playbook: setup-common.yml
+
+- name: CI GitLab Runner Setup
+  hosts: all
+  become: yes
+  vars:
+    # Common (shared by both runners)
+    gitlab_url: "https://gitlab-master.nvidia.com"
+    gitlab_token: "{{ lookup('file', '~/.netrc') | regex_search('machine ' + gitlab_url | regex_replace('^https?://', '') + '\\s+login oauth2\\s+password ([^\\s]+)', '\\1') | first }}"
+    gitlab_runner_version: "17.4.2"  # Runner version matching gitlab-master's major.minor
+    gitlab_runner_executor: "docker"
+    gitlab_runner_docker_image: "alpine:3.9"
+    gitlab_runner_home: "/gitlab-runner"
+    gitlab_runner_description: "{{ inventory_hostname }}"
+    gitlab_runner_tags: "test"  # Add production tags manually after validating the runner
+
+    # NRS group runner only
+    nrs_group_id: "224496"  # ID of the NRS group
+    nrs_runner_config_name: "{{ ansible_hostname }}"  # name in config.toml [[runners]]
+
+    # Alpasim project runner only.
+    alpasim_project_id: "168448"  # ID of the Alpasim project
+    alpasim_runner_config_name: "{{ ansible_hostname }}-alpasim"  # name in config.toml [[runners]]
+
+    # Sauron project runner only.
+    sauron_project_id: "159135"  # ID of the Sauron project
+    sauron_runner_config_name: "{{ ansible_hostname }}-sauron"  # name in config.toml [[runners]]
+
+    # GitLab API access levels used for permission checks (see https://docs.gitlab.com/ee/api/members.html)
+    gitlab_access_level_owner: 50
+    gitlab_access_level_maintainer: 40
+  vars_files:
+    - vars-ansible.yml
+
+  tasks:
+    - name: Localhost tasks for GitLab API and runner setup
+      # These tasks are run on the localhost and do not require sudo privileges
+      delegate_to: localhost
+      become: no
+      block:
+        - name: Check GitLab API access
+          uri:
+            url: "{{ gitlab_url }}/api/v4/version"
+            method: GET
+            headers:
+              PRIVATE-TOKEN: "{{ gitlab_token }}"
+            validate_certs: yes
+          register: api_check
+          retries: 3
+          delay: 5
+          until: api_check.status is defined and api_check.status == 200
+          failed_when: api_check.status is not defined or api_check.status != 200
+
+        - name: Fail if GitLab API access check fails
+          fail:
+            msg: "Failed to access GitLab API. Please check your .netrc file has correct credentials."
+          when: api_check.status is not defined or api_check.status != 200
+
+        - name: Get GitLab Runner S3 URL
+          # GitLab uses a redirect with an HTML page containing the actual S3 URL
+          # Neither curl -L nor uri module can handle this type of redirect
+          # Using Python to parse the HTML and extract the S3 URL
+          shell: python3 -c 'import requests, re; r = requests.get("https://gitlab.com/gitlab-org/gitlab-runner/-/releases/v{{ gitlab_runner_version }}/downloads/binaries/gitlab-runner-linux-amd64"); print(re.search(r"https://gitlab-runner-downloads.s3.amazonaws.com/[^\"]+", r.text).group())'
+          register: runner_s3_url
+          changed_when: false
+
+    - name: Download GitLab Runner binary
+      get_url:
+        url: "{{ runner_s3_url.stdout }}"
+        dest: /usr/local/bin/gitlab-runner
+        mode: '0755'
+        owner: root
+        group: root
+        validate_certs: yes
+      register: runner_binary
+
+    - name: Set GitLab Runner binary permissions
+      file:
+        path: /usr/local/bin/gitlab-runner
+        mode: '0755'
+        owner: root
+        group: root
+      when: runner_binary.changed
+
+    - name: Create gitlab-runner user with custom home directory
+      user:
+        name: gitlab-runner
+        comment: 'GitLab Runner'
+        shell: /bin/bash
+        home: "{{ gitlab_runner_home }}"
+        create_home: yes
+        system: no
+      register: runner_user
+
+    - name: Install GitLab Runner service
+      shell: gitlab-runner install --user=gitlab-runner --working-directory={{ gitlab_runner_home }}
+      args:
+        creates: /etc/systemd/system/gitlab-runner.service
+      register: runner_service
+
+    - name: Set ownership of GitLab Runner config directory
+      file:
+        path: /etc/gitlab-runner
+        owner: gitlab-runner
+        group: gitlab-runner
+        recurse: yes
+      when: runner_service.changed
+
+    - name: Check if gitlab-runner is in docker group
+      command: getent group docker
+      register: docker_group_check
+      changed_when: false
+      failed_when: false
+
+    - name: Add gitlab-runner to docker group
+      user:
+        name: gitlab-runner
+        groups: docker
+        append: yes
+      when: docker_group_check.rc == 0 and 'gitlab-runner' not in (docker_group_check.stdout | default(''))
+
+    - name: Register NRS group runner
+      include_tasks: register_gitlab_runner.yml
+      vars:
+        runner_config_name: "{{ nrs_runner_config_name }}"
+        resource_type: group
+        resource_id: "{{ nrs_group_id }}"
+        min_access_level: "{{ gitlab_access_level_owner }}"
+        fail_msg: "You must have Owner role on the NRS group (ID {{ nrs_group_id }}) to register a new runner. Check Settings -> Members in the NRS group."
+        api_body:
+          runner_type: "group_type"
+          group_id: "{{ nrs_group_id }}"
+          description: "{{ gitlab_runner_description }}"
+          tag_list: "{{ gitlab_runner_tags }}"
+          run_untagged: "false"
+          locked: "false"
+
+    - name: Create fake Lustre scratch space for alpasim runner
+      file:
+        path: "/raid/fake_lustre"
+        state: directory
+        owner: gitlab-runner
+        group: gitlab-runner
+        mode: '0755'
+      when: alpasim_runner_enabled | bool
+
+    - name: Register Alpasim project runner
+      include_tasks: register_gitlab_runner.yml
+      vars:
+        runner_config_name: "{{ alpasim_runner_config_name }}"
+        resource_type: project
+        resource_id: "{{ alpasim_project_id }}"
+        min_access_level: "{{ gitlab_access_level_maintainer }}"
+        fail_msg: "You must have Maintainer (or higher) role on the Alpasim project (ID {{ alpasim_project_id }}) to register an Alpasim runner. Check Settings -> Members in the Alpasim project."
+        api_body:
+          runner_type: "project_type"
+          project_id: "{{ alpasim_project_id }}"
+          description: "{{ gitlab_runner_description }}"
+          tag_list: "{{ gitlab_runner_tags }}"
+          run_untagged: "false"
+          locked: "false"
+        extra_docker_volumes: '--docker-volumes "/raid/fake_lustre:/lustre"'
+      when: alpasim_runner_enabled | bool
+
+    - name: Register Sauron project runner
+      include_tasks: register_gitlab_runner.yml
+      vars:
+        runner_config_name: "{{ sauron_runner_config_name }}"
+        resource_type: project
+        resource_id: "{{ sauron_project_id }}"
+        min_access_level: "{{ gitlab_access_level_maintainer }}"
+        fail_msg: "You must have Maintainer (or higher) role on the Sauron project (ID {{ sauron_project_id }}) to register a Sauron runner. Check Settings -> Members in the Sauron project."
+        api_body:
+          runner_type: "project_type"
+          project_id: "{{ sauron_project_id }}"
+          description: "{{ gitlab_runner_description }}"
+          tag_list: "{{ gitlab_runner_tags }}"
+          run_untagged: "false"
+          locked: "false"
+        docker_shm_size: "32000000000"
+      when: sauron_runner_enabled | bool
+
+    - name: Create crontab entries for docker cleanup
+      cron:
+        user: root
+        name: "{{ item.name }}"
+        job: "{{ item.job }}"
+        minute: "{{ item.minute | default(omit) }}"
+        hour: "{{ item.hour | default(omit) }}"
+        day: "{{ item.day | default(omit) }}"
+        weekday: "{{ item.weekday | default(omit) }}"
+        special_time: "{{ item.special_time | default(omit) }}"
+      loop:
+        - name: "Daily docker system prune"
+          minute: "0"
+          hour: "3"
+          job: "/usr/bin/docker system prune -f --volumes &>/dev/null"
+        - name: "Weekly docker system prune all"
+          minute: "0"
+          hour: "5"
+          weekday: "1,3"
+          job: "/usr/bin/docker system prune -a -f --volumes &>/dev/null"
+
+    - name: Reboot the system
+      reboot:
+        msg: "Rebooting after GitLab Runner setup"
+        reboot_timeout: 3600
+        pre_reboot_delay: 0
+        post_reboot_delay: 30

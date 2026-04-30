@@ -1,0 +1,8 @@
+# @package _global_
+# Owner: Janick Martinez Esturo
+
+defaults:
+  - 3dgut_static.yaml
+  - /apps/AV/module_mixins/_calib_mixin.yaml
+  - override /model/calib: free_pose
+

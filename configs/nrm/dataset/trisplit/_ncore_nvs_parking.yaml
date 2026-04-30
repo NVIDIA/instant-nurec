@@ -1,0 +1,43 @@
+# @package _global_
+# Owner: jiahuih
+
+# Compared to _ncore_nvs_mixed, this adds parking-specific data to training and validation.
+
+defaults:
+  - _ncore_nvs_mixed
+
+  # Inheriting from the above base config, as long as the name contains "gen3c_wide", it will
+  # use the nurec cameras.
+  - /nrm/dataset@dataset.train.mixture.parking_gen3c_wide.config: ncore
+  - /nrm/dataset@dataset.val.mixture.parking_gen3c_wide.config: ncore
+
+# Oversample the parking data, and disable validating the ncore_c1c2kl data.
+# Also use 1s gap between frames for parking data since vehicle motion is slow.
+dataset:
+  train:
+    mixture:
+      parking_gen3c_wide:
+        sample_ratio: 2.0
+        config:
+          ncore_json_list_path: s3@pdx-team-ncore://nrm-training-data/celsius_6cam_720p_all_in_one/data-split/all/feb-parking.lst
+          frame_batch_samplers:
+            uniform:
+              frame_gap_timestamp_us: 1000000
+  val:
+    mixture:
+      ncore_c1c2kl:
+        sample_ratio: 0.0
+      ncore_gen3c_wide:
+        sample_ratio: 0.002
+      parking_gen3c_wide:
+        sample_ratio: 0.8
+        config:
+          ncore_json_list_path: s3@pdx-team-ncore://nrm-training-data/celsius_6cam_720p_all_in_one/data-split/all/feb-parking.lst
+          frame_batch_samplers:
+            uniform:
+              frame_gap_timestamp_us: 1000000
+
+override_config:
+  # Don't select frame_gap_timestamp_us for the parking configs.
+  regular_context_camera_spec:
+    selector: ["^(?!.*parking_gen3c)dataset.*config"]

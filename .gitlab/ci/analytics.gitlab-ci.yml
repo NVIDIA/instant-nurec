@@ -1,0 +1,69 @@
+# Copyright (c) 2025-2026 NVIDIA CORPORATION.  All rights reserved.
+
+# CI Analytics Job
+#
+# This job collects CI job data and generates statistics and visualizations.
+#
+# Recovery from incomplete data:
+#   If the ci_jobs.json becomes incomplete (missing historical data), we can't
+#   simply redo a full download from the GitLab API since information about
+#   retired runners is not available in that API. Instead, we can inject a
+#   backup from a known-good job.
+#
+#   1. Find a known-good job ID:
+#      - Go to CI/CD > Jobs, filter by "ci_analytics" and "success"
+#      - Find a job from before the data became incomplete
+#      - Note the job ID (visible in the URL or job list)
+#
+#   2. Trigger a pipeline on main with the backup:
+#      - Go to CI/CD > Pipelines > Run Pipeline
+#      - Select "main" branch
+#      - Add variable: CI_ANALYTICS_BACKUP_JOB_ID = <job-id>
+#      - Run the pipeline
+#
+#   3. Once the job succeeds, its artifact becomes the new baseline for future jobs.
+
+ci_analytics:
+  stage: build
+  variables:
+    # Set to a known-good job ID to recover from incomplete data.
+    # Leave empty for normal operation (uses latest artifact from main).
+    CI_ANALYTICS_BACKUP_JOB_ID: ""
+    # Comma-separated list of GitLab project paths outside the NRS group to collect (projects sharing our runners).
+    CI_ANALYTICS_EXTRA_PROJECTS: "alpamayo/alpasim,dvl/sauron/sauron"
+    # Per-project tokens for extra projects not accessible with the primary credentials.
+    CI_ANALYTICS_SAURON_TOKEN: "dvl/sauron/sauron=$SAURON_GITLAB_TOKEN"
+  script:
+    - mkdir -p ci_analytics
+    # Download baseline ci_jobs.json from previous job artifacts
+    - |
+      ARTIFACT_URL=""
+      if [[ -n "${CI_ANALYTICS_BACKUP_JOB_ID}" ]]; then
+        # Use specified fallback job ID for recovery from incomplete data
+        echo "Using fallback job ID: ${CI_ANALYTICS_BACKUP_JOB_ID}"
+        ARTIFACT_URL="${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/jobs/${CI_ANALYTICS_BACKUP_JOB_ID}/artifacts"
+      else
+        # Normal operation: use latest successful artifact from main
+        ARTIFACT_URL="${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/jobs/artifacts/${CI_DEFAULT_BRANCH}/download?job=ci_analytics"
+      fi
+      if curl -f -s --header "JOB-TOKEN: ${CI_JOB_TOKEN}" -o ci_analytics.zip "${ARTIFACT_URL}"; then
+        unzip -q -o ci_analytics.zip "ci_analytics/*.json"
+        echo "Successfully loaded baseline from artifact"
+      elif [[ -n "${CI_ANALYTICS_BACKUP_JOB_ID}" ]]; then
+        echo "ERROR: Failed to download artifacts from backup job ${CI_ANALYTICS_BACKUP_JOB_ID}"
+        exit 1
+      else
+        echo "No passing ci_analytics job artifact found for the main branch, will download job data from scratch"
+      fi
+    # Gather new job data and test runtimes from the API; merge into ci_analytics .json files.
+    # Load default amount of data from the API if no input .json files are available.
+    - internal/scripts/ci/analytics/ci_job_collector.py --verbose --extra-projects "${CI_ANALYTICS_EXTRA_PROJECTS}" --extra-project-token "${CI_ANALYTICS_SAURON_TOKEN}"
+    # Generate the HTML visualization from the collected job data.
+    - internal/scripts/ci/analytics/ci_visualization.py
+  artifacts:
+    paths:
+      - ci_analytics
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH # Run automatically on the main branch
+    - when: manual  # Run manually on all other branches/commits
+  allow_failure: true  # Optional job, does not block the pipeline

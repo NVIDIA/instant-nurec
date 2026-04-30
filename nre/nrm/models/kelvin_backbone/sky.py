@@ -1,0 +1,281 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+from abc import ABC, abstractmethod
+from typing import cast
+
+import torch
+import torchvision.transforms as transforms
+
+from einops import rearrange, repeat
+from torch import nn
+
+from ncore.impl.data.types import CameraModelParameters
+from nre.models.nn_extensions import TypedModuleList
+from nre.nrm.config.models import (
+    KelvinModelConfig,
+    KelvinSkyCubemapDecoderConfig,
+    KelvinSkySolidColorConfig,
+)
+from nre.nrm.models.blocks.attention import CrossAttentionBlock, KVProjector
+from nre.nrm.models.blocks.dpt import DPTFusionHead, DPTReassembleBlock
+from nre.nrm.models.blocks.embeds import PatchEmbed, PositionalEmbed
+from nre.nrm.models.blocks.layers import LayerNorm2d
+from nre.nrm.models.kelvin_backbone.base import KelvinLatent
+from nre.nrm.utils.cubemap import cubemap_ray_directions, unproject_to_sky_cubemap
+from nre.utils.batch import DataAndRenderingBatch
+from nre.utils.geometry import tquat_to_se3_matrix
+from nre.utils.misc import unpack_optional
+
+
+class KelvinSkyBase(nn.Module, ABC):
+    @abstractmethod
+    def initialize_weights(self, loaded_state_dicts: dict[str, dict[str, torch.Tensor]]):
+        """
+        Initialize the weights of the model from the loaded state dicts.
+        """
+
+    @abstractmethod
+    def decode(self, encoded_latent: KelvinLatent, batches: list[DataAndRenderingBatch]) -> torch.Tensor:
+        """
+        Decode the encoded latent into a sky cubemap.
+        Returns:
+            The sky cubemap. [6, cubemap_size, cubemap_size, 3]
+        """
+
+
+class SolidColorSky(KelvinSkyBase):
+    def __init__(self, config: KelvinSkySolidColorConfig, model_config: KelvinModelConfig):
+        super().__init__()
+        self.cubemap_size = config.cubemap_size
+        self.color = nn.Buffer(torch.tensor(config.color))
+
+    def initialize_weights(self, loaded_state_dicts: dict[str, dict[str, torch.Tensor]]):
+        pass
+
+    def decode(self, encoded_latent: KelvinLatent, batches: list[DataAndRenderingBatch]) -> torch.Tensor:
+        batch_size = encoded_latent.batch_size
+        return repeat(
+            self.color, "C -> B 6 SH SW C", B=batch_size, SH=self.cubemap_size, SW=self.cubemap_size
+        ).contiguous()
+
+
+class CubemapDecoderSky(KelvinSkyBase):
+    """
+    Let's start with brute force decoding.
+    """
+
+    class DPTFusionUpsampler(nn.Module):
+        """Upsampler from patches to RGB values, optionally taking in skipped features (DPT-style)."""
+
+        def __init__(self, embed_dim: int, dpt_dim: int, sky_cubemap_size: int, fusion_dim: int | None):
+            super().__init__()
+            self.reassemble = DPTReassembleBlock(
+                input_dim=embed_dim,
+                output_dim=dpt_dim,
+                n_blocks=4,
+                hidden_dims=(embed_dim // 8, embed_dim // 4, embed_dim // 2, embed_dim),
+                pos_embed_strength=0.1,
+            )
+            self.decode_head = DPTFusionHead(
+                input_dim=dpt_dim,
+                output_dim=fusion_dim or 3,
+                n_blocks=4,
+                before_conv="1-layer",
+                after_conv="2-layers",
+                after_conv_dim=32,
+                pos_embed_strength=0.1,
+            )
+            self.sky_cubemap_size = sky_cubemap_size
+
+            self.fusion_dim = fusion_dim
+            if fusion_dim is not None:
+                self.unproject = nn.Sequential(
+                    nn.Conv2d(3, fusion_dim, kernel_size=3, stride=1, padding=1),
+                    nn.ReLU(inplace=True),
+                    nn.Conv2d(fusion_dim, fusion_dim, kernel_size=3, stride=1, padding=1),
+                    LayerNorm2d(fusion_dim, eps=1e-5),
+                )
+                self.fusion_head = nn.Sequential(
+                    nn.Conv2d(2 * fusion_dim, fusion_dim, kernel_size=3, stride=1, padding=1),
+                    nn.ReLU(inplace=True),
+                    nn.Conv2d(fusion_dim, 3, kernel_size=1, stride=1, padding=0),
+                )
+
+        def forward(self, x: torch.Tensor, skip: torch.Tensor | None = None) -> torch.Tensor:
+            x_list = self.reassemble([x] * self.reassemble.n_blocks)
+            x = self.decode_head(x_list, output_shape=(self.sky_cubemap_size, self.sky_cubemap_size))
+            if skip is not None:
+                assert self.fusion_dim is not None, "Fusion dimension must be provided if skip is provided."
+                skip = unpack_optional(self.unproject(skip))
+                x = self.fusion_head(torch.cat([x, skip], dim=1))
+            return x
+
+    class RayPatchEmbed(nn.Module):
+        def __init__(self, embed_dim: int, pe_dim: int, patch_shape: tuple[int, int]):
+            super().__init__()
+            assert pe_dim % 3 == 0, "Embedding dimension must be divisible by 3."
+            self.pe_dim = pe_dim
+            self.ray_embed = PatchEmbed(
+                patch_shape=patch_shape,
+                input_dim=pe_dim,
+                embed_dim=embed_dim,
+                norm=True,
+            )
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            rx, ry, rz = x[:, 0], x[:, 1], x[:, 2]
+            rx = PositionalEmbed.get_1d_sincos_nerf_embed(rx, self.pe_dim // 3)
+            ry = PositionalEmbed.get_1d_sincos_nerf_embed(ry, self.pe_dim // 3)
+            rz = PositionalEmbed.get_1d_sincos_nerf_embed(rz, self.pe_dim // 3)
+            x = torch.cat([rx, ry, rz], dim=-1)
+            return self.ray_embed(rearrange(x, "B h w C -> B C h w"))
+
+    def __init__(self, config: KelvinSkyCubemapDecoderConfig, model_config: KelvinModelConfig):
+        super().__init__()
+        self.config = config
+        self.patch_shape = model_config.patch_shape
+        self.sky_cubemap_size = config.cubemap_size
+        assert self.sky_cubemap_size % self.patch_shape[0] == 0, "Sky cubemap size must be divisible by patch shape"
+
+        self.num_latent_heads = model_config.encoder.n_heads
+        self.embed_dim = config.embed_dim
+        self.depth = config.depth
+
+        # Down-project and normalize the backbone features
+        self.feature_transform = nn.Sequential(
+            nn.Linear(model_config.encoder.embed_dim, self.embed_dim),
+            nn.LayerNorm(self.embed_dim),
+        )
+
+        # Skip connections for RGB information
+        self.rgb_normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225], inplace=False)
+        self.patch_embed_img = PatchEmbed(
+            patch_shape=self.patch_shape,
+            input_dim=3,
+            embed_dim=self.embed_dim,
+            norm=True,
+        )
+
+        # Ray directional embeddings to build img-cubemap connections
+        self.patch_embed_ray = self.RayPatchEmbed(self.embed_dim, 3 * 16, self.patch_shape)
+
+        # Query rays for cross-attention
+        self.token = nn.Parameter(torch.randn(self.embed_dim) * 0.02)
+        self.query_rays = nn.Buffer(cubemap_ray_directions(self.sky_cubemap_size, device=torch.device("cuda")))
+
+        self.blocks = TypedModuleList(
+            [
+                CrossAttentionBlock(
+                    self.embed_dim,
+                    self.num_latent_heads,
+                    qkv_bias=True,
+                    attn_drop=0.0,
+                    proj_drop=0.0,
+                    qk_norm=True,
+                    mlp_ratio=4.0,
+                    dropout=0.0,
+                    layer_scale_init_values=1.0,
+                    kv_projector=None,
+                )
+                for _ in range(self.depth)
+            ]
+        )
+        self.kv_projector = KVProjector(
+            dim=self.embed_dim,
+            n_heads=self.num_latent_heads,
+            kv_bias=True,
+            k_norm=True,
+        )
+
+        self.fusion_dim = config.fusion_dim
+        self.upsample = self.DPTFusionUpsampler(self.embed_dim, 128, self.sky_cubemap_size, self.fusion_dim)
+
+    def initialize_weights(self, loaded_state_dicts: dict[str, dict[str, torch.Tensor]]):
+        pass
+
+    def decode(self, encoded_latent: KelvinLatent, batches: list[DataAndRenderingBatch]) -> torch.Tensor:
+        """
+        Args:
+            encoded_latent: KelvinMultiscaleFeaturesLatent
+            batches: list[DataAndRenderingBatch]
+
+        Returns:
+            torch.Tensor: (B, 6, S, S, 3)
+        """
+        batch_size = encoded_latent.batch_size
+
+        batch_rgbs: list[torch.Tensor] = []
+        batch_rays: list[torch.Tensor] = []
+        batch_skips: list[torch.Tensor] = []
+        for batch in batches:
+            data = unpack_optional(batch.data.camera)
+            rendering = unpack_optional(unpack_optional(batch.rendering).camera)
+            rgb = unpack_optional(data.labels.rgb)
+
+            batch_rgbs.append(rgb)
+            batch_rays.append(rendering.rays[..., 3:])
+            if self.fusion_dim is not None:
+                batch_skips.append(
+                    unproject_to_sky_cubemap(
+                        self.sky_cubemap_size,
+                        tquat_to_se3_matrix(rendering.poses_tquat_startend[:, 1])[:, :3, :3],
+                        [
+                            cast(CameraModelParameters, sensor_model)
+                            for sensor_model in rendering.sensor_model_parameters
+                        ],
+                        rgb,
+                        None,
+                    )[0]
+                )
+
+        # KV = backbone + RGB + Ray
+        rgbs_in = torch.stack(batch_rgbs, dim=0)
+        rgbs_in = self.patch_embed_img(self.rgb_normalize(rearrange(rgbs_in, "B V H W C -> (B V) C H W")))
+        rgbs_in = rearrange(rgbs_in, "(B V) h w C -> B (V h w) C", B=batch_size)
+        rays_in = torch.stack(batch_rays, dim=0)
+        rays_in = self.patch_embed_ray(rearrange(rays_in, "B V H W C -> (B V) C H W"))
+        rays_in = rearrange(rays_in, "(B V) h w C -> B (V h w) C", B=batch_size)
+        features_in = self.feature_transform(encoded_latent.deepest)  # This contains normalization after proj.
+        features_in = features_in.reshape(batch_size, -1, self.embed_dim) + rgbs_in + rays_in
+        k, v = self.kv_projector(k=features_in, v=features_in)
+
+        # Q = Ray
+        queries = self.patch_embed_ray(rearrange(self.query_rays, "F SH SW C -> F C SH SW"))
+        _, s, _, _ = queries.shape
+        queries = repeat(queries, "F h w C -> B (F h w) C", B=batch_size) + self.token
+
+        for block in self.blocks:
+            queries = block(queries, k, v)
+
+        # Upsample with optional skip connection
+        skip: torch.Tensor | None = None
+        with torch.autocast("cuda", enabled=False):
+            queries = rearrange(queries.float(), "B (F h w) C -> (B F) h w C", F=6, h=s, w=s)
+            if self.fusion_dim is not None:
+                skip = torch.stack(batch_skips, dim=0)
+                skip = rearrange(skip.float(), "B F h w C -> (B F) C h w")
+            if self.config.checkpointing:
+                queries = torch.utils.checkpoint.checkpoint(self.upsample, queries, skip=skip, use_reentrant=False)
+            else:
+                queries = self.upsample(queries, skip=skip)
+            queries = rearrange(queries, "(B F) C H W -> B F H W C", F=6)
+            queries = torch.clamp(queries, min=-1.0, max=1.0) * 0.5 + 0.5
+
+        return queries
+
+
+def make_sky(config: KelvinModelConfig) -> KelvinSkyBase:
+    if isinstance(config.sky, KelvinSkyCubemapDecoderConfig):
+        return CubemapDecoderSky(config.sky, config)
+    elif isinstance(config.sky, KelvinSkySolidColorConfig):
+        return SolidColorSky(config.sky, config)
+    else:
+        raise ValueError(f"Unsupported sky config: {config.sky}")

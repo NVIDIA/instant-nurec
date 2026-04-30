@@ -1,0 +1,32 @@
+defaults:
+  - rigid_gaussians
+  - /model/object_feature_volume@deform_network.feature_volume: fused_permuto_xyzi
+  - override /model/input_embedding@deform_network.feature_volume.time_input_embedding: individual_remap_time
+
+name: "deformable-gaussians"
+
+deformnet_start_iteration: 1000
+cuboid_tracks_expand: 0.05
+smoothness_frame_steps: 5
+
+deform_network:
+  deform_rotations: true
+  rotations_from_identity: true
+  deform_scales: false
+  feature_volume:
+    hash_grid_encoding_config:
+      log2_hashmap_size: 19
+  precision: ${trainer.precision}
+  optimizer:
+    name: fused_adam
+    args:
+      lr: 0.001
+      eps: 1.e-15
+      betas: [0.9, 0.99]
+  scheduler:
+    name: StepFunCosineAnnealingLR
+    interval: step
+    args:
+      T_max: ${mul:${trainer.max_epochs},${dataset.n_samples_per_epoch}}
+      min_factor: 0.0333
+      update_every_n_steps: ${trainer.annealing_update_every_n_steps}

@@ -1,0 +1,48 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+package(default_visibility = ["//:core_package_group"])
+
+# Aliases for slang targets depending on the target platform
+alias(
+    name = "slangc",
+    actual =
+        select({
+            "@platforms//cpu:aarch64": "@slang_aarch64//:slangc",
+            "//conditions:default": "@slang_x86_64//:slangc",
+        }),
+)
+
+alias(
+    name = "slang_headers",
+    actual =
+        select({
+            "@platforms//cpu:aarch64": "@slang_aarch64//:slang_headers",
+            "//conditions:default": "@slang_x86_64//:slang_headers",
+        }),
+)
+
+alias(
+    name = "lib_slang_compiler",
+    actual =
+        select({
+            "@platforms//cpu:aarch64": "@slang_aarch64//:lib_slang_compiler",
+            "//conditions:default": "@slang_x86_64//:lib_slang_compiler",
+        }),
+)
+
+alias(
+    name = "lib_slang_rtc",
+    actual =
+        select({
+            "@platforms//cpu:aarch64": "@slang_aarch64//:lib_slang_rtc",
+            "//conditions:default": "@slang_x86_64//:lib_slang_rtc",
+        }),
+)

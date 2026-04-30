@@ -1,0 +1,60 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+load("@nre_pip_deps//:requirements.bzl", pip_requirement = "requirement")
+load("@rules_python//python:defs.bzl", "py_library")
+
+DEFAULT_VISIBILITY = ["//:core_package_group"]
+
+package(default_visibility = DEFAULT_VISIBILITY)
+
+filegroup(
+    name = "py_files",
+    srcs = glob(["**/*.py"]),
+    visibility = [
+        "//internal/scripts/pycena:__pkg__",
+    ],
+)
+
+py_library(
+    name = "pylib",
+    srcs = [
+        "controllers.py",
+        "render_novel_trajectory.py",
+    ],
+    visibility = DEFAULT_VISIBILITY + [
+        # Add visibility for //:run
+        "//:__pkg__",
+    ],
+    deps = [
+        "//nre/artifact:pylib",
+        "//nre/config:pylib",
+        "//nre/datamodules:pylib",
+        "//nre/datasets:pylib",
+        "//nre/grpc:pylib",
+        "//nre/grpc/protos:grpc_pb2",
+        "//nre/render:pylib",
+        "//nre/systems:pylib",
+        "//nre/utils:pylib",
+        "//nre/utils:pylib_misc",
+        "//nre/utils:pylib_ncore_utils",
+        "//nre/utils:pylib_types",
+        "//nre/utils/debug:pylib",
+        "//nre/utils/io:pylib",
+        pip_requirement("aiofiles"),
+        pip_requirement("click"),
+        pip_requirement("lietorch"),
+        pip_requirement("numpy"),
+        pip_requirement("imageio"),
+        pip_requirement("imageio-ffmpeg"),
+        pip_requirement("setuptools"),
+        pip_requirement("scipy"),
+    ],
+)

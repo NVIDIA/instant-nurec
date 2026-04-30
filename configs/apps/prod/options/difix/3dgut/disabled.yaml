@@ -1,0 +1,10 @@
+# @package _global_
+
+difix:
+  training:
+    # Disable training-time difix
+    enabled: false
+  
+  inference:
+    # Disable the inference-time diffusion difix call
+    enabled: false

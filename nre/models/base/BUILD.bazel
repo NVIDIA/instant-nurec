@@ -1,0 +1,48 @@
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+load("@nre_pip_deps//:requirements.bzl", pip_requirement = "requirement")
+load("@rules_python//python:defs.bzl", "py_library")
+load("//bazel/pytest:defs.bzl", "pytest_test")
+
+package(default_visibility = ["//:core_package_group"])
+
+filegroup(
+    name = "py_files",
+    srcs = glob(["**/*.py"]),
+    visibility = [
+        "//internal/scripts/pycena:__pkg__",
+    ],
+)
+
+py_library(
+    name = "pylib",
+    srcs = [
+        "__init__.py",
+        "base.py",
+    ],
+    deps = [
+        pip_requirement("numpy"),
+        pip_requirement("torch"),
+        pip_requirement("omegaconf"),
+        "//nre:pylib",
+        "//nre/utils:pylib_misc",
+        "//nre/utils:pylib_optim",
+        "//nre/utils:pylib_types",
+    ],
+)
+
+pytest_test(
+    name = "base_test",
+    srcs = ["base_test.py"],
+    deps = [
+        ":pylib",
+    ],
+)

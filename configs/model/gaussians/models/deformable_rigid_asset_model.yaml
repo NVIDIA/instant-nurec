@@ -1,0 +1,248 @@
+defaults:
+  - rigid_gaussians
+
+name: "elastic-loaded-ah"
+
+# Deformation network configuration
+deform_matrix_size: 3
+restriction_policy: vis_frequency_drop
+
+log_every_n_steps: 100
+
+# Temporal appearance with increased Fourier features
+fourier_features_dim: 20  # Increased from 5 to 20 to capture high frequency changes (e.g., blinking turning signal)
+
+time_embed:
+  name: individual-remap-time-input-embedding
+  remap_min: 0
+  remap_max: 1
+
+particle:
+  density_kernel_degree: 2
+  density_kernel_min_response: 0
+
+optimize_track_albedo: false
+optimize_track_scale: false
+
+# Masking end step: when to stop updating gaussian hit mask
+# Should match when albedo starts training (step 3000) since masking
+# is used to collect visibility statistics before albedo optimization
+masking_end_step: 3000
+
+# Align track-level schedulers with features_albedo start (step 3000)
+track_albedo:
+  start_global_step: 3000
+  optimizer:
+    name: fused_adam
+    args:
+      lr: 1.0e-5
+      eps: 1.e-15
+      betas: [0.9, 0.99]
+    params:
+      track_albedos:
+        args:
+          lr: 1.0e-5
+  scheduler:
+    name: SequentialLR
+    interval: step
+    milestones:
+      - ${...start_global_step}
+      - ${add:${...start_global_step},${system.warmup_steps}}
+
+    schedulers:
+      - name: ConstantLR # skip until `start_global_step`
+        args:
+          factor: 0.0
+          total_iters: ${.....start_global_step}
+      - name: LinearLR # linear warm-up in the first system.warmup_steps steps
+        interval: step
+        args:
+          start_factor: 0.01
+          end_factor: 1.0
+          total_iters: ${system.warmup_steps}
+      - name: StepFunCosineAnnealingLR
+        interval: step
+        args:
+          T_max: ${sub:${mul:${trainer.max_epochs},${dataset.n_samples_per_epoch}},${add:${.....start_global_step},${system.warmup_steps}}}
+          min_factor: 0.0333
+          update_every_n_steps: ${trainer.annealing_update_every_n_steps}
+
+track_scale:
+  start_global_step: 3000
+  optimizer:
+    name: fused_adam
+    args:
+      lr: 1.0e-5
+      eps: 1.e-15
+      betas: [0.9, 0.99]
+    params:
+      track_scales:
+        args:
+          lr: 1.0e-5
+  scheduler:
+    name: SequentialLR
+    interval: step
+    milestones:
+      - ${...start_global_step}
+      - ${add:${...start_global_step},${system.warmup_steps}}
+
+    schedulers:
+      - name: ConstantLR # skip until `start_global_step`
+        args:
+          factor: 0.0
+          total_iters: ${.....start_global_step}
+      - name: LinearLR # linear warm-up in the first system.warmup_steps steps
+        interval: step
+        args:
+          start_factor: 0.01
+          end_factor: 1.0
+          total_iters: ${system.warmup_steps}
+      - name: StepFunCosineAnnealingLR
+        interval: step
+        args:
+          T_max: ${sub:${mul:${trainer.max_epochs},${dataset.n_samples_per_epoch}},${add:${.....start_global_step},${system.warmup_steps}}}
+          min_factor: 0.0333
+          update_every_n_steps: ${trainer.annealing_update_every_n_steps}
+
+# Scheduler-based learning rate control matching old enable_*_opt_at flags:
+# - deformation opt at: 1000    → Deformation starts at 1000 and ends at 3000
+# - albedo opt at: 3000         → Albedo starts at 3000
+# - specular opt at: 5000       → Specular starts at 5000
+# - pos opt at: never           → Positions FROZEN
+# - densities opt at: never     → Densities FROZEN
+# - rotations opt at: never     → Rotations FROZEN
+# - scales opt at: never        → Scales FROZEN
+# Harvested assets are inserted in the training at initialization step, so we need to freeze the positions, densities, rotations, and scales.
+# If we don't freeze the above paramters, we will loose the geometry because we will overfit on the visible side of the assets.
+
+# Deformation network optimizer configuration
+# This is used by DeformableRigidAssetModel.configure_optimizers()
+# (Deformation optimizer is defined under deformation_network above)
+deformation_network:
+  optimizer:
+    name: fused_adam
+    args:
+      lr: 0.001
+      eps: 1.0e-15
+      betas: [0.9, 0.99]
+    params:
+      W:
+        args:
+          lr: 0.001
+  scheduler:
+    name: SequentialLR
+    interval: step
+    milestones:
+      - 1000
+      - 3000
+    schedulers:
+      # Frozen until step 1000
+      - name: ConstantLR
+        args:
+          factor: 0.0
+          total_iters: 1000
+      # Active from 1000 to 3000
+      - name: ConstantLR
+        args:
+          factor: 1.0
+          total_iters: 3000
+      # Frozen after step 3000
+      - name: ConstantLR
+        args:
+          factor: 0.0
+          total_iters: 999999
+
+optimizers:
+  # Optimizer 1: Positions - FROZEN
+  - name: fused_adam
+    args:
+      lr: 0.01
+      eps: 1.0e-15
+      betas: [0.9, 0.99]
+    params:
+      positions:
+        args:
+          lr: 0.00016
+    scheduler:
+      name: ConstantLR
+      interval: step
+      args:
+        factor: 0.0  # Frozen completely
+        total_iters: 999999
+
+  # Optimizer 2: Albedo - delayed start at 3000 (enable_albedo_opt_at: 3000)
+  - name: fused_adam
+    args:
+      lr: 0.01
+      eps: 1.0e-15
+      betas: [0.9, 0.99]
+    params:
+      features_albedo:
+        args:
+          lr: 0.0025  # Target LR after delayed start
+    scheduler:
+      name: SequentialLR
+      interval: step
+      milestones:
+        - 3000
+      schedulers:
+        # Frozen until step 3000
+        - name: ConstantLR
+          args:
+            factor: 0.0
+            total_iters: 3000
+        # Active from step 3000 onward
+        - name: ConstantLR
+          args:
+            factor: 1.0
+            total_iters: 999999
+
+  # Optimizer 3: Specular - delayed start at 5000 (enable_specular_opt_at: 5000)
+  - name: fused_adam
+    args:
+      lr: 0.01
+      eps: 1.0e-15
+      betas: [0.9, 0.99]
+    params:
+      features_specular:
+        args:
+          lr: 0.000125  # Target LR after delayed start
+    scheduler:
+      name: SequentialLR
+      interval: step
+      milestones:
+        - 5000
+      schedulers:
+        # Frozen until step 5000
+        - name: ConstantLR
+          args:
+            factor: 0.0
+            total_iters: 5000
+        # Active from step 5000 onward
+        - name: ConstantLR
+          args:
+            factor: 1.0
+            total_iters: 999999
+
+  # Optimizer 4: Densities, Rotations, Scales - FROZEN
+  - name: fused_adam
+    args:
+      lr: 0.01
+      eps: 1.0e-15
+      betas: [0.9, 0.99]
+    params:
+      densities:
+        args:
+          lr: 0.05
+      rotations:
+        args:
+          lr: 0.001
+      scales:
+        args:
+          lr: 0.005
+    scheduler:
+      name: ConstantLR
+      interval: step
+      args:
+        factor: 0.0  # Frozen completely
+        total_iters: 999999

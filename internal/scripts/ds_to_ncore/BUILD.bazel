@@ -1,0 +1,134 @@
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+load("@aspect_rules_py//py:defs.bzl", "py_binary", "py_image_layer")
+load("@mypy_integration//:mypy.bzl", "mypy_test")
+load("@nre_pip_deps//:requirements.bzl", pip_requirement = "requirement")
+load("@rules_oci//oci:defs.bzl", "oci_image", "oci_load", "oci_push")
+load("@rules_pkg//:pkg.bzl", "pkg_tar")
+load("//bazel/pytest:defs.bzl", "pytest_test")
+load("//bazel/rules_oci:default_layer_groups.bzl", "default_layer_groups")
+
+DS_TO_NCORE_DEPS = [
+    pip_requirement("tqdm"),
+    pip_requirement("numpy"),
+    pip_requirement("nvidia-ncore"),
+    pip_requirement("nvidia-ncore-internal"),
+    pip_requirement("pillow"),
+    pip_requirement("click"),
+    pip_requirement("torch"),
+    pip_requirement("OpenEXR"),
+    "//nre/utils:pylib_ncore_utils",
+    "//nre/utils:pylib",
+]
+
+py_binary(
+    name = "ds_to_ncore",
+    srcs = [
+        "ds_to_ncore.py",
+        "ds_to_ncore_utils.py",
+    ],
+    main = "ds_to_ncore.py",
+    deps = DS_TO_NCORE_DEPS,
+)
+
+pytest_test(
+    name = "ds_to_ncore_test",
+    timeout = "moderate",
+    srcs = [
+        "ds_to_ncore_test.py",
+    ],
+    data = [
+        "@test_data_ds2ncore//:drivesim_data",
+    ],
+    deps = [
+        ":ds_to_ncore",
+        "@rules_python//python/runfiles",
+    ],
+)
+
+################################################################
+# DS to NCore Image Rules
+################################################################
+
+# Add the version file as a separate tar layer
+pkg_tar(
+    name = "run_version_file_yaml_tar",
+    srcs = [
+        "//bazel/version:version_file_yaml",  # required to report version from within run
+    ],
+    compressor = "@pigz//:pigz",
+    extension = "tar.gz",
+    package_dir = "/",
+    tags = [
+        "manual",
+        "no-remote-cache",
+    ],
+)
+
+py_image_layer(
+    name = "ds_to_ncore_image_layer",
+    binary = "ds_to_ncore",
+    compressor = "@pigz//:pigz",
+    compressor_args = "-n",
+    layer_groups = default_layer_groups(),
+    root = "/app/",
+    tags = [
+        "manual",
+        "no-remote-cache",
+    ],
+)
+
+oci_image(
+    name = "ds_to_ncore_image_oci",
+    base = "@nre_run_image_oci",
+    entrypoint = ["/app/internal/scripts/ds_to_ncore/ds_to_ncore"],
+    tags = [
+        "manual",
+        "no-remote-cache",
+    ],
+    tars = [
+        ":ds_to_ncore_image_layer",
+        ":run_version_file_yaml_tar",  # put last in the list of tar files to make this the last / often changing layer
+    ],
+    workdir = "/app/internal/scripts/ds_to_ncore/ds_to_ncore.runfiles/_main",
+)
+
+# Build the image and load it into a local runtime:
+# $ bazel run //internal/scripts/ds_to_ncore:load_ds_to_ncore_image_oci
+# $ docker run -it --rm --gpus all nvcr.io/nvidian/ct-toronto-ai/ds_to_ncore_dev:latest
+oci_load(
+    name = "load_ds_to_ncore_image_oci",
+    image = ":ds_to_ncore_image_oci",
+    repo_tags = ["nvcr.io/nvidian/ct-toronto-ai/ds_to_ncore_dev:latest"],
+    tags = [
+        "manual",
+        "no-remote-cache",
+    ],
+)
+
+oci_push(
+    name = "push_ds_to_ncore_image_oci",
+    image = ":ds_to_ncore_image_oci",
+    repository = "nvcr.io/nvidian/ct-toronto-ai/ds_to_ncore_dev",
+    tags = [
+        "manual",
+        "no-remote-cache",
+    ],
+)
+
+mypy_test(
+    name = "ds_to_ncore_mypy",
+    timeout = "long",
+    deps = [
+        ":ds_to_ncore",
+        ":ds_to_ncore_test",
+    ],
+)

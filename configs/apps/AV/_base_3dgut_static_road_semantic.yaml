@@ -1,0 +1,10 @@
+# @package _global_
+# Owner: Sipeng Zhang
+
+defaults:
+  - /apps/AV/_base_3dgut_static.yaml
+  - /model/gaussians/extra_signal@model.layers.background.extra_signal: [semantic_logits]
+  - /model/gaussians/extra_signal@model.layers.road.extra_signal: [semantic_logits]
+  - override /model: gaussians/composite/static_gaussians_road
+  - override /model/background: sky_env_map
+  - override /loss: gaussians_av_road_semantic

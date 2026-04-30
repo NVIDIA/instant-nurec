@@ -1,0 +1,31 @@
+# @package _global_
+# order in which configs override each other (/* - denotes a relative search path)
+defaults:
+  - /apps/AV/NV/3dgut_dynamic_mcmc.yaml
+  - /model/gaussians/extra_signal@model.layers.background.extra_signal: [intensity, raydrop]
+  - /model/gaussians/extra_signal@model.layers.dynamic_rigids.extra_signal: [intensity, raydrop]
+  - /model/gaussians/extra_signal@model.layers.dynamic_deformables.extra_signal: [intensity, raydrop]
+  - override /system: nrend_test_gaussians
+  - override /model/post_processing@model.post_processing.b: ppisp
+  - override /model/post_processing@model.post_processing.c: null
+
+model:
+  layers:
+    background:
+      particle:
+        lidar_extra_signal_sph_degree: 3
+    dynamic_rigids:
+      particle:
+        lidar_extra_signal_sph_degree: 3
+    dynamic_deformables:
+      particle:
+        lidar_extra_signal_sph_degree: 3
+
+dataset:
+  val_lidar: true
+
+system:
+  test:
+    nrend:
+      enabled: True
+      log_level: 4

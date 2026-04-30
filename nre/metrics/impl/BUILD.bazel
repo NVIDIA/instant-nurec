@@ -1,0 +1,235 @@
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+load("@nre_pip_deps//:requirements.bzl", pip_requirement = "requirement")
+load("@rules_python//python:defs.bzl", "py_library")
+load("//bazel/pytest:defs.bzl", "pytest_test")
+
+DEFAULT_VISIBILITY = [
+    "//:core_package_group",
+    "//bazel/docs:__pkg__",
+]
+
+package(default_visibility = DEFAULT_VISIBILITY)
+
+filegroup(
+    name = "py_files",
+    srcs = glob(["**/*.py"]),
+    visibility = [
+        "//internal/scripts/pycena:__pkg__",
+    ],
+)
+
+py_library(
+    name = "pylib",
+    srcs = [
+        "cpsnr.py",
+        "drift.py",
+        "factory.py",
+        "fcs_adaptive.py",
+        "fid.py",
+        "higher_order_moments.py",
+        "lidar_common.py",
+        "lpips.py",
+        "ntd.py",
+        "object_level_perceptual.py",
+        "object_level_semantic.py",
+        "perceptual.py",
+        "psnr.py",
+        "ssim.py",
+        "temporal_coherence.py",
+    ],
+    visibility = DEFAULT_VISIBILITY + [
+        # Add visibility for //internal/scripts/bench
+        "//internal/scripts/bench:__pkg__",
+    ],
+    deps = [
+        pip_requirement("torchmetrics"),
+        pip_requirement("torch"),
+        pip_requirement("point_cloud_utils"),
+        pip_requirement("numpy"),
+        pip_requirement("scipy"),
+        pip_requirement("scikit-learn"),
+        pip_requirement("transformers"),
+        pip_requirement("pillow"),
+        "//nre/datasets:pylib",
+        "//nre/metrics:pylib_metric",
+        "//nre/metrics:pylib_utils",
+        "//nre/metrics/impl/utils:pylib",
+        "//nre/utils:pylib",
+        "//nre/utils:pylib_types",
+    ],
+)
+
+pytest_test(
+    name = "ssim_test",
+    size = "medium",
+    srcs = [
+        "ssim_test.py",
+    ],
+    deps = [
+        ":pylib",
+        "//nre/metrics:pylib_utils",
+    ],
+)
+
+pytest_test(
+    name = "lpips_test",
+    size = "medium",
+    srcs = [
+        "lpips_test.py",
+    ],
+    deps = [
+        ":pylib",
+        "//nre/metrics:pylib_utils",
+    ],
+)
+
+pytest_test(
+    name = "psnr_test",
+    size = "medium",
+    srcs = [
+        "psnr_test.py",
+    ],
+    deps = [
+        ":pylib",
+        "//nre/metrics:pylib_utils",
+    ],
+)
+
+pytest_test(
+    name = "cpsnr_test",
+    size = "medium",
+    srcs = [
+        "cpsnr_test.py",
+    ],
+    deps = [
+        ":pylib",
+    ],
+)
+
+pytest_test(
+    name = "factory_test",
+    size = "medium",
+    srcs = [
+        "factory_test.py",
+    ],
+    deps = [
+        ":pylib",
+    ],
+)
+
+pytest_test(
+    name = "fid_test",
+    size = "medium",
+    srcs = [
+        "fid_test.py",
+    ],
+    deps = [
+        ":pylib",
+        "//nre/metrics:pylib_utils",
+    ],
+)
+
+pytest_test(
+    name = "perceptual_test",
+    size = "medium",
+    srcs = [
+        "perceptual_test.py",
+    ],
+    deps = [
+        ":pylib",
+        "//nre/metrics:pylib_utils",
+    ],
+)
+
+pytest_test(
+    name = "drift_test",
+    size = "medium",
+    srcs = [
+        "drift_test.py",
+    ],
+    deps = [
+        ":pylib",
+        "//nre/metrics:pylib_utils",
+    ],
+)
+
+pytest_test(
+    name = "temporal_coherence_test",
+    size = "medium",
+    srcs = [
+        "temporal_coherence_test.py",
+    ],
+    deps = [
+        ":pylib",
+        "//nre/metrics:pylib_utils",
+    ],
+)
+
+pytest_test(
+    name = "ntd_test",
+    size = "medium",
+    srcs = [
+        "ntd_test.py",
+    ],
+    deps = [
+        ":pylib",
+        "//nre/metrics:pylib_utils",
+    ],
+)
+
+pytest_test(
+    name = "higher_order_moments_test",
+    size = "medium",
+    srcs = [
+        "higher_order_moments_test.py",
+    ],
+    deps = [
+        ":pylib",
+        "//nre/metrics:pylib_utils",
+    ],
+)
+
+pytest_test(
+    name = "fcs_adaptive_test",
+    size = "medium",
+    srcs = [
+        "fcs_adaptive_test.py",
+    ],
+    deps = [
+        ":pylib",
+        "//nre/metrics:pylib_utils",
+    ],
+)
+
+pytest_test(
+    name = "object_level_semantic_test",
+    size = "medium",
+    srcs = [
+        "object_level_semantic_test.py",
+    ],
+    deps = [
+        ":pylib",
+        "//nre/metrics:pylib_utils",
+    ],
+)
+
+pytest_test(
+    name = "object_level_perceptual_test",
+    size = "medium",
+    srcs = [
+        "object_level_perceptual_test.py",
+    ],
+    deps = [
+        ":pylib",
+        "//nre/metrics:pylib_utils",
+    ],
+)

@@ -1,0 +1,122 @@
+defaults:
+  - _self_
+  - profiling@profiling.params
+  - prober
+  - /logger: wandb
+  - /sensor: lidar_model
+  - override hydra/hydra_logging: disabled
+  - override hydra/job_logging: disabled
+
+seed: 42
+mode: trainval
+
+# PyTorch matmul precision setting for better performance on Tensor Core devices
+# Valid values: "highest" (default), "high", "medium"
+matmul_precision: medium
+
+# Resume should be set to the name of the checkpoint e.g. "last.ckpt" or "epoch=4.ckpt" (".ckpt" extension can also be omitted).
+# The path to the checkpoint will be automatically deduced from the parsed config location
+resume: null
+resume_weights_only: false
+verbose: false
+force_validate: false
+
+out_dir: ???
+
+checkpoint:
+  every_n_train_steps: 1000
+  save_top_k: 1
+  monitor: 'train/psnr'
+  mode: 'max'
+  save_on_train_epoch_end: true
+  save_on_preemption: false
+
+  artifact:
+    enabled: false
+    checkpoint:
+      enabled: true
+    mesh:
+      generic: # Settings for generic Poisson meshing on the full point cloud
+        enabled: false
+        formats: ['ply', 'usd'] # Output formats. Any subset of ['ply', 'usd'].
+        step_frame: 1     # Frame step for point cloud generation
+        lidar_ids: null   # LiDARs to use for point cloud generation, first LiDAR if null
+        camera_ids: null  # Cameras to use for point cloud generation, first point-cloud-capable camera if null
+        max_num_points: null  # Optional limit to the number of points fed to meshing, based on random subsampling
+        n_neighbors: 200  # Point cloud k-NNs used to compute normals prior to meshing
+        trim_distance: 0.225  # Vertex-to-2nd-nearest-point distance threshold for mesh trimming
+        smooth: false     # Whether to apply a rig-trajectory-based smoothing to the Poisson mesh
+        apply_road_segmentation: false  # Transfer point cloud road/non-road labels to the mesh
+        export_disjoint_meshes: false # Export mesh road/non-road mesh segments into separate files
+      ground: # Settings for plane-based road segmentation andground meshing (based on Delaunay triangulation)
+        enabled: false
+        formats: ['ply', 'usd'] # Output formats. Any subset of ['ply', 'usd'].
+        step_frame: 1   # Frame step for point cloud generation
+        lidar_ids: null   # LiDARs to use for point cloud generation, first LiDAR if null
+        camera_ids: null  # Cameras to use for point cloud generation, first point-cloud-capable camera if null
+        min_ray_length: 0.1
+        ground_compat_max_distance: 0.5
+        ground_compat_max_angle_deg: 60.0
+        num_plane_hypotheses: 100
+        plane_max_distance: 0.3
+        plane_max_angle_deg: 30
+        plane_min_eval_points: 1000
+        plane_max_eval_points: 10000
+        plane_min_inliers: 1000
+        enable_plane_extension: false
+        voxel_size: 0.1
+        min_points_per_voxel: 1
+        smoothing_passes: 10
+        verbose: false
+
+    nrend:
+      enabled: false
+      use_legacy_model_dict: false # Export the legacy model dictionary (for OV rendering support)
+    parsed_config:
+      enabled: true
+    rig_trajectories:
+      enabled: true
+      add_default_cameras: false
+    sequence_tracks:
+      enabled: true
+      controllable_only: false
+
+viewer:
+  enabled: false
+  port: 8080
+  host: '127.0.0.1' # localhost by default, change to your dynamic address to let others view
+  remain_after_trainer_loop: false # if true, your script will not finish until keyboard interrupt and keep serving the viewer
+  # fraction of source res to render in low res (dynamic) and high res (static) views.
+  # Defaults seem to give good UX with 4k source resolution.
+  ray_subsampling_step:
+    high_resolution: 4 # 1/4th resolution
+    low_resolution: 16 # 1/6th resolution
+  n_lidar_frames_displayed: 15
+
+profiling:
+  enabled: false
+  params: ???  # see profiling.yaml for all options
+
+scopedtimer:
+  enabled: false
+  logfile: null
+  # Supported verbosity levels: NONE, SUMMARY, BASIC, DETAILS
+  verbosity: NONE
+  synchronize: false
+  # Supported profiling backends: NONE, TRACY, NVTX
+  profiling_backend: NVTX
+  # Optional step windows for backend emission
+  emit_start_step: null
+  emit_num_steps: null
+  emit_repeat_interval: null
+
+system:
+  collect_garbage_mem_usage: null # Never calls explicit garbage collection. collect_garbage_check_interval is ignored.
+  collect_garbage_check_interval: 10000
+
+hydra:
+  output_subdir: null
+  job:
+    chdir: false
+  run:
+    dir: .

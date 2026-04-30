@@ -1,0 +1,44 @@
+max_epochs: 1
+log_every_n_steps: 50
+enable_progress_bar: true 
+num_sanity_val_steps: 0
+precision: 16
+plugins: []
+check_val_every_n_epoch: 1
+num_nodes: 1
+# Total number of parallel batch processors in distributed training.
+# Typically set to the number of GPUs used for parallel training,
+# as each batch is typically dispatched to one GPU
+world_size: 1
+# Annealing update interval in steps used for the cosine annealing scheduler (used the be dataset.n_samples_per_epoch)
+annealing_update_every_n_steps: 1000
+
+# If true (default), scale all learning rates given in the config so that training the model with world_size > 1
+# results in a model similar to one trained with world_size == 1.
+# If false, the given learning rates are used unchanged.
+relative_lr: true
+
+# If true (default), scale the training schedule specified in the config to compensate for scaled steps per epoch due to world_size > 2.
+# If false, the defined training schedule are used unchanged.
+relative_schedule: true  
+
+# If true (default), scale the number of workers schedule specified in the
+#   config to compensate for increased number of subprocesses spawned by pytorch
+#   lightning when world_size > 1.
+# If false, the defined training schedule are used unchanged.
+relative_num_workers: true
+
+# Enable PyTorch Lightning's built-in anomalies detection
+# When enabled, the trainer will detect and handle training anomalies like NaN/Inf values during training
+detect_anomaly: false
+
+# This is a scaling factor that is useful for tuning the effective batch size for distributed training.
+batch_size_scaling_factor: 1.0
+
+# This is a scaling factor that is useful for tuning the effective number of training steps for distributed training.
+training_step_scaling_factor: 1.0
+
+# NCCL timeout for distributed training collective operations (in minutes)
+# Increase this if you encounter timeout errors during distributed training
+# Default is 30 minutes. For long-running operations, consider increasing to 60 or 120 minutes
+nccl_timeout_minutes: 30

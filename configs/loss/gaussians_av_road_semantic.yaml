@@ -1,0 +1,33 @@
+defaults:
+  - gaussians_av
+
+semantic:
+  lambda_: 0.001
+road_gaussians:
+  fn: abs
+  reduce:
+    name: mean
+  layer_name: road
+  n_samples: 10
+  grid_len: 0.2
+  range: 4
+  min: 2
+  rotation_lambda: 10
+  lambda_: 1
+node_semantic_gaussians:
+  fn: bce_with_logits
+  reduce:
+    name: mean
+  layer_labels_to_use:
+    road: [road]
+  layer_labels_to_exclude:
+    background: [road]
+  start_step: ${loss.semantic.start_step}  
+  lambda_: 1
+gaussian_z_scale:
+  fn: abs
+  reduce:
+    name: mean
+  layer_name: road
+  road_z_scale: 0.001
+  lambda_: 1

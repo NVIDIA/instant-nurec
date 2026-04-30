@@ -1,0 +1,229 @@
+# @package _global_
+# Owner: Haithem Turki
+
+# order in which configs override each other (/* - denotes a relative search path)
+defaults:
+  - /experimental/asset_harvesting/3dgut_base.yaml
+  - /model/gaussians/models@model.layers.loaded_ply_assets: rigid_gaussians
+  - /model/gaussians/initialization@model.layers.loaded_ply_assets.initialization: ply_tracks
+  - /model/tracks_calib@model.layers.loaded_ply_assets.tracks_calib: direct
+  - override /model/gaussians/initialization@model.layers.background.initialization: ply
+  - override /model/gaussians/initialization@model.layers.dynamic_rigids.initialization: ply_tracks
+  - override /model/gaussians/initialization@model.layers.dynamic_deformables.initialization: ply_tracks
+
+model:
+  layers:
+    background:
+      optimizer:
+        name: fused_adam
+        params:
+          positions:
+            args:
+              lr: 0
+          densities:
+            args:
+              lr: 0
+          features_albedo:
+            args:
+              lr: 0
+          features_specular:
+            args:
+              lr: 0
+          rotations:
+            args:
+              lr: 0
+          scales:
+            args:
+              lr: 0
+      initialization:
+        path: /lustre/fsw/portfolios/nvr/users/hturki/asset-harvesting/3dgut-8-objects-3-cam-12-s/plys/background/model.ply
+    loaded_ply_assets:
+      optimizer:
+        name: fused_adam
+        params:
+          positions:
+            args:
+              lr: 0
+          densities:
+            args:
+              lr: 0
+          features_albedo:
+            args:
+              lr: 0
+          features_specular:
+            args:
+              lr: 0
+          rotations:
+            args:
+              lr: 0
+          scales:
+            args:
+              lr: 0
+      particle:
+        density_kernel_degree: 2
+        density_kernel_min_response: 0
+      optimize_track_albedo: true
+      optimize_track_scale: true
+      tracks:
+        ids:
+          - 2650a12d36146ad4ab44ad4fc6bb77f59fa487f4
+          - 2863d7ae605104eeef364e3f164d3404e20f680c
+          - 371822d2fa85504960f9581cfaeae6e7059bab61
+          - 6676319c523479160a1952182ce1f8ce29b48b65
+          - 6f751b16b8d2edbd6d389c5ba0ada75d78f184d6
+          - 7969dc00956d339734564618b8a71b3652ac0483
+          - 98a4760ee296bfed020d6e2da742a44e7368f0ea
+          - a9412422c11252f60268edc332c9efaf8a40f6e7
+        is_dynamic: true
+      initialization:
+        track_ids:
+          2650a12d36146ad4ab44ad4fc6bb77f59fa487f4: /lustre/fsw/portfolios/nvr/users/hturki/asset-harvesting/8_dancing_cars.pkl_nv4/2650a12d36146ad4ab44ad4fc6bb77f59fa487f4/gs.ply
+          2863d7ae605104eeef364e3f164d3404e20f680c: /lustre/fsw/portfolios/nvr/users/hturki/asset-harvesting/8_dancing_cars.pkl_nv4/2863d7ae605104eeef364e3f164d3404e20f680c/gs.ply
+          371822d2fa85504960f9581cfaeae6e7059bab61: /lustre/fsw/portfolios/nvr/users/hturki/asset-harvesting/8_dancing_cars.pkl_nv4/371822d2fa85504960f9581cfaeae6e7059bab61/gs.ply
+          6676319c523479160a1952182ce1f8ce29b48b65: /lustre/fsw/portfolios/nvr/users/hturki/asset-harvesting/8_dancing_cars.pkl_nv4/6676319c523479160a1952182ce1f8ce29b48b65/gs.ply
+          6f751b16b8d2edbd6d389c5ba0ada75d78f184d6: /lustre/fsw/portfolios/nvr/users/hturki/asset-harvesting/8_dancing_cars.pkl_nv4/6f751b16b8d2edbd6d389c5ba0ada75d78f184d6/gs.ply
+          7969dc00956d339734564618b8a71b3652ac0483: /lustre/fsw/portfolios/nvr/users/hturki/asset-harvesting/8_dancing_cars.pkl_nv4/7969dc00956d339734564618b8a71b3652ac0483/gs.ply
+          98a4760ee296bfed020d6e2da742a44e7368f0ea: /lustre/fsw/portfolios/nvr/users/hturki/asset-harvesting/8_dancing_cars.pkl_nv4/98a4760ee296bfed020d6e2da742a44e7368f0ea/gs.ply
+          a9412422c11252f60268edc332c9efaf8a40f6e7: /lustre/fsw/portfolios/nvr/users/hturki/asset-harvesting/8_dancing_cars.pkl_nv4/a9412422c11252f60268edc332c9efaf8a40f6e7/gs.ply
+    dynamic_rigids:
+      optimizer:
+        name: fused_adam
+        params:
+          positions:
+            args:
+              lr: 0
+          densities:
+            args:
+              lr: 0
+          features_albedo:
+            args:
+              lr: 0
+          features_specular:
+            args:
+              lr: 0
+          rotations:
+            args:
+              lr: 0
+          scales:
+            args:
+              lr: 0
+      tracks:
+        ids:
+          - 136a72d2b5ccfbe155304a3a09493e6ee840732e
+          - 2cae362ea72a40b6ac70fb7efd8186d153f6bdb6
+          - 2d22ac1d42e6187f09ee6c578df187a760123ccf
+          - 2f5fccc7b5fc2d41bbc3e1e469655f24f540e383
+          - 35c4c9c9a4a095528bf4d3bcbfc2d78b83bb3ae1
+          - 3d2d45d4b3f9c8fcd7d9417d5d99a1b5a894ec42
+          - 42271387fd9aeff9e75d653d2f08c7da3e3d8ec6
+          - 464cdd91c81952d73c2501ec3c9f04c7cfdbeb5f
+          - 46d3e59de07a6aac6b2078c35aa4c16a03d10df3
+          - 534f4e13fb5a6938a83a9b6d419b4447d7e3e3b4
+          - 5c1db421da9732ec803cb70434c6f7689b755cb7
+          - 732217de58820ef4dc0353a910df674a58084629
+          - 795ea5cadaa829b1f37d3eb5b17e1e33fc8368fc
+          - 798a64f7e4115b0af4cc5f226e0ec1cc17008d79
+          - 802e3f8209166abf8be5d54be8e47aadc4b20d19
+          - 827905cfdf507d19fd1622a61d56c8dccf0a95b5
+          - 85c1632decc4f842f062b7481a8d10ce40c8fa50
+          - 8671f18a267681cee5cd948bc533e9825ed664c9
+          - 8aa80f7daf9fea98a5be5f6fe2e1c08a73e8474f
+          - 979014556ab8cdd13048702896fb99fcc40fe793
+          - 9989190094e077edacfbde7d42a307ac8c0a62a1
+          - a464de5c0abc61c62198c3a95152b3ff527baec8
+          - b97f63cdb32dbbaef957da68bb7639d3129df174
+          - c54515459d02d43144208e18f4c8acd73e3aa144
+          - cde06ed09d69b48dac7fbecb51e1907083c0fba1
+          - d6cf95f640fff6e9912a1ee27539e0423daab74c
+          - d8fd4a140ee61a241d078da8d7a96f10c172a6bd
+          - e3479c19053568ce27fcc573669d61191419b296
+          - f76d9909d5e11245bd28024f0b4d8c01d224608b
+      initialization:
+        transform: [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
+        scale_to_track: false
+        track_ids:
+          136a72d2b5ccfbe155304a3a09493e6ee840732e: /lustre/fsw/portfolios/nvr/users/hturki/asset-harvesting/3dgut-8-objects-3-cam-12-s/plys/dynamic_rigids/136a72d2b5ccfbe155304a3a09493e6ee840732e.ply
+          2cae362ea72a40b6ac70fb7efd8186d153f6bdb6: /lustre/fsw/portfolios/nvr/users/hturki/asset-harvesting/3dgut-8-objects-3-cam-12-s/plys/dynamic_rigids/2cae362ea72a40b6ac70fb7efd8186d153f6bdb6.ply
+          2d22ac1d42e6187f09ee6c578df187a760123ccf: /lustre/fsw/portfolios/nvr/users/hturki/asset-harvesting/3dgut-8-objects-3-cam-12-s/plys/dynamic_rigids/2d22ac1d42e6187f09ee6c578df187a760123ccf.ply
+          2f5fccc7b5fc2d41bbc3e1e469655f24f540e383: /lustre/fsw/portfolios/nvr/users/hturki/asset-harvesting/3dgut-8-objects-3-cam-12-s/plys/dynamic_rigids/2f5fccc7b5fc2d41bbc3e1e469655f24f540e383.ply
+          35c4c9c9a4a095528bf4d3bcbfc2d78b83bb3ae1: /lustre/fsw/portfolios/nvr/users/hturki/asset-harvesting/3dgut-8-objects-3-cam-12-s/plys/dynamic_rigids/35c4c9c9a4a095528bf4d3bcbfc2d78b83bb3ae1.ply
+          3d2d45d4b3f9c8fcd7d9417d5d99a1b5a894ec42: /lustre/fsw/portfolios/nvr/users/hturki/asset-harvesting/3dgut-8-objects-3-cam-12-s/plys/dynamic_rigids/3d2d45d4b3f9c8fcd7d9417d5d99a1b5a894ec42.ply
+          42271387fd9aeff9e75d653d2f08c7da3e3d8ec6: /lustre/fsw/portfolios/nvr/users/hturki/asset-harvesting/3dgut-8-objects-3-cam-12-s/plys/dynamic_rigids/42271387fd9aeff9e75d653d2f08c7da3e3d8ec6.ply
+          464cdd91c81952d73c2501ec3c9f04c7cfdbeb5f: /lustre/fsw/portfolios/nvr/users/hturki/asset-harvesting/3dgut-8-objects-3-cam-12-s/plys/dynamic_rigids/464cdd91c81952d73c2501ec3c9f04c7cfdbeb5f.ply
+          46d3e59de07a6aac6b2078c35aa4c16a03d10df3: /lustre/fsw/portfolios/nvr/users/hturki/asset-harvesting/3dgut-8-objects-3-cam-12-s/plys/dynamic_rigids/46d3e59de07a6aac6b2078c35aa4c16a03d10df3.ply
+          534f4e13fb5a6938a83a9b6d419b4447d7e3e3b4: /lustre/fsw/portfolios/nvr/users/hturki/asset-harvesting/3dgut-8-objects-3-cam-12-s/plys/dynamic_rigids/534f4e13fb5a6938a83a9b6d419b4447d7e3e3b4.ply
+          5c1db421da9732ec803cb70434c6f7689b755cb7: /lustre/fsw/portfolios/nvr/users/hturki/asset-harvesting/3dgut-8-objects-3-cam-12-s/plys/dynamic_rigids/5c1db421da9732ec803cb70434c6f7689b755cb7.ply
+          732217de58820ef4dc0353a910df674a58084629: /lustre/fsw/portfolios/nvr/users/hturki/asset-harvesting/3dgut-8-objects-3-cam-12-s/plys/dynamic_rigids/732217de58820ef4dc0353a910df674a58084629.ply
+          795ea5cadaa829b1f37d3eb5b17e1e33fc8368fc: /lustre/fsw/portfolios/nvr/users/hturki/asset-harvesting/3dgut-8-objects-3-cam-12-s/plys/dynamic_rigids/795ea5cadaa829b1f37d3eb5b17e1e33fc8368fc.ply
+          798a64f7e4115b0af4cc5f226e0ec1cc17008d79: /lustre/fsw/portfolios/nvr/users/hturki/asset-harvesting/3dgut-8-objects-3-cam-12-s/plys/dynamic_rigids/798a64f7e4115b0af4cc5f226e0ec1cc17008d79.ply
+          802e3f8209166abf8be5d54be8e47aadc4b20d19: /lustre/fsw/portfolios/nvr/users/hturki/asset-harvesting/3dgut-8-objects-3-cam-12-s/plys/dynamic_rigids/802e3f8209166abf8be5d54be8e47aadc4b20d19.ply
+          827905cfdf507d19fd1622a61d56c8dccf0a95b5: /lustre/fsw/portfolios/nvr/users/hturki/asset-harvesting/3dgut-8-objects-3-cam-12-s/plys/dynamic_rigids/827905cfdf507d19fd1622a61d56c8dccf0a95b5.ply
+          85c1632decc4f842f062b7481a8d10ce40c8fa50: /lustre/fsw/portfolios/nvr/users/hturki/asset-harvesting/3dgut-8-objects-3-cam-12-s/plys/dynamic_rigids/85c1632decc4f842f062b7481a8d10ce40c8fa50.ply
+          8671f18a267681cee5cd948bc533e9825ed664c9: /lustre/fsw/portfolios/nvr/users/hturki/asset-harvesting/3dgut-8-objects-3-cam-12-s/plys/dynamic_rigids/8671f18a267681cee5cd948bc533e9825ed664c9.ply
+          8aa80f7daf9fea98a5be5f6fe2e1c08a73e8474f: /lustre/fsw/portfolios/nvr/users/hturki/asset-harvesting/3dgut-8-objects-3-cam-12-s/plys/dynamic_rigids/8aa80f7daf9fea98a5be5f6fe2e1c08a73e8474f.ply
+          979014556ab8cdd13048702896fb99fcc40fe793: /lustre/fsw/portfolios/nvr/users/hturki/asset-harvesting/3dgut-8-objects-3-cam-12-s/plys/dynamic_rigids/979014556ab8cdd13048702896fb99fcc40fe793.ply
+          9989190094e077edacfbde7d42a307ac8c0a62a1: /lustre/fsw/portfolios/nvr/users/hturki/asset-harvesting/3dgut-8-objects-3-cam-12-s/plys/dynamic_rigids/9989190094e077edacfbde7d42a307ac8c0a62a1.ply
+          a464de5c0abc61c62198c3a95152b3ff527baec8: /lustre/fsw/portfolios/nvr/users/hturki/asset-harvesting/3dgut-8-objects-3-cam-12-s/plys/dynamic_rigids/a464de5c0abc61c62198c3a95152b3ff527baec8.ply
+          b97f63cdb32dbbaef957da68bb7639d3129df174: /lustre/fsw/portfolios/nvr/users/hturki/asset-harvesting/3dgut-8-objects-3-cam-12-s/plys/dynamic_rigids/b97f63cdb32dbbaef957da68bb7639d3129df174.ply
+          c54515459d02d43144208e18f4c8acd73e3aa144: /lustre/fsw/portfolios/nvr/users/hturki/asset-harvesting/3dgut-8-objects-3-cam-12-s/plys/dynamic_rigids/c54515459d02d43144208e18f4c8acd73e3aa144.ply
+          cde06ed09d69b48dac7fbecb51e1907083c0fba1: /lustre/fsw/portfolios/nvr/users/hturki/asset-harvesting/3dgut-8-objects-3-cam-12-s/plys/dynamic_rigids/cde06ed09d69b48dac7fbecb51e1907083c0fba1.ply
+          d6cf95f640fff6e9912a1ee27539e0423daab74c: /lustre/fsw/portfolios/nvr/users/hturki/asset-harvesting/3dgut-8-objects-3-cam-12-s/plys/dynamic_rigids/d6cf95f640fff6e9912a1ee27539e0423daab74c.ply
+          d8fd4a140ee61a241d078da8d7a96f10c172a6bd: /lustre/fsw/portfolios/nvr/users/hturki/asset-harvesting/3dgut-8-objects-3-cam-12-s/plys/dynamic_rigids/d8fd4a140ee61a241d078da8d7a96f10c172a6bd.ply
+          e3479c19053568ce27fcc573669d61191419b296: /lustre/fsw/portfolios/nvr/users/hturki/asset-harvesting/3dgut-8-objects-3-cam-12-s/plys/dynamic_rigids/e3479c19053568ce27fcc573669d61191419b296.ply
+          f76d9909d5e11245bd28024f0b4d8c01d224608b: /lustre/fsw/portfolios/nvr/users/hturki/asset-harvesting/3dgut-8-objects-3-cam-12-s/plys/dynamic_rigids/f76d9909d5e11245bd28024f0b4d8c01d224608b.ply
+    dynamic_deformables:
+      optimizer:
+        name: fused_adam
+        params:
+          positions:
+            args:
+              lr: 0
+          densities:
+            args:
+              lr: 0
+          features_albedo:
+            args:
+              lr: 0
+          features_specular:
+            args:
+              lr: 0
+          rotations:
+            args:
+              lr: 0
+          scales:
+            args:
+              lr: 0
+      tracks:
+        ids:
+          - 3bfe375dd1f702aa715048b239063f191a619583
+          - 5c6d9f025873ec66d3401dfbdb78d9f009ecd306
+          - 9270ef04bcf46fd89b1a3fc6622dae8f87858e55
+          - 5a7e7745847673577d8920192440042be8c9b385
+          - 81208260a5bfa15d22a8a159f8610ccce1bc8f45
+          - aec0f8f62c9a2434e6aaea6d069047b6de20ca73
+        is_dynamic: true
+      initialization:
+        transform: [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
+        scale_to_track: false
+        track_ids:
+          3bfe375dd1f702aa715048b239063f191a619583: /lustre/fsw/portfolios/nvr/users/hturki/asset-harvesting/3dgut-8-objects-3-cam-12-s/plys/dynamic_deformables/3bfe375dd1f702aa715048b239063f191a619583.ply
+          5c6d9f025873ec66d3401dfbdb78d9f009ecd306: /lustre/fsw/portfolios/nvr/users/hturki/asset-harvesting/3dgut-8-objects-3-cam-12-s/plys/dynamic_deformables/5c6d9f025873ec66d3401dfbdb78d9f009ecd306.ply
+          9270ef04bcf46fd89b1a3fc6622dae8f87858e55: /lustre/fsw/portfolios/nvr/users/hturki/asset-harvesting/3dgut-8-objects-3-cam-12-s/plys/dynamic_deformables/9270ef04bcf46fd89b1a3fc6622dae8f87858e55.ply
+          5a7e7745847673577d8920192440042be8c9b385: /lustre/fsw/portfolios/nvr/users/hturki/asset-harvesting/3dgut-8-objects-3-cam-12-s/plys/dynamic_deformables/5a7e7745847673577d8920192440042be8c9b385.ply
+          81208260a5bfa15d22a8a159f8610ccce1bc8f45: /lustre/fsw/portfolios/nvr/users/hturki/asset-harvesting/3dgut-8-objects-3-cam-12-s/plys/dynamic_deformables/81208260a5bfa15d22a8a159f8610ccce1bc8f45.ply
+          aec0f8f62c9a2434e6aaea6d069047b6de20ca73: /lustre/fsw/portfolios/nvr/users/hturki/asset-harvesting/3dgut-8-objects-3-cam-12-s/plys/dynamic_deformables/aec0f8f62c9a2434e6aaea6d069047b6de20ca73.ply
+  strategy:
+    exclude_layer_ids:
+      - loaded_ply_assets
+      - background
+      - dynamic_deformables
+      - dynamic_rigids
+
+dataset:
+  n_samples_per_epoch: 5000
+
+system:
+  test:
+    val_render_selected_nodes:
+      loaded:
+        - loaded_ply_assets

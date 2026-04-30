@@ -1,0 +1,15 @@
+# Copyright (c) 2023 NVIDIA CORPORATION.  All rights reserved.
+
+# This file was the source for semantic *major* and *minor* version
+# information (currently repo-wide - this could be changed to be more
+# fine-grained in the future). 
+# Now semantic is year-month based via major==year and minor=month.
+#
+# Semantic *patch* versions are derived _automatically_
+# based on the number of merge requests merged since this file
+# was last modified. Hence, any change to this file will trigger
+# a reset of the reported *patch* version, so changes need to be
+# performed carefully
+
+VERSION_MAJOR=26
+VERSION_MINOR=5

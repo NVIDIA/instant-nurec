@@ -1,0 +1,37 @@
+# from {{ tool.import_path }} import {{ tool.import_symbol }} as {{ tool.import_alias | default(tool.import_symbol) }}
+tools:
+  - name: "ncore-aux-data"
+    import_path: "apps.aux_gen.ncore_aux_data"
+    import_symbol: "cli"
+    import_alias: "ncore_aux_data_cli"
+    obfuscation_modules:
+      - mod: nre
+        mod_dir: nre
+      - mod: apps
+        mod_dir: apps
+      - mod: libs
+        mod_dir: libs
+      - mod: internal
+        mod_dir: internal
+  - name: "mask-annotator"
+    import_path: "apps.avmask_annotator.mask_annotator"
+    import_symbol: "run_mask_annotator"
+    obfuscation_modules:
+      - mod: nre
+        mod_dir: nre
+      - mod: apps
+        mod_dir: apps
+      - mod: internal
+        mod_dir: internal
+  - name: "asset-harvester"
+    import_path: "apps.asset_harvester.asset_harvest"
+    import_symbol: "asset_harvest"
+    obfuscation_modules:
+      - mod: nre
+        mod_dir: nre
+      - mod: apps
+        mod_dir: apps
+      - mod: libs
+        mod_dir: libs
+      - mod: internal
+        mod_dir: internal

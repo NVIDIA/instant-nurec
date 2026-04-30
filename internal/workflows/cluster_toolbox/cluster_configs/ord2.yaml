@@ -1,0 +1,27 @@
+# @package _global_
+
+defaults:
+  - ord
+  - _self_
+
+server: "oci-ord-cs-002-login-01.nvidia.com" # login server
+
+# Use AV account and storage space.
+team: "av_alpamayo_cosmos"
+exec_path:
+  remote: "/lustre/fsw/portfolios/av/users/${user}/nre_experiments"
+
+partition:
+  - batch_block-h100
+
+# Default environment variables for H100 partition
+default_env_vars:
+  NCCL_IB_DISABLE: "1"
+  NCCL_SOCKET_IFNAME: "eth0"
+  NCCL_SOCKET_FAMILY: "4"
+  NCCL_SOCKET_NTHREADS: "4"
+  NCCL_NSOCKS_PERTHREAD: "4"
+  NCCL_NET_GDR_LEVEL: "PHB"
+  NCCL_CROSS_NIC: "1"
+  NCCL_TIMEOUT: "1800"
+  TORCH_NCCL_ASYNC_ERROR_HANDLING: "1"

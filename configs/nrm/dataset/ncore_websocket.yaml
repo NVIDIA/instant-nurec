@@ -1,0 +1,7 @@
+defaults:
+  - ncore
+
+name: nrm-websocket-ncore
+
+ws_server_addr: ???
+ws_server_port: 7000

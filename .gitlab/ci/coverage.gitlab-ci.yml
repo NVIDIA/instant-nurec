@@ -1,0 +1,68 @@
+# Copyright (c) 2025-2026 NVIDIA CORPORATION.  All rights reserved.
+
+coverage:
+  extends: .bazel_test
+  stage: build
+  tags:
+    - type/docker
+    - os/linux
+    - arch/x86_64
+    - gpu
+    - 2_gpus
+  script:
+    # Run tests and generate a HTML coverage report
+    # For performance's sake this command limits Bazel to processing "real" test targets, for instance static analysis checks are skipped
+    - bazelisk coverage $(bazelisk query 'kind(".*_test rule", //...) except (attr("name", "^_|^requirements_|_mypy$", //...) + attr("tags", "manual", //...))')
+    - genhtml --title "NRE Coverage Report - Version ${VERSION_STRING}" --output coverage bazel-out/_coverage/_coverage_report.dat || ( rm -rf coverage; exit 1 )
+  artifacts:
+    paths:
+      - bazel-telemetry/
+      - testlogs/
+      - coverage/
+    expose_as: "Bazel test logs and coverage report"
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH # Run automatically on the main branch
+    - if: $CI_COMMIT_BRANCH =~ /^release\/[0-9]{2}\.(0[1-9]|1[0-2])/ # Run automatically on release branches
+      allow_failure: false # Block pipeline on failure for release branches
+    - if: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME =~ /^release\/[0-9]{2}\.(0[1-9]|1[0-2])/ # Run automatically on MRs targeting release branches
+      allow_failure: false # Block pipeline on failure for MRs targeting release branches
+    - when: manual # Run manually on all other branches/commits
+  allow_failure: true # Don't block pipeline if manual job isn't triggered or fails on main
+
+
+combined_coverage:
+  extends: .bazel_test
+  stage: build
+  tags:
+    - type/docker
+    - os/linux
+    - arch/x86_64
+    - gpu
+    - 2_gpus
+  timeout: 8h
+  script:
+    - |
+      if ! grep -q 'RmProfilingAdminOnly: 0' /proc/driver/nvidia/params 2>/dev/null; then
+        CURRENT=$(grep RmProfilingAdminOnly /proc/driver/nvidia/params 2>/dev/null || echo "unreadable")
+        echo "ERROR: Permissions (NVIDIA RmProfilingAdminOnly, current value: ${CURRENT}) need to be fixed on bare metal for the runner, please contact a CI admin"
+        exit 1
+      fi
+
+    # Run combined coverage script (host + device coverage, merge, post-process, generate HTML)
+    - bazelisk run //internal/scripts/cuda_coverage:run_combined_coverage -- --output-dir combined_coverage --run-long-tests
+  artifacts:
+    paths:
+      - bazel-telemetry/
+      - testlogs/
+      - combined_coverage/
+      - test_miss_report_html/
+      - host_coverage.dat
+      - device_coverage.dat
+    expose_as: "Bazel test logs and coverage report"
+  rules:
+    # run CUDA combined coverage weekly on Saturdays
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $SCHEDULE_TYPE == "weekly_saturday"
+      when: on_success
+    - when: manual
+  allow_failure: true
+

@@ -1,0 +1,46 @@
+--- a/nvidia/__init__.py
++++ b/nvidia/__init__.py
+@@ -1,16 +0,0 @@
+-# SPDX-FileCopyrightText: Copyright (c) 2017-2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+-# SPDX-License-Identifier: Apache-2.0
+-#
+-# Licensed under the Apache License, Version 2.0 (the "License");
+-# you may not use this file except in compliance with the License.
+-# You may obtain a copy of the License at
+-#
+-# http://www.apache.org/licenses/LICENSE-2.0
+-#
+-# Unless required by applicable law or agreed to in writing, software
+-# distributed under the License is distributed on an "AS IS" BASIS,
+-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+-# See the License for the specific language governing permissions and
+-# limitations under the License.
+-
+-__path__ = __import__('pkgutil').extend_path(__path__, __name__)
+diff --git a/nvidia_nvimgcodec_cu12-0.4.1.21.dist-info/RECORD b/nvidia_nvimgcodec_cu12-0.4.1.21.dist-info/RECORD
+--- a/nvidia_nvimgcodec_cu12-0.4.1.21.dist-info/RECORD
++++ b/nvidia_nvimgcodec_cu12-0.4.1.21.dist-info/RECORD
+@@ -4,13 +4,9 @@
+ nvidia/nvimgcodec/extensions/libjpeg_turbo_ext.so.0.4.1,sha256=rPQweXaXFkfRrjK4jXRupd5q8IG8Id7SDbnXP2o3R94,663401
+ nvidia/nvimgcodec/extensions/libnvbmp_ext.so.0.4.1,sha256=NTRZnF-tG9p4Z0GG3gzHYjzt4Llszv9fmnV93DTMUNI,268865
+ nvidia/nvimgcodec/extensions/libtiff_ext.so.0.4.1,sha256=YINkiPDFfSxDwR6AIE-cuJdSmeO7S3wRGKRufvoO6S8,3019249
+-nvidia/__init__.py,sha256=cvDDd6aZOR07mDTFqaFbcuJwaOuCAqCSrTdiIVH5JJs,750
++nvidia/__init__.py,sha256=47DEQpj8HBSa-_TImW-5JCeuQeRkm5NMpJWZG3hSuFU,0
+ nvidia/nvimgcodec/__init__.py,sha256=sRLzFKUk7xWW7KqKmvLxiDImstrh9rXkk2uJbjXAdbg,962
+-nvidia_nvimgcodec_cu12-0.4.1.21.dist-info/LICENSE.txt,sha256=Qrlh6DT4gmX0pMIVkrvxL5Y2vk2HyEK-nlQoIep537s,19675
+ nvidia/nvimgcodec/extensions/libnvpnm_ext.so.0.4.1,sha256=Rkc6J5OZDeifwmu0ixam4qXA6GMN2l5MP7rDNHiP9ZE,203385
+-nvidia_nvimgcodec_cu12-0.4.1.21.dist-info/METADATA,sha256=QRYTzyKMGhslD_iZqNKoeLOhW5PH6JG0Z_lGTsrNWII,813
+-nvidia_nvimgcodec_cu12-0.4.1.21.dist-info/top_level.txt,sha256=fTkAtiFuL16nUrB9ytDDtpytz2t0B4NvYTnRzwAhO14,7
+-nvidia_nvimgcodec_cu12-0.4.1.21.dist-info/WHEEL,sha256=2FGl9dtffCwsa1FFtCVM6SiBfrK0b74-2jlQBpFe_bY,110
+ nvidia/nvimgcodec/nvimgcodec_impl.cpython-313-aarch64-linux-gnu.so,sha256=vyS-BJYZolU4GcjEGJVfzEK8MEIDpKMVhzte2QaN0wk,9445329
+ nvidia/nvimgcodec/nvimgcodec_impl.cpython-312-aarch64-linux-gnu.so,sha256=hSpSAwawak5SSn0gHmQ-85CdGxmdFvJK28gSDMoQ8fM,9445257
+ nvidia/nvimgcodec/nvimgcodec_impl.cpython-313t-aarch64-linux-gnu.so,sha256=RABj9cdvj9v0HadscWHoPGVgdbZTA629uTNoR0DVaHA,9379905
+@@ -23,4 +19,8 @@
+ nvidia/nvimgcodec/extensions/libnvjpeg_ext.so.0.4.1,sha256=RZFHtuvhc4ZsV92ULK9vQxu7KNRBCjUtjcoDhcmA1Ag,8785977
+ nvidia/nvimgcodec/extensions/libnvtiff_ext.so.0.4.1,sha256=zPdqLLDHQtvUy1sgMYkE-5v0woWUyosE9-iqJsfDqns,8653321
+ nvidia/nvimgcodec/nvimgcodec_impl.cpython-38-aarch64-linux-gnu.so,sha256=C6WuSSopA7FpHDxovfNKMznOnAlsM3dV4F45kksM_fA,9379673
++nvidia_nvimgcodec_cu12-0.4.1.21.dist-info/LICENSE.txt,sha256=Qrlh6DT4gmX0pMIVkrvxL5Y2vk2HyEK-nlQoIep537s,19675
++nvidia_nvimgcodec_cu12-0.4.1.21.dist-info/METADATA,sha256=QRYTzyKMGhslD_iZqNKoeLOhW5PH6JG0Z_lGTsrNWII,813
++nvidia_nvimgcodec_cu12-0.4.1.21.dist-info/top_level.txt,sha256=fTkAtiFuL16nUrB9ytDDtpytz2t0B4NvYTnRzwAhO14,7
++nvidia_nvimgcodec_cu12-0.4.1.21.dist-info/WHEEL,sha256=2FGl9dtffCwsa1FFtCVM6SiBfrK0b74-2jlQBpFe_bY,110
+ nvidia_nvimgcodec_cu12-0.4.1.21.dist-info/RECORD,,

@@ -1,0 +1,5 @@
+# @package _global_
+
+model:
+  calib:
+    name: skip-calib

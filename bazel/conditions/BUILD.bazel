@@ -1,0 +1,154 @@
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+config_setting(
+    name = "internal",
+    flag_values = {"//bazel/flags:internal": "True"},
+    visibility = [
+        "//deps/docker:__pkg__",
+        "//internal/scripts/pycena:__pkg__",
+        "//internal/scripts/pycena/runtime:__pkg__",
+        "//libs/nrend:__pkg__",
+        "//nre:__pkg__",
+    ],
+)
+
+# Config setting for enabling Mamba dependencies
+config_setting(
+    name = "mamba",
+    flag_values = {"//bazel/flags:mamba": "True"},
+    visibility = [
+        "//nre/nrm:__subpackages__",
+    ],
+)
+
+# Config setting for building all tools
+# Triggered when all tool flags are enabled (via --config=all_tools)
+config_setting(
+    name = "all_tools",
+    flag_values = {
+        "//bazel/flags:ncore_aux_data": "True",
+        "//bazel/flags:asset_harvester": "True",
+        "//bazel/flags:mask_annotator": "True",
+    },
+    visibility = [
+        "//apps:__pkg__",
+        "//deps/docker:__pkg__",
+        "//internal/scripts/pycena:__pkg__",
+        "//internal/scripts/pycena/runtime:__pkg__",
+    ],
+)
+
+# Individual tool conditions
+config_setting(
+    name = "ncore_aux_data",
+    flag_values = {"//bazel/flags:ncore_aux_data": "True"},
+    visibility = [
+        "//apps:__pkg__",
+        "//deps/docker:__pkg__",
+        "//internal/scripts/pycena:__pkg__",
+        "//internal/scripts/pycena/runtime:__pkg__",
+    ],
+)
+
+config_setting(
+    name = "asset_harvester",
+    flag_values = {"//bazel/flags:asset_harvester": "True"},
+    visibility = [
+        "//apps:__pkg__",
+        "//deps/docker:__pkg__",
+        "//internal/scripts/pycena:__pkg__",
+        "//internal/scripts/pycena/runtime:__pkg__",
+    ],
+)
+
+config_setting(
+    name = "mask_annotator",
+    flag_values = {"//bazel/flags:mask_annotator": "True"},
+    visibility = [
+        "//apps:__pkg__",
+        "//deps/docker:__pkg__",
+        "//internal/scripts/pycena:__pkg__",
+        "//internal/scripts/pycena/runtime:__pkg__",
+    ],
+)
+
+config_setting(
+    name = "ncore_aux_data_and_asset_harvester",
+    flag_values = {
+        "//bazel/flags:ncore_aux_data": "True",
+        "//bazel/flags:asset_harvester": "True",
+    },
+    visibility = [
+        "//apps:__pkg__",
+        "//deps/docker:__pkg__",
+        "//internal/scripts/pycena:__pkg__",
+        "//internal/scripts/pycena/runtime:__pkg__",
+    ],
+)
+
+config_setting(
+    name = "asset_harvester_and_mask_annotator",
+    flag_values = {
+        "//bazel/flags:asset_harvester": "True",
+        "//bazel/flags:mask_annotator": "True",
+    },
+    visibility = [
+        "//apps:__pkg__",
+        "//deps/docker:__pkg__",
+        "//internal/scripts/pycena:__pkg__",
+        "//internal/scripts/pycena/runtime:__pkg__",
+    ],
+)
+
+config_setting(
+    name = "ncore_aux_data_and_mask_annotator",
+    flag_values = {
+        "//bazel/flags:ncore_aux_data": "True",
+        "//bazel/flags:mask_annotator": "True",
+    },
+    visibility = [
+        "//apps:__pkg__",
+        "//deps/docker:__pkg__",
+        "//internal/scripts/pycena:__pkg__",
+        "//internal/scripts/pycena/runtime:__pkg__",
+    ],
+)
+
+config_setting(
+    name = "run_grpc_only",
+    flag_values = {"//bazel/flags:run_grpc_only": "True"},
+    visibility = [
+        "//:__pkg__",
+        "//internal/scripts/pycena:__subpackages__",
+    ],
+)
+
+config_setting(
+    name = "skip_nrend_obfuscation",
+    flag_values = {"//bazel/flags:skip_nrend_obfuscation": "True"},
+    visibility = [
+        "//libs/nrend:__pkg__",
+    ],
+)
+
+config_setting(
+    name = "local_gsplat",
+    flag_values = {"//bazel/flags:local_gsplat": "True"},
+    visibility = [
+        "//nre/models/gaussians:__pkg__",
+    ],
+)
+
+config_setting(
+    name = "coverage_mode",
+    define_values = {"cuda_coverage_dev": "true"},
+    visibility = ["//visibility:public"],
+)

@@ -1,0 +1,49 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+load("@nre_pip_deps//:requirements.bzl", pip_requirement = "requirement")
+load("@rules_python//python:defs.bzl", "py_library")
+
+package(default_visibility = ["//:core_package_group"])
+
+filegroup(
+    name = "py_files",
+    srcs = glob(["**/*.py"]),
+)
+
+# Config (and loss return types) only; no nre/utils so nre/config can depend on this without a cycle.
+py_library(
+    name = "pylib_config",
+    srcs = ["config.py"],
+    deps = [
+        "//nre/config:pylib_base_schema",
+        pip_requirement("omegaconf"),
+        pip_requirement("pydantic"),
+        pip_requirement("torch"),
+    ],
+)
+
+py_library(
+    name = "pylib",
+    srcs = [
+        "__init__.py",
+        "loss_aggregator.py",
+    ],
+    deps = [
+        ":pylib_config",
+        "//libs/losses/models:pylib",
+        "//libs/slang_gaussians:pylib",
+        "//nre/datasets:pylib",
+        "//nre/models/base:pylib",
+        "//nre/nrm/models:pylib",
+        "//nre/nrm/primitives:pylib",
+        "//nre/utils:pylib",
+    ],
+)

@@ -1,0 +1,18 @@
+start_step: 90  # it is a good idea to profile after a short burn-in period e.g. due to loading/caching data.
+num_steps: 10  # WARNING profiling for many steps e.g. 100 can cause training to crash while results are aggregated.
+
+activities:
+  cpu: true
+  cuda: true
+
+record_shapes: true
+profile_memory: true
+with_flops: true
+with_stack: true
+with_modules: true
+
+output_dir: runtime_profiling  # will be found in: {config.out_dir}/{config.run_id}/<output_dir>
+export_to_chrome: true  # if true, produces file "*.pt.trace.json" - open in Chrome at URL chrome://tracing
+
+# Passed to PyTorchProfiler API: https://lightning.ai/docs/pytorch/stable/api/lightning.pytorch.profilers.PyTorchProfiler.html
+emit_nvtx: false  # if true, you must launch the run command under nsys e.g. `nsys profile <args> -- bazel run ...`

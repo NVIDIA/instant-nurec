@@ -1,0 +1,52 @@
+# Copyright (c) 2023-2025 NVIDIA CORPORATION.  All rights reserved.
+
+# Import all architecture-specific dependencies for x86_64
+
+-r requirements_3_11_common.in
+
+# this is a patched torch 2.7.0 wheel built using: deps/docker/Dockerfile-pytorch
+# torch wheels for x86_64 include an updated cuda library loading logic to
+# always preload all cuda libraries from the available pypi packages, see
+# (https://gitlab-master.nvidia.com/nrs/nre_external/pytorch/-/commit/c41f6e01287c393761bee9639282f55900bac8b7)
+torch==2.7.0+cu128.gitc41f6e01287 --hash=sha256:d52fbdc00d5a99617b33d826d901c3323d37285c579ab0371d8451a688017031
+torchvision==0.22.0+cu128
+
+# torch_scatter built for commit 6cf77c420f837a427b0d57965e414d68c1bd89ec
+torch-scatter==2.1.2+git6cf77c4pt2.7.0cu128sm80to120 --hash=sha256:f5359ccbae6f36a64b7b12f7ce13ef71a1d32f5cfd66aa8a8c0da3b6980ba4f9
+
+# apex built for commit 312acb44f9fe05cab8c67bba6daa0e64d3737863
+apex==0.1+git312acb4pt2.7.0cu128sm80to120 --hash=sha256:5bebcc3ed663c6050755a05c649c28ba7d5183d88e2cf0849cd8ed7b8744aed4
+
+# tinycudann built for commit c2de4fa9e4e87794371d9f0129da341c4f6bbd98 (see https://gitlab-master.nvidia.com/nrs/nre_external/tiny-cuda-nn)
+tinycudann==1.8.4+gitc2de4fapt2.7.0cu128sm75to120 --hash=sha256:7e5b8ec90bd86beccf0f143012a9843f869304504ef2d76fbc4c0d6bc4b8df3d
+
+# nvdiffrast built for commit dc1dedfd48de9be566d0cfde3ba96a710cc71014 (see https://gitlab-master.nvidia.com/nrs/nre_external/nvdiffrast/-/tree/patches)
+nvdiffrast==0.3.1+gitdc1dedfpt2.7.0cu128sm80to120 --hash=sha256:f2fa21a2afe3bcd0afeef11ba21c511d1ca2876f47b42fa98aa5fb10344a22a3
+
+# lietorch built for `master` commit 0fa9ce8ffca86d985eca9e189a99690d6f3d4df6
+lietorch==0.2+git0fa9ce8pt2.7.0cu128sm80to120 --hash=sha256:1e67110ecf8a590ff56c3599ea243d34c15b853aa8cd785ab181c762f387009e
+
+# x86_64 build of poisson-recon
+poisson-recon==13.74.1 --hash=sha256:623e70c0b1a33531c02bdd8e63bcac3bf211c4765d60b3ff32cd0a9c61dd83ed
+
+# x86_64 build of usd-core wheel (>=26.3 for UsdVol ParticleField schema API)
+usd-core==26.3 --hash=sha256:7d59943477483dc950e36a0453d451b8818c6e4898b095cb35bdab86375b7f0c
+
+# SSIM loss with a fused kernel (see https://gitlab-master.nvidia.com/nrs/nre_external/fused-ssim)
+fused-ssim==0.2.0+gite86e6f9pt2.7.0cu128sm80to120 --hash=sha256:fd7ca61c95eb640c010f179265da7804e4357d3e35b25d9e7eda30cb96c8c80f
+
+# mmcv built for commit 3a5fb4b9 (see https://gitlab-master.nvidia.com/nrs/nre_external/mmcv)
+mmcv==2.2.0+git3a5fb4b9pt2.7.0cu128sm80to120 --hash=sha256:3614ba7f87c18e14c0d81096ec2403cf816f0c57a76e944ea361626a754acd92
+
+# transformer-engine for commit cafd8e50
+flash-attn==2.7.3 --hash=sha256:03c25845e64e370bcbab9dc909288731e0e428e0892bed699eb866f5cbb5749e
+transformer-engine==1.11.0+cafd8e50 --hash=sha256:3c06dac27c062cbad200e4d03c30405ac09b75e34eb326472288b411f9b2c979
+
+# sam2 pre-built from sdist for Bazel determinism
+sam2==1.1.0+pt2.7.0cu128sm80to120 --hash=sha256:209b151f76a48f28eaeb6ad57feaf89eacb22bfd2d9575bd4e83bc77bb06127c
+
+# Packages only available for x86_64 exclusively
+pycuda==2024.1.2 --hash=sha256:a4a3e87672123c3b32333bd37a211cb1aac781398d14c17a4a538b5adc2cab83
+tensorrt-cu12==10.4.0
+tensorrt-cu12-bindings==10.4.0
+tensorrt-cu12-libs==10.4.0

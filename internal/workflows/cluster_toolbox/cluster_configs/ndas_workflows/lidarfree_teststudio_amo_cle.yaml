@@ -1,0 +1,28 @@
+# @package _global_
+
+defaults:
+  - teststudio_amo_cle
+  - lidarfree_workflow
+  - _self_
+
+workflow_name_prefix: nurec-cicd-reconstruct-lidarfree-amo-cle
+
+car2sim:
+  cut: []
+  save_artifacts_in_s3: true
+
+switchboard:
+  connections:
+    car2sim_to_nurec_cicd_amo_cle:
+      force_enable: true
+      target_task: trigger-gitlab-pipeline
+      replace_input_task: [reconstruction]
+      with_internal_input: nre-out
+    car2sim_to_nurec_cicd_amo_cle_2:
+      force_enable: true
+      target_task: trigger-gitlab-pipeline
+      replace_input_task: [swiftstack-uploader]
+      with_internal_input: swiftstack-uploader-nre
+
+nurec_cicd_amo_cle:
+  enabled: true

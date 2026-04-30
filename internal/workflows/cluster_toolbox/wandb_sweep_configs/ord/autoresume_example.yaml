@@ -1,0 +1,87 @@
+# Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+method: grid
+metric:
+  goal: maximize
+  name: train/psnr
+parameters:
+  benchmark_dataset:
+    values:
+      - 05443ac1-8125-4ace-9daa-6ecdc0df43ff
+      - 258bafc3-4d74-4c92-9fca-e841ef6dece0
+      - 2fbc0e5b-d45a-46ec-ba4c-058dd03edea8
+      - 34d6855b-4913-4e13-8a37-e4f03d34911c
+      - 363c62fe-0a3f-4215-b2dd-c09f3c81fcd4
+      - 50b2e3c2-ea29-4a88-8762-d64bae082455
+      - 544b94fd-1a2d-42c7-9975-ef3b3d3fd9bc
+      - 5d4c2ea3-790d-4274-8a55-6c28622f9042
+      - 6b0e39fb-f4fe-43d4-8459-73582af55b90
+      - 7d3a40a2-502c-4bb6-bcc5-f54a818ab6c7
+      - 86ad21f0-5c8e-4733-9e48-585b3b3c0607
+      - b52c247a-fe42-4fb6-8119-84eeafaf327e
+      - bd305b15-f1bd-4724-ae37-63ed2378216d
+      - c83d3e54-0d62-4d30-af9f-0f70e05bcfaa
+
+  benchmark_config:
+    values:
+      - 3dgut_dynamic
+      - 3dgut_dynamic_road_semantic
+      - 3dgut_static
+      - 3dgut_static_road_semantic
+
+command:
+  - /bin/bash
+  - -euxc
+  - |
+    # Wandb currently has a bug where the same preempted run can get dequeued multiple times by different agents
+    # We work around this by logging resumed runs in a thread-safe way and requeuing the job if the preempted run is already running
+    
+    # Create a file descriptor over the given lockfile.
+    exec {FD}<>/wandb_agent_lock/lock && flock $FD 
+
+    if [ -f /wandb_agent_lock/$WANDB_RUN_ID ]; then
+      run_exists=1
+    else
+      run_exists=0
+      if [ -d /results/${WANDB_RUN_ID} ]; then
+        touch /wandb_agent_lock/$WANDB_RUN_ID
+      fi
+    fi
+
+    # Release the lock and close the file descriptor
+    flock -u $FD && exec {FD}<&-
+
+    if [ $run_exists -eq 0 ]; then
+      if [ -d /results/${WANDB_RUN_ID} ]; then
+          echo "Previous run found - resuming"
+          /usr/local/bin/bazelisk run //:run -- --config-name=$(find /results/${WANDB_RUN_ID} -name 'parsed.yaml') mode=trainval resume=auto force_validate=true || rm /wandb_agent_lock/$WANDB_RUN_ID
+      else
+          echo "No previous run found"
+          # $0 is "benchmark_dataset=<value>"
+          # $1 is "benchmark_config=<value>"
+          eval "$0"
+          eval "$1"
+
+          DATA=/lustre/fsw/portfolios/nvr/users/hturki/15-clip-smoketest
+
+          if [[ "$benchmark_dataset" == "50b2e3c2-ea29-4a88-8762-d64bae082455" ]]; then
+            LIDAR_ID="lidar_gt_top_p128_v4p5"
+          else
+            LIDAR_ID="lidar_gt_top_p128"
+          fi
+
+          /usr/local/bin/bazelisk run //:run -- --config-name=configs/apps/AV/NV/${benchmark_config}.yaml mode=trainval \
+              dataset.path=${DATA}/${benchmark_dataset}/clipgt-${benchmark_dataset}.json \
+              logger.entity=<<wandb_entity>> \
+              logger.project=<<wandb_project>> \
+              logger.tags=<<wandb_tags>> \
+              logger.run_name=internal_15_${benchmark_dataset}_${benchmark_config} \
+              out_dir=/results/${WANDB_RUN_ID} dataset.lidar_ids="['${LIDAR_ID}']"
+      fi
+    else
+      echo "Preempted run $WANDB_RUN_ID already started - requeuing job"
+      touch $SHOULD_REQUEUE_PATH
+    fi
+
+  # Substituted by the W&B sweep controller and does not work directly inside the script above. Use "$@" to pass to script above
+  - ${args_no_hyphens}
+

@@ -1,0 +1,16 @@
+# @package _global_
+
+defaults:
+  - ord
+  - _self_
+
+# HSG specific config args
+server: "oci-hsg-cs-001-login-01.nvidia.com" # login server
+
+bazel:
+  dev_image_path: "/lustre/fsw/portfolios/nvr/users/qiwu/containers/nre-ord-dev-v26.1.35_d8868b6a.sqsh"
+
+segment: ${num_nodes}
+
+partition:
+  - batch

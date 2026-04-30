@@ -1,0 +1,52 @@
+# @package _global_
+
+defaults:
+  - ndas_workflow_base
+  - _self_
+
+workflow_name_prefix: nurec-cicd-reconstruct-lidarfree
+
+tasks:
+  initial-pose: { gpu: l4 }
+  session-converter: { gpu: l4 }
+  patch-rig: { gpu: l4 }
+  segmentation: { gpu: l4 }
+  sfm: { gpu: l4 }
+  depth-fusion: { gpu: l4 }
+  moge2-depth: { gpu: l4 }
+  depth-distort: { gpu: l4 }
+  sauron-vis-cuboid-on-camera: { gpu: l4 }
+  sauron-vis-cuboid-on-demovideo: { gpu: l4 }
+  nre-out: { gpu: l4 }
+  nre-render: { gpu: l4 }
+
+car2sim:
+  nurec_task_name: nre-run
+  reconstruction_args: null
+  training_config: configs/apps/prod/Hyperion-8.1/car2sim_lidarfree.yaml
+  source_wf: chienlungc-lidarfree-car2sim-tot-sauron-detection/latest-success
+  cut:
+    - sauron-detection-tracking
+    - nre-out
+
+switchboard:
+  connections:
+    car2sim_to_nre_eval:
+      with_internal_input: nre-out
+
+    car2sim_to_shim:
+      with_internal_input: nre-out
+
+    car2sim_to_nre_eval_nvrq:
+      force_enable: true
+      target_task: nvrq-multiplex-ncore
+      replace_input_task: [clipgt-ncore]
+      with_external_wf: ${car2sim.source_wf}
+      with_external_input: [sauron-ncore-export]
+
+reconstruction_run_binary_tasks:
+- nre-run
+- nre-out
+- render_nre
+- psnr-semantic-labelmap-images
+- base-pacsim-replay

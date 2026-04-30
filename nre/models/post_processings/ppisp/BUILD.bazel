@@ -1,0 +1,74 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+load("@nre_pip_deps//:requirements.bzl", pip_requirement = "requirement")
+load("@rules_python//python:defs.bzl", "py_library")
+load("//bazel/pytest:defs.bzl", "pytest_test")
+
+package(default_visibility = [
+    "//:core_package_group",
+    "//internal/scripts/pycena:__pkg__",
+])
+
+filegroup(
+    name = "py_files",
+    srcs = glob(["**/*.py"]),
+    visibility = [
+        "//internal/scripts/pycena:__pkg__",
+    ],
+)
+
+# Slang submodule library
+py_library(
+    name = "pylib_slang",
+    deps = [
+        "//nre/models/post_processings/ppisp/slang:pylib",
+    ],
+)
+
+py_library(
+    name = "pylib",
+    srcs = [
+        "__init__.py",
+        "ppisp.py",
+    ],
+    deps = [
+        ":pylib_slang",
+        "//libs/losses/kernel:def_constants",
+        pip_requirement("torch"),
+    ],
+)
+
+pytest_test(
+    name = "ppisp_test",
+    timeout = "long",
+    srcs = [
+        "ppisp_test.py",
+    ],
+    deps = [
+        ":pylib",
+        "//libs/losses/models:pylib",
+    ],
+)
+
+pytest_test(
+    name = "ppisp_slang_test",
+    srcs = [
+        "ppisp_slang_test.py",
+    ],
+    data = [
+        "@test_data_prober_generated//:ppisp",
+    ],
+    deps = [
+        ":pylib",
+        "//nre/utils:pylib_prober",
+        "//nre/utils:pylib_tests",
+    ],
+)

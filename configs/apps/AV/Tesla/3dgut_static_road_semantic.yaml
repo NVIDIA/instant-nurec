@@ -1,0 +1,22 @@
+# @package _global_
+# Owner: Haithem Turki
+
+defaults:
+  - /apps/AV/_base_3dgut_static_road_semantic.yaml
+  - _tesla_mixin.yaml
+
+# Initialization defaults to lidar, and in the absence of lidar, the first camera sensor is used.
+# Here we initialize with all camera sensors that we are using.
+model:
+  layers:
+    background:
+      initialization:
+        camera_ids: ${dataset.camera_ids}
+    road:
+      initialization:
+        camera_ids: ${dataset.camera_ids}
+      optimizer:
+        params:
+          rotations:
+            args:
+              lr: 0 # Fixing flat rotation for road seems to give better NVS results

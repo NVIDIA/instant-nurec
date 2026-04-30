@@ -1,0 +1,55 @@
+# @package _global_
+#
+# Eval-only workflow that evaluates reconstruction results from an external workflow.
+# Supports both standard (reconstruction task) and lidarfree (nre-out task) workflows.
+#
+# Usage:
+#   bazel run //internal/workflows/cluster_toolbox/ndas_workflows:run_ndas_workflow -- \
+#     --ndas-workflow-config=nre_eval_only.yaml \
+#     car2sim.source_wf=<workflow/run>
+#
+# Optional: Override source workflows for specific tasks if they come from different workflows:
+#   eval_sources.reconstruction_wf=<workflow/run>   # Source for nre-out/reconstruction
+#   eval_sources.clipgt_ncore_wf=<workflow/run>     # Source for clipgt-ncore
+#   eval_sources.nre_aux_data_wf=<workflow/run>     # Source for nre-aux-data
+
+defaults:
+  - ndas_workflow_base
+  - _self_
+
+workflow_name_prefix: nurec-nre-eval
+
+car2sim:
+  enabled: false
+
+amo_cle:
+  enabled: false
+
+failure_reason:
+  enabled: false
+
+# Configurable source workflows for each task type.
+# By default, all use car2sim.source_wf. Override individually if tasks come from different workflows.
+eval_sources:
+  reconstruction_wf: ${car2sim.source_wf}  # Source for nre-out/reconstruction task
+  clipgt_ncore_wf: ${car2sim.source_wf}    # Source for clipgt-ncore task
+  nre_aux_data_wf: ${car2sim.source_wf}    # Source for nre-aux-data task
+
+switchboard:
+  connections:
+    car2sim_to_nre_eval:
+      force_enable: false
+      with_external_wf: ${eval_sources.reconstruction_wf}
+      with_external_input: [nre-out, reconstruction]
+
+    car2sim_to_nre_eval_psnr_semantic_labelmap_images_1:
+      force_enable: false
+      with_external_wf: ${eval_sources.clipgt_ncore_wf}
+
+    car2sim_to_nre_eval_psnr_semantic_labelmap_images_2:
+      force_enable: false
+      with_external_wf: ${eval_sources.nre_aux_data_wf}
+
+    car2sim_to_nre_eval_nvrq:
+      force_enable: false
+      with_external_wf: ${eval_sources.clipgt_ncore_wf}

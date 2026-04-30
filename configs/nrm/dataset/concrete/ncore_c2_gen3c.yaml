@@ -1,0 +1,20 @@
+defaults:
+  - ../ncore@_here_
+
+ncore_json_base_path: /lustre/fsw/portfolios/nvr/projects/nvr_torontoai_3dscenerecon/nre-ff/celsius2_l3_55k_720p/
+ncore_json_list_path: /lustre/fsw/portfolios/nvr/users/jiahuih/nre_experiments/data/data_split/celsius2_l3_55k_720p/gen3c.lst
+
+cuboid_tracks_params:
+  lidar_id: lidar_gt_top_p128
+
+# Add Gen3C external supervision
+supervision_camera_ids:
+  - camera_front_wide_120fov
+  # Novel view moving left (0,1)
+  - ncore_path: gen3c/0.zarr.itar
+    camera_id: camera_front_wide_120fov
+    unique_sensor_idx: 0
+  # Novel view moving right (4,5)
+  - ncore_path: gen3c/4.zarr.itar
+    camera_id: camera_front_wide_120fov
+    unique_sensor_idx: 0

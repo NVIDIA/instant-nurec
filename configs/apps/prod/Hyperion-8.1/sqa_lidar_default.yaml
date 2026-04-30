@@ -1,0 +1,19 @@
+# @package _global_
+
+defaults:
+  # Configs override each other in the listed order (/ denotes config root)
+  - car2sim.yaml
+  - /model/gaussians/extra_signal@model.layers.background.extra_signal: [semantic_logits, intensity, raydrop]
+  - /model/gaussians/extra_signal@model.layers.road.extra_signal: [semantic_logits, intensity, raydrop]
+  - /model/gaussians/extra_signal@model.layers.dynamic_deformables.extra_signal: [semantic_logits, intensity, raydrop]
+  - /model/gaussians/extra_signal@model.layers.dynamic_rigids.extra_signal: [semantic_logits, intensity, raydrop]
+
+
+dataset:
+  val_lidar: true
+
+loss: 
+  intensity:
+    lambda_: 1.0
+  raydrop:
+    lambda_: 0.1

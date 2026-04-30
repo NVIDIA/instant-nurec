@@ -1,0 +1,5 @@
+semantic_logits:
+  # Number of semantic classes (output dimensions)
+  n_signal_dim: 20
+  sensor_type: camera
+  activation: none

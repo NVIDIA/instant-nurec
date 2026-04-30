@@ -1,0 +1,49 @@
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+load("@aspect_rules_py//py:defs.bzl", "py_binary")
+load("@nre_pip_deps//:requirements.bzl", pip_requirement = "requirement")
+load("@nre_pip_deps_mypy//:requirements.bzl", pip_requirement_mypy = "requirement")
+
+exports_files([
+    "mypy_version.txt",
+    "mypy.ini",
+])
+
+py_binary(
+    name = "mypy",
+    srcs = ["@mypy_integration//mypy:main.py"],
+    main = "@mypy_integration//mypy:main.py",
+    deps = [
+        pip_requirement_mypy("mypy"),
+
+        # List all internal dependencies that have type-annotations - otherwise skip them in mypy.ini
+        pip_requirement("numpy"),
+        pip_requirement("click"),
+        pip_requirement("pytest"),
+        pip_requirement("torch"),
+        pip_requirement("nvidia-ncore"),
+        pip_requirement("nvidia-ncore-internal"),
+        pip_requirement("hydra-core"),
+        pip_requirement("shortuuid"),
+        pip_requirement("pytorch_lightning"),
+        pip_requirement("imageio"),
+        pip_requirement("pillow"),
+        pip_requirement("kornia"),
+        pip_requirement("viser"),
+        pip_requirement("pydantic"),
+        pip_requirement("requests"),
+        pip_requirement("types-requests"),
+        pip_requirement("pandas-stubs"),
+
+        # Bazel-built external libraries with type annotations
+        "//nre/models/gaussians:pylib_cc_gsplat",
+    ],
+)

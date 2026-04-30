@@ -1,0 +1,28 @@
+# Copyright (c) 2026 NVIDIA CORPORATION.  All rights reserved.
+
+load("@aspect_rules_py//py:defs.bzl", "py_binary")
+load("@mypy_integration//:mypy.bzl", "mypy_test")
+load("@nre_pip_deps//:requirements.bzl", pip_requirement = "requirement")
+
+package(default_visibility = ["//visibility:private"])
+
+py_binary(
+    name = "extract_camera_params",
+    srcs = ["extract_camera_params.py"],
+    main = "extract_camera_params.py",
+    deps = [
+        "//nre/artifact:pylib",
+        "//nre/utils:pylib_types",
+        pip_requirement("click"),
+        pip_requirement("numpy"),
+        pip_requirement("nvidia-ncore"),
+    ],
+)
+
+mypy_test(
+    name = "extract_camera_params_mypy",
+    timeout = "long",
+    deps = [
+        ":extract_camera_params",
+    ],
+)

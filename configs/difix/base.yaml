@@ -1,0 +1,34 @@
+name: ???
+
+inference:
+  enabled: false
+  use_color_transfer: true
+
+cache_dir: "~/.cache/nre/difix"
+
+model_url: ???
+model_resolution: ???
+model_filename: ???
+
+training:
+  enabled: false
+  p_scheduler:
+    p_init: 0.5  # Initial probability of applying difix
+    p_final: null  # Optional: target probability at last milestone; derives gamma if set
+    milestones: [25000, 28000]  # Training steps where probability changes
+    update_interval: step  # Can be 'step' or 'epoch'
+    gamma: 0.5  # Multiplier applied at each milestone
+  start_step: 20000  # Step at which training-time difix starts
+  use_color_transfer: true
+  shuffle_novel_views: false
+  num_workers: 4
+  novel_view_poses:
+    # List of novel views to fix
+    # each is represented as dictionary with keys "translation" and "rotation"
+    # translation is in meters, rotation in degrees (XYZ / roll-pitch-yaw Euler)
+    - {translation: [0.0, 3.0, 0.0], rotation: null} 
+    - {translation: [0.0, -3.0, 0.0], rotation: null}
+  log_images: false  # Log rendered images during training into logger
+  log_every_n_steps: 100  # Frequency of image logging
+  log_buffer_images: false  # Log buffer images into disk
+  debug_dir: null  # Path to local directory for debug images

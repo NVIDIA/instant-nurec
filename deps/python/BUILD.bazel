@@ -1,0 +1,102 @@
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+load("@rules_multirun//:defs.bzl", "multirun")
+load("@rules_uv//uv:pip.bzl", "pip_compile")
+
+exports_files(
+    ["requirements_3_11_x86_64.txt"],
+    visibility = ["//internal/scripts/deps:__pkg__"],
+)
+
+# Check that our compiled pip requirements are up-to-date
+pip_compile(
+    name = "requirements_3_11_x86_64",
+    size = "medium",
+    args = [
+        "--generate-hashes",
+        "--emit-index-url",
+        "--index-strategy",
+        "unsafe-best-match",
+    ],
+    data = [":requirements_3_11_common.in"],
+    py3_runtime = "@python_3_11//:py3_runtime",
+    python_platform = "x86_64-manylinux_2_31",
+    requirements_in = "requirements_3_11_x86_64.in",
+    requirements_overrides = "requirements_3_11_overrides.in",
+    requirements_txt = "requirements_3_11_x86_64.txt",
+)
+
+pip_compile(
+    name = "requirements_3_11_internal_x86_64",
+    size = "medium",
+    args = [
+        "--generate-hashes",
+        "--emit-index-url",
+        "--index-strategy",
+        "unsafe-best-match",
+    ],
+    data = [":requirements_3_11_x86_64.txt"],
+    py3_runtime = "@python_3_11//:py3_runtime",
+    python_platform = "x86_64-manylinux_2_31",
+    requirements_in = "requirements_3_11_internal_x86_64.in",
+    requirements_overrides = "requirements_3_11_overrides.in",
+    requirements_txt = "requirements_3_11_internal_x86_64.txt",
+)
+
+pip_compile(
+    name = "requirements_3_11_aarch64",
+    size = "medium",
+    args = [
+        "--generate-hashes",
+        "--emit-index-url",
+        "--index-strategy",
+        "unsafe-best-match",
+    ],
+    data = [":requirements_3_11_common.in"],
+    py3_runtime = "@python_3_11//:py3_runtime",
+    python_platform = "aarch64-manylinux_2_31",
+    requirements_in = "requirements_3_11_aarch64.in",
+    requirements_overrides = "requirements_3_11_overrides.in",
+    requirements_txt = "requirements_3_11_aarch64.txt",
+)
+
+# Separate sets of requirements specific to docs builds.
+# Uses requirements_3_11_x86_64.txt as constraint to enforce matching package
+# versions, since we bring packages from both sets of requirements under the
+# same venv when building documentation.
+pip_compile(
+    name = "requirements_3_11_docs",
+    args = [
+        "--generate-hashes",
+        "--emit-index-url",
+        "--index-strategy",
+        "unsafe-best-match",
+    ],
+    data = [":requirements_3_11_x86_64.txt"],
+    py3_runtime = "@python_3_11//:py3_runtime",
+    python_platform = "x86_64-manylinux_2_31",
+    requirements_in = "requirements_3_11_docs.in",
+    requirements_txt = "requirements_3_11_docs.txt",
+)
+
+# Single command to update all requirements files in correct order of execution
+multirun(
+    name = "update_all_requirements",
+    commands = [
+        ":requirements_3_11_x86_64",
+        ":requirements_3_11_internal_x86_64",  # depends on requirements_3_11_x86_64, needs to be executed afterward
+        ":requirements_3_11_aarch64",
+        ":requirements_3_11_docs",  # depends on requirements_3_11_x86_64 for constraints
+        "//internal/scripts/deps:generate_lock",  # uv.lock at repo root for Black Duck (uv tree --no-dedupe --frozen)
+    ],
+    jobs = 1,  # Enforce sequential execution
+    keep_going = False,  # Fail on error
+)

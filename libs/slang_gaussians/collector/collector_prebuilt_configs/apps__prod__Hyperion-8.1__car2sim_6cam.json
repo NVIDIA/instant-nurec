@@ -1,0 +1,36 @@
+[
+    [
+        "Collector_Copy<3>",
+        "RotationsCollector_Normalize",
+        "ScalesCollector_Exp",
+        "DensitiesCollector_Sigmoid",
+        "Collector_Copy<20>",
+        "SphericalFeaturesCollector_Fourier_Holistic<3,45,5>"
+    ],
+    [
+        "Collector_Copy<3>",
+        "RotationsCollector_Normalize",
+        "ScalesCollector_Exp",
+        "DensitiesCollector_Sigmoid",
+        "Collector_Copy<20>",
+        "SphericalFeaturesCollector_Copy<3,45>"
+    ],
+    [
+        "PositionsRotationsDensitiesCollector_Tracks",
+        "ScalesCollector_Exp",
+        "Collector_Copy<20>",
+        "SphericalFeaturesCollector_Fourier_Individual<3,45,20>"
+    ],
+    [
+        "PositionsRotationsDensitiesCollector_Tracks",
+        "ScalesCollector_Exp",
+        "Collector_Copy<20>",
+        "SphericalFeaturesCollector_Copy<3,45>"
+    ],
+    [
+        "PositionsRotationsDensitiesCollector_Deformable",
+        "ScalesCollector_Exp",
+        "Collector_Copy<20>",
+        "SphericalFeaturesCollector_Copy<3,45>"
+    ]
+]

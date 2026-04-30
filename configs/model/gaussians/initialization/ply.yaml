@@ -1,0 +1,6 @@
+defaults:
+  - base
+
+name: ply
+translate_world_to_nre: false # Whether to translate the positions from world to NRE coordinates
+path: ???

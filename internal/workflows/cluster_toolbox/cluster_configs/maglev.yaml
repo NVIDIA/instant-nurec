@@ -1,0 +1,15 @@
+# @package _global_
+
+defaults:
+  - base
+  - _self_
+
+name: maglev
+
+# Maglev specific config args
+
+maglev_api_key: null
+maglev_cli: null
+
+resource_share: sdg-rno
+node_type: constellation-v2-ovx

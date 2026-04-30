@@ -1,0 +1,21 @@
+# GSplat Renderer Configuration
+
+defaults:
+  - 3dgut_nrend
+
+name: 3dgut-gsplat
+
+# Rasterization mode for gsplat
+# Options: "classic" (standard 3DGS) or "antialiased" (Mip-Splatting)
+# 3DGUT should use classic to match nRend, which dilates by min_projected_ray_radius
+# but does not apply the antialiased opacity compensation factor.
+rasterize_mode: classic
+
+# Whether to use FreePoseCalib's rays as input (like nrend)
+# or let gsplat create the rays internally.
+use_rays: True
+
+# Logging level (info, warning, error)
+log_level: info
+
+use_gsplat_for_camera_rendering: True

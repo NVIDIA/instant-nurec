@@ -1,0 +1,7 @@
+*
+!/external/docker/.tmux.conf
+!/external/docker/init.sh
+!/external/docker/init_ssh.sh
+!/external/docker/.tmux.conf
+!/external/docker/.sshrc
+!/scripts/*.py

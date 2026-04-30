@@ -1,0 +1,57 @@
+defaults:
+  - base
+
+name: ppisp-post-processing
+use_slang: true
+
+# If per_frame_ppisp_enabled = false, we forward -1 frame index to ppisp
+# This might be meaningful if e.g. fourier features are activated for the background.
+per_frame_ppisp_enabled: true
+
+# Tune LR for individual sub-modules according to tests, choosing 1/10 of the value as a reference.
+optimizer:
+  name: fused_adam
+  args:
+    lr: 0.001
+    eps: 1.e-15
+    betas: [0.9, 0.99]
+  params:
+    ppisp:
+      exposure:
+        args:
+          lr: 0.02
+      vignetting:
+        args:
+          lr: 0.01
+      color:
+        args:
+          lr: 0.00005
+      crf:
+        args:
+          lr: 0.01
+
+# Freezing ISP parameters has shown to be beneficial to the stability of the training.
+start_global_step: 250
+scheduler:
+  name: SequentialLR
+  interval: step
+  milestones:
+    - ${...start_global_step}
+    - ${add:${...start_global_step},${system.warmup_steps}}
+  schedulers:
+    - name: ConstantLR # skip until `start_global_step`
+      args:
+        factor: 0.0
+        total_iters: ${.....start_global_step}
+    - name: LinearLR # linear warm-up in the first system.warmup_steps steps
+      interval: step
+      args:
+        start_factor: 0.01
+        end_factor: 1.0
+        total_iters: ${system.warmup_steps}
+    - name: StepFunCosineAnnealingLR
+      interval: step
+      args:
+        T_max: ${sub:${mul:${trainer.max_epochs},${dataset.n_samples_per_epoch}},${add:${.....start_global_step},${system.warmup_steps}}}
+        min_factor: 0.0333
+        update_every_n_steps: ${trainer.annealing_update_every_n_steps}

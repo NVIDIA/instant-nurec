@@ -1,0 +1,36 @@
+name: base-nrm-system
+
+warmup_steps: ???
+optimizer: ???
+enable_render_global_step: 0
+
+log_every_n_steps: 5
+log_media_every_n_steps: 50
+log_media_every_n_steps_val: 10
+
+# 0 means infer automatically
+# i.e. if on SLURM, will use slurm job info, otherwise will assume single-node training/testing
+device_count: 0
+num_nodes: 0
+
+strategy: auto
+
+max_epochs: 20
+check_val_every_n_epoch: 1
+precision: ???
+num_sanity_val_steps: 0
+
+# Notes for memory savers:
+# - RAM consumption almost increases linearly with the number of workers
+# - Decreasing prefetch factor from 2 to 1 saves 15-20% RAM while increase ~15% data loading time
+train_num_workers: 4
+train_batch_size: 1
+train_prefetch_factor: 2
+
+val_num_workers: 4
+val_batch_size: 1
+val_prefetch_factor: 2
+
+test_num_workers: 4
+test_batch_size: 1
+test_prefetch_factor: 2

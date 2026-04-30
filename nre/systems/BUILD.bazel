@@ -1,0 +1,88 @@
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+load("@nre_pip_deps//:requirements.bzl", pip_requirement = "requirement")
+load("@rules_python//python:defs.bzl", "py_library")
+
+DEFAULT_VISIBILITY = [
+    "//:core_package_group",
+    "//bazel/docs:__pkg__",
+    # Add visibility for ppisp_report package
+    "//internal/scripts/experimental/ppisp_report:__pkg__",
+]
+
+package(default_visibility = DEFAULT_VISIBILITY)
+
+filegroup(
+    name = "py_files",
+    srcs = glob(["**/*.py"]),
+    visibility = [
+        "//internal/scripts/pycena:__pkg__",
+    ],
+)
+
+py_library(
+    name = "pylib",
+    srcs = [
+        "__init__.py",
+        "base.py",
+        "gaussians.py",
+        "nrend_test_systems.py",
+        "registry.py",
+        "utils.py",
+    ],
+    visibility = DEFAULT_VISIBILITY + [
+        # Add visibility for //internal/scripts/experimental:grpc_control_actors
+        "//internal/scripts/experimental:__pkg__",
+    ],
+    deps = [
+        "//libs/losses:pylib",
+        "//libs/nrend:pylib",
+        "//nre/config:pylib",
+        "//nre/datamodules:pylib",
+        "//nre/datasets:pylib",
+        "//nre/difix:pylib",
+        "//nre/metrics:pylib",
+        "//nre/models:pylib",
+        "//nre/models/base:pylib",
+        "//nre/models/gaussians:pylib",
+        "//nre/models/gaussians:pylib_gaussians_composite",
+        "//nre/utils:pylib",
+        "//nre/utils:pylib_custom_metrics",
+        "//nre/utils:pylib_types",
+        "//nre/utils/io:pylib",
+        pip_requirement("omegaconf"),
+        pip_requirement("torch"),
+        pip_requirement("pytorch-lightning"),
+        pip_requirement("imageio"),
+        pip_requirement("numpy"),
+        pip_requirement("einops"),
+        pip_requirement("imageio-ffmpeg"),
+        pip_requirement("setuptools"),
+        pip_requirement("wandb"),
+        pip_requirement("torchmetrics"),
+        pip_requirement("trimesh"),
+        pip_requirement("tqdm"),
+    ],
+)
+
+py_library(
+    name = "utils",
+    srcs = ["utils.py"],
+    deps = [
+        # List any dependencies of utils.py here
+        "//nre/datamodules:pylib",
+        "//libs/losses:pylib",
+        "//nre/models/base:pylib",
+        pip_requirement("numpy"),
+        pip_requirement("torch"),
+        pip_requirement("omegaconf"),
+    ],
+)

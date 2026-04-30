@@ -1,0 +1,8 @@
+# Example mapping from label_class to exemplar PLY path used for fallback assets
+# Copy this file to your output RUN_ID directory as class_exemplars.yaml and edit paths.
+# Only providing fallbacks for automobile, car, and bus - all other classes will be ignored if harvesting fails
+'automobile': nre/utils/io/asset_harvester_tools/asset_bank/4/4.ply
+'Car': nre/utils/io/asset_harvester_tools/asset_bank/4/4.ply
+'bus': nre/utils/io/asset_harvester_tools/asset_bank/7/7.ply
+'Bus': nre/utils/io/asset_harvester_tools/asset_bank/7/7.ply
+

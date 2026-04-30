@@ -1,0 +1,5 @@
+# @package _global_
+
+defaults:
+  - 3dgut_dynamic_mcmc.yaml
+  - override /model/gaussians/renderer@model.renderer: 3dgut_gsplat

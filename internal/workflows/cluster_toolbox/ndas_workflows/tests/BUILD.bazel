@@ -1,0 +1,39 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+load("@aspect_rules_py//py:defs.bzl", "py_binary")
+load("//bazel/pytest:defs.bzl", "pytest_test")
+
+py_binary(
+    name = "fetch_sample_specs",
+    srcs = ["fetch_sample_specs.py"],
+    data = [
+        "//internal/workflows/cluster_toolbox/cluster_configs",
+        "@maglev_cli//file:maglev",
+    ],
+    main = "fetch_sample_specs.py",
+)
+
+pytest_test(
+    name = "run_ndas_workflow_integration_test",
+    timeout = "long",
+    srcs = [
+        "run_ndas_workflow_integration_test.py",
+    ],
+    data = [
+        "//internal/workflows/cluster_toolbox/cluster_configs",
+        "@maglev_cli//file:maglev",
+    ],
+    tags = ["manual"],
+    deps = [
+        "//internal/workflows/cluster_toolbox:pylib",
+        "//internal/workflows/cluster_toolbox/ndas_workflows:run_ndas_workflow",
+    ],
+)

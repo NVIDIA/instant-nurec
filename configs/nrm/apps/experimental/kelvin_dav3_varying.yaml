@@ -1,0 +1,75 @@
+# @package _global_
+# Owner: jiahuih
+
+# order in which configs override each other (/* - denotes a relative search path)
+defaults:
+  - kelvin_dav3_front
+
+system:
+  train_batch_size: 1
+  val_batch_size: 1
+
+shared_config:
+  camera_ids:
+    - camera_front_wide_120fov
+    - camera_cross_left_120fov
+    - camera_cross_right_120fov
+    - camera_rear_left_70fov
+    - camera_rear_right_70fov
+  nurec_camera_ids:
+    - ncore_path: nurec/all.zarr.itar
+      camera_id: camera_front_wide_120fov
+      unique_sensor_idx: 0
+      sample_ratio: 0.3
+    - ncore_path: nurec/all.zarr.itar
+      camera_id: camera_cross_left_120fov
+      unique_sensor_idx: 1
+      sample_ratio: 0.3
+    - ncore_path: nurec/all.zarr.itar
+      camera_id: camera_cross_right_120fov
+      unique_sensor_idx: 2
+      sample_ratio: 0.3
+    - ncore_path: nurec/all.zarr.itar
+      camera_id: camera_rear_left_70fov
+      unique_sensor_idx: 3
+      sample_ratio: 0.3
+    - ncore_path: nurec/all.zarr.itar
+      camera_id: camera_rear_right_70fov
+      unique_sensor_idx: 4
+      sample_ratio: 0.3
+
+# Expected 60-70% MEM usage with batch size = 1.
+override_config:
+  res_spec:
+    config:
+      camera_subsampler:
+        frame_width: 504
+        frame_height: 280
+  context_camera_spec:
+    config:
+      augmentations:
+        context_sensor_idxs:
+          default:
+            values:
+              - [0]
+              - [0, 1, 2]
+              - [0, 1, 2, 3, 4]
+            weights: [1.0, 1.0, 1.0]
+            start_epoch: 0
+        context_n_frames_per_sample:
+          default:
+            values: [8, 14, 18]
+            weights: [1.0, 1.0, 1.0]
+            start_epoch: 0
+        # Excluding 5-cam, 18-frame setting.
+        max_context_pixels: 12_000_000
+  regular_context_camera_spec:
+    config:
+      frame_batch_samplers:
+        uniform:
+          frame_gap_timestamp_us: 500000
+        uniform_2:
+          name: uniform
+          n_frames_per_sample: 8  # will be overriden during concretization
+          n_samples_per_sequence: 10
+          frame_gap_timestamp_us: 250000

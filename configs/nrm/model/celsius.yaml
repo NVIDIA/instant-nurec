@@ -1,0 +1,68 @@
+defaults:
+  # GRT is not suitable for feed-forward inference!
+  - /model/gaussians/renderer@renderer: 3dgut_nrend
+
+name: celsius
+
+# Used when computing gt velocity and mask from cuboid tracks.
+track_padding_m: [1.2, 1.2, 1.2]
+
+# Initialization weights from pretrained checkpoints.
+init_weights_path: null
+
+# Scale for initializing sky/motion tokens.
+init_token_scale: 0.02
+
+# Transformer backbone configuration (ViT-large)
+patch_shape: [8, 8]
+encoder:
+  depth: 24
+  block_pattern: T
+  embed_dim: 1024
+  n_heads: 16
+  mlp_ratio: 4.0
+
+# Specifications of different decoders.
+sky_module:
+  enabled: true
+
+motion_module:
+  enabled: false
+  # Set to 0 to disable motion basis (velocity will just be predicted from upscaled backbone feat)
+  n_motion_tokens: 0
+  unpatch_dim: 32
+  motion_qkv_dim: 32
+  falloff: true
+  bidirectional_flow: true
+
+affine_module:
+  enabled: true
+  # Number of affine tokens must be larger than the number of views.
+  # Preferably set this equal to the number of views.
+  n_affine_tokens: -1
+  cross_attend: true
+  # Start optimizing the affine module from this global step.
+  optimization_start_global_step: 0
+
+# parameters for different activation functions
+activations:
+  opacity_shift: -2.0
+  scale_shift_log_ratio: -1.0
+  scale_max: 0.3
+  distance_min: 0.1
+  distance_max: 500.0
+  distance_shift: -1.65
+  sky_mask_clamp_min: -10.0
+  sky_mask_clamp_max: 10.0
+  # Adaptive falloff sigma based on frame gap
+  falloff_sigma_min: -1.0
+  falloff_sigma_max: 2.0
+
+# For online velocity computation from lidar
+velocity_from_lidar:
+  enabled: false
+  gap_from_image_us: 0
+  near_mask_threshold_m: 3.0
+  box_filter_voxel_size_m: 0.1
+  box_filter_max_count: 3
+  gaussians_scale: 0.01

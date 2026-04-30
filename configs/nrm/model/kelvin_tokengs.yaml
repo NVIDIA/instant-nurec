@@ -1,0 +1,35 @@
+defaults:
+  - /model/gaussians/renderer@renderer: 3dgs_gsplat
+
+name: kelvin
+
+use_2dgs: false
+prepare_normal_supervision: false
+
+# Network configuration.
+patch_shape: [8, 8]
+
+encoder:
+  name: token-gs-encoder
+  depth: 12
+  n_heads: 16
+  embed_dim: 1024
+  use_qk_norm: true
+  layer_scale_init_values: 1e-4
+
+decoder:
+  name: token-gs-decoder
+  depth: 12
+  use_qk_norm: true
+  layer_scale_init_values: 1e-4
+  num_gaussian_tokens: 1024
+  gaussian_token_init_std: 0.02
+
+sky:
+  name: solid-color
+  color: [0.5, 0.5, 0.5]
+  cubemap_size: 448
+
+init_weights_paths: {}
+
+scene_rescale: 1.0

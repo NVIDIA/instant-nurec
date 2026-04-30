@@ -1,0 +1,53 @@
+# Temporal appearance config for fourier_features_dim=20 layers.
+# Adjusts features_albedo lr to be 4x smaller to account for higher fourier dimension.
+
+fourier_features_dim: 20
+
+optimizers:
+  - name: fused_adam
+    args:
+      lr: 0.01
+      eps: 1.e-15
+      betas: [0.9, 0.99]
+    params:
+      positions:
+        args:
+          # 3DGS value: 0.00016 initial and decayed to 0.0000016
+          # Note: The position lr gets multiplied by the scene scale in gaussians_model
+          lr: 0.00016
+    scheduler:
+      name: ExponentialLR
+      interval: step
+      args:
+        gamma: ${calc_exp_lr_decay_rate:0.01,${mul:${trainer.max_epochs},${dataset.n_samples_per_epoch}}}
+
+  - name: fused_adam
+    args:
+      lr: 0.01
+      eps: 1.e-15
+      betas: [0.9, 0.99]
+    params:
+      densities:
+        args:
+          lr: 0.05 # 3DGS value: 0.05
+      features_albedo:
+        args:
+          lr: ${div:0.0025, 4} # 4x smaller when fourier_features_dim=20
+      features_specular:
+        args:
+          lr: ${div:0.0025,20} # 3DGS value 20x smaller than lr of features_albedo
+      rotations:
+        args:
+          lr: 0.001 # 3DGS value: 0.001
+      scales:
+        args:
+          lr: 0.005 # 3DGS value: 0.005
+      extra_signal:
+        args:
+          lr: 0.01
+      camera_extra_signal:
+        args:
+          lr: 0.01
+      lidar_extra_signal:
+        args:
+          lr: 0.01

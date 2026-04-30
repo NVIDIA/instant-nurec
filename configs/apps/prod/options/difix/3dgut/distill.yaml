@@ -1,0 +1,11 @@
+# @package _global_
+
+defaults:
+  - override /difix: difix
+
+difix:
+  training:
+    enabled: true
+
+  inference:
+    enabled: false

@@ -1,0 +1,33 @@
+# @package _global_
+# Owner: Haithem Turki
+
+loss:
+  gaussian_scale:
+    fn: abs
+    reduce:
+      name: mean
+    lambda_: 0.005 # lower than the MCMC paper default of 0.01, seems to work well on the internal smoketest clips
+    layer_lambdas:
+      road: 0.01
+    visibility_filter: true
+    occlusion_aware: false
+  gaussian_density:
+    fn: abs
+    reduce:
+      name: mean
+    lambda_: 0.005 # lower than the MCMC paper default of 0.01, seems to work well on the internal smoketest clips
+    layer_lambdas:
+      road: 1
+    visibility_filter: true
+    occlusion_aware: false
+
+model:
+  strategy:
+    relocate:
+      max_invisible_steps: 1000
+
+  renderer:
+    outputs:
+      scene:
+        enable_visibility: true # Enable visibility rendering for visibility-based losses computation
+        enable_cumulated_weights: true # Enable cumulated weights rendering for cumulated weights-based losses computation

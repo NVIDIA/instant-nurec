@@ -1,0 +1,209 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+load("@aspect_rules_py//py:defs.bzl", "py_binary")
+load("@mypy_integration//:mypy.bzl", "mypy_test")
+# ----------------------------------------------------------------------------------
+
+load("@nre_pip_deps//:requirements.bzl", pip_requirement = "requirement")
+load("@rules_python//python:defs.bzl", "py_library")
+load("//bazel/pytest:defs.bzl", "pytest_test")
+
+filegroup(
+    name = "py_files",
+    srcs = glob(["**/*.py"]),
+    visibility = [
+        "//internal/scripts/pycena:__pkg__",
+    ],
+)
+
+filegroup(
+    name = "asset_harvest_files",
+    srcs = [
+        "__init__.py",
+        "asset_harvest.py",
+        "asset_harvest_metadata.py",
+        "flip_ply.py",
+        "utils.py",
+    ],
+    visibility = [
+        "//internal/scripts/pycena:__subpackages__",
+    ],
+)
+
+################################################################
+# Deps list
+################################################################
+
+ASSET_HARVESTER_DEPS = [
+    pip_requirement("torch"),
+    pip_requirement("numpy"),
+    pip_requirement("pillow"),
+    pip_requirement("opencv-python"),
+    pip_requirement("imageio"),
+    pip_requirement("imageio-ffmpeg"),
+    pip_requirement("setuptools"),
+    pip_requirement("click"),
+    pip_requirement("click-default-group"),
+    pip_requirement("asset-harvester"),
+    pip_requirement("diffusers"),
+    pip_requirement("open_clip_torch"),
+    pip_requirement("transformers"),
+    pip_requirement("torchvision"),
+    pip_requirement("lpips"),
+    pip_requirement("roma"),
+    pip_requirement("einops"),
+    pip_requirement("safetensors"),
+    pip_requirement("accelerate"),
+    pip_requirement("kiui"),
+    pip_requirement("scipy"),
+    pip_requirement("timm"),
+    pip_requirement("omegaconf"),
+    pip_requirement("torchmetrics"),
+    pip_requirement("tyro"),
+    pip_requirement("wandb"),
+    pip_requirement("matplotlib"),
+    pip_requirement("boto3"),
+    pip_requirement("xformers"),
+    pip_requirement("pydantic"),
+    pip_requirement("tqdm"),
+    pip_requirement("pyyaml"),
+    pip_requirement("scikit-image"),
+    pip_requirement("packaging"),
+    pip_requirement("fused-ssim"),
+    pip_requirement("patch-conv"),
+    pip_requirement("nvidia-ncore"),
+    "//nre/models/gaussians:pylib",
+    "//nre/models/gaussians:pylib_cc_gsplat",
+    "//nre/config:pylib",
+    "//nre/utils:pylib",
+    "//nre/utils/debug:pylib",
+]
+
+ASSET_HARVESTER_DATA = [
+    "//configs",
+    "@asset_harvester_multiview_feature_embeddings//:embeddings",
+]
+
+# make AH data dependencies available to be used by the nre tools
+py_library(
+    name = "asset_harvester_data_lib",
+    data = ASSET_HARVESTER_DATA,
+    visibility = [
+        "//apps:__pkg__",
+        "//internal/scripts/pycena/runtime:__pkg__",
+    ],
+)
+
+################################################################
+# PyBinary rules
+################################################################
+
+py_binary(
+    name = "asset_harvester",
+    srcs = [
+        "__init__.py",
+        "asset_harvest.py",
+        "asset_harvest_metadata.py",
+        "flip_ply.py",
+        "utils.py",
+    ],
+    data = ASSET_HARVESTER_DATA,
+    main = "asset_harvest.py",
+    visibility = [
+        # Add visibility for //internal/scripts/ci:python_absolute_path_check
+        "//internal/scripts/ci:__pkg__",
+        # Add visibility for SQA tests
+        "//internal/sqa:__pkg__",
+    ],
+    deps = ASSET_HARVESTER_DEPS,
+)
+
+py_binary(
+    name = "flip_ply",
+    srcs = [
+        "__init__.py",
+        "flip_ply.py",
+    ],
+    main = "flip_ply.py",
+    visibility = [
+        "//visibility:private",
+    ],
+    deps = [
+        "//nre/models/gaussians:pylib",
+    ],
+)
+
+# Rendering adapter for TokenGS gsplat renderer
+py_library(
+    name = "rendering_lib",
+    srcs = [
+        "rendering.py",
+    ],
+    visibility = [
+        "//internal/scripts/experimental/models/gaussian:__subpackages__",
+        "//nre/utils:__pkg__",
+    ],
+    deps = [
+        pip_requirement("asset-harvester"),
+        pip_requirement("torch"),
+    ],
+)
+
+mypy_test(
+    name = "asset_harvester_mypy",
+    timeout = "long",
+    deps = [
+        ":asset_harvester",
+    ],
+)
+
+pytest_test(
+    name = "asset_harvest_test",
+    timeout = "long",
+    srcs = [
+        "asset_harvest_test.py",
+    ],
+    data = [
+        "@test_data_asset_harvester",
+    ],
+    tags = ["manual"],
+    deps = [
+        ":asset_harvester",
+        pip_requirement("click"),
+        "@rules_python//python/runfiles",
+    ],
+)
+
+################################################################
+# Library rule for module access
+################################################################
+
+py_library(
+    name = "pylib",
+    srcs = [
+        "__init__.py",
+        "asset_harvest.py",
+        "asset_harvest_metadata.py",
+        "flip_ply.py",
+        "utils.py",
+    ],
+    visibility = [
+        "//apps:__pkg__",
+        "//internal/scripts/pycena/runtime:__pkg__",
+    ],
+    deps = ASSET_HARVESTER_DEPS,
+)
+
+################################################################
+# Scripts for harvest pipeline
+################################################################
+
+## Removed plan_tracks and generate_asset_harvester_training_yaml; use nre/utils/io/asset_harvester_tools instead

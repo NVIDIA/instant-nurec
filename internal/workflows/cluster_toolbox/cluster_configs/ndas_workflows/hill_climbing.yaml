@@ -1,0 +1,46 @@
+# @package _global_
+
+defaults:
+  - ndas_workflow_base
+  - _self_
+
+workflow_name_prefix: nurec-cicd-reconstruct-hill-climbing
+
+amo_cle:
+  enabled: false
+
+nre_eval_regression:
+  enabled: true
+
+nre_eval:
+  cut:
+    # Cut to only keep tasks needed for hill climbing testing
+    # Keep full rendering pipeline (1-13) and metadata tasks (14-17)
+    # This will exclude evaluators 18-75
+    # Rendering pipeline (tasks 1-13)
+    - create_clips_parallel_structure  # Task 1
+    - mount_clips  # Task 2
+    - download_usdz  # Task 3
+    - multiplex_usdz_transforms  # Task 4
+    - copy_render_launcher  # Task 5
+    - render_nre  # Task 6
+    - encode_video_h264  # Task 7
+    - mux_videos  # Task 8
+    - merge_synthetic_data_into_clip  # Task 9
+    - rr_entrypoint_real  # Task 10
+    - rr_entrypoint_real-indexer  # Task 11
+    - rr_entrypoint_synth  # Task 12 - needed for regression test input
+    - rr_entrypoint_synth-indexer  # Task 13 - indexer
+    # Metadata tasks (14-17)
+    - ddb-comparison-link  # Task 14
+    - upload-comparison-links  # Task 15
+    - generate_synthesis_eval_metadata  # Task 16
+    - aggregate-and-upload-eval-metadata  # Task 17
+
+car2sim:
+  cut: []
+  full_pipeline:
+    clipgt_ids:
+    - 17847356-5cf4-4d37-b806-472746e84d08
+    - 40a76fa8-55e9-490d-8e83-0a99d410e190
+    - 5a61a519-1123-4b9e-a80c-0c40fcbe1453

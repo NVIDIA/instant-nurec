@@ -1,0 +1,25 @@
+# @package _global_
+
+# order in which configs override each other (/* - denotes a relative search path)
+defaults:
+  - /apps/AV/_base_3dgut_dynamic.yaml
+  - _alpasim_mixin
+  - override /difix: difix
+
+difix:
+  training:
+    enabled: true
+
+# overwrite some of the default parameters
+loss: 
+  lidar:
+    lambda_: 0.03
+
+dataset:
+  n_train_sample_lidar_rays: 2048
+    
+checkpoint:
+  every_n_train_steps: ${mul:${trainer.max_epochs},${dataset.n_samples_per_epoch}}
+  artifact:
+    nrend:
+      enabled: false # TODO: nrend does not support dynamic 3dgut scenes yet

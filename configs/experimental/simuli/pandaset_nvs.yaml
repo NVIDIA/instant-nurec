@@ -1,0 +1,40 @@
+# @package _global_
+# Owner: Haithem Turki
+
+# order in which configs override each other (/* - denotes a relative search path)
+defaults:
+  - /apps/AV/PandaSet/3dgut_dynamic_mcmc.yaml
+  - _simuli_mixin.yaml
+  - _simuli_dynamic_mixin.yaml
+  - /model/gaussians/extra_signal@model.layers.background.extra_signal: [intensity, raydrop]
+  - /model/gaussians/extra_signal@model.layers.dynamic_rigids.extra_signal: [intensity, raydrop]
+  - override /model/background: sky_env_map
+
+dataset:
+  lidar_ignore_rows: [62, 63]
+
+  # Validate on frames 1,3,5,...
+  val_camera_frame_start: 1
+  val_camera_frame_step: 2
+  val_lidar_frame_start: 1
+  val_lidar_frame_step: 2
+
+  samplers:
+    batch_sampler:
+      camera_pixel_sampler:
+        crop_type: full_image
+        subsample: 1
+      camera_frame_sampler:
+        name: holdout
+        # Exclude frames used during validation from the training set.
+        exclude_frames_start: 1
+        exclude_every_n_frames: 2
+        include_frames_start: null
+        include_every_n_frames: null
+      lidar_frame_sampler:
+        name: holdout
+        # Exclude frames used during validation from the training set.
+        exclude_frames_start: 1
+        exclude_every_n_frames: 2
+        include_frames_start: null
+        include_every_n_frames: null

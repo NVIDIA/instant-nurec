@@ -1,0 +1,16 @@
+diff --git i/oci/private/authn.bzl w/oci/private/authn.bzl
+index eb01388..9220abc 100644
+--- i/oci/private/authn.bzl
++++ w/oci/private/authn.bzl
+@@ -37,6 +37,11 @@ _WWW_AUTH = {
+         "scope": "repository:{repository}:pull",
+         "service": "container_registry",
+     },
++    "gitlab-master.nvidia.com:5005": {
++        "realm": "gitlab-master.nvidia.com/jwt/auth",
++        "scope": "repository:{repository}:pull",
++        "service": "container_registry",
++    },
+     ".app.snowflake.com": {
+         "realm": "{registry}/v2/token",
+         "scope": "repository:{repository}:pull",

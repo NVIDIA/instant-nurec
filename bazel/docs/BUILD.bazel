@@ -1,0 +1,39 @@
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+load("@aspect_rules_py//py:defs.bzl", "py_binary")
+load("@nre_pip_deps_docs//:requirements.bzl", requirement_docs = "requirement")
+
+py_binary(
+    name = "sphinx_wrapper",
+    srcs = ["sphinx_wrapper.py"],
+    main = "sphinx_wrapper.py",
+    visibility = ["//docs:__subpackages__"],
+    deps = [
+        requirement_docs("sphinx"),
+        requirement_docs("sphinx_rtd_theme"),
+        requirement_docs("autodoc-pydantic"),
+        "@nre_repo//libs/gaussian_mcmc:pylib_cc",
+        "@nre_repo//libs/losses:pylib",
+        "@nre_repo//libs/nrend:pylib",
+        "@nre_repo//libs/packed_ops:pylib_cc",
+        "@nre_repo//libs/pytorch3d_knn:pylib_cc",
+        "@nre_repo//libs/ray_utils:pylib_cc",
+        "@nre_repo//libs/tracy_utils:pylib",
+        "@nre_repo//libs/vren:pylib_cc",
+        "@nre_repo//nre/datamodules:pylib",
+        "@nre_repo//nre/datasets:pylib",
+        "@nre_repo//nre/datasets/samplers:pylib",
+        "@nre_repo//nre/grpc:pylib",
+        "@nre_repo//nre/models:pylib",
+        "@nre_repo//nre/systems:pylib",
+        "@nre_repo//nre/viewer:pylib",
+    ],
+)

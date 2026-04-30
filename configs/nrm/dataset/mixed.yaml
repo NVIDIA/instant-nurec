@@ -1,0 +1,12 @@
+name: nrm-mixed
+
+# Specification of the mixture components, for example:
+# mixture:
+#   ncore_c1_pp:    # <-- Name of the mixture component
+#     name: nrm-ncore
+#     sample_ratio: 1.2
+#     config:        # <-- Config of the mixture component
+#       ncore_json_base_path: /path/to/ncore/json/base
+#       ...
+# You can use hydra's default list syntax to inherent configs from other yaml files.
+mixture: {}

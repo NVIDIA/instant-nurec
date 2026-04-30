@@ -1,0 +1,17 @@
+# @package _global_
+
+# Switch below between static and dynamic model
+defaults:
+  - /nrm/apps/celsius_base: _static_full    # Override from cmd-line with nrm/apps/celsius_base=_dynamic_full
+  - /nrm/dataset/trisplit: _ncore_local_low_res
+
+out_dir: /nrm_debug/out
+
+system:
+  log_media_every_n_steps: 5
+  log_media_every_n_steps_val: 1
+  warmup_steps: 50
+
+model:
+  init_weights_path: /nrm_debug/gslrm.ckpt
+  activation_checkpointing: true

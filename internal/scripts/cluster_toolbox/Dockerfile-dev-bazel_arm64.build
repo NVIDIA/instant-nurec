@@ -1,0 +1,45 @@
+# Copyright (c) 2024 NVIDIA CORPORATION.  All rights reserved.
+
+#
+# BUILD: DOCKER_BUILDKIT=1 docker image build -t nvcr.io/nvidian/qiwu:nre_dev_arm64 -f deps/docker/Dockerfile-dev-bazel_arm64 .
+# PUSH:  docker push nvcr.io/nvidian/qiwu:nre_dev_arm64
+#
+# Note: this image is used for running the Cluster toolbox on ORD in bazel mode
+#       Please do not to overwrite existing images!
+
+# need to use ubuntu24.04 as slang libraries are currently not available for older OSs
+FROM nvidia/cuda:12.8.0-devel-ubuntu24.04
+
+LABEL maintainer="Qi Wu <qiwu@nvidia.com>"
+
+# Needed for string substitution
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN \
+    # Add additional system libraries
+    apt-get -y update -qq --fix-missing && \
+    apt-get install -y --no-install-recommends software-properties-common && \
+    add-apt-repository -y ppa:ubuntu-toolchain-r/test && \
+    apt-get -y update -qq --fix-missing && \
+    apt-get -y install --no-install-recommends \
+        gcc g++ gcc-11 g++-11 libglib2.0-0 libopenblas-dev libgl1 clang git wget ninja-build ffmpeg \
+        xz-utils jq sudo pandoc jupyter-nbconvert python3-pip patchelf docker.io curl zip unzip \
+        libglx0 libglvnd0 libglvnd-dev libgl1 libgl1-mesa-dev libegl1 libegl1-mesa-dev libgles2 libgles2-mesa-dev \
+    && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN \
+   # Add python -> python3 symlink (required for bazel-build image entrypoints)
+   ln -s /usr/bin/python3 /usr/bin/python
+
+ARG BAZELISK_VERSION=v1.20.0
+RUN \
+    # Install bazelisk
+    wget https://github.com/bazelbuild/bazelisk/releases/download/$BAZELISK_VERSION/bazelisk-linux-arm64 -O /usr/local/bin/bazelisk && \
+    chmod +x /usr/local/bin/bazelisk
+
+# Set required driver capabilities ('compute' for cuda, 'graphics' for optix, 'utility' for nvidia-smi)
+ENV NVIDIA_DRIVER_CAPABILITIES=graphics,compute,utility
+
+# Make all devices visible by default
+ENV NVIDIA_VISIBLE_DEVICES=all

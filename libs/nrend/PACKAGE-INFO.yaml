@@ -1,0 +1,4 @@
+Package: nrend
+Description: NRend is a cuda rendering library for NRE models.
+Maintainers: nicolasm@nvidia.com
+Repository: https://gitlab-master.nvidia.com/nrs/nre

@@ -1,0 +1,107 @@
+# @package _global_
+
+defaults:
+  # Configs override each other in the listed order (/ denotes config root)
+  # Note: this requires the aux task to generate the road semantic labels for lidar
+  - /apps/AV/_base_3dgut_dynamic_road_semantic.yaml
+  - /apps/prod/options/artifact: default
+  - /apps/prod/options/nrend: disabled
+  - /apps/prod/options/difix/3dgut: disabled
+  - /apps/prod/options/mesh: disabled
+  - /apps/prod/options/ground: enabled
+  - /apps/prod/options/subsampling/3dgut: batch_sampler_4
+  - /apps/prod/Hyperion-8.1/options/sensors: hyperion8.1_4cam_1lidar
+  - /apps/prod/Hyperion-8.1/options/validation: default
+  # Enable the calibration module to optimize per-frame poses
+  - /apps/prod/options/calib: enabled
+  # Temporal appearance for dynamic rigids
+  - /apps/prod/options/temporal_appearance@model.layers.dynamic_rigids: fourier_features_dim_20
+  # Enable MCMC strategy
+  - /apps/AV/module_mixins/_mcmc_mixin.yaml
+  - override /model/gaussians/strategy@model.strategy: mcmc
+  # Disable the post-processing per-frame for temporal appearance
+  - override /model/post_processing@model.post_processing.b: ppisp
+  - override /model/post_processing@model.post_processing.c: null
+  - override /logger: dummy
+
+dataset:
+  n_samples_per_epoch: 30_000
+  n_train_sample_lidar_rays: 2048
+  cuboid_tracks_params:
+    track_label_sources:
+      - AUTOLABEL
+
+checkpoint:
+  every_n_train_steps: ${mul:${trainer.max_epochs},${dataset.n_samples_per_epoch}}
+  
+model:
+  # disabling calibration for lidar
+  calib:
+    lidar:
+      enabled: false
+
+  strategy:
+    add:
+      max_n_gaussians: 2_000_000 # Maximum number of Gaussians
+
+  # 800k background points + 200k random points + 300k dynamic rigids + 300k dynamic deformables + 400k road points = 2m points
+  layers:
+    dynamic_rigids:
+      initialization:
+        num_point_cloud_points_in_layer: 300_000
+
+    dynamic_deformables:
+      initialization:
+        num_point_cloud_points_in_layer: 300_000
+
+    road:
+      initialization:
+        num_point_cloud_points: 400_000
+        num_random_points: 100_000
+
+    # Enable temporal appearance for background for compatible with Pacsim
+    background:
+      fourier_features_dim: 5
+      initialization:
+        num_point_cloud_points: 800_000
+        num_near_points: 100_000
+        num_far_points: 100_000
+
+  # Enable LIDAR-specific rendering optimizations
+  renderer:
+    culling:
+      far_clip_distance_lidar: 200.0
+      far_clip_distance_camera: 1000.0
+      # enable_ray_based_culling: true  # Skip expanding Gaussians into empty tiles
+    #tiling:
+    #  lidar:
+    #    tile_size_elevation: 4
+    #    tile_size_azimuth: 8
+    #    n_bins_elevation: 16  # or even higher, like 64 or 128, the optimal value is lidar model dependent
+
+  post_processing:
+    b:
+      # Disable frame-specific optimizations for the PPISP pipeline for two reasons:
+      # 1. we don't have a PPISP controller yet.
+      # 2. we are using fourier features for the background which interferes with the frame-specific optimizations.
+      per_frame_ppisp_enabled: false
+
+loss:
+  lidar:
+    lambda_: 0.03
+
+  # Applying background-in-track loss only to the dynamic classes improves reconstruction quality in static regions near dynamic obstacles, 
+  # which are often occluded by dynamic cuboids (jittering cuboids).
+  background_in_track_gaussian:
+    fn: bce_with_logits
+    reduce:
+      name: mean
+    lambda_: 0.1
+    layer_names:
+      - background  # layer name to suppress
+    layer_labels_to_use:
+      background: ["person", "rider", "car", "truck", "bus", "train", "motorcycle", "bicycle"]  # only penalize these dynamic classes in background layer
+
+system:
+  collect_garbage_mem_usage: 0.7  # Trigger when 70% of GPU memory is used, avoid out-of-memory issues due to memory fragmentation in maglev workflows
+  collect_garbage_check_interval: 10  # Check memory every 10 steps

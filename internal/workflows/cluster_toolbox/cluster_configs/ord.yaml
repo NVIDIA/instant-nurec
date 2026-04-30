@@ -1,0 +1,69 @@
+# @package _global_
+
+defaults:
+  - base
+  - _self_
+
+name: ord
+
+# ORD specific config args
+server: "cs-oci-ord-login-02.nvidia.com" # login server
+user: ??? # login account to ssh onto ord
+team: "nvr_torontoai_3dscenerecon"
+partition:
+  - polar
+  - grizzly
+  - polar3
+  - polar4
+
+# Job configurations
+num_nodes: 1
+num_gpus: 1  # means the number of GPUs per node !!!
+time: "04:00:00"
+
+# Execution environment
+exec_mode: bazel # "bazel" or "docker_python" or "docker"
+exec_path:
+  include_config_name: false
+  include_dataset_name: false
+  remote: "/lustre/fsw/portfolios/nvr/users/${user}/nre_experiments" # default path on ORD
+  remote_ray_head: "${exec_path.remote}/ray_head"
+  local: ???
+
+# Git commit to go to if supported
+git_commit: null
+
+keep_workspace: false # If true, the runcache will be saved on lustre after the job is done.
+keep_runcache: false # NOTE: Only for development purposes, if true, the runcache will be saved on lustre after the job is done.
+
+pip_cache: ""  # should be <path_to_pip_cache>.tar
+
+docker:
+  build_push: false
+  image_cache_path: "/lustre/fsw/portfolios/nvr/users/${user}/containers" # default directory that we can cache images to on ORD
+
+bazel:
+  dev_cache_path: "${exec_path.remote}/bazel_keep_cache"
+  # NOTE: Docker images are by default store in `/lustre/fsw/portfolios/nvr/projects/nvr_torontoai_3dscenerecon/containers`. However,
+  #       this path is not accessible to all users. So we use Qi Wu's personal container directory for now. If additional docker images
+  #       are needed, but you have no access to the `3dscenerecon` PPP, please contact Qi Wu (qiwu@nvidia.com) to add them to his directory.
+  dev_image_path: "/lustre/fsw/portfolios/nvr/users/qiwu/containers/nre-ord-dev-v26.4.90_c6280fa2_dev.sqsh"
+  cache_prefill: "/lustre/fsw/portfolios/nvr/users/qiwu/caches/nre-bazel-cache-latest"  # should be <path_to_cache_prefill> but without -rank<N>.tar suffix.
+
+docker_python:
+  # NOTE: Docker images are by default store in `/lustre/fsw/portfolios/nvr/projects/nvr_torontoai_3dscenerecon/containers`. However,
+  #       this path is not accessible to all users. So we use Qi Wu's personal container directory for now. If additional docker images
+  #       are needed, but you have no access to the `3dscenerecon` PPP, please contact Qi Wu (qiwu@nvidia.com) to add them to his directory.
+  dev_image_path: "/lustre/fsw/portfolios/nvr/users/qiwu/containers/nre:python-dev-0.2.765_0ce3eab2.sqsh"
+
+conda: {}  # TODO
+
+# By default we always mount /lustre to "/lustre" in the container.
+# You can specify any additional paths here.
+mounts: {}
+ports: [6006]
+
+scratch_prefix: "/raid/scratch" # root directory for per-job scratch space
+scratch_in_container: false
+
+no_resume: true # Note: set as true as resuming NRE training from a checkpoint is currently untested

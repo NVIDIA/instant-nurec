@@ -1,0 +1,19 @@
+# @package _global_
+# Owner: Haithem Turki
+
+dataset:
+  camera_ids:
+    - camera_front_50fov # ['camera_front_right_50fov', 'camera_side_left_50fov', 'camera_side_right_50fov', 'camera_front_50fov', 'camera_front_left_50fov']
+    - camera_front_right_50fov
+    - camera_front_left_50fov
+  lidar_ids:
+    - lidar_top
+  n_val_image_subsample: 2
+  samplers:
+    batch_sampler:
+      camera_pixel_sampler:
+        subsample: 2
+
+system:
+  test:
+    video_fps: 10

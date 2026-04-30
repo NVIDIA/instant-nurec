@@ -1,0 +1,31 @@
+# @package _global_
+
+defaults:
+  - ord
+  - _self_
+
+# GCP specific config args
+server: "gcp-iad-slurm-2-login-01.nvidia.com" # login server
+
+# Inter-node connection in GCP relies on TCPxO / FasTrak, and the library relies on GLIBC >=2.39 (so we need to use Ubuntu 24.04)
+bazel:
+  dev_image_path: "/lustre/fsw/portfolios/av/users/jiahuih/containers/nre-ord-dev-v26.5.17_ubuntu24.sqsh"
+
+team: "av_alpamayo_cosmos"
+exec_path:
+  remote: "/lustre/fsw/portfolios/av/projects/${team}/users/${user}/nre_experiments" # default path on GCP
+
+# On GCP the host /tmp is tmpfs (RAMFS) and /raid/ root is not user-writable, so
+# neither the ORD default (/raid/scratch) nor the old (/tmp/scratch) works. Instead
+# we keep /scratch and /runcache *inside* the per-job pyxis container rootfs (on
+# node-local /raid ext4) and rely on pyxis's per-job rootfs cleanup for disposal.
+# See ord_template.py: SCRATCH_IN_CONTAINER mode skips the host mkdir and bind
+# mounts; resolve_scratch_host_path globs for the rootfs when the driver needs to
+# reach into it (e.g. term_handler reading the pid file for SIGUSR1 forwarding).
+# The scratch_prefix value below is unused when scratch_in_container is true but
+# kept valid for the legacy $SCRATCH/$TMP_CACHE exports in ORD_DEFS.
+scratch_prefix: "/tmp/scratch_unused"
+scratch_in_container: true
+
+partition:
+  - batch

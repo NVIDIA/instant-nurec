@@ -1,0 +1,14 @@
+# @package _global_
+
+defaults:
+  # Configs override each other in the listed order (/ denotes config root)
+  - /apps/AV/_base_3dgut_dynamic.yaml
+  - /apps/prod/options/artifact: default
+  - /apps/prod/options/nrend: disabled
+  - /apps/prod/options/difix/3dgut: disabled
+  - /apps/prod/options/mesh: disabled
+  - /apps/prod/options/ground: disabled
+  - /apps/prod/options/subsampling/3dgut: batch_sampler_4
+  - options/sensors: drivesim_4cam_2valcam_1lidar
+  - options/validation: default
+  - override /logger: dummy

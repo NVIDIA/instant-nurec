@@ -1,0 +1,13 @@
+# @package _global_
+
+dataset:
+  n_val_image_subsample: 4  # Reduction factor of rendered frame resolution w.r.t. input resolution
+  val_camera_frame_step: 3  # Validation on every third camera frame (30 fps camera -> 10 fps)
+  val_lidar_frame_step: 3
+
+system:
+  test:
+    save_results: true
+    save_inputs: true
+    save_videos: true
+    video_fps: 10

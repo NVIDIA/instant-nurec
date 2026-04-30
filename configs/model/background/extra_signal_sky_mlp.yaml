@@ -1,0 +1,17 @@
+defaults:
+  - sky_mlp
+
+name: extra-signal-sky-mlp
+extra_signal:
+  # TODO: [JG] Also allow for multiple heads; for now, only use the first head. 
+  #       This works for now since only semantic heads requires extra-signal in sky-mlp
+  #       https://omegaconf.readthedocs.io/en/2.3_branch/custom_resolvers.html#oc-dict-keys-values
+  types: "${oc.dict.keys: ...extra_signal.heads}"
+  type: ${.types[0]}
+  n_output_dims: ${...extra_signal.n_output_dims}
+  mlp_network_config:
+    otype: FullyFusedMLP
+    activation: ReLU
+    output_activation: None
+    n_neurons: 64
+    n_hidden_layers: 2

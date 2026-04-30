@@ -1,0 +1,59 @@
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
+
+bool_flag(
+    name = "internal",
+    build_setting_default = True,
+    visibility = ["//bazel/conditions:__pkg__"],
+)
+
+bool_flag(
+    name = "mamba",
+    build_setting_default = False,
+    visibility = ["//bazel/conditions:__pkg__"],
+)
+
+bool_flag(
+    name = "run_grpc_only",
+    build_setting_default = False,
+    visibility = ["//bazel/conditions:__pkg__"],
+)
+
+bool_flag(
+    name = "mask_annotator",
+    build_setting_default = False,
+    visibility = ["//bazel/conditions:__pkg__"],
+)
+
+bool_flag(
+    name = "asset_harvester",
+    build_setting_default = False,
+    visibility = ["//bazel/conditions:__pkg__"],
+)
+
+bool_flag(
+    name = "ncore_aux_data",
+    build_setting_default = False,
+    visibility = ["//bazel/conditions:__pkg__"],
+)
+
+bool_flag(
+    name = "skip_nrend_obfuscation",
+    build_setting_default = False,
+    visibility = ["//bazel/conditions:__pkg__"],
+)
+
+bool_flag(
+    name = "local_gsplat",
+    build_setting_default = False,
+    visibility = ["//bazel/conditions:__pkg__"],
+)

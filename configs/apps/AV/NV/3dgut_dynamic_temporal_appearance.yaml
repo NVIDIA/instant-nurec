@@ -1,0 +1,41 @@
+# @package _global_
+# Owner: Tyler Zhu
+
+defaults:
+  - /apps/AV/_base_3dgut_dynamic.yaml
+  - /apps/AV/NV/_nv_mixin.yaml
+  # traffic_light (key = traffic_light)
+  - /model/gaussians/models@model.layers.traffic_light: rigid_gaussians
+  - /model/gaussians/strategy@model.layers.traffic_light.strategy: gsplat
+  - /model/gaussians/initialization@model.layers.traffic_light.initialization: lidar_dynamic_tracks
+  - /model/input_embedding@model.layers.traffic_light.time_embed: individual_step_time_gaussian
+  - /model/tracks_calib@model.layers.traffic_light.tracks_calib: skip
+
+dataset:
+  generate_traffic_light_cuboid_tracks:
+    enabled: true
+
+model:
+  layers:
+    dynamic_rigids:
+      fourier_features_dim: 5
+
+    background:
+      ignore_classes_from_layers: ["traffic_light"]
+
+    traffic_light:
+      class_labels: ["traffic light"]
+      fourier_features_dim: 5
+      tracks:
+        label_classes:
+          ["generated traffic light"]
+      initialization:
+        keep_all_track_poses: true
+        symmetric_axis: null
+# system:
+#   test:
+#     val_render_selected_nodes:
+#       background_only:
+#         - background
+#       traffic_light_only:
+#         - traffic_light

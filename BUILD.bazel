@@ -1,0 +1,382 @@
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+load("@aspect_rules_py//py:defs.bzl", "py_binary", "py_image_layer", "py_library")
+
+# nre:allow-py-venv-binary - py_venv_binary used for better perf and multiprocess-safety of deliverables
+load("@aspect_rules_py//py/unstable:defs.bzl", "py_venv_binary")
+load("@mypy_integration//:mypy.bzl", "mypy_test")
+load("@nre_pip_deps//:requirements.bzl", pip_requirement = "requirement")
+load("@rules_oci//oci:defs.bzl", "oci_image", "oci_load", "oci_push")
+load("@rules_pkg//:pkg.bzl", "pkg_tar")
+load("//bazel/rules_oci:default_layer_groups.bzl", "default_layer_groups")
+
+# Formatting target aliases for convenience
+alias(
+    name = "format",
+    actual = "//bazel/format:format",
+)
+
+alias(
+    name = "format.check",
+    actual = "//bazel/format:custom_check",
+)
+
+# uv.lock (TOML) at repo root for Black Duck security scans: uv tree --no-dedupe --frozen
+alias(
+    name = "generate_lock",
+    actual = "//internal/scripts/deps:generate_lock",
+)
+
+################################################################
+# NRE py_binary
+################################################################
+
+## Main NRE run entrypoint
+RUN_DEPS = [
+    pip_requirement("click"),
+    pip_requirement("click-default-group"),
+    "//nre:pylib",
+    "//nre/benchmark:pylib",
+    "//nre/config:pylib_version",
+    "//nre/metrics:pylib_compute",
+    "//nre/run:pylib",
+    "//nre/utils/io/export:pylib",
+    "//nre/utils/upgrade/cli:pylib",
+    "//nre/grpc:pylib",
+    "//nre/viewer:pylib",
+    "//nre/render/novel_trajectory:pylib",
+    # Include asset harvester CLI and deps in the run image
+    "//nre/utils/io/asset_harvester_tools:pylib",
+]
+
+## Tracy default dependencies (CPU-only) - use standard deps but replace core library
+RUN_DEPS_TRACY = [
+    dep if dep != "//nre:pylib" else "//nre:pylib_tracy"
+    for dep in RUN_DEPS
+]
+
+## Tracy GPU dependencies - use standard deps but replace core library
+RUN_DEPS_TRACY_GPU = [
+    dep if dep != "//nre:pylib" else "//nre:pylib_tracy_gpu"
+    for dep in RUN_DEPS
+]
+
+# Data dependencies of the 'run' target
+RUN_DATA = select({
+    # Don't add configs if only building the gRPC server
+    "//bazel/conditions:run_grpc_only": [],
+    "//conditions:default": ["//configs"],
+}) + [
+    ":notices_file",
+] + [
+    # Asset harvester CLI data
+    "//nre/utils/io/asset_harvester_tools:asset_harvester_data_lib",
+    # Documentation and examples for non-obfuscated images
+    "//docs/architecture:architecture_docs",
+]
+
+filegroup(
+    name = "notices_file",
+    srcs = ["NOTICES"],
+    visibility = [
+        "//apps:__pkg__",
+        "//apps/asset_harvester:__pkg__",
+        "//apps/aux_gen:__pkg__",
+        "//internal/scripts/pycena:__subpackages__",
+    ],
+)
+
+# Generates the run entrypoint based on build configs
+# - for run gRPC server only (run_grpc_only condition) it's an inline script
+# - otherwise replicate the original run.py file
+genrule(
+    name = "gen_run_py",
+    srcs = ["run.py"],
+    outs = ["gen_run.py"],
+    cmd = select({
+        "//bazel/conditions:run_grpc_only": """
+cat << 'EOF' > $@
+# Copyright (c) 2025-2026 NVIDIA CORPORATION.  All rights reserved.
+
+# Generated entrypoint for gRPC-only server
+from nre.grpc.serve import serve_grpc
+
+if __name__ == "__main__":
+    serve_grpc()
+EOF
+""",
+        "//conditions:default": "cp $(SRCS) $@",
+    }),
+    visibility = [
+        "//internal/scripts/pycena:__pkg__",
+    ],
+)
+
+RUN_SRCS = [
+    ":gen_run_py",
+]
+
+py_library(
+    name = "pylib",
+    srcs = RUN_SRCS,
+    data = RUN_DATA,
+    deps = RUN_DEPS,
+)
+
+py_venv_binary(
+    name = "run",
+    main = "gen_run.py",
+    visibility = [
+        "//internal/scripts/ci:__pkg__",
+        # Add visibility for SQA tests
+        "//internal/sqa:__pkg__",
+    ],
+    deps = [":pylib"],
+)
+
+################################################################
+# Tracy Profiling Targets
+################################################################
+
+# NRE with Tracy CPU-only profiling
+py_binary(
+    name = "run_with_tracy",
+    srcs = RUN_SRCS,
+    data = RUN_DATA,
+    env = {
+        "TRACY_ENABLE": "1",
+        "TRACY_NO_BROADCAST": "1",  # Disable LAN discovery
+        "TRACY_NO_CALLSTACK": "1",  # Reduce overhead
+        "TRACY_NO_EXIT": "1",  # Don't exit on disconnect
+        "TRACY_NO_GPU": "1",  # Disable GPU profiling overhead at runtime
+        "TRACY_NO_SAMPLING": "1",  # Reduce overhead
+        "TRACY_NO_SYSTEM_TRACING": "1",  # Reduce noise
+    },
+    main = "gen_run.py",
+    deps = RUN_DEPS_TRACY,
+)
+
+# NRE with Tracy CPU + GPU profiling (higher overhead)
+py_binary(
+    name = "run_with_tracy_gpu",
+    srcs = RUN_SRCS,
+    data = RUN_DATA,
+    env = {
+        "TRACY_ENABLE": "1",
+        # GPU profiling enabled (no TRACY_NO_GPU = full profiling)
+        "TRACY_NO_BROADCAST": "1",  # Disable LAN discovery
+        "TRACY_NO_CALLSTACK": "1",  # Reduce overhead
+        "TRACY_NO_EXIT": "1",  # Don't exit on disconnect
+        "TRACY_NO_SAMPLING": "1",  # Reduce overhead
+        "TRACY_NO_SYSTEM_TRACING": "1",  # Reduce noise
+    },
+    main = "gen_run.py",
+    deps = RUN_DEPS_TRACY_GPU,
+)
+
+mypy_test(
+    name = "run_mypy",
+    timeout = "long",
+    deps = [
+        ":pylib",
+    ],
+)
+
+################################################################
+# Common image rules
+################################################################
+
+# Layer for HOME directory writable by all users
+# (ex. to receive default cache folder for various Python dependencies, though
+# this won't be persisted in our typical container invocations).
+pkg_tar(
+    name = "home_dir_tar",
+    compressor = "@pigz//:pigz",
+    empty_dirs = ["/home"],
+    extension = "tar.gz",
+    mode = "0777",
+    tags = [
+        "manual",
+    ],
+)
+
+################################################################
+# Obfuscation rules
+################################################################
+
+# The doc for py_image_layer states that "binary" should be a py_binary target. However, the implementation is
+# not Python-specific, so we can use it with the "pycena_run" target.
+py_image_layer(
+    name = "pycena_run_image_layer",
+    binary = "//internal/scripts/pycena/runtime:pycena_run",
+    compressor = "@pigz//:pigz",
+    compressor_args = "-n",
+    layer_groups = default_layer_groups(),
+    root = "/app/",
+    tags = [
+        "manual",
+        "no-remote-cache",
+    ],
+)
+
+oci_image(
+    name = "obfuscated_run_image_oci",
+    base = "@nre_run_image_oci",
+    entrypoint = ["/app/internal/scripts/pycena/runtime/pycena_run"],
+    env = {
+        "HOME": "/home",
+        "TORCHINDUCTOR_CACHE_DIR": "/tmp/torchinductor",
+    },
+    tags = [
+        "manual",
+        "no-remote-cache",
+    ],
+    tars = [
+        ":pycena_run_image_layer",
+        ":home_dir_tar",
+        "//nre/grpc/release:customer_distribution_tarball",
+        "//bazel/version:version_file_yaml_tar",  # put last in the list of tar files to make this the last / often changing layer
+    ],
+)
+
+# Build the image and load it into a local runtime:
+# $ bazel run //:load_obfuscated_run_image_oci
+# $ docker run -it --rm --gpus all nvcr.io/nvidian/ct-toronto-ai/nre_obfuscated_run:latest
+oci_load(
+    name = "load_obfuscated_run_image_oci",
+    image = ":obfuscated_run_image_oci",
+    repo_tags = ["nvcr.io/nvidian/ct-toronto-ai/nre_obfuscated_run:latest"],
+    tags = [
+        "manual",
+        "no-remote-cache",
+    ],
+)
+
+# Push the image to the registry:
+# $ bazel run //:push_obfuscated_run_image_oci [-- --tag ${TAG}]
+# Note: Don't push the 'latest' tag from local builds, we reserve this to images generated by post-merge pipelines in CI.
+#       A custom tag can be specific on the above command if needed.
+oci_push(
+    name = "push_obfuscated_run_image_oci",
+    image = ":obfuscated_run_image_oci",
+    repository = "nvcr.io/nvidian/ct-toronto-ai/nre_obfuscated_run",  # this can be overriden by providing --repository
+    tags = [
+        "manual",
+        "no-remote-cache",
+    ],
+)
+
+################################################################
+# Regular Image Rules
+################################################################
+
+# OCI image for 'run'
+py_image_layer(
+    name = "run_image_layer",
+    binary = "run",
+    compressor = "@pigz//:pigz",
+    compressor_args = "-n",
+    layer_groups = default_layer_groups(),
+    root = "/app/",
+    tags = [
+        "manual",
+        "no-remote-cache",
+    ],
+)
+
+oci_image(
+    name = "run_image_oci",
+    base = "@nre_run_image_oci",
+    entrypoint = ["/app/run"],
+    env = {
+        "HOME": "/home",
+        "TORCHINDUCTOR_CACHE_DIR": "/tmp/torchinductor",
+    },
+    tags = [
+        "manual",
+        "no-remote-cache",
+    ],
+    tars = [
+        ":run_image_layer",
+        ":home_dir_tar",
+        "//bazel/version:version_file_yaml_tar",  # put last in the list of tar files to make this the last / often changing layer
+    ],
+    workdir = "/app/run.runfiles/_main",
+)
+
+# Build the image and load it into a local runtime:
+# $ bazel run //:load_run_image_oci
+# $ docker run -it --rm --gpus all nvcr.io/nvidian/ct-toronto-ai/nre_run:latest
+oci_load(
+    name = "load_run_image_oci",
+    image = ":run_image_oci",
+    repo_tags = ["nvcr.io/nvidian/ct-toronto-ai/nre_run:latest"],
+    tags = [
+        "manual",
+        "no-remote-cache",
+    ],
+)
+
+# Push the image to the registry:
+# $ bazel run //:push_run_image_oci [-- --tag ${TAG}]
+# Note: Don't push the 'latest' tag from local builds, we reserve this to images generated by post-merge pipelines in CI.
+#       A custom tag can be specific on the above command if needed.
+oci_push(
+    name = "push_run_image_oci",
+    image = ":run_image_oci",
+    repository = "nvcr.io/nvidian/ct-toronto-ai/nre_run",  # this can be overriden by providing --repository
+    tags = [
+        "manual",
+        "no-remote-cache",
+    ],
+)
+################################################################
+# Package Groups
+################################################################
+
+# Use package groups to manage code visibility [https://bazel.build/concepts/visibility] and prevent
+# unnecessary dependencies between targets
+package_group(
+    name = "core_package_group",
+    packages = [
+        "//internal/scripts/nrm_data/...",  # packages that do data generation for nrm, may use nre components
+        "//internal/scripts/pycena/...",  # packages that depend on core libraries as part of obfuscation
+        "//internal/scripts/usdz_tools/...",  # USDZ inspection and extraction utilities
+        "//libs/...",  # packages of all compiled libraries
+        "//nre/...",  # all regular nre-code packages
+    ],
+)
+
+package_group(
+    name = "aux_package_group",
+    packages = [
+        # packages used for aux-data generation
+        "//apps/aux_gen/...",
+        "//internal/scripts/aux_tools/...",
+    ],
+)
+
+package_group(
+    name = "asset_harvester_package_group",
+    packages = [
+        # packages used for asset harvesting
+        "//apps/asset_harvester/...",
+    ],
+)
+
+package_group(
+    name = "mypy_typing_group",
+    packages = [
+        # Packages needed for using mypy with identifiers from
+        # repositories we build ourselves.
+        "//bazel/typing/...",
+    ],
+)

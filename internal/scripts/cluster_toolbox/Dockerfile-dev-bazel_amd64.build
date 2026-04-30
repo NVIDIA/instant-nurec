@@ -1,0 +1,97 @@
+# Copyright (c) 2024 NVIDIA CORPORATION.  All rights reserved.
+
+#
+# BUILD: DOCKER_BUILDKIT=1 docker image build -t nvcr.io/nvidian/qiwu:nre_dev -f deps/docker/Dockerfile-dev-ord-toolbox.build .
+# PUSH:  docker push nvcr.io/nvidian/qiwu:nre_dev
+#
+# Note: this image is used for running the Cluster toolbox on ORD in bazel mode
+#       Please do not to overwrite existing images!
+
+
+FROM nvidia/cuda:12.8.0-devel-ubuntu24.04
+
+LABEL maintainer="Qi Wu <qiwu@nvidia.com>"
+
+# Needed for string substitution
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN \
+    # Add additional system libraries
+    apt-get update -qq --fix-missing && \
+    # Install a temporary gnupg to bootstrap the newer gnupg
+    apt-get install -y --no-install-recommends software-properties-common wget gnupg && \
+    add-apt-repository -y ppa:ubuntu-toolchain-r/test && \
+    # Add official GnuPG repository (provides gnupg 2.5.16)
+    wget -qO- https://repos.gnupg.org/deb/gnupg/noble/gnupg-signing-key.gpg | gpg --dearmor -o /usr/share/keyrings/gnupg-archive-keyring.gpg && \
+    echo "deb [signed-by=/usr/share/keyrings/gnupg-archive-keyring.gpg] https://repos.gnupg.org/deb/gnupg/noble noble main" > /etc/apt/sources.list.d/gnupg.list && \
+    apt-get -y update -qq --fix-missing && \
+    apt-get -y install --no-install-recommends \
+        gcc g++ gcc-11 g++-11 libglib2.0-0 libopenblas-dev libgl1 clang git wget \
+        xz-utils jq sudo pandoc jupyter-nbconvert python3-pip patchelf docker.io curl zip unzip \
+        libglx0 libglvnd0 libglvnd-dev libgl1 libgl1-mesa-dev libegl1 libegl1-mesa-dev libgles2 \
+        libgles2-mesa-dev gnupg libhwloc-dev \
+    && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN \
+    # Install nsight-system for profiling
+    echo "deb http://developer.download.nvidia.com/devtools/repos/ubuntu$(grep DISTRIB_RELEASE /etc/lsb-release | cut -d '=' -f2 | tr -d .)/$(dpkg --print-architecture) /" | tee /etc/apt/sources.list.d/nvidia-devtools.list && \
+    apt-key adv --fetch-keys http://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/7fa2af80.pub && \
+    apt-get update -qq --fix-missing && \
+    apt-get -y install nsight-systems-cli \
+    && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install Amazon EFA support (together with the libfabric caller) for AWS cluster
+# This also installs libibverbs.so for classical RDMA/RoCE stack support (e.g. for ORD)
+ARG EFA_INSTALLER_VERSION="1.43.2"
+RUN apt-get update -qq --fix-missing \
+    && curl -fsSL "https://efa-installer.amazonaws.com/aws-efa-installer-${EFA_INSTALLER_VERSION}.tar.gz" \
+        -o /tmp/aws-efa-installer.tar.gz \
+    && EFA_DIR="$(tar -tf /tmp/aws-efa-installer.tar.gz | head -1 | cut -d/ -f1)" \
+    && tar -xf /tmp/aws-efa-installer.tar.gz -C /tmp \
+    && cd "/tmp/${EFA_DIR}" \
+    && ./efa_installer.sh -y -g -d --skip-kmod --skip-limit-conf --no-verify \
+    && rm -rf "/tmp/${EFA_DIR}" /tmp/aws-efa-installer.tar.gz \
+    && \
+    rm -rf /var/lib/apt/lists/*
+# ensures process forks which are RDMA capable and secure against memory corruption
+# important due to the use of multiprocessing in data loading
+ENV FI_EFA_FORK_SAFE="1"
+
+# Installs aws-ofi-nccl so that NCCL can pick libfabric dispatcher as the RDMA provider.
+ARG AWS_OFI_NCCL_VERSION="v1.16.3"
+RUN curl -fsSL \
+        "https://github.com/aws/aws-ofi-nccl/releases/download/${AWS_OFI_NCCL_VERSION}/aws-ofi-nccl-${AWS_OFI_NCCL_VERSION#v}.tar.gz" \
+        -o /tmp/aws-ofi-nccl.tar.gz \
+    && tar -xf /tmp/aws-ofi-nccl.tar.gz -C /tmp \
+    && cd /tmp/aws-ofi-nccl-${AWS_OFI_NCCL_VERSION#v} \
+    && ./configure --prefix=/opt/aws-ofi-nccl \
+        --with-mpi=/opt/amazon/openmpi \
+        --with-libfabric=/opt/amazon/efa \
+        --with-cuda=/usr/local/cuda \
+        --enable-platform-aws \
+    && make -j"$(nproc)" \
+    && make install \
+    && rm -rf /tmp/aws-ofi-nccl-${AWS_OFI_NCCL_VERSION#v} /tmp/aws-ofi-nccl.tar.gz
+
+ENV PATH="/opt/amazon/efa/bin:${PATH}"
+ENV LD_LIBRARY_PATH="/opt/amazon/efa/lib:/opt/aws-ofi-nccl/lib:${LD_LIBRARY_PATH}"
+
+RUN \
+   # Add python -> python3 symlink (required for bazel-build image entrypoints)
+   ln -s /usr/bin/python3 /usr/bin/python
+
+ARG BAZELISK_VERSION=v1.20.0
+RUN \
+    # Install bazelisk
+    wget https://github.com/bazelbuild/bazelisk/releases/download/$BAZELISK_VERSION/bazelisk-linux-amd64 -O /usr/local/bin/bazelisk && \
+    chmod +x /usr/local/bin/bazelisk
+
+# Set required driver capabilities ('compute' for cuda, 'graphics' for optix, 'utility' for nvidia-smi)
+ENV NVIDIA_DRIVER_CAPABILITIES=graphics,compute,utility
+
+# Make all devices visible by default
+ENV NVIDIA_VISIBLE_DEVICES=all
+
+RUN pip install -U pip --break-system-packages --ignore-installed

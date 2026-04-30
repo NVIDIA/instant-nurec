@@ -1,0 +1,78 @@
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+load("@nre_pip_deps//:requirements.bzl", pip_requirement = "requirement")
+load("@nre_pip_deps_internal//:requirements.bzl", pip_requirement_internal = "requirement")
+load("@rules_python//python:defs.bzl", "py_library")
+load("//bazel/pytest:defs.bzl", "pytest_test")
+
+DEFAULT_VISIBILITY = [
+    "//nre/nrm:__subpackages__",
+]
+
+filegroup(
+    name = "py_files",
+    srcs = glob(["**/*.py"]),
+    visibility = [
+        "//internal/scripts/pycena:__pkg__",
+    ],
+)
+
+py_library(
+    name = "pylib",
+    srcs = [
+        "__init__.py",
+        "aa_vit.py",
+        "attention.py",
+        "dav3.py",
+        "dpt.py",
+        "embeds.py",
+        "layers.py",
+        "mamba_scan.py",
+    ],
+    visibility = DEFAULT_VISIBILITY,
+    deps = [
+        pip_requirement("torch"),
+        pip_requirement("numpy"),
+        pip_requirement("einops"),
+        "//nre/models:pylib_nn_extensions",
+        "//nre/nrm/utils:pylib",
+        "//nre/utils:pylib_geometry",
+    ] + select({
+        "//bazel/conditions:mamba": [
+            # The below two dependencies are loaded very slowly, so we make them optional
+            pip_requirement_internal("mamba_ssm"),
+            pip_requirement_internal("causal_conv1d"),
+        ],
+        "//conditions:default": [],
+    }),
+)
+
+pytest_test(
+    name = "blocks_test",
+    srcs = ["blocks_test.py"],
+    deps = [
+        pip_requirement_internal("mamba_ssm"),
+        pip_requirement_internal("causal_conv1d"),
+        ":pylib",
+    ],
+)
+
+# Individual smoke test to make sure DAv3 results can be reproduced.
+pytest_test(
+    name = "dav3_test",
+    srcs = ["dav3_test.py"],
+    deps = [
+        ":pylib",
+        "@depth_anything_3//:pylib",
+        pip_requirement("einops"),
+        pip_requirement("parameterized"),
+    ],
+)

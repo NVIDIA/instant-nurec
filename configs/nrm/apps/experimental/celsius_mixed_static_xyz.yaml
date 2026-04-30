@@ -1,0 +1,24 @@
+# @package _global_
+# Owner: jiahuih
+
+# order in which configs override each other (/* - denotes a relative search path)
+defaults:
+  - celsius_mixed_static
+  - override /nrm/model@model: celsius_xyz
+
+system:
+  precision: bf16-mixed
+
+model:
+  init_weights_path: /lustre/fs12/portfolios/nvr/users/jiaweir/workspace/nre/xyz_aug25.safetensors
+  affine_module:
+    cross_attend: true
+
+loss:
+  distance:
+    lambda_: 0.1
+  primitive_visibility_regularization:
+    fn: mse
+    reduce:
+      name: mean
+    lambda_: 1.

@@ -1,0 +1,98 @@
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+load("@aspect_rules_js//js:defs.bzl", "js_library")
+load("@aspect_rules_lint//format:defs.bzl", "format_multirun")
+load("@aspect_rules_py//py:defs.bzl", "py_binary")
+load("@npm//deps/npm:prettier/package_json.bzl", prettier = "bin")
+load("@rules_multirun//:defs.bzl", "multirun")
+load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
+
+sh_binary(
+    name = "ruff-isort",
+    srcs = [
+        "ruff_isort.sh",
+    ],
+    data = [
+        "@multitool//tools/ruff",
+    ],
+    deps = [
+        "@bazel_tools//tools/bash/runfiles",
+    ],
+)
+
+js_library(
+    name = "prettierrc",
+    srcs = ["prettier.config.cjs"],
+    deps = [
+        "//deps/npm:node_modules/@prettier/plugin-xml",
+        "//deps/npm:node_modules/prettier-plugin-gherkin",
+        "//deps/npm:node_modules/prettier-plugin-sql",
+    ],
+)
+
+prettier.prettier_binary(
+    name = "prettier",
+    # Include this js_library and its dependencies in the runfiles (runtime dependencies)
+    data = [":prettierrc"],
+    # Allow the binary to be run outside bazel
+    env = {"BAZEL_BINDIR": "."},
+    fixed_args = [
+        # `require` statements in the config file will be resolved relative to its location
+        # Therefore to make it hermetic, prettier must be pointed at the copy of the config file
+        # in the runfiles folder rather than the one in the source folder.
+        "--config=\"$$JS_BINARY__RUNFILES\"/$(rlocationpath :prettierrc)",
+        # default log level is "log" which spams on success
+        # https://prettier.io/docs/en/cli.html#--log-level
+        # NB: prettier 2 names this loglevel, in prettier 3 it's renamed log-level, see
+        # https://prettier.io/blog/2023/07/05/3.0.0.html#cli-1
+        "--loglevel=warn",
+    ],
+)
+
+format_multirun(
+    name = "format",
+    c = "@llvm_toolchain//:clang-format",
+    cc = "@llvm_toolchain//:clang-format",
+    cuda = "@llvm_toolchain//:clang-format",
+    markdown = ":prettier",
+    # Currently `ruff format` does not support sort import so this is a workaround
+    # of `python = "@multitool//tools/ruff"`.
+    # See more at https://docs.astral.sh/ruff/formatter/#sorting-imports.
+    python = ":ruff-isort",
+    starlark = "@buildifier_prebuilt//:buildifier",
+    starlark_check_args = [
+        "--mode=diff",
+        "--lint=warn",
+    ],
+    starlark_fix_args = [
+        "--lint=fix",
+    ],
+    visibility = [
+        # Add visibility for //:format
+        "//:__pkg__",
+    ],
+)
+
+py_binary(
+    name = "starlark_custom_lint",
+    srcs = ["starlark_custom_lint.py"],
+    main = "starlark_custom_lint.py",
+)
+
+multirun(
+    name = "custom_check",
+    commands = [
+        ":format.check",
+        ":starlark_custom_lint",
+    ],
+    # Add visibility for //:format.check
+    visibility = ["//:__pkg__"],
+)

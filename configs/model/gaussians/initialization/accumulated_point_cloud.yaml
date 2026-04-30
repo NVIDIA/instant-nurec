@@ -1,0 +1,18 @@
+defaults:
+  - base
+
+name: accumulated-point-cloud
+
+point_cloud_path: null # Path to a point cloud file, supported formats: PLY, OBJ, STL, OFF, VRML 2.0, X3D, COLLADA, 3DS
+num_point_cloud_points: 1_000_000
+
+num_near_points: 200_000
+
+num_far_points: 200_000
+far_radius_factor: 20 # Multiplies the extent of the scene to get the radius of the far points
+
+observation_scale_factor: 0.01
+default_density: ${eval:'0.5 if ("${model.strategy.name}"=="mcmc") else 0.1'}
+default_scale: 0.1
+
+non_dynamic_points_only: false # Set to false to keep all background points in the point cloud

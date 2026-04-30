@@ -1,0 +1,73 @@
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+load("@nre_pip_deps//:requirements.bzl", pip_requirement = "requirement")
+load("@rules_python//python:defs.bzl", "py_library")
+
+DEFAULT_VISIBILITY = [
+    "//:core_package_group",
+    "//bazel/docs:__pkg__",
+]
+
+package(default_visibility = DEFAULT_VISIBILITY)
+
+filegroup(
+    name = "py_files",
+    srcs = glob(["**/*.py"]),
+    visibility = [
+        "//internal/scripts/pycena:__pkg__",
+    ],
+)
+
+py_library(
+    name = "pylib",
+    srcs = [
+        "__init__.py",
+        "abstract_viewer.py",
+        "dataset_interface.py",
+        "lightning_viewer.py",
+        "lock.py",
+        "ncore_dataset_interface.py",
+        "nrm_dataset_interface.py",
+        "ply_viewer.py",
+        "usdz_viewer.py",
+        "viewpoint.py",
+    ],
+    data = [
+        "@nv_assets//:nv-car",
+    ],
+    visibility = DEFAULT_VISIBILITY + [
+        # Add visibility for //:run
+        "//:__pkg__",
+        # Add visibility for //internal/scripts/experimental:render
+        "//internal/scripts/experimental:__pkg__",
+    ],
+    deps = [
+        "//libs/losses/orchestration:pylib",
+        "//nre/artifact:pylib",
+        "//nre/config:pylib",
+        "//nre/models/gaussians:pylib",
+        "//nre/models/gaussians:pylib_gaussians_composite",
+        "//nre/render:pylib",
+        "//nre/systems:pylib",
+        "//nre/utils:pylib",
+        "//nre/utils:pylib_cli",
+        "//nre/utils:pylib_types",
+        "//nre/utils/io/export:pylib_render",
+        pip_requirement("torch"),
+        pip_requirement("kornia"),
+        pip_requirement("nvidia-ncore"),
+        pip_requirement("einops"),
+        pip_requirement("pillow"),
+        pip_requirement("viser"),
+        pip_requirement("pytorch_lightning"),
+        pip_requirement("numpy"),
+    ],
+)

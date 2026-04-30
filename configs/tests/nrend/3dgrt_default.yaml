@@ -1,0 +1,32 @@
+# @package _global_
+# Owner: nicolasm
+
+# Reference 3DGUT NRend configuration file for testing the NRend library integration :
+# - to evaluate and debug the rendering accuracy
+# - to evaluate the rendering performances
+# - to create unittests.
+
+# order in which configs override each other (/* - denotes a relative search path)
+defaults:
+  - /apps/AV/NV/3dgrt_static.yaml
+  - override /system: nrend_test_gaussians
+  - override /loss: gaussians
+  - override /model/background: sky_env_map
+  - override /model/post_processing@model.post_processing.b: null
+  - override /model/post_processing@model.post_processing.c: null
+    
+dataset:
+  n_train_sample_lidar_rays: 0
+  
+model:
+  layers:
+    background:
+      particle:
+        density_kernel_degree: 3
+        density_kernel_min_response: 0.0113
+  
+system:
+  test:
+    nrend:
+      enabled: True
+      log_level: 4

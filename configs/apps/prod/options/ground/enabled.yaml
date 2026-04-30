@@ -1,0 +1,8 @@
+# @package _global_
+
+checkpoint:
+  artifact:
+    enabled: true
+    mesh:
+      ground:
+        enabled: true

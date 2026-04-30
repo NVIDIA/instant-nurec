@@ -1,0 +1,10 @@
+# NRM pretrained model: c200p16b16_init5c_commercial_v3_prealpha living on NGC
+
+model_url: https://api.ngc.nvidia.com/v2/org/nvstaging/team/nre/models/nrm-celsius/versions/c200p16b16_init5c_commercial_v3_prealpha/files/c200p16b16_init5c_commercial_v3_prealpha.ckpt
+model_config: https://api.ngc.nvidia.com/v2/org/nvstaging/team/nre/models/nrm-celsius/versions/c200p16b16_init5c_commercial_v3_prealpha/files/c200p16b16_init5c_commercial_v3_prealpha.yaml
+model_config_overrides:
+  # Allow easy switching test dataset by overriding this option.
+  - +nrm/dataset/concrete@dataset.test=ncore_local_low_res
+  - +model.activations.xyz_type=none
+
+model_cache_dir: ${oc.env:HOME}/.cache/nrm/pretrained_models/c200p16b16_init5c_commercial_v3_prealpha

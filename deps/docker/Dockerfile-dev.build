@@ -1,0 +1,88 @@
+# Copyright (c) 2023-2026 NVIDIA CORPORATION.  All rights reserved.
+
+# Latest version is: v19, please increment it
+# Use host's network stack to reach urm.nvidia.com
+# BUILD: DOCKER_BUILDKIT=1 docker image build --network=host -t gitlab-master.nvidia.com:5005/nrs/nre:dev-v19 -f deps/docker/Dockerfile-dev.build .
+# PUSH:  docker push gitlab-master.nvidia.com:5005/nrs/nre:dev-v19
+#
+# Note: please keep in mind to upgrade version tags also in `.gitlab-ci.yaml` and not to overwrite existing images
+
+FROM nvidia/cuda:12.8.0-cudnn-devel-ubuntu22.04
+
+LABEL maintainer="Janick Martinez Esturo <janickm@nvidia.com>"
+
+# Needed for string substitution
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN \
+    # Add additional system libraries
+    apt-get update -qq --fix-missing && \
+    apt-get install -y --no-install-recommends software-properties-common && \
+    add-apt-repository -y ppa:ubuntu-toolchain-r/test && \
+    apt-get -y update -qq --fix-missing && \
+    apt-get -y install --no-install-recommends \
+        gcc g++ gcc-11 g++-11 lcov libglib2.0-0 libopenblas-dev libcublas11 libgl1 clang curl file git git-lfs unzip wget xz-utils jq sudo pandoc jupyter-nbconvert python3-pip patchelf docker.io \
+    && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN \
+   # Add python -> python3 symlink (required for bazel-build image entrypoints)
+   ln -s /usr/bin/python3 /usr/bin/python
+
+RUN \
+    # Install NVault cli tool for fetching secrets
+    curl https://urm.nvidia.com/artifactory/sw-kaizen-data-generic-local/com/nvidia/vault/vault-agent/2.5.1/nvault_agent_v2.5.1_linux_amd64.zip -L -o vault_agent.zip && \
+    echo "891bc4096d7db7245eb4dd849cbc1498d3968511966863c5d126b09112e5ea2f vault_agent.zip" | sha256sum -c - && \
+    unzip vault_agent.zip -d /usr/local/bin/ && \
+    chmod +x /usr/local/bin/vault* && \
+    rm -f vault_agent.zip
+
+# Bump SHA256 and version when updating Sonar Scanner
+ARG SONAR_SCANNER_VERSION=8.0.1.6346
+ARG SONAR_SCANNER_SHA256=4bd40bf8411ed104853e94a3746ec92bc92845fde2b27dbf5c33fb5cfa8ecbe9
+ENV SONAR_SCANNER_HOME=/opt/sonar-scanner
+ENV PATH="${SONAR_SCANNER_HOME}/bin:${PATH}"
+RUN \
+    # Install Sonar Scanner (full distribution with bundled JRE)
+    curl -sSLo sonar-scanner.zip "https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SONAR_SCANNER_VERSION}-linux-x64.zip" && \
+    echo "${SONAR_SCANNER_SHA256}  sonar-scanner.zip" | sha256sum -c - && \
+    unzip -q sonar-scanner.zip -d /opt/ && \
+    mv /opt/sonar-scanner-${SONAR_SCANNER_VERSION}-linux-x64 ${SONAR_SCANNER_HOME} && \
+    chmod +x ${SONAR_SCANNER_HOME}/bin/sonar-scanner ${SONAR_SCANNER_HOME}/bin/sonar-scanner-debug ${SONAR_SCANNER_HOME}/jre/bin/java && \
+    rm -f sonar-scanner.zip
+
+# Bump version and SHA256 when updating rclone
+ARG RCLONE_VERSION=v1.73.1
+ARG RCLONE_SHA256=e9bad0be2ed85128e0d977bf36c165dd474a705ea950d18e1005cef98119407b
+RUN \
+    # install rclone
+    curl -sSLo rclone.zip "https://github.com/rclone/rclone/releases/download/${RCLONE_VERSION}/rclone-${RCLONE_VERSION}-linux-amd64.zip" && \
+    echo "${RCLONE_SHA256}  rclone.zip" | sha256sum -c - && \
+    unzip -q rclone.zip && \
+    mv rclone-${RCLONE_VERSION}-linux-amd64/rclone /usr/local/bin/rclone && \
+    chmod +x /usr/local/bin/rclone && \
+    rm -rf rclone.zip rclone-${RCLONE_VERSION}-linux-amd64
+
+ARG BAZELISK_VERSION=v1.20.0
+RUN \
+    # Install bazelisk
+    wget https://github.com/bazelbuild/bazelisk/releases/download/$BAZELISK_VERSION/bazelisk-linux-amd64 -O /usr/local/bin/bazelisk && \
+    chmod +x /usr/local/bin/bazelisk
+
+# Create foreign docker groups to allow access to host's /var/run/docker.sock
+RUN \
+    groupadd --gid 141 docker141 && \
+    groupadd --gid 999 docker999
+
+# Run as developer (make sure sudo can be run without password)
+RUN \
+    useradd --create-home --groups sudo,docker,docker141,docker999 developer && \
+    echo "developer:developer" | sudo chpasswd && \
+    echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
+USER developer
+
+# Set required driver capabilities ('compute' for cuda, 'graphics' for optix, 'utility' for nvidia-smi)
+ENV NVIDIA_DRIVER_CAPABILITIES=graphics,compute,utility
+
+# Make all devices visible by default
+ENV NVIDIA_VISIBLE_DEVICES=all

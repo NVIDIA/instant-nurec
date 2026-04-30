@@ -1,0 +1,5 @@
+defaults:
+  - /nrm/apps/options: _long_primitive_merge
+  - sensors@dataset.predict: h81_3cam_960
+
+out_dir: /nrm_debug/long_primitive_merge_3cam

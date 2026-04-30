@@ -1,0 +1,25 @@
+[tool.uv]
+managed = true
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+exclude = [
+    # Prevent checking ci-cache files
+    ".ci-keep",
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["nre", "scripts", "libs", "ncore", "ncore_internal"]
+default-section = "third-party"
+known-third-party = ["wandb"] # prevent local wandb folders to be treaded as different package - see https://github.com/astral-sh/ruff/issues/8571
+section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
+lines-between-types = 1
+lines-after-imports = 2
+
+[tool.pyright]
+exclude = ["bazel**/"]
+
+[build-system]
+requires = ["setuptools>=42", "wheel", "pydantic", "pyyaml"]
+build-backend = "setuptools.build_meta"

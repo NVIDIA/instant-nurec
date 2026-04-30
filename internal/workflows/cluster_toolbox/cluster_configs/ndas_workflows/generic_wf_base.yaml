@@ -1,0 +1,46 @@
+# @package _global_
+#
+# Base config for generic workflows that don't use the hardcoded NDAS pipeline
+# (car2sim, nre_eval, amo_cle, etc.). Child configs only need to define
+# generic_wf_components and switchboard connections.
+#
+# Usage:
+#   bazel run //internal/workflows/cluster_toolbox/ndas_workflows:run_ndas_workflow -- \
+#     --ndas-workflow-config=<child_config>.yaml \
+#     docker.image=<nre-image> ...
+
+defaults:
+  - ndas_workflow_base
+  - _self_
+
+require_nre_docker_images: false
+
+docker:
+  image: null
+  tools_image: null
+
+# Null out hardcoded image replacement lists; generic workflows use
+# per-component image_replacement_rules instead.
+replace_sauron_images_that_contain_substrings: []
+
+car2sim:
+  enabled: false
+
+nre_eval:
+  enabled: false
+
+amo_cle:
+  enabled: false
+
+nurec_cicd_amo_cle:
+  enabled: false
+
+failure_reason:
+  enabled: false
+
+nre_eval_regression:
+  enabled: false
+
+switchboard:
+  delete_connections: null
+  connections: null

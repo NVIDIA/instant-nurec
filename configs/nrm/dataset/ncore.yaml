@@ -1,0 +1,80 @@
+name: nrm-ncore
+
+ncore_json_list_path: ???
+
+# If the above ncore_json_list_path contains any non-absolute path, it will be based on this value.
+ncore_json_base_path: null
+
+# V3 sequence loader parameters
+cuboid_loading_max_workers: 0 # If specified, set the max_workers for thread parallel cuboid loading in the V3 sequence loader
+                              # (automatically infered number for 'null' - serial execution with '0')
+
+# V4 sequence loader parameters
+poses_component_group: default
+intrinsics_component_group: default
+masks_component_group: default
+cuboids_component_group: default
+
+# If specified, will only load the *intersection* of the sequences specified in the json_list_path and 
+# the ones in the keys of this subrange.
+# The json file is a dictionary with format {sequence_name: [subrange_1, subrange_2, ...]}, where 
+# each subrange is a tuple of start/end time points normalized to 0~1 of the sequence length.
+subrange_json_path: null
+
+open_consolidated: true
+camera_max_fov_deg: 190.0
+
+n_camera_mask_dilation_iterations: 10
+
+aux_data:
+  enabled: true
+  enabled_context: true
+  semantic_segmentation: true
+  depth: true
+  egomask: true
+
+# Applies to both context and supervision
+# (Original is 3840x2160)
+camera_subsampler:
+  frame_width: 416
+  frame_height: 240
+
+context_camera_ids:
+  - camera_front_wide_120fov
+  - camera_cross_left_120fov
+  - camera_cross_right_120fov
+
+frame_batch_samplers:
+  uniform:
+    name: uniform
+    n_frames_per_sample: 4
+    n_samples_per_sequence: 10
+    frame_gap_timestamp_us: 500000
+
+supervision_camera_ids:
+  - camera_front_wide_120fov
+  - camera_cross_left_120fov
+  - camera_cross_right_120fov
+
+# As our supervision always enforces stratified sampling, so no sampler needed here
+supervision_frame_batch:
+  n_frames_per_sample: 12
+  prepend_timestamps_us: 0
+  append_timestamps_us: 0
+  sample_strategy: "random"
+  frame_resolution: null # null means same resolution as camera_subsampler
+
+cuboid_tracks_params:
+  lidar_id: lidar_gt_top_p128;lidar_gt_top_p128_v4p5;lidar_virtual
+  track_min_travel_distance_m: 1.5
+  track_min_centroid_rig_dist_m: 3.0 # Distance threshold for cubic tracks to be considered self-classifications to skip [m]
+  track_extrapolate_timestamps_us: 1000000  # Extrapolate 1s for better computation of velocity in start/end frames.
+  track_label_source: "AUTOLABEL"
+
+lidar_frame_batch:
+  gap_from_image_us: 0
+
+compute_rendering_data: false
+cache_loaders_and_sensors: false
+
+augmentations: null

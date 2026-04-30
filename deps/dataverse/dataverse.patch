@@ -1,0 +1,24 @@
+diff --git a/dataverse-0.1.dev20+g463b51c.dist-info/METADATA b/dataverse-0.1.dev20+g463b51c.dist-info/METADATA
+--- a/dataverse-0.1.dev20+g463b51c.dist-info/METADATA
++++ b/dataverse-0.1.dev20+g463b51c.dist-info/METADATA
+@@ -8,7 +8,7 @@
+ Requires-Dist: rich
+ Requires-Dist: lru-dict
+ Requires-Dist: decord
+-Requires-Dist: opencv-python-headless
++Requires-Dist: opencv-python
+ Requires-Dist: scipy
+ Requires-Dist: pyquaternion
+ Requires-Dist: torch
+diff --git a/dataverse-0.1.dev20+g463b51c.dist-info/RECORD b/dataverse-0.1.dev20+g463b51c.dist-info/RECORD
+--- a/dataverse-0.1.dev20+g463b51c.dist-info/RECORD
++++ b/dataverse-0.1.dev20+g463b51c.dist-info/RECORD
+@@ -48,7 +48,7 @@
+ dataverse/utils/ndas/av_metadata.py,sha256=H8-leSlOOIro4v3DPOaLKrdv17UBEgM9FJUWTAoDzMU,16751
+ dataverse/utils/ndas/camera_model.py,sha256=7UgFweywTk4CSEAIdcjSbGy412wIfcd1qCtcnvCSD18,25519
+ dataverse/utils/ndas/rig.py,sha256=uW2izy6tE_P0u-7PLq_L0wTq5MKumHQnjj5CPCEMhYA,5085
+-dataverse-0.1.dev20+g463b51c.dist-info/METADATA,sha256=0tOx6wCCf2xg4YtZnw_wJNjgc61KWMynpli3D5m2fUI,3775
++dataverse-0.1.dev20+g463b51c.dist-info/METADATA,sha256=VZ_CP9sQ1lr5qvEmvYWnpQNLkLU8YYK4hv4ClHPLTxM,3766
+ dataverse-0.1.dev20+g463b51c.dist-info/WHEEL,sha256=_zCd3N1l69ArxyTb8rzEoP9TpbYXkqRFSNOD5OuxnTs,91
+ dataverse-0.1.dev20+g463b51c.dist-info/top_level.txt,sha256=DQthQD-a7flZ1h_SzQ_2X0ZD9T4hl_K8UW43H1y_t6k,10
+ dataverse-0.1.dev20+g463b51c.dist-info/RECORD,,

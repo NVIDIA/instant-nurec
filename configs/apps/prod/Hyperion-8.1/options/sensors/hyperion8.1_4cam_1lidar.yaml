@@ -1,0 +1,10 @@
+# @package _global_
+
+dataset:
+  camera_ids:
+    - camera_front_wide_120fov
+    - camera_front_tele_30fov
+    - camera_cross_left_120fov
+    - camera_cross_right_120fov
+  lidar_ids:
+    - lidar_gt_top_p128

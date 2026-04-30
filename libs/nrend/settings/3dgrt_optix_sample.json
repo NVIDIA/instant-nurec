@@ -1,0 +1,16 @@
+{
+    "name": "3dgrt-optix-nrend",
+    "log_level": 4,
+    "culling": {
+        "near_clip_distance": 0.2,
+        "far_clip_distance": 3.402823466e+38
+    },
+    "pipeline": {
+        "type": "reference_instance",
+        "k_buffer_size": 10
+    },
+    "primitives": { 
+        "type": "transformed_aabb", 
+        "density_scale": true 
+    }
+}

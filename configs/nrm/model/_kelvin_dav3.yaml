@@ -1,0 +1,45 @@
+defaults:
+  - /model/gaussians/renderer@renderer: 3dgut_nrend
+
+name: kelvin
+
+use_2dgs: false
+prepare_normal_supervision: false
+renderer:
+  outputs:
+    camera:
+      enable_normals: false
+
+# Network configuration.
+patch_shape: [14, 14]
+
+encoder:
+  name: dav3-encoder
+  checkpointing: "all"
+
+decoder:
+  name: dpt-decoder
+  checkpointing: true
+  dpt_chunk_size: 4
+  fusion_for_gs_motion: false
+  motion_depth: 0
+
+sky:
+  name: cubemap-decoder
+  cubemap_size: 448
+  depth: 1
+  fusion_dim: null
+  checkpointing: true
+
+post_processing:
+  optimization_start_global_step: 1000
+
+activations:
+  xyz_type: none
+  distance_type: none
+  # Should be -1.0 [default value] + log(avg_scene_rescale)
+  scale_shift_log_ratio: -2.90
+  # Should be 0.3 [default value] * scene_rescale
+  scale_max: 0.045
+
+scene_rescale: 0.15

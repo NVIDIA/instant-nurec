@@ -1,0 +1,101 @@
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+load("@rules_python//python:defs.bzl", "py_library")
+
+DEFAULT_VISIBILITY = [
+    "//:core_package_group",
+    "//bazel/docs:__pkg__",
+]
+
+package(default_visibility = DEFAULT_VISIBILITY)
+
+filegroup(
+    name = "py_files",
+    srcs = glob(["**/*.py"]),
+    visibility = [
+        "//internal/scripts/pycena:__pkg__",
+    ],
+)
+
+py_library(
+    name = "pylib_reporoot",
+    srcs = [
+        "repo_root.py",
+    ],
+    visibility = DEFAULT_VISIBILITY + [
+        # Add visibility for //:run
+        "//:__pkg__",
+    ],
+)
+
+py_library(
+    name = "pylib",
+    srcs = [
+        "__init__.py",
+    ],
+    visibility = DEFAULT_VISIBILITY + [
+        # Add visibility for //:run
+        "//:__pkg__",
+        # Add visibility for //apps
+        "//apps:__pkg__",
+        "//internal/scripts:__subpackages__",
+    ],
+    deps = [
+        ":pylib_reporoot",
+        "//nre/config:pylib_version",
+        "//nre/utils:pylib_colored_exceptions",
+        "//nre/utils:pylib_misc",
+        "//nre/utils/debug:pylib",
+    ] + select({
+        "@//bazel/conditions:internal": ["//nre/internal:pylib"],
+        "//conditions:default": [],
+    }),
+)
+
+# Tracy default variant (CPU-only)
+py_library(
+    name = "pylib_tracy",
+    srcs = [
+        "__init__.py",
+    ],
+    visibility = DEFAULT_VISIBILITY + [
+        "//:__pkg__",
+    ],
+    deps = [
+        ":pylib_reporoot",
+        "//nre/config:pylib_version",
+        "//nre/utils:pylib_misc_tracy",
+        "//nre/utils/debug:pylib",
+    ] + select({
+        "@//bazel/conditions:internal": ["//nre/internal:pylib"],
+        "//conditions:default": [],
+    }),
+)
+
+# Tracy GPU variant
+py_library(
+    name = "pylib_tracy_gpu",
+    srcs = [
+        "__init__.py",
+    ],
+    visibility = DEFAULT_VISIBILITY + [
+        "//:__pkg__",
+    ],
+    deps = [
+        ":pylib_reporoot",
+        "//nre/config:pylib_version",
+        "//nre/utils:pylib_misc_tracy_gpu",
+        "//nre/utils/debug:pylib",
+    ] + select({
+        "@//bazel/conditions:internal": ["//nre/internal:pylib"],
+        "//conditions:default": [],
+    }),
+)

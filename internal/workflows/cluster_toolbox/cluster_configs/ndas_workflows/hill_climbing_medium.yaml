@@ -1,0 +1,56 @@
+# @package _global_
+
+defaults:
+  - hill_climbing
+  - _self_
+
+car2sim:
+  full_pipeline:
+    clipgt_ids:
+    - 40a76fa8-55e9-490d-8e83-0a99d410e190
+    - 5a61a519-1123-4b9e-a80c-0c40fcbe1453
+    - 50e94f2a-722c-4b0e-8a2a-53ee5ae04d6d
+    - 34aa2a92-1fd3-413f-a5b5-179b7d8a6bfa
+    - 9da1f997-f94b-4b58-ac7b-6a96d5b6b24c
+    - 506db0e6-760b-41ec-836c-2426e6b32861
+    - 3e439e88-0a9e-4909-99ae-a17b6bedbf72
+    - 4bc488d3-19f1-41f0-8e0e-3d6929db2b8b
+    - 367ac6fa-ac84-4425-bef8-e5b5ddb90c8f
+    - 555d068b-3770-46e6-b0ff-2cd9df939ab4
+    - 5cd20a8b-62b5-40c9-a919-e54ea2dd31a6
+    - 87b86527-b61c-4c9e-b1a9-c329ed96d856
+    - f88e59dc-c644-4697-9212-1afc38e6a01b
+    - 942ae0f8-bdec-4f3e-aea3-89a602b0a6b0
+    - 238d41e9-6232-4d08-af37-e8d4b0f317d8
+    - 77ccd1ea-f23a-43c2-9742-ed5e759cdea7
+    - 6967b1be-9af0-4200-a0bd-f0dc49f989b7
+    - 545b7d73-bc73-4f9d-b786-8895a13441c5
+    - 19047c6f-70a2-4423-a931-e99f455714be
+    - 420921c0-fe71-4ec6-ada2-93636c7c1912
+    - 28b8d280-b22d-440d-a292-5b3c8e8d4201
+    - 4e71c222-74a2-4c27-b249-385524cdae6a
+    - 2dac2e67-2903-4a0b-8dd1-7ba53eb1404a
+    - d629704d-a548-46c5-825c-b24b7103510c
+    - 9877a6e3-cfb4-44c9-b2f4-5cd54d228a7c
+    - 316779b1-4757-4656-9e43-4159a4f24e2f
+    - b237a5a3-b271-4882-861f-4e5550ca0a40
+    - 4a812513-8bf2-426a-a0a3-aa4851ba693c
+    - d6da0eae-cfb8-43a0-927a-e238daa36b81
+    - 528790d3-440e-4612-9329-0c398e3d71a5
+    - 9778c8d5-2c38-4e8b-9ce9-9d4dbac81810
+    - 0b958745-f2e2-4f0a-83d6-d278ded9a8d9
+    - ef36ba6b-94e0-4d8f-b946-e345c01960be
+    - 0d8508ed-fd7b-4ba5-a7bd-38bdaa2bfa1e
+    - f66c97a7-e7a4-4c34-901a-033a1a423b7c
+    - 3f7d58a7-63ea-499f-8af3-b05cfa12ab35
+    - 246998b3-d136-4e9e-a35a-69b4bdc4f363
+    - 1bcc6350-8dc5-4fc1-b2fa-696f3d45363b
+    - fd6c1bbf-68ac-4d99-aa4a-3483419fd1ec
+    - b068ba3f-02d8-43a6-86a4-943df7affc36
+    - d0d4282c-5975-4311-ba47-713df23dec44
+    - 24a80c89-f9e2-4733-b2de-ce11b12eaddb
+    - 688fefc3-1d76-4dc2-8f88-253071bf2f9a
+    - 60a22761-4a7a-4f76-8f57-2ee0be975d24
+    - 2f5f8a7f-32a8-44d6-abbd-c6251f0e113f
+    - 3c0cbe8d-5e6e-4337-a3d8-d763c0aaa38e
+    - c41db0ab-77cf-4978-8471-be8dc7f1bfd0

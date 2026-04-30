@@ -1,0 +1,161 @@
+# Use the defaults to import the samplers, if you list more they will be combined
+defaults:
+  - samplers: timestamp_image_crop  # Include samplers/timestamp_image_crop.yaml
+
+name: ncore
+
+# Data-source specification by a 'path' to a NCore V3 / V4 sequence meta-file.
+# The time range can be restricted with additional 'seek_offset_sec' / 'duration_sec' parameters.
+path: ???
+seek_offset_sec: null
+duration_sec: null
+
+# V3 sequence loader parameters
+cuboid_loading_max_workers: 0 # If specified, set the max_workers for thread parallel cuboid loading in the V3 sequence loader
+                              # (automatically infered number for 'null' - serial execution with '0')
+
+# V4 sequence loader parameters
+poses_component_group: default
+intrinsics_component_group: default
+masks_component_group: default
+cuboids_component_group: default
+
+# Sensors and sensor models
+camera_ids:
+- camera_front_wide_120fov
+lidar_ids:
+- lidar_gt_top_p128_v4p5
+
+# These parameters can be overriden to select a subset of sensors for training
+# ie. for sensors that should be rendered but not used for training
+train_camera_ids: ${.camera_ids}
+train_lidar_ids: ${.lidar_ids}
+
+val_camera_ids: ${.camera_ids}
+val_lidar_ids: ${.lidar_ids}
+
+lidar_ignore_rows: [] # Ignore the specified lidar rows
+
+show_progress_bars: true # show progress bars for the user
+
+# Scale
+max_dist_m: 150.0
+
+# Misc
+n_samples_per_epoch: 30000
+n_train_sample_camera_rays: 6144
+n_train_sample_lidar_rays: 2048
+n_val_image_subsample: 4
+val_camera: true # If enabled, will return camera rays in validation/test time.
+val_lidar: false # If enabled, will return lidar rays in validation/test time.
+val_sensor_transl_delta_m: null # Translation (meters, relative to rig frame) / rotation (deg, XYZ / roll-pitch-yaw Euler angles relative
+val_sensor_rot_delta_deg: null  # to rig frame) extrinsic deltas to apply to all sensor extrinsics for validation / test data generation (e.g., for novel-view rendering)
+                                # If extrinsic deltas are applied, rays will be inconsistent with label data / most metrics can't be evaluated
+val_camera_frame_start: 0       # Camera frame start index for validation / test mode.
+val_camera_frame_step: 1        # Camera frame step count for validation / test mode.  Mutually exclusive with val_camera_exclude_frame_step.
+val_camera_exclude_frame_start: null  # Start camera frame index to exclude in validation / test mode. Used together with val_camera_exclude_frame_step.
+val_camera_exclude_frame_step: null  # Excludes camera frames every nth step for validation / test mode. Mutually exclusive with val_camera_frame_step.
+val_lidar_frame_start: 0             # Lidar frame start index for validation / test mode.
+val_lidar_frame_step: 1              # Lidar frame step count for validation / test mode. Mutually exclusive with val_lidar_exclude_frame_step.
+val_lidar_exclude_frame_start: null  # Start lidar frame index to exclude in validation / test mode. Used together with val_lidar_exclude_frame_step.
+val_lidar_exclude_frame_step: null   # Excludes lidar frames every nth step for validation / test mode. Mutually exclusive with val_lidar_frame_step.
+
+camera_mask_sources: [dataset, aux] # Priority order of data sources to load camera masks from (possible values: [dataset, aux])
+n_camera_mask_dilation_iterations: 30
+# Override camera masks for specified sensors. Example:
+# camera_mask_overrides:
+#   camera_front_wide_120fov: /path/to/foo.png
+#   camera_cross_right_120fov: /path/to/bar.png
+camera_mask_overrides: {}
+camera_mask_border: null # If specified, exclude pixels within the specified border (top, right, bottom, left)
+
+frame_generic_data_pose_overwrite: false # If enabled, will overwrite per-frame sensor-world poses from generic data fields (used in some, e.g., separately optimized datasets) - it's an error if these are not provided
+
+open_consolidated: true
+jpeg_backend_cpu: simplejpeg # Backend to use for CPU-based JPEG decoding [PIL, simplejpeg]
+simplejpeg_fastdct: false # If enabled, use fastest DCT method for JPEG decoding (via simplejpeg) - speeds up decoding by 4-5% for a minor loss in quality
+simplejpeg_fastupsample: false # If enabled, use fastest color upsampling method for JPEG decoding (via simplejpeg) - speeds up decoding by 4-5% for a minor loss in quality
+aux_data: true
+camera_max_fov_deg: 190.0 # Limit effective FOV of omnidirectional camera models (like FTheta / OpenCVFisheye) to prevent erroneous flipped re-projections
+lidar_model_parameter_cwccw_fallback: false # If enabled, try to apply a backwards-compatiblity fallback for NCore lidar model parameters, which were stored with wrong spin direction conventions
+
+# If specified, use the specified nominal lidar model parameters for each lidar_id. Example:
+# lidar_model_parameter_nominal_values:
+#   lidar_gt_top_p128_v4p5: HESAI-Pandar128
+#   lidar_gt_top_p128: HESAI-Pandar128
+# Currently supported: [HESAI-Pandar128, HESAI-AT128]
+lidar_model_parameter_nominal_values: {}
+
+# The following paramaters are used for 'train_sequential' dataset splits, which exhaustively provides datasource samples in linear order (e.g., used for modules such as the uncertainty estimators that need to be fitted against training rays at the end of training)
+n_train_sequential_image_subsample: 4
+train_sequential_camera: true
+train_sequential_lidar: false
+train_sequential_camera_frame_start: 0
+train_sequential_camera_frame_step: 1
+train_sequential_camera_exclude_frame_start: null
+train_sequential_camera_exclude_frame_step: null
+train_sequential_lidar_frame_start: 0
+train_sequential_lidar_frame_step: 1
+train_sequential_lidar_exclude_frame_start: null
+train_sequential_lidar_exclude_frame_step: null
+
+cuboid_tracks_params:
+  track_min_distance_m: 1.0 # Distance (length of path taken by the object) threshold to classify objects to be dynamic [m]
+  track_min_displacement_m: 1.0 # Displacement (difference between start and end positions) threshold to classify objects to be dynamic [m]
+  track_speed_reduction_op: median # Reduction operation on all pose-inferred speeds to classify for dynamic/static objects [median, max]
+  track_min_speed_ms: 0.1 # Speed threshold to classify objects to be dynamic [m/s]
+  track_min_centroid_rig_dist_m: 3.0 # Distance threshold for cubic tracks to be considered self-classifications to skip [m]
+  track_extrapolate: true # Extrapolate label pose of dynamic tracks once at the start / end (to improve interpolation coverage)
+  track_label_sources: null # If non-null, a list of allowed label sources from [AUTOLABEL, EXTERNAL, GT_SYNTHETIC, GT_ANNOTATION] with optional '@<source-version>' suffixes -
+                            # required if dataset contains labels from more than a single source
+  use_displacement_and_distance: true # Use displacement and distance thresholds to classify objects to be dynamic
+  camera_visibility: false # If enabled, will only use camera-visible time-intervals for track dynamic classification
+
+valid_measurements_method: EGO_CUBOIDTRACKS # Valid pixels/lidarpoints method to invoke (possible values: [EGO, EGO_CUBOIDTRACKS, EGO_SCENEFLOW, EGO_CUBOIDTRACKS_SCENEFLOW, EGO_CUBOIDTRACKS_TRAFFICLIGHT, EGO_FRAMEMASKS])
+
+valid_lidarpoints_cuboid_track_params:
+  track_padding_m: [0.5, 0.5, 0.25] # Cuboid bbox padding in local box x/y/z directions [m], used for dynamic point classification (checking if points are associated with a dynamic track)
+
+valid_pixels_cuboid_track_params:
+  track_padding_m: [1.0, 1.0, 0.25] # Cuboid bbox padding in local box x/y/z directions [m]
+  frame_track_idxs: false # If enabled, store per-frame track image buffers with per-pixel track indices
+
+valid_pixels_scene_flow_params:
+  flow_min_speed_ms: 1.4 # Speed threshold to classify objects to be dynamic  [m/s]
+  flow_dilate_radius: 20 # dilation radius for the dynamic mask from scene flow (dilation is performed after downsampling the mask to a low-res)
+  flow_downsample_scale: 2 # downsample scale for dynamic mask from scene flow (only for accelerating the dilation operation)
+
+valid_pixels_traffic_light_params:
+  seg_dilate_radius: 21
+
+valid_pixels_frame_mask_params:
+  n_dilation_iterations: 10 # Number of dilation iterations to apply to per-frame masks
+  classes: null             # If specified, keys to query for per-frame masks. We construct per-frame masks by loading each key via `get_frame_generic_data` and include pixels marked as true in any of the per-key masks
+
+lidar_dynamic_points:
+  method: dynamic_tracks # 'dynamic_tracks': Dynamic point classification computed at data loading time from tracks classified to be dynamic | 'dynamic_flag': NCore-internal per-point "dynamic_flag" is used [precomputed on potentially different dynamic object classification!]
+
+# Classes to filter out when loading point clouds derived from camera sensor and predicted depth
+camera_point_cloud_ignore_classes:
+  - egocar
+  - sky # should be captured by background model instead of gaussians
+
+# Classes to filter out when loading non-dynamic point clouds derived from camera sensor and predicted depth
+camera_point_cloud_dynamic_classes:
+  - person
+  - rider
+  - car
+  - truck
+  - bus
+  - train
+  - motorcycle
+  - bicycle
+
+use_real_lidar_rays: false # if enabled, will use the lidar points to compute the lidar rays from the dataset
+
+generate_static_rigid_cuboid_tracks:
+  enabled: false
+  max_distance_m: 100.0
+  visibility_check_camera_ids:
+    - camera_front_wide_120fov
+rigid_classes: ["traffic light", "traffic sign"]

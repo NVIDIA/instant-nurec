@@ -1,0 +1,34 @@
+# @package _global_
+# Owner: nicolasm
+
+# Reference 3DGUT NRend configuration file for testing the NRend library integration :
+# - to evaluate and debug the rendering accuracy
+# - to evaluate the rendering performances
+# - to create unittests.
+
+# order in which configs override each other (/* - denotes a relative search path)
+defaults:
+  - /apps/AV/NV/3dgut_dynamic.yaml
+  - /model/gaussians/extra_signal@model.layers.background.extra_signal: [intensity]
+  - /model/gaussians/extra_signal@model.layers.dynamic_deformables.extra_signal: [intensity]
+  - /model/gaussians/extra_signal@model.layers.dynamic_rigids.extra_signal: [intensity]
+
+  - override /system: nrend_test_gaussians
+  - override /model/post_processing@model.post_processing.b: null
+  - override /model/post_processing@model.post_processing.c: null
+  - override /dataset/samplers: timestamp_image_crop 
+
+system:
+  test:
+    nrend:
+      enabled: True
+      log_level: 4
+
+dataset:
+  val_lidar: true
+
+loss: 
+  lidar:
+    lambda_: 0.05
+  intensity:
+    lambda_: 1.0

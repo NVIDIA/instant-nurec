@@ -1,0 +1,8 @@
+name: weighted-instance-input-embedding
+
+embedding_dim: 1
+requires_grad: false
+weight_init_config:
+  method: linspace
+  from_: 0.05
+  to_: 0.95

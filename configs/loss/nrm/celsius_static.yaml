@@ -1,0 +1,70 @@
+rgb:
+  fn: mse
+  reduce:
+    name: mean
+  lambda_: 1.0
+  # Use lower weight for synthetic views
+  # For static models, hood and dynamic objects will be marked as invalid.
+  mask_semantic_classes: ["~synthetic", "synthetic"]
+  semantic_lambdas: [1.0, 0.25]
+
+# SSIM is disabled in favor of LPIPS loss,
+# and we add this loss no matter the view is synthetic or not
+lpips:
+  fn: lpips
+  reduce:
+    name: mean
+  lambda_: 0.2
+  limit_max_resolution: 512
+
+distance:
+  fn: depth_inverse_mse
+  reduce:
+    name: mean
+  lambda_: 1.0
+  min_distance: 0.1
+  max_distance: 50.0
+  normalize_by_opacity: true
+  allow_missing_supervision: true
+  mask_semantic_classes: ["~synthetic", "synthetic"]
+  semantic_lambdas: [1.0, 0.25]
+
+# For primitive loss, only hood is marked as invalid, not the dynamic objects.
+# We supervise their distance prediction to be well-prepared for dynamic model training.
+# However, this loss conflicts with the 3DGUT nature, so we gradually disable it and use pure render distance supervision.
+primitive_distance:
+  fn: depth_inverse_mse
+  min_distance: 0.1
+  max_distance: 50.0
+  mask_semantic_classes: ["~sky"]
+  semantic_lambdas: [1.0]
+  reduce:
+    name: mean
+  lambda_: 1.0
+  lambda_scheduler:
+    name: linear_lambda
+    start: 1000
+    end: 1200
+    update_interval: "step"
+    update_frequency: 1
+    lambda_end: 0.01
+
+primitive_sky_distance:
+  fn: depth_inverse_mse
+  reduce:
+    name: mean
+  lambda_: 50.0
+  sky_distance: 400.0
+  lambda_scheduler:
+    name: linear_lambda
+    start: 1000
+    end: 1200
+    update_interval: "step"
+    update_frequency: 1
+    lambda_end: 0.5
+
+primitive_sky_mask:
+  fn: bce_truncated
+  reduce:
+      name: mean
+  lambda_: 0.01

@@ -1,0 +1,20 @@
+# GSplat Renderer Configuration
+
+defaults:
+  - 3dgs_nrend
+
+name: 3dgs-gsplat
+
+# Rasterization mode for gsplat
+# Options: "classic" (standard 3DGS) or "antialiased" (Mip-Splatting)
+rasterize_mode: classic
+
+# 3dgs-gsplat doesn't not support ray input, this must be False.
+use_rays: False
+
+# Logging level (info, warning, error)
+log_level: info
+
+# Note: GSplat uses PyTorch autograd for differentiation
+# No need for separate forward/backward pipeline configuration
+# as required by NRend variants

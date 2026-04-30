@@ -1,0 +1,21 @@
+defaults:
+  - celsius
+
+# use layer scale and qk norm
+encoder:
+  layer_scale_init_values: 0.01
+  qk_norm: true
+
+# remove layer norm after patch embed and encoder
+use_patch_embed_norm: false
+use_encoder_norm: false
+
+# use xyz centroid prediction
+centroid_prediction: xyz
+
+# use a smaller scene rescale to have a mean depth of 1
+scene_rescale: 0.01
+
+# use a smaller max scale
+activations:
+  scale_max: 0.075

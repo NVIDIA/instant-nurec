@@ -1,0 +1,60 @@
+primitive_sky_cubemap:
+  fn: l1
+  reduce:
+    name: mean
+  masked_region: "smooth"
+  lambda_: 1.0
+
+primitive_rgb:
+  fn: l1
+  reduce:
+    name: mean
+  lambda_: 0.1
+
+primitive_distance:
+  fn: l1
+  min_distance: 0.1
+  max_distance: 300.0
+  sky_distance: null
+  mask_semantic_classes: null
+  semantic_lambdas: null
+  use_z_depth: false
+  lambda_: 1.0
+  confidence_alpha_: null
+  reduce:
+    name: quantile
+    quantile: 0.98
+
+primitive_distance_gradient:
+  fn: abs
+  min_distance: 0.1
+  max_distance: 50.0
+  use_z_depth: false
+  lambda_: 1.0
+  confidence_alpha_: null
+  reduce:
+    name: mean
+  scale_steps: [1, 2, 4, 8]
+  scale_lambdas: [1.0, 1.0, 1.0, 1.0]
+
+primitive_semantics:
+  fn: cross_entropy
+  reduce:
+    name: mean
+  lambda_: 0.01
+
+primitive_normal:
+  fn: normal_cosine
+  reduce:
+    name: mean
+  lambda_: 0.2
+  allow_missing_supervision: true
+
+primitive_velocity:
+  fn: l1
+  velocity_mask_threshold: 0.01
+  mask_semantic_classes: ["vehicle", "~vehicle"]
+  semantic_lambdas: [1.0, 0.1]
+  reduce:
+    name: mean
+  lambda_: 1.0

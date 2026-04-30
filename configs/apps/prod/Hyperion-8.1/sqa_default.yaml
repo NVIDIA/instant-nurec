@@ -1,0 +1,80 @@
+# @package _global_
+
+defaults:
+  # Configs override each other in the listed order (/ denotes config root)
+  - /apps/AV/_base_3dgut_dynamic_road_semantic.yaml
+  - /apps/prod/options/artifact: default
+  - /apps/prod/options/nrend: disabled
+  - /apps/prod/options/difix/3dgut: disabled
+  - /apps/prod/options/mesh: disabled
+  - /apps/prod/options/subsampling/3dgut: batch_sampler_4
+  - options/sensors: hyperion8.1_1cam_1lidar
+  - options/validation: default
+  # Enable the calibration module to optimize per-frame poses
+  - /apps/prod/options/calib: enabled
+  # Enable MCMC strategy
+  - /apps/AV/module_mixins/_mcmc_mixin.yaml
+  - override /model/gaussians/strategy@model.strategy: mcmc  
+  - override /logger: dummy
+  # Disable the post-processing per-frame for temporal appearance
+  - override /model/post_processing@model.post_processing.b: ppisp
+  - override /model/post_processing@model.post_processing.c: null
+
+model:
+  post_processing:
+    b:
+      # Disable frame-specific optimizations for the PPISP pipeline for two reasons:
+      # 1. we don't have a PPISP controller yet.
+      # 2. we are using fourier features for the background which interferes with the frame-specific optimizations.
+      per_frame_ppisp_enabled: false
+
+  # disabling calibration for lidar
+  calib:
+    lidar:
+      enabled: false
+
+  strategy:
+    add:
+      max_n_gaussians: 2_000_000 # Maximum number of Gaussians
+
+  layers:
+    # Enable temporal appearance for dynamic rigids
+    dynamic_rigids:
+      fourier_features_dim: 20
+      initialization:
+        num_point_cloud_points_in_layer: 300_000
+    # Enable temporal appearance for dynamic deformables
+    dynamic_deformables:
+      initialization:
+        num_point_cloud_points_in_layer: 300_000
+    # Enable temporal appearance for road
+    road:
+      initialization:
+        num_point_cloud_points: 400_000
+    # Enable temporal appearance for background for compatible with Pacsim
+    background:
+      fourier_features_dim: 5
+      initialization:
+        num_point_cloud_points: 800_000
+        num_near_points: 100_000
+        num_far_points: 100_000
+
+  # Enable LIDAR-specific rendering optimizations
+  renderer:
+    culling:
+      far_clip_distance_lidar: 200.0
+      far_clip_distance_camera: 1000.0
+
+dataset:
+  cuboid_tracks_params:
+    track_label_sources:
+      - AUTOLABEL
+
+  n_train_sample_lidar_rays: 2048
+
+checkpoint:
+  every_n_train_steps: ${mul:${trainer.max_epochs},${dataset.n_samples_per_epoch}}
+  
+loss: 
+  lidar:
+    lambda_: 0.03

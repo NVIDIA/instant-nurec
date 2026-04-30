@@ -1,0 +1,131 @@
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+load("@nre_pip_deps//:requirements.bzl", pip_requirement = "requirement")
+load("@rules_python//python:defs.bzl", "py_library")
+load("//bazel/pytest:defs.bzl", "pytest_test")
+
+DEFAULT_VISIBILITY = ["//:core_package_group"]
+
+package(default_visibility = DEFAULT_VISIBILITY)
+
+filegroup(
+    name = "py_files",
+    srcs = glob(["**/*.py"]),
+    visibility = [
+        "//internal/scripts/pycena:__pkg__",
+    ],
+)
+
+py_library(
+    name = "pylib",
+    srcs = [
+        "__init__.py",
+        "main.py",
+        "profile_dataloader.py",
+        "run_script.py",
+    ],
+    visibility = DEFAULT_VISIBILITY + [
+        # Add visibility for //:run
+        "//:__pkg__",
+        "//test_data:__pkg__",
+        # Add visibility for //internal/scripts/test_data:generate_test_data
+        "//internal/scripts/test_data:__pkg__",
+    ],
+    deps = [
+        "//nre/config:pylib",
+        "//nre/config:pylib_version",
+        "//nre/systems:pylib",
+        "//nre/utils:pylib",
+        "//nre/utils:pylib_callbacks",
+        "//nre/utils:pylib_prober",
+        "//nre/utils/debug:pylib",
+        "//nre/viewer:pylib",
+        pip_requirement("click"),
+        pip_requirement("pytorch_lightning"),
+        pip_requirement("hydra-core"),
+        pip_requirement("omegaconf"),
+        pip_requirement("numpy"),
+    ],
+)
+
+pytest_test(
+    name = "main_test",
+    timeout = "long",
+    srcs = [
+        "main_test.py",
+    ],
+    data = [
+        "//configs",
+        "@test_data_ncore//:ncore_1sec",
+        "@test_data_ncore//:ncore_clipgt_1sec",
+    ],
+    deps = [
+        ":pylib",
+        "//nre/grpc:pylib",
+        pip_requirement("click"),
+        pip_requirement("pytest-grpc"),
+        "@rules_python//python/runfiles",
+    ],
+)
+
+pytest_test(
+    name = "main_lidarfree_test",
+    timeout = "long",
+    srcs = [
+        "main_lidarfree_test.py",
+    ],
+    data = [
+        "//configs",
+        "@test_data_ncore//:ncore_clipgt_lidarfree_1sec",
+    ],
+    deps = [
+        ":pylib",
+        "//nre/grpc:pylib",
+        pip_requirement("click"),
+        pip_requirement("pytest-grpc"),
+        "@rules_python//python/runfiles",
+    ],
+)
+
+pytest_test(
+    name = "robotics_test",
+    timeout = "long",
+    srcs = [
+        "robotics_test.py",
+    ],
+    data = [
+        "//configs",
+        "@test_robotics_data//:galileofigure8b",
+    ],
+    deps = [
+        ":pylib",
+        "//nre/grpc:pylib",
+        pip_requirement("click"),
+        pip_requirement("pytest-grpc"),
+        "@rules_python//python/runfiles",
+    ],
+)
+
+pytest_test(
+    name = "run_script_test",
+    srcs = [
+        "run_script_test.py",
+    ],
+    data = [
+        "//docs/architecture/examples",
+    ],
+    deps = [
+        ":pylib",
+        "//nre:pylib",
+        pip_requirement("click"),
+        "@rules_python//python/runfiles",
+    ],
+)

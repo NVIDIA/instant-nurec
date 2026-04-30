@@ -1,0 +1,39 @@
+# @package _global_
+
+defaults:
+  - ndas_workflow_base
+  - _self_
+
+workflow_name_prefix: nurec-cicd-reconstruct-rendering-profiling
+
+amo_cle:
+  enabled: false
+
+car2sim:
+  enabled: true
+  training_config: configs/apps/prod/Hyperion-8.1/car2sim.yaml
+  cut:
+    - reconstruction
+  reconstruction_args:
+  - --config-name=configs/apps/prod/Hyperion-8.1/car2sim.yaml
+  - out_dir=$WORK_RECONSTRUCTION_DIR
+  - mode=train
+  - logger.name=dummy
+  - dataset.path=$DATASET_FILE
+  - dataset.seek_offset_sec=0.0
+  - dataset.duration_sec=$DURATION
+  - dataset.aux_data=True
+  - dataset.lidar_ids=$LIDAR_ID_LIST
+  - dataset.samplers.batch_sampler.camera_pixel_sampler.subsample=2
+  - dataset.cuboid_tracks_params.track_label_sources=[AUTOLABEL]
+  - profiling.enabled=true
+  - scopedtimer.enabled=true
+  - scopedtimer.verbosity=BASIC
+  - scopedtimer.synchronize=true
+  - scopedtimer.logfile=timing.log
+    
+nre_eval:
+  enabled: true
+  cut: 
+    - create_clips_parallel_structure
+    - render_nre

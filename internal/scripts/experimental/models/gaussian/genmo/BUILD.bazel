@@ -1,0 +1,37 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+load("@nre_pip_deps//:requirements.bzl", pip_requirement = "requirement")
+load("@rules_python//python:defs.bzl", "py_library")
+
+# GenMO integration utilities library
+py_library(
+    name = "genmo_utils",
+    srcs = [
+        "__init__.py",
+        "genmo_init.py",
+        "pose_extraction.py",
+    ],
+    visibility = [
+        "//internal/scripts/experimental/models/gaussian:__pkg__",
+        "//internal/scripts/experimental/models/gaussian/nvhuman:__pkg__",
+        "//scripts/pycena:__subpackages__",
+    ],
+    deps = [
+        pip_requirement("torch"),
+        pip_requirement("numpy"),
+        pip_requirement("opencv-python"),
+        pip_requirement("hydra-core"),
+        pip_requirement("omegaconf"),
+        "@genmo//:hmr4d",
+        "@genmo//:motiondiff",
+        "@rules_python//python/runfiles",
+    ],
+)

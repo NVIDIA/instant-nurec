@@ -1,0 +1,49 @@
+# @package _global_
+# Test config for 3DGS GSplat renderer (standard 3DGS - with pose gradients)
+# Use this for pose optimization workflows (DirectTracksCalib, FreePoseCalib)
+
+defaults:
+  - /apps/AV/NV/3dgut_static.yaml
+  - override /model/gaussians/renderer@model.renderer: 3dgs_gsplat
+  - override /model/gaussians/initialization@model.layers.background.initialization: random
+  - override /model/post_processing@model.post_processing.b: null
+  - override /model/post_processing@model.post_processing.c: null
+
+model:
+  layers:
+    background:
+      particle:
+        density_kernel_min_response: 0.0113
+  renderer:
+    log_level: 4
+    # Tiling configuration
+    tiling:
+      camera:
+        tile_width: 16
+        tile_height: 16
+    # Background rendering
+    background:
+      color: 0.0
+    # Culling parameters
+    culling:
+      near_clip_distance: 0.01
+      far_clip_distance: 1.0e10
+    # Projection parameters
+    projection:
+      min_projected_ray_radius: 0.5477  # sqrt(0.3)
+    # Rasterization mode
+    rasterize_mode: classic  # or antialiased
+    # Radius clipping (0.0 = disabled)
+    radius_clip: 0.0
+    # Phase 2: Memory optimization parameters (for training)
+    packed: true        # Memory-efficient mode (recommended)
+    sparse_grad: false  # COO sparse gradients (requires packed=true)
+    absgrad: false      # Absolute gradients for densification
+
+dataset:
+  # Lidar isn't supported by gsplat yet
+  n_train_sample_lidar_rays: 0
+  # Disable lidar sensor loading entirely
+  lidar_ids: []  # Don't load any lidar sensors
+  all_lidar_ids: []  # Empty list to prevent lidar validation
+

@@ -1,0 +1,7 @@
+defaults:
+  - base
+
+name: cosmos-difix
+model_url: https://api.ngc.nvidia.com/v2/org/nvidia/team/nre/models/nurec-fixer/versions/cosmos_3dgut/files/cosmos_3dgut.pt
+model_resolution: [576, 1024]
+model_filename: "cosmos_3dgut.pt"

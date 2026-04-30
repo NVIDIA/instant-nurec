@@ -1,0 +1,13 @@
+# this script value is a placeholder, this config will be dynamically regenerated in //internal/scripts/pycena:gen_config_nre_tools
+# the obfuscation modules are also defined in tools.yaml
+script: internal/scripts/gen_entrypoint.py
+obfuscation_modules: []
+build_dir: internal/scripts/pycena
+template_dir: internal/scripts/pycena/templates
+dump_ast: False
+debug: False
+skip_script: True
+script_prefix: entrypoint
+python_version: "3.11"
+python_build_root: ../rules_python++python+python_3_11_x86_64-unknown-linux-gnu
+python_run_root: ../rules_python++python+python_3_11_x86_64-unknown-linux-gnu

@@ -1,0 +1,188 @@
+# Copyright (c) 2023-2026 NVIDIA CORPORATION.  All rights reserved.
+
+## Common logic to import as shared into all projects
+
+# Default compilation mode and compiler version
+build --compilation_mode=opt
+
+# Use gcc-11 as newer gcc versions are not supported natively by nvcc-11-8
+build --repo_env=CC=gcc-11
+
+# Default CXX flags
+build --cxxopt=-std=c++17
+build --cxxopt=-Werror
+build --action_env=BAZEL_CXXOPTS=-std=c++17
+build --@rules_cuda//cuda:host_copts=-std=c++17
+build --@rules_cuda//cuda:copts=-Werror=all-warnings
+
+# Force separate C/C++/CUDA action cache keys when doing C compiler
+# updates which bring in new ABI requirements.
+# Please increment NRE_CC_ABI_TAG when the ABI changes.
+# Can be retired once we adopt a hermetic toolchain.
+build --copt=-DNRE_CC_ABI_TAG=1
+build --host_copt=-DNRE_CC_ABI_TAG=1
+build --@rules_cuda//cuda:copts=-DNRE_CC_ABI_TAG=1
+build --@rules_cuda//cuda:host_copts=-DNRE_CC_ABI_TAG=1
+
+# Silence warnings produced with our toolchain by some external projects
+# Note: labels not usable here for external projects due to the special handling
+# of "@" in this option, see https://github.com/bazelbuild/bazel/issues/19665
+build --host_per_file_copt=external/(pigz|zopfli).*@-w
+
+# Enable local disk caching
+build --disk_cache=~/.cache/bazel/disk-cache/nre
+build --remote_instance_name nre
+
+# Disable remote cache uploads by default to avoid pollution in case users configure access
+# for their local builds. CI overrides this via .bazelrc.user
+build --remote_upload_local_results=false
+
+# Ensure that user's own PATH/LD_LIBRARY_PATH doesn't propagate into the build/test sandbox
+build --incompatible_strict_action_env
+
+# Pass GITHUB_TOKEN for update-license-overrides target
+run:license-update --action_env=GITHUB_TOKEN
+
+# Check the ctime of input files of an action before uploading it to a remote cache (there may be cases where the Linux kernel delays writing of files, which could cause false positives)
+build --guard_against_concurrent_changes=full
+
+#? --config=no-internal        Exclude internal modules
+build:no-internal --//bazel/flags:internal=false
+
+#? --config=mamba               Enable Mamba (this might slow down bazel start-up times)
+build:mamba --//bazel/flags:mamba=True
+
+# NRE tools - all enabled by default
+# Override with --//bazel/flags:<tool>=False to disable specific tools
+build --//bazel/flags:ncore_aux_data=True
+build --//bazel/flags:mask_annotator=True
+build --//bazel/flags:asset_harvester=True
+
+# Default CUDA architectures to build cuda kernels for (compute-capability 80 is required for A100s, e.g., in Maglev dgxa100.* resources)
+build --@rules_cuda//cuda:archs=compute_80:sm_80;compute_86:sm_86;compute_89:sm_89;compute_90:sm_90;compute_100:sm_100;compute_120:sm_120;compute_120:compute_120
+
+# Collect workspace status from repository ('--stamp' needs to be enabled separately)
+build --workspace_status_command=$(pwd)/bazel/version/workspace_status.sh
+
+#? --config=cuda_80            Build kernels for compute-capability 80 only
+build:cuda_80 --@rules_cuda//cuda:archs=compute_80:sm_80
+
+#? --config=cuda_86            Build kernels for compute-capability 86 only (e.g., for Ampere machines, like the A40 in colossus machines)
+build:cuda_86 --@rules_cuda//cuda:archs=compute_86:sm_86
+
+#? --config=cuda_89            Build kernels for compute-capability 89 only
+build:cuda_89 --@rules_cuda//cuda:archs=compute_89:sm_89
+
+#? --config=cuda_90            Build kernels for compute-capability 90 only
+build:cuda_90 --@rules_cuda//cuda:archs=compute_90:sm_90
+
+#? --config=cuda_100           Build kernels for compute-capability 100 only
+build:cuda_100 --@rules_cuda//cuda:archs=compute_100:sm_100
+
+#? --config=cuda_120           Build kernels for compute-capability 120 only
+build:cuda_120 --@rules_cuda//cuda:archs=compute_120:sm_120;compute_120:compute_120
+
+#? --config=ci_test_timeout    Increased the CI test timeouts [default 60,300,900,3600 for short, moderate, long, eternal]
+build:ci_test_timeout --test_timeout=60,300,1300,3600
+
+#? --config=run_grpc_only      Build only the gRPC-only server image
+build:run_grpc_only --//bazel/flags:run_grpc_only=True
+
+#? --config=local_gsplat      Use local gsplat repository checkout in deps/gsplat instead of remote repository
+build:local_gsplat --@//bazel/flags:local_gsplat=True
+
+#? --config=skip_nrend_obfuscation   Skip obfuscation of NRend JIT sources
+build:skip_nrend_obfuscation --//bazel/flags:skip_nrend_obfuscation=True
+
+# Show outputs of failing tests by default
+test --test_output=errors
+
+# Only build test targets when executing tests
+test --build_tests_only
+
+# Add strict visibility to config_settings targets
+build --incompatible_config_setting_private_default_visibility
+
+# Mypy integration
+build --@mypy_integration//:mypy=//bazel/typing:mypy
+test --@mypy_integration//:mypy_config=//bazel/typing:mypy.ini
+build --incompatible_default_to_explicit_init_py
+
+# Code coverage measurement (Python/C++ only)
+coverage --test_timeout=180,900,3900,10800 # Triple of CI test timeouts to account for coverage collection overhead
+coverage --combined_report=lcov
+coverage --instrument_test_targets
+coverage --instrumentation_filter="^//"
+
+#? --config=cuda_coverage_host  CUDA host code coverage (gcov for .cu/.cuh)
+#                               Usage: bazel coverage --config=cuda_coverage_host //target
+build:cuda_coverage_host --compilation_mode=dbg
+build:cuda_coverage_host --strip=never
+# Disable extra debug assertions (not needed for coverage)
+build:cuda_coverage_host --copt=-DNDEBUG
+build:cuda_coverage_host --host_copt=-DNDEBUG
+build:cuda_coverage_host --@rules_cuda//cuda:copts=-DNDEBUG
+build:cuda_coverage_host --@rules_cuda//cuda:host_copts=-DNDEBUG
+# gcov instrumentation flags for CUDA
+build:cuda_coverage_host --@rules_cuda//cuda:copts=-Xcompiler=--coverage
+build:cuda_coverage_host --@rules_cuda//cuda:host_copts=--coverage
+# Link with gcov
+build:cuda_coverage_host --linkopt=--coverage
+build:cuda_coverage_host --host_linkopt=--coverage
+# nvcc resolves to absolute paths before passing to gcc, bazel coverage expects relative paths
+# Default GCOV_PREFIX_STRIP for sandbox execution
+# Scripts calculate dynamically: base_components + 3 for sandbox path overhead
+test:cuda_coverage_host --test_env=GCOV_PREFIX_STRIP=11
+coverage:cuda_coverage_host --test_env=COVERAGE_GCOV_OPTIONS=-r
+
+#? --config=cuda_coverage_dev  CUDA device code coverage (NCU for GPU kernels)
+#                                  Usage: bazel coverage --config=cuda_coverage_dev //target:test
+#                                  Automatically runs tests under NCU and converts to LCOV format
+build:cuda_coverage_dev --compilation_mode=dbg
+build:cuda_coverage_dev --strip=never
+# Device -O1 + line info for NCU coverage (close to -G coverage without full debug overhead)
+# --ptxas-options=-O0 disables ptxas assembler optimization
+build:cuda_coverage_dev --@rules_cuda//cuda:copts=-O1
+build:cuda_coverage_dev --@rules_cuda//cuda:copts=--generate-line-info
+build:cuda_coverage_dev --@rules_cuda//cuda:copts=--ptxas-options=-O0
+# Flag to trigger coverage_mode select in slangtorch_library genrules (slangc -O0 vs -O3)
+build:cuda_coverage_dev --define=cuda_coverage_dev=true
+# Disable assertions for stability under profiling
+build:cuda_coverage_dev --copt=-DNDEBUG
+build:cuda_coverage_dev --host_copt=-DNDEBUG
+build:cuda_coverage_dev --@rules_cuda//cuda:copts=-DNDEBUG
+build:cuda_coverage_dev --@rules_cuda//cuda:host_copts=-DNDEBUG
+# Extended timeouts for NCU profiling overhead (8x normal)
+test:cuda_coverage_dev --test_timeout=480,2400,7200,28800
+# Limit concurrent tests to avoid NCU contention on shared GPU profiling hardware
+test:cuda_coverage_dev --local_test_jobs=4
+# JIT compilation flags for NCU source correlation
+test:cuda_coverage_dev --test_env=CUDA_COVERAGE_MODE=1
+test:cuda_coverage_dev --test_env=CUDA_RTC_OPT_LEVEL=1
+test:cuda_coverage_dev --test_env=SLANG_NVRTC_FLAGS="-lineinfo -O0 --ptxas-options=-O0"
+test:cuda_coverage_dev --test_env=SLANGTORCH_NVRTC_FLAGS="-lineinfo -O0 --ptxas-options=-O0"
+test:cuda_coverage_dev --test_env=SLANGC_FLAGS="-O0 -g -line-directive-mode standard"
+test:cuda_coverage_dev --test_env=SLANGTORCH_SLANGC_FLAGS="-O0 -g -line-directive-mode standard"
+test:cuda_coverage_dev --test_env=SLANG_OPT_LEVEL=0
+test:cuda_coverage_dev --test_env=SLANG_DEBUG=1
+# Exclude all targets from gcov instrumentation - NCU handles coverage, not gcov
+coverage:cuda_coverage_dev --instrumentation_filter=-.*
+# Run tests under NCU profiler which converts output to LCOV format
+coverage:cuda_coverage_dev --run_under=//internal/scripts/cuda_coverage:ncu_coverage_wrapper
+# Cache test results including coverage - if binary unchanged, skip test+NCU entirely
+coverage:cuda_coverage_dev --cache_test_results=yes
+
+# aspect-rules_py (supports single interpreter only)
+common --@aspect_rules_py//py:interpreter_version=3.11.14
+
+# Require OAuth2 support in rules_oci for some docker image repositories
+common --repo_env=OCI_ENABLE_OAUTH2_SUPPORT=1
+
+# Work-around a Bazel startup crash when running inside containers on ORD
+# https://gitlab-master.nvidia.com/nrs/nre/-/issues/358
+startup --host_jvm_args=-XX:-UseContainerSupport
+
+## -----------------------------------------------------------
+
+## Allow for optional user-specific overwrites https://docs.bazel.build/versions/main/best-practices.html#using-the-bazelrc-file
+try-import %workspace%/.bazelrc.user

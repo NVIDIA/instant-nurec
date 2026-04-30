@@ -1,0 +1,16 @@
+# @package _global_
+# Owner: jiahuih
+
+# order in which configs override each other (/* - denotes a relative search path)
+defaults:
+  - /nrm/apps/kelvin_base: _base
+  - /nrm/model@model: kelvin_dav3_base
+  - /nrm/dataset/trisplit: _ncore_nvs_parking
+  - override /loss/nrm@loss: kelvin_pixel_aligned
+
+system:
+  train_num_workers: 8
+  # Decrease val/test RAM consumption
+  val_num_workers: 4
+  test_num_workers: 4
+  log_media_every_n_steps_val: 2

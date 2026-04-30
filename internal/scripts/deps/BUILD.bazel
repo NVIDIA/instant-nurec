@@ -1,0 +1,31 @@
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+# nre:allow-rules-python-py-binary
+load("@rules_python//python:defs.bzl", "py_binary")
+
+# uv.lock (TOML) at repo root for Black Duck. Uses uv from multitool.
+# Requires network and, for private GitLab indexes, credentials (e.g. ~/.netrc).
+# Only analyzed when explicitly built/run (e.g. bazel run //:generate_lock); does not affect standard builds.
+py_binary(
+    name = "generate_lock",
+    srcs = ["run_uv_lock.py"],
+    data = [
+        "//deps/python:requirements_3_11_x86_64.txt",
+        "@multitool//tools/uv",
+    ],
+    main = "run_uv_lock.py",
+    tags = ["requires-network"],
+    visibility = [
+        "//:__pkg__",
+        "//deps/python:__pkg__",
+    ],
+    deps = ["@rules_python//python/runfiles"],
+)

@@ -1,0 +1,4 @@
+defaults:
+  - individual_step_time
+
+name: holistic-step-time-input-embedding

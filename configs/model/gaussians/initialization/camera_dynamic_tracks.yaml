@@ -1,0 +1,16 @@
+defaults:
+  - base
+
+name: camera-dynamic-tracks
+
+num_point_cloud_points_per_track: 5_000 # the maximum number of point cloud points per track
+num_point_cloud_points_in_layer: null # When set, the maximum number of point cloud points in the layer
+
+default_density: ${eval:'0.5 if ("${model.strategy.name}"=="mcmc") else 0.1'}
+keep_all_track_poses: false
+default_scale: 0.1
+symmetric_axis: ???
+
+camera_ids: null
+step_frame: 1
+fill_with_random_points: true

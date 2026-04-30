@@ -1,0 +1,110 @@
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+load("@aspect_rules_py//py:defs.bzl", "py_binary")
+load("@nre_pip_deps//:requirements.bzl", pip_requirement = "requirement")
+load("@rules_python//python:defs.bzl", "py_library")
+load("//bazel/pytest:defs.bzl", "pytest_test")
+
+DEFAULT_VISIBILITY = [
+    "//:core_package_group",
+    "//bazel/docs:__pkg__",
+]
+
+package(default_visibility = DEFAULT_VISIBILITY)
+
+filegroup(
+    name = "py_files",
+    srcs = glob(["**/*.py"]),
+    visibility = [
+        "//internal/scripts/pycena:__pkg__",
+    ],
+)
+
+py_library(
+    name = "pylib",
+    srcs = [
+        "downloader.py",
+        "ego_hood.py",
+        "grpc_server_config.py",
+        "scene_cache.py",
+        "serve.py",
+        "trajectory.py",
+    ],
+    visibility = DEFAULT_VISIBILITY + [
+        # Add visibility for //:run
+        "//:__pkg__",
+        # Add visibility for //internal/scripts/experimental:grpc_control_actors
+        "//internal/scripts/experimental:__pkg__",
+    ],
+    deps = [
+        "//nre/artifact:pylib",
+        "//nre/datasets:pylib",
+        "//nre/grpc/protos:grpc_pb2",
+        "//nre/systems:pylib",
+        "//nre/utils:pylib",
+        "//nre/utils:pylib_cli",
+        "//nre/utils/debug:pylib",
+        "//nre/viewer:pylib",
+        pip_requirement("pytorch_lightning"),
+        pip_requirement("imageio"),
+        pip_requirement("numpy"),
+        pip_requirement("pillow"),
+        pip_requirement("torchvision"),
+        pip_requirement("einops"),
+        pip_requirement("scipy"),
+        pip_requirement("lietorch"),
+        pip_requirement("nvidia-ncore"),
+        pip_requirement("hydra-core"),
+        pip_requirement("grpcio"),
+        pip_requirement("click"),
+        pip_requirement("nvidia-nvimgcodec-cu12"),
+        pip_requirement("requests"),
+        pip_requirement("grpcio-health-checking"),
+    ],
+)
+
+pytest_test(
+    name = "serve_test",
+    srcs = [
+        "backend_cache_test.py",
+        "downloader_test.py",
+        "ego_hood_test.py",
+        "scene_cache_test.py",
+        "serve_test.py",
+    ],
+    deps = [
+        ":pylib",
+        "//nre/grpc/protos:grpc_pb2",
+        pip_requirement("imageio"),
+    ],
+)
+
+pytest_test(
+    name = "grpc_server_config_test",
+    srcs = [
+        "grpc_server_config_test.py",
+    ],
+    deps = [
+        ":pylib",
+        pip_requirement("click"),
+    ],
+)
+
+py_binary(
+    name = "update_generated",
+    srcs = ["update_generated.py"],
+    data = ["//nre/grpc/protos:proto_files"],
+    main = "update_generated.py",
+    deps = [
+        pip_requirement("grpcio"),
+        pip_requirement("grpcio-tools"),
+    ],
+)

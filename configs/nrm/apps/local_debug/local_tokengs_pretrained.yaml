@@ -1,0 +1,36 @@
+# @package _global_
+# Local debug app for training Kelvin from a legacy TokenGS checkpoint.
+# Override model.init_weights_paths.tokengs on the CLI to point to your .safetensors or .ckpt file.
+
+defaults:
+  - /nrm/apps/experimental/kelvin_tokengs_dataverse
+  - override /nrm/dataset/concrete@dataset.train: dv_mixed3_local_small
+  - override /nrm/dataset/concrete@dataset.val: dv_mixed3_local_small
+  - override /nrm/dataset/concrete@dataset.test: dv_mixed3_local_small
+
+out_dir: /nrm_debug/out
+
+system:
+  log_every_n_steps: 5
+  log_media_every_n_steps: 5
+  log_media_every_n_steps_val: 1
+  warmup_steps: 50
+  log_novel_view_perturbation: 10.0
+
+model:
+  # Path to legacy TokenGS checkpoint (.safetensors or .ckpt). Override from CLI: +model.init_weights_paths.tokengs=/path
+  init_weights_paths: {}
+  encoder:
+    depth: 24
+  decoder:
+    depth: 1
+    num_gaussian_tokens: 4096
+    use_decoder_norm: false  # legacy TokenGS has no backbone_norm after decoder
+  activations:
+    scale_max: 0.075
+  # use a smaller scene rescale to have a mean depth of 1
+  scene_rescale: 0.15
+
+loss:
+  primitive_visibility_regularization:
+    lambda_: 0

@@ -1,0 +1,35 @@
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+load("@aspect_rules_py//py:defs.bzl", "py_binary")
+load("@nre_pip_deps//:requirements.bzl", pip_requirement = "requirement")
+
+# Test data generation script
+# Regenerate test data on the test_data_ncore dataset with the command:
+# bazel run //internal/scripts/test_data:generate_test_data -- --test-data-dir $(realpath test_data)
+# or on more realistic data (i.e clipgt-05443ac1-8125-4ace-9daa-6ecdc0df43ff):
+# bazel run //internal/scripts/test_data:generate_test_data -- --test-data-dir $(realpath test_data) --dataset-path /data/h81/clipgt-05443ac1-8125-4ace-9daa-6ecdc0df43ff/05443ac1-8125-4ace-9daa-6ecdc0df43ff/clipgt-05443ac1-8125-4ace-9daa-6ecdc0df43ff.json --additional-args dataset.duration_sec=1.0
+py_binary(
+    name = "generate_test_data",
+    srcs = ["generate_test_data.py"],
+    data = [
+        "//bazel/version:version_file_yaml",
+        "//configs",
+        "@test_data_ncore//:ncore_clipgt_1sec",
+    ],
+    main = "generate_test_data.py",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//nre/run:pylib",
+        pip_requirement("click"),
+        pip_requirement("torch"),
+        "@rules_python//python/runfiles",
+    ],
+)

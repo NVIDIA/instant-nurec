@@ -1,0 +1,159 @@
+diff -ruN rules_cuda_orig/cuda/private/actions/compile.bzl rules_cuda_patched/cuda/private/actions/compile.bzl
+--- rules_cuda_orig/cuda/private/actions/compile.bzl	2025-12-17 22:42:26.588406933 +0000
++++ rules_cuda_patched/cuda/private/actions/compile.bzl	2025-12-17 23:03:46.170010907 +0000
+@@ -11,7 +11,8 @@
+         common,
+         pic = False,
+         rdc = False,
+-        _prefix = "_objs"):
++        _prefix = "_objs",
++        coverage_enabled = False):
+     """Perform CUDA compilation, return compiled object files.
+ 
+     Notes:
+@@ -29,9 +30,10 @@
+         pic: Whether the `srcs` are compiled for position independent code.
+         rdc: Whether the `srcs` are compiled for relocatable device code.
+         _prefix: DON'T USE IT! Prefix of the output dir. Exposed for device link to redirect the output.
++        coverage_enabled: Whether to declare .gcno files as outputs for coverage instrumentation.
+ 
+     Returns:
+-        An compiled object `File`.
++        A struct with object and gcno `File`s.
+     """
+     actions = ctx.actions
+     cc_feature_configuration = cc_common.configure_features(
+@@ -69,7 +71,17 @@
+         if basename_counter[basename] > 1:
+             filename = "{}/{}".format(basename_index, filename)
+         obj_file = actions.declare_file("{}/{}/{}".format(_prefix, ctx.attr.name, filename))
+-        ret.append(obj_file)
++
++        # Declare gcno file for coverage instrumentation
++        gcno_file = None
++        if coverage_enabled:
++            gcno_filename = filename.rsplit(".", 1)[0] + ".gcno"
++            gcno_file = actions.declare_file("{}/{}/{}".format(_prefix, ctx.attr.name, gcno_filename))
++
++        ret.append(struct(
++            object = obj_file,
++            gcno = gcno_file,
++        ))
+ 
+         var = cuda_helper.create_compile_variables(
+             cuda_toolchain,
+@@ -99,7 +111,7 @@
+         actions.run(
+             executable = cuda_compiler,
+             arguments = [args],
+-            outputs = [obj_file],
++            outputs = [obj_file] + ([gcno_file] if gcno_file else []),
+             inputs = depset([src], transitive = [common.headers, cc_toolchain.all_files, cuda_toolchain.all_files]),
+             env = env,
+             mnemonic = "CudaCompile",
+diff -ruN rules_cuda_orig/cuda/private/rules/cuda_library.bzl rules_cuda_patched/cuda/private/rules/cuda_library.bzl
+--- rules_cuda_orig/cuda/private/rules/cuda_library.bzl	2025-12-17 22:42:26.592406954 +0000
++++ rules_cuda_patched/cuda/private/rules/cuda_library.bzl	2025-12-17 22:44:08.308923966 +0000
+@@ -20,6 +20,9 @@
+     if not use_rdc:
+         use_rdc = cuda_helper.check_must_enforce_rdc(cuda_archs_info = common.cuda_archs_info)
+ 
++    # Check if coverage instrumentation is enabled and coverage flags are present in the CUDA host compiler options
++    coverage_enabled = ctx.coverage_instrumented() and "--coverage" in common.host_compile_flags
++
+     # flatten first, so that non-unique basenames can be properly deduplicated
+     src_files = []
+     for src in ctx.attr.srcs:
+@@ -39,11 +42,21 @@
+     dlink_rdc_objects = depset(transitive = [dep[CudaInfo].dlink_rdc_objects for dep in attr.deps if CudaInfo in dep])
+     dlink_rdc_pic_objects = depset(transitive = [dep[CudaInfo].dlink_rdc_pic_objects for dep in attr.deps if CudaInfo in dep])
+ 
+-    # direct outputs
+-    objects = depset(compile(ctx, cuda_toolchain, cc_toolchain, src_files, common, pic = False, rdc = False)) if not use_rdc else depset([])
+-    pic_objects = depset(compile(ctx, cuda_toolchain, cc_toolchain, src_files, common, pic = True, rdc = False)) if not use_rdc else depset([])
+-    rdc_objects = depset(compile(ctx, cuda_toolchain, cc_toolchain, src_files, common, pic = False, rdc = True)) if use_rdc else depset([])
+-    rdc_pic_objects = depset(compile(ctx, cuda_toolchain, cc_toolchain, src_files, common, pic = True, rdc = True)) if use_rdc else depset([])
++    # direct outputs - compile returns structs with object and gcno fields
++    compile_outputs = compile(ctx, cuda_toolchain, cc_toolchain, src_files, common, pic = False, rdc = False, coverage_enabled = coverage_enabled) if not use_rdc else []
++    pic_compile_outputs = compile(ctx, cuda_toolchain, cc_toolchain, src_files, common, pic = True, rdc = False, coverage_enabled = coverage_enabled) if not use_rdc else []
++    rdc_compile_outputs = compile(ctx, cuda_toolchain, cc_toolchain, src_files, common, pic = False, rdc = True, coverage_enabled = coverage_enabled) if use_rdc else []
++    rdc_pic_compile_outputs = compile(ctx, cuda_toolchain, cc_toolchain, src_files, common, pic = True, rdc = True, coverage_enabled = coverage_enabled) if use_rdc else []
++
++    # Extract object files from compile outputs
++    objects = depset([o.object for o in compile_outputs])
++    pic_objects = depset([o.object for o in pic_compile_outputs])
++    rdc_objects = depset([o.object for o in rdc_compile_outputs])
++    rdc_pic_objects = depset([o.object for o in rdc_pic_compile_outputs])
++
++    # Collect gcno files for coverage metadata
++    all_compile_outputs = compile_outputs + pic_compile_outputs + rdc_compile_outputs + rdc_pic_compile_outputs
++    gcno_files = [o.gcno for o in all_compile_outputs if o.gcno != None]
+ 
+     # if rdc is enabled for this `cuda_library`, then we need to do a pass of device link further.
+     rdc_dlink_inputs = None
+@@ -139,6 +152,12 @@
+             dlink_rdc_objects = rdc_dlink_inputs,
+             dlink_rdc_pic_objects = rdc_pic_dlink_inputs,
+         ),
++        coverage_common.instrumented_files_info(
++            ctx,
++            source_attributes = ["srcs", "hdrs"],
++            dependency_attributes = ["deps"],
++            metadata_files = gcno_files,
++        ),
+     ]
+ 
+ cuda_library = rule(
+diff -ruN rules_cuda_orig/cuda/private/rules/cuda_objects.bzl rules_cuda_patched/cuda/private/rules/cuda_objects.bzl
+--- rules_cuda_orig/cuda/private/rules/cuda_objects.bzl	2025-12-17 22:42:26.596406974 +0000
++++ rules_cuda_patched/cuda/private/rules/cuda_objects.bzl	2025-12-17 22:44:47.821123566 +0000
+@@ -14,6 +14,9 @@
+ 
+     common = cuda_helper.create_common(ctx)
+ 
++    # Check if coverage instrumentation is enabled and coverage flags are present in the CUDA host compiler options
++    coverage_enabled = ctx.coverage_instrumented() and "--coverage" in common.host_compile_flags
++
+     # flatten first, so that non-unique basenames can be properly deduplicated
+     src_files = []
+     for src in ctx.attr.srcs:
+@@ -29,11 +32,21 @@
+     archive_rdc_pic_objects = depset(transitive = [dep[CudaInfo].rdc_pic_objects for dep in attr.deps if CudaInfo in dep] +
+                                                   [dep[CudaInfo].archive_rdc_pic_objects for dep in attr.deps if CudaInfo in dep])
+ 
+-    # direct outputs
+-    objects = depset(compile(ctx, cuda_toolchain, cc_toolchain, src_files, common, pic = False, rdc = False))
+-    pic_objects = depset(compile(ctx, cuda_toolchain, cc_toolchain, src_files, common, pic = True, rdc = False))
+-    rdc_objects = depset(compile(ctx, cuda_toolchain, cc_toolchain, src_files, common, pic = False, rdc = True))
+-    rdc_pic_objects = depset(compile(ctx, cuda_toolchain, cc_toolchain, src_files, common, pic = True, rdc = True))
++    # direct outputs - compile returns structs with object and gcno fields
++    compile_outputs = compile(ctx, cuda_toolchain, cc_toolchain, src_files, common, pic = False, rdc = False, coverage_enabled = coverage_enabled)
++    pic_compile_outputs = compile(ctx, cuda_toolchain, cc_toolchain, src_files, common, pic = True, rdc = False, coverage_enabled = coverage_enabled)
++    rdc_compile_outputs = compile(ctx, cuda_toolchain, cc_toolchain, src_files, common, pic = False, rdc = True, coverage_enabled = coverage_enabled)
++    rdc_pic_compile_outputs = compile(ctx, cuda_toolchain, cc_toolchain, src_files, common, pic = True, rdc = True, coverage_enabled = coverage_enabled)
++
++    # Extract object files from compile outputs
++    objects = depset([o.object for o in compile_outputs])
++    pic_objects = depset([o.object for o in pic_compile_outputs])
++    rdc_objects = depset([o.object for o in rdc_compile_outputs])
++    rdc_pic_objects = depset([o.object for o in rdc_pic_compile_outputs])
++
++    # Collect gcno files for coverage metadata
++    all_compile_outputs = compile_outputs + pic_compile_outputs + rdc_compile_outputs + rdc_pic_compile_outputs
++    gcno_files = [o.gcno for o in all_compile_outputs if o.gcno != None]
+ 
+     compilation_ctx = cc_common.create_compilation_context(
+         headers = common.headers,
+@@ -83,6 +96,12 @@
+             archive_rdc_objects = archive_rdc_objects,
+             archive_rdc_pic_objects = archive_rdc_pic_objects,
+         ),
++        coverage_common.instrumented_files_info(
++            ctx,
++            source_attributes = ["srcs", "hdrs"],
++            dependency_attributes = ["deps"],
++            metadata_files = gcno_files,
++        ),
+     ]
+ 
+ cuda_objects = rule(

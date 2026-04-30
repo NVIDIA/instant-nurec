@@ -1,0 +1,44 @@
+# Copyright (c) 2023-2025 NVIDIA CORPORATION.  All rights reserved.
+
+# Import all architecture-specific dependencies for aarch64
+
+-r requirements_3_11_common.in
+
+# this is a patched torch 2.7.0 wheel built using: deps/docker/Dockerfile-pytorch
+torch==2.7.0+cu128.git13417947453 --hash=sha256:26f294781943f915cac051d324e4132d24dd58e1ede46c2280078e874ad6b9e4
+torchvision==0.22.0 \
+    --hash=sha256:6be714bcdd8849549571f6acfaa2dfa9e00676f042bda517432745fb116f7904
+
+# torch_scatter built for commit 6cf77c420f837a427b0d57965e414d68c1bd89ec
+torch-scatter==2.1.2+git6cf77c4pt2.7.0cu128sm80to120 --hash=sha256:51fac723c8be5965f5aac288c9bb098fb0d4ed0fd4f5844f3e786ae1482b51ab
+
+# apex built for commit 312acb44f9fe05cab8c67bba6daa0e64d3737863
+apex==0.1+git312acb4pt2.7.0cu128sm80to120 --hash=sha256:44ea007dd7f46bdbd34721fecc371c8219e7d8ebb7d27d5767f85002ee9dab9d
+
+# tinycudann built for commit c2de4fa9e4e87794371d9f0129da341c4f6bbd98 (see https://gitlab-master.nvidia.com/nrs/nre_external/tiny-cuda-nn)
+tinycudann==1.8.4+gitc2de4fapt2.7.0cu128sm75to120 --hash=sha256:861b794ea3063a44e237960b05fa47735f84647e94b2bf9cd0504cfa3318f224
+
+# nvdiffrast built for commit dc1dedfd48de9be566d0cfde3ba96a710cc71014 (see https://gitlab-master.nvidia.com/nrs/nre_external/nvdiffrast/-/tree/patches)
+nvdiffrast==0.3.1+gitdc1dedfpt2.7.0cu128sm80to120 --hash=sha256:09bffa9a107d99f022a5bac71a20b0336b2444960eae09d29bbddfd90d96b0e5
+
+# lietorch built for `master` commit 0fa9ce8ffca86d985eca9e189a99690d6f3d4df6
+lietorch==0.2+git0fa9ce8pt2.7.0cu128sm80to120 --hash=sha256:d026b28a9e2e22c85ea680257ce49b5852dbc05cd50373bfc4cb47c41ff56b3b
+
+# aarch64 build of poisson-recon
+poisson-recon==13.74.1 --hash=sha256:2e11ce4ed2dabcdc6adf4c64ed1b0f9c985e374e39a696e06e0572fd50146e0d
+
+# aarch64 build of usd-core wheel (26.3 for UsdVol ParticleField schema API)
+usd-core==26.3 --hash=sha256:1edf906dfc60c7d40e18b883cecf04a4ac8edd501ebde7a24251b5f9152eab4c
+
+# SSIM loss with a fused kernel (see https://gitlab-master.nvidia.com/nrs/nre_external/fused-ssim)
+fused-ssim==0.2.0+gite86e6f9pt2.7.0cu128sm80to120 --hash=sha256:9838832dc9678270f4a17125af8618cf8036c452eb8df4bc4e2152d2fe9094e5
+
+# mmcv built for commit 3a5fb4b9 (see https://gitlab-master.nvidia.com/nrs/nre_external/mmcv)
+mmcv==2.2.0+git3a5fb4b9pt2.7.0cu128sm80to120 --hash=sha256:3614ba7f87c18e14c0d81096ec2403cf816f0c57a76e944ea361626a754acd92
+
+# transformer-engine for commit cafd8e50
+flash-attn==2.7.3 --hash=sha256:29cd7d83c1b0decacbb15a1e61cbb2bbd7d3aab16a5bdcc101fb8c6b3b3d29c2
+transformer-engine==1.11.0+cafd8e50 --hash=sha256:24e874c7706674483b81979d2e807ea745dce226d173b91db9ae9d2e93047b41
+
+# sam2 pre-built from sdist for Bazel determinism
+sam2==1.1.0+pt2.7.0cu128sm80to120 --hash=sha256:3433e34cddd11fa404404dd558bf6938e217eb8bd93ea26586a46a9d92031ba8

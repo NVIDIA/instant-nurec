@@ -1,0 +1,42 @@
+# @package _global_
+# Owner: jiahuih
+
+# order in which configs override each other (/* - denotes a relative search path)
+defaults:
+  - /nrm/apps/celsius_base: _static_full
+  - /nrm/dataset/trisplit: _mixed_data
+
+model:
+  init_weights_path: /lustre/fsw/portfolios/nvr/users/jiahuih/workspace/nre/init-ckpt/gslrm.ckpt
+  activation_checkpointing: true
+
+shared_config:
+  camera_ids:
+    - camera_front_wide_120fov
+    - camera_cross_left_120fov
+    - camera_cross_right_120fov
+    - camera_front_tele_30fov
+
+override_config:
+  context_camera_spec:
+    config:
+      frame_batch_samplers:
+        uniform:
+          n_frames_per_sample: 1
+
+  # Add +/- 0.5s to create some multi-view disparity
+  # Otherwise it will overfit too much to this single view
+  low_res_spec:
+    config:
+      supervision_frame_batch:
+        prepend_timestamps_us: 500000
+        append_timestamps_us: 500000
+
+  high_res_spec:
+    config:
+      supervision_frame_batch:
+        prepend_timestamps_us: 500000
+        append_timestamps_us: 500000
+      camera_subsampler:
+        frame_width: 1280
+        frame_height: 720

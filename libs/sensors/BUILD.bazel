@@ -1,0 +1,527 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+load("@nre_pip_deps//:requirements.bzl", pip_requirement = "requirement")
+load("@rules_cc//cc:defs.bzl", "cc_binary")
+load("@rules_cuda//cuda:defs.bzl", "cuda_library")
+load("@rules_python//python:defs.bzl", "py_library")
+load("//bazel/pytest:defs.bzl", "pytest_test")
+load("//bazel/slang:defs.bzl", "slangtorch_library")
+
+package(default_visibility = ["//:core_package_group"])
+
+filegroup(
+    name = "py_files",
+    srcs = glob(["**/*.py"]),
+    visibility = [
+        "//internal/scripts/pycena:__pkg__",
+    ],
+)
+
+# ============================================================================
+# Common Slang Files (shared between cameras and lidars)
+# ============================================================================
+
+COMMON_SLANG_FILES = [
+    "kernels/common/interface.slang",
+    "kernels/common/interpolation.slang",
+    "kernels/common/trajectory.slang",
+]
+
+filegroup(
+    name = "common_slang_files",
+    srcs = COMMON_SLANG_FILES,
+    visibility = ["//:core_package_group"],
+)
+
+# ============================================================================
+# Camera Slang Files
+# ============================================================================
+
+CAMERA_SLANG_FILES = [
+    "kernels/cameras/interface.slang",
+    "kernels/cameras/parameters.slang",
+    "kernels/cameras/camera.slang",
+    "kernels/cameras/camera_kernels.slang",
+]
+
+# Filegroup for camera slang files to be reused by other packages
+filegroup(
+    name = "camera_slang_files",
+    srcs = CAMERA_SLANG_FILES,
+    visibility = ["//:core_package_group"],
+)
+
+# Compile the Camera Slang module into a SlangTorch C++ CUDA extension
+slangtorch_library(
+    name = "camera_slang_cc",
+    srcs = ["kernels/cameras/camera_kernels.slang"],
+    extra_cmd_args = "-I$$(dirname $$(dirname $(location //libs/slang_utils:constants_slang)))",
+    visibility = ["//:core_package_group"],
+    deps = [
+        "kernels/cameras/camera.slang",
+        "kernels/cameras/interface.slang",
+        "kernels/cameras/parameters.slang",
+        "kernels/common/interface.slang",
+        "kernels/common/interpolation.slang",
+        "kernels/common/trajectory.slang",
+        "//libs/geometry/kernels:slang_files",
+        "//libs/slang_utils:constants_slang",
+        "//libs/slang_utils:extensions_slang",
+    ],
+)
+
+# ============================================================================
+# LiDAR Slang Files
+# ============================================================================
+
+LIDAR_SLANG_FILES = [
+    "kernels/lidars/interface.slang",
+    "kernels/lidars/parameters.slang",
+    "kernels/lidars/lidar.slang",
+    "kernels/lidars/lidar_kernels.slang",
+]
+
+# Filegroup for lidar slang files to be reused by other packages
+filegroup(
+    name = "lidar_slang_files",
+    srcs = LIDAR_SLANG_FILES,
+    visibility = ["//:core_package_group"],
+)
+
+# Compile the LiDAR Slang module into a SlangTorch C++ CUDA extension
+slangtorch_library(
+    name = "lidar_slang_cc",
+    srcs = ["kernels/lidars/lidar_kernels.slang"],
+    extra_cmd_args = "-I$$(dirname $$(dirname $(location //libs/slang_utils:constants_slang)))",
+    visibility = ["//:core_package_group"],
+    deps = [
+        "kernels/common/interface.slang",
+        "kernels/common/interpolation.slang",
+        "kernels/common/trajectory.slang",
+        "kernels/lidars/interface.slang",
+        "kernels/lidars/lidar.slang",
+        "kernels/lidars/parameters.slang",
+        "//libs/geometry/kernels:slang_files",
+        "//libs/slang_utils:constants_slang",
+        "//libs/slang_utils:extensions_slang",
+    ],
+)
+
+# ============================================================================
+# Pose Calibration Slang Files
+# ============================================================================
+
+POSE_CALIB_SLANG_FILES = [
+    "kernels/pose_calib/pose_calib.slang",
+]
+
+# Filegroup for pose calibration slang files to be reused by other packages
+filegroup(
+    name = "pose_calib_slang_files",
+    srcs = POSE_CALIB_SLANG_FILES,
+    visibility = ["//:core_package_group"],
+)
+
+# Compile the Pose Calibration Slang module into a SlangTorch C++ CUDA extension.
+# Kept for test-only A/B equivalence verification against hand-written CUDA.
+# Note: testonly is not set here because the slangtorch_library macro does not
+# propagate it to intermediate cuda_library targets. Test-only gating is done
+# at the py_library level (pose_calib_kernels_with_slang).
+slangtorch_library(
+    name = "pose_calib_slang_cc",
+    srcs = ["kernels/pose_calib/pose_calib.slang"],
+    extra_cmd_args = "-I$$(dirname $$(dirname $(location //libs/slang_utils:constants_slang)))",
+    visibility = ["//:core_package_group"],
+    deps = [
+        ":camera_slang_files",
+        ":common_slang_files",
+        "//libs/geometry/kernels:slang_files",
+        "//libs/slang_utils:constants_slang",
+        "//libs/slang_utils:extensions_slang",
+    ],
+)
+
+# Hand-written CUDA kernels for pose calibration (replaces Slang in production).
+cuda_library(
+    name = "pose_calib_cuda_cuda",
+    srcs = ["kernels/pose_calib/pose_calib_cuda.cu"],
+    hdrs = ["kernels/pose_calib/pose_calib_cuda.h"],
+    copts = [
+        "-D__CUDA_NO_HALF_OPERATORS__",
+        "-D__CUDA_NO_HALF_CONVERSIONS__",
+        "-D__CUDA_NO_BFLOAT16_CONVERSIONS__",
+        "-D__CUDA_NO_HALF2_OPERATORS__",
+        "--use_fast_math",
+    ],
+    includes = ["kernels/pose_calib"],
+    deps = [
+        "//libs/kernel_utils:ku_cc",
+        "@nre_pip_deps//torch:torch_headers",
+        "@rules_python//python/cc:current_py_cc_headers",
+    ],
+)
+
+cc_binary(
+    name = "pose_calib_cuda_cc",
+    srcs = ["kernels/pose_calib/pose_calib_cuda_binding.cpp"],
+    copts = [
+        "-DTORCH_API_INCLUDE_EXTENSION_H",
+        "-DTORCH_EXTENSION_NAME=libpose_calib_cuda_cc",
+    ],
+    linkopts = [
+        "-Wl,--no-undefined",
+        "-Wl,--as-needed",
+    ],
+    linkshared = True,
+    deps = [
+        ":pose_calib_cuda_cuda",
+        "@nre_pip_deps//torch:libc10",
+        "@nre_pip_deps//torch:libc10_cuda",
+        "@nre_pip_deps//torch:libtorch_cpu",
+        "@nre_pip_deps//torch:libtorch_python",
+        "@nre_pip_deps//torch:torch_headers",
+        "@rules_python//python/cc:current_py_cc_libs",
+    ],
+)
+
+# ============================================================================
+# Combined Slang Files
+# ============================================================================
+
+filegroup(
+    name = "slang_files",
+    srcs = COMMON_SLANG_FILES + CAMERA_SLANG_FILES + LIDAR_SLANG_FILES + POSE_CALIB_SLANG_FILES,
+    visibility = [
+        "//internal/scripts/pycena/runtime:__pkg__",
+    ],
+)
+
+# ============================================================================
+# Python Libraries
+# ============================================================================
+
+py_library(
+    name = "kernels_common",
+    srcs = [
+        "kernels/common/__init__.py",
+        "kernels/common/pose.py",
+    ],
+    deps = [
+        pip_requirement("torch"),
+    ],
+)
+
+py_library(
+    name = "camera_kernels",
+    srcs = [
+        "kernels/cameras/__init__.py",
+        "kernels/cameras/bindings.py",
+        "kernels/cameras/parameters.py",
+    ],
+    deps = [
+        ":camera_slang_cc",
+        ":kernels_common",
+        "//libs/slang_utils:pylib_utils",
+        pip_requirement("numpy"),
+        pip_requirement("scipy"),
+        pip_requirement("torch"),
+    ],
+)
+
+py_library(
+    name = "lidar_kernels",
+    srcs = [
+        "kernels/lidars/__init__.py",
+        "kernels/lidars/bindings.py",
+        "kernels/lidars/parameters.py",
+    ],
+    deps = [
+        ":kernels_common",
+        ":lidar_slang_cc",
+        "//libs/slang_utils:pylib_utils",
+        pip_requirement("numpy"),
+        pip_requirement("scipy"),
+        pip_requirement("torch"),
+        pip_requirement("slangtorch"),
+    ],
+)
+
+# Production target: CUDA kernels only (no Slang compilation).
+py_library(
+    name = "pose_calib_kernels",
+    srcs = [
+        "kernels/pose_calib/__init__.py",
+        "kernels/pose_calib/bindings.py",
+    ],
+    data = [
+        ":pose_calib_cuda_cc",
+    ],
+    deps = [
+        pip_requirement("numpy"),
+        pip_requirement("scipy"),
+        pip_requirement("torch"),
+    ],
+)
+
+# Test-only target: includes Slang kernels for A/B equivalence testing.
+py_library(
+    name = "pose_calib_kernels_with_slang",
+    testonly = True,
+    srcs = [
+        "kernels/pose_calib/__init__.py",
+        "kernels/pose_calib/bindings.py",
+    ],
+    data = [
+        ":pose_calib_cuda_cc",
+        ":pose_calib_slang_cc",
+    ],
+    deps = [
+        pip_requirement("numpy"),
+        pip_requirement("scipy"),
+        pip_requirement("torch"),
+    ],
+)
+
+py_library(
+    name = "sensor_models",
+    srcs = [
+        "models/__init__.py",
+        # cameras subpackage
+        "models/cameras/__init__.py",
+        "models/cameras/camera_model.py",
+        "models/cameras/fisheye.py",
+        "models/cameras/ftheta.py",
+        "models/cameras/image_frame.py",
+        "models/cameras/pinhole.py",
+        # lidars subpackage
+        "models/lidars/__init__.py",
+        "models/lidars/lidar_frame.py",
+        "models/lidars/lidar_model.py",
+        "models/lidars/row_offset_structured_spinning.py",
+        # common subpackage
+        "models/common/__init__.py",
+        "models/common/frame.py",
+        "models/common/return_types.py",
+        "models/common/utils.py",
+    ],
+    visibility = ["//:core_package_group"],
+    deps = [
+        ":camera_kernels",
+        ":kernels_common",
+        ":lidar_kernels",
+        "//libs/geometry/kernels:pylib",
+        pip_requirement("numpy"),
+        pip_requirement("torch"),
+    ],
+)
+
+py_library(
+    name = "pylib_slang",
+    srcs = [
+        "__init__.py",
+        "kernels/__init__.py",
+    ],
+    visibility = ["//:core_package_group"],
+    deps = [
+        ":camera_kernels",
+        ":camera_slang_cc",
+        ":kernels_common",
+        ":lidar_kernels",
+        ":lidar_slang_cc",
+        ":pose_calib_kernels",
+        ":sensor_models",
+        "//libs/geometry/kernels:pylib",
+        "//libs/slang_utils:pylib_utils",
+        pip_requirement("torch"),
+    ],
+)
+
+# ============================================================================
+# Tests
+# ============================================================================
+
+pytest_test(
+    name = "camera_parameters_test",
+    srcs = ["kernels/cameras/parameters_test.py"],
+    deps = [
+        ":camera_kernels",
+        ":pylib_slang",
+        "//libs/geometry/kernels:pylib",
+        pip_requirement("numpy"),
+        pip_requirement("scipy"),
+        pip_requirement("torch"),
+    ],
+)
+
+filegroup(
+    name = "camera_test_data",
+    srcs = glob(["kernels/cameras/test_data/*.json"]),
+    visibility = ["//:core_package_group"],
+)
+
+pytest_test(
+    name = "camera_kernels_test",
+    srcs = ["kernels/cameras/camera_kernels_test.py"],
+    data = [":camera_test_data"],
+    deps = [
+        ":camera_kernels",
+        ":kernels_common",
+        ":pylib_slang",
+        "//libs/geometry/kernels:pylib",
+        pip_requirement("numpy"),
+        pip_requirement("opencv-python"),
+        pip_requirement("torch"),
+    ],
+)
+
+pytest_test(
+    name = "lidar_parameters_test",
+    srcs = ["kernels/lidars/parameters_test.py"],
+    deps = [
+        ":lidar_kernels",
+        ":pylib_slang",
+        "//libs/geometry/kernels:pylib",
+        pip_requirement("numpy"),
+        pip_requirement("scipy"),
+        pip_requirement("torch"),
+    ],
+)
+
+# LiDAR test data files
+filegroup(
+    name = "lidar_test_data",
+    srcs = glob(["kernels/lidars/test_data/*.json"]),
+    visibility = ["//:core_package_group"],
+)
+
+pytest_test(
+    name = "lidar_kernels_test",
+    srcs = ["kernels/lidars/lidar_kernels_test.py"],
+    data = [":lidar_test_data"],
+    deps = [
+        ":kernels_common",
+        ":lidar_kernels",
+        ":pylib_slang",
+        "//libs/geometry/kernels:pylib",
+        pip_requirement("numpy"),
+        pip_requirement("parameterized"),
+        pip_requirement("scipy"),
+        pip_requirement("torch"),
+    ],
+)
+
+pytest_test(
+    name = "pose_calib_kernels_test",
+    srcs = ["kernels/pose_calib/pose_calib_kernels_test.py"],
+    deps = [
+        ":pose_calib_kernels_with_slang",
+        ":pylib_slang",
+        "//libs/geometry/kernels:pylib",
+        "//libs/slang_utils:pylib_utils",
+        "//nre/utils/sensors:pylib",
+        pip_requirement("numpy"),
+        pip_requirement("torch"),
+    ],
+)
+
+# ============================================================================
+# Layer 2 Model Tests
+# ============================================================================
+
+# Camera model tests
+pytest_test(
+    name = "camera_model_test",
+    srcs = ["models/cameras/camera_model_test.py"],
+    deps = [
+        ":kernels_common",
+        ":pylib_slang",
+        ":sensor_models",
+        "//libs/geometry/kernels:pylib",
+        pip_requirement("numpy"),
+        pip_requirement("torch"),
+    ],
+)
+
+pytest_test(
+    name = "pinhole_camera_test",
+    srcs = ["models/cameras/pinhole_test.py"],
+    deps = [
+        ":kernels_common",
+        ":pylib_slang",
+        ":sensor_models",
+        "//libs/geometry/kernels:pylib",
+        pip_requirement("numpy"),
+        pip_requirement("torch"),
+    ],
+)
+
+pytest_test(
+    name = "fisheye_camera_test",
+    srcs = ["models/cameras/fisheye_test.py"],
+    deps = [
+        ":kernels_common",
+        ":pylib_slang",
+        ":sensor_models",
+        "//libs/geometry/kernels:pylib",
+        pip_requirement("numpy"),
+        pip_requirement("torch"),
+    ],
+)
+
+pytest_test(
+    name = "ftheta_camera_test",
+    srcs = ["models/cameras/ftheta_test.py"],
+    deps = [
+        ":kernels_common",
+        ":pylib_slang",
+        ":sensor_models",
+        "//libs/geometry/kernels:pylib",
+        pip_requirement("numpy"),
+        pip_requirement("torch"),
+    ],
+)
+
+# LiDAR model tests
+pytest_test(
+    name = "lidar_model_test",
+    srcs = ["models/lidars/lidar_model_test.py"],
+    deps = [
+        ":kernels_common",
+        ":pylib_slang",
+        ":sensor_models",
+        "//libs/geometry/kernels:pylib",
+        pip_requirement("numpy"),
+        pip_requirement("torch"),
+    ],
+)
+
+pytest_test(
+    name = "row_offset_structured_spinning_lidar_test",
+    srcs = ["models/lidars/row_offset_structured_spinning_test.py"],
+    deps = [
+        ":kernels_common",
+        ":pylib_slang",
+        ":sensor_models",
+        "//libs/geometry/kernels:pylib",
+        pip_requirement("numpy"),
+        pip_requirement("torch"),
+    ],
+)
+
+# Common return types test
+pytest_test(
+    name = "models_return_types_test",
+    srcs = ["models/common/return_types_test.py"],
+    deps = [
+        ":sensor_models",
+        pip_requirement("torch"),
+    ],
+)

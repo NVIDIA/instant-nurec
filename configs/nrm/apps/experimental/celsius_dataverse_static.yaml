@@ -1,0 +1,47 @@
+# @package _global_
+# Owner: mtyszkiewicz
+
+# order in which configs override each other (/* - denotes a relative search path)
+defaults:
+  - /nrm/apps/celsius_base: _static_full
+
+  # Data
+  - /nrm/dataset/concrete@dataset.train: dv_mixed3_ord_train
+  - /nrm/dataset/concrete@dataset.val: dv_mixed3_ord_train
+  - /nrm/dataset/concrete@dataset.test: dv_mixed3_ord_train
+
+system:
+  train_batch_size: 8
+  val_batch_size: 8
+  test_batch_size: 8
+  max_epochs: 20
+
+  warmup_steps: 1000
+
+  optimizer:
+    name: fused_adam
+    args:
+      lr: 4e-4
+      eps: 1.e-15
+      betas: [0.9, 0.99]
+
+dataset:
+# training mixture is replicated, test/val is subsampled by to 10% of the dataset (may need further tuning for reasonable runtime)
+  val:
+    mixture: &test_val_mixture
+      dataverse-re10k:
+        sample_ratio: 0.1
+      dataverse-dl3dv:
+        sample_ratio: 0.1
+  test:
+    mixture: *test_val_mixture
+
+model:
+  sky_module:
+    enabled: false
+  affine_module:
+    enabled: false
+  motion_module:
+    enabled: false
+  use_deferred_bp: true
+  activation_checkpointing: false

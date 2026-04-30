@@ -1,0 +1,146 @@
+test_plan:
+  # Train Val GRPC-Hyp8.1 (lite)
+  - name: nre_image_trainval--mode-lite--obfuscation-no--dataset-test_data_ncore--config-hyperion8.1_sqa_default
+    description: Lite training and validation test.
+    parallel_execution: false # No parallel execution allowed due to runtime checks
+    ci_runtime_limit_train: "4m40s"
+    ci_runtime_limit_val: "1m05s"
+    eval_psnr_threshold_camera_front_wide_120fov: 22.0
+  - name: nre_image_trainval--mode-lite--obfuscation-yes--dataset-test_data_ncore--config-hyperion8.1_sqa_default
+    description: Lite training and validation test on obfuscated SW.
+    eval_psnr_threshold_camera_front_wide_120fov: 22.0
+
+  # Train Val GRPC-Hyp8.1 - Jira NRE-1195
+  - name: nre_image_trainval--mode-full--obfuscation-yes--dataset-H81_Panda128_6b0e750d_1cam_1lidar--config-hyperion8.1_sqa_default
+  - name: nre_image_trainval--mode-full--obfuscation-no--dataset-H81_Panda128_6b0e750d_1cam_1lidar--config-hyperion8.1_sqa_default
+  - name: nre_image_trainval--mode-full--obfuscation-yes--dataset-H81_Panda128_6b0e750d_1cam_1lidar--config-hyperion8.1_sqa_default_gsplat
+  - name: nre_image_trainval--mode-full--obfuscation-no--dataset-H81_Panda128_6b0e750d_1cam_1lidar--config-hyperion8.1_sqa_default_gsplat
+  - name: nre_image_trainval--mode-full--obfuscation-yes--dataset-H81_Panda128_6b0e750d_1cam_1lidar--config-hyperion8.1_sqa_difix_inference
+  - name: nre_image_trainval--mode-full--obfuscation-no--dataset-H81_Panda128_6b0e750d_1cam_1lidar--config-hyperion8.1_sqa_difix_inference
+  - name: nre_image_trainval--mode-full--obfuscation-yes--dataset-H81_Panda128_6b0e750d_1cam_1lidar--config-hyperion8.1_sqa_difix_distill
+  - name: nre_image_trainval--mode-full--obfuscation-no--dataset-H81_Panda128_6b0e750d_1cam_1lidar--config-hyperion8.1_sqa_difix_distill
+  - name: nre_image_trainval--mode-full--obfuscation-yes--dataset-H81_Panda128_6b0e750d_1cam_1lidar--config-hyperion8.1_sqa_difix_distill_and_inference
+  - name: nre_image_trainval--mode-full--obfuscation-no--dataset-H81_Panda128_6b0e750d_1cam_1lidar--config-hyperion8.1_sqa_difix_distill_and_inference
+
+  - name: nre_image_trainval--mode-full--obfuscation-yes--dataset-H81_Panda128_0d59b8c8_1cam_1lidar--config-hyperion8.1_sqa_default
+  - name: nre_image_trainval--mode-full--obfuscation-no--dataset-H81_Panda128_0d59b8c8_1cam_1lidar--config-hyperion8.1_sqa_default
+  - name: nre_image_trainval--mode-full--obfuscation-yes--dataset-H81_Panda128_0d59b8c8_1cam_1lidar--config-hyperion8.1_sqa_default_gsplat
+  - name: nre_image_trainval--mode-full--obfuscation-no--dataset-H81_Panda128_0d59b8c8_1cam_1lidar--config-hyperion8.1_sqa_default_gsplat
+  - name: nre_image_trainval--mode-full--obfuscation-yes--dataset-H81_Panda128_0d59b8c8_1cam_1lidar--config-hyperion8.1_sqa_difix_inference
+  - name: nre_image_trainval--mode-full--obfuscation-no--dataset-H81_Panda128_0d59b8c8_1cam_1lidar--config-hyperion8.1_sqa_difix_inference
+  - name: nre_image_trainval--mode-full--obfuscation-yes--dataset-H81_Panda128_0d59b8c8_1cam_1lidar--config-hyperion8.1_sqa_difix_distill
+  - name: nre_image_trainval--mode-full--obfuscation-no--dataset-H81_Panda128_0d59b8c8_1cam_1lidar--config-hyperion8.1_sqa_difix_distill
+  - name: nre_image_trainval--mode-full--obfuscation-yes--dataset-H81_Panda128_0d59b8c8_1cam_1lidar--config-hyperion8.1_sqa_difix_distill_and_inference
+  - name: nre_image_trainval--mode-full--obfuscation-no--dataset-H81_Panda128_0d59b8c8_1cam_1lidar--config-hyperion8.1_sqa_difix_distill_and_inference
+
+  # LIDAR test case - Jira NRE-1202
+  - name: nre_image_trainval--mode-full--obfuscation-yes--dataset-H81_Panda128_6b0e750d_1cam_1lidar--config-hyperion8.1_sqa_lidar_default
+  - name: nre_image_trainval--mode-full--obfuscation-no--dataset-H81_Panda128_6b0e750d_1cam_1lidar--config-hyperion8.1_sqa_lidar_default
+
+  - name: nre_image_trainval--mode-full--obfuscation-yes--dataset-H81_Panda128_0d59b8c8_1cam_1lidar--config-hyperion8.1_sqa_lidar_default
+  - name: nre_image_trainval--mode-full--obfuscation-no--dataset-H81_Panda128_0d59b8c8_1cam_1lidar--config-hyperion8.1_sqa_lidar_default
+
+  - name: nre_image_trainval--mode-full--obfuscation-yes--dataset-H81_AT128_6b0e750d_1cam_1lidar--config-hyperion8.1_sqa_lidar_default
+  - name: nre_image_trainval--mode-full--obfuscation-no--dataset-H81_AT128_6b0e750d_1cam_1lidar--config-hyperion8.1_sqa_lidar_default
+
+  - name: nre_image_trainval--mode-full--obfuscation-yes--dataset-H81_AT128_0d59b8c8_1cam_1lidar--config-hyperion8.1_sqa_lidar_default
+  - name: nre_image_trainval--mode-full--obfuscation-no--dataset-H81_AT128_0d59b8c8_1cam_1lidar--config-hyperion8.1_sqa_lidar_default
+
+  # Car2Sim - Jira NRE-905
+  - name: nre_image_trainval--mode-full--obfuscation-yes--dataset-H81_Panda128_6b0e750d_4cam_1lidar--config-car2sim
+  - name: nre_image_trainval--mode-full--obfuscation-no--dataset-H81_Panda128_6b0e750d_4cam_1lidar--config-car2sim
+  - name: nre_image_trainval--mode-full--obfuscation-no--dataset-H81_Panda128_6b0e750d_4cam_1lidar--config-car2sim_gsplat
+
+  - name: nre_image_trainval--mode-full--obfuscation-yes--dataset-H81_Panda128_0d59b8c8_4cam_1lidar--config-car2sim
+  - name: nre_image_trainval--mode-full--obfuscation-no--dataset-H81_Panda128_0d59b8c8_4cam_1lidar--config-car2sim
+  - name: nre_image_trainval--mode-full--obfuscation-no--dataset-H81_Panda128_0d59b8c8_4cam_1lidar--config-car2sim_gsplat
+
+  # Lidar Free
+  - name: nre_image_trainval--mode-full--obfuscation-yes--dataset-H81_6b0e750d_4cam_lidarfree--config-car2sim_lidarfree
+  - name: nre_image_trainval--mode-full--obfuscation-no--dataset-H81_6b0e750d_4cam_lidarfree--config-car2sim_lidarfree
+  - name: nre_image_trainval--mode-full--obfuscation-no--dataset-H81_6b0e750d_4cam_lidarfree--config-car2sim_lidarfree_gsplat
+
+  - name: nre_image_trainval--mode-full--obfuscation-yes--dataset-H81_0d59b8c8_4cam_lidarfree--config-car2sim_lidarfree
+  - name: nre_image_trainval--mode-full--obfuscation-no--dataset-H81_0d59b8c8_4cam_lidarfree--config-car2sim_lidarfree
+  - name: nre_image_trainval--mode-full--obfuscation-no--dataset-H81_0d59b8c8_4cam_lidarfree--config-car2sim_lidarfree_gsplat
+
+  # Render Tests (lite)
+  - name: nre_render_grpc--mode-lite--obfuscation-no--dataset-test_data_ncore--config-hyperion8.1_sqa_default--artifact_source-train_val
+    description: Lite gRPC rendering test after minimal training.
+    eval_psnr_threshold_camera_front_wide_120fov: 60.0
+  - name: nre_render_grpc--mode-lite--obfuscation-no--dataset-test_data_ncore--config-hyperion8.1_sqa_default--artifact_source-train_val--test_control_actor-yes
+    description: Lite gRPC rendering test after minimal training with rotation of dynamic actors.
+  - name: nre_render_grpc--mode-lite--obfuscation-no--dataset-test_data_ncore--config-hyperion8.1_sqa_default--artifact_source-train_val--use_gsplat-yes
+    description: Lite gRPC rendering test after minimal training with rendering handled through Gsplat.
+    eval_psnr_threshold_camera_front_wide_120fov: 45.0
+  - name: nre_render_grpc--mode-lite--obfuscation-no--dataset-test_data_ncore--config-hyperion8.1_sqa_default--artifact_source-train_val--edit_assets_scenario-sqa_scene_lite
+    manual_validation: "[Asset edit test](README.md#asset-edit-test)"
+  - name: nre_image_render--mode-lite--obfuscation-no--dataset-test_data_ncore--config-hyperion8.1_sqa_default--artifact_source-train_val
+    description: Lite direct rendering test after minimal training.
+    eval_psnr_threshold_camera_front_wide_120fov: 60.0
+
+  ## Forward rendering capability (lite)
+  # Use artifacts generated in older release with the same inputs and configuration as above Render Tests.
+  - name: nre_render_grpc--mode-lite--obfuscation-no--dataset-test_data_ncore--artifact_source-test_data_ncore_sqa_default_25.06_artifacts
+    description: Lite backward-compatibility test for gRPC rendering using artifacts generated by minimal training with release 25.06.
+    eval_psnr_threshold_camera_front_wide_120fov: 45.0
+  - name: nre_image_render--mode-lite--obfuscation-no--dataset-test_data_ncore--artifact_source-test_data_ncore_sqa_default_25.06_artifacts
+    description: Lite backward-compatibility test for direct rendering using artifacts generated by minimal training with release 25.06.
+    eval_psnr_threshold_camera_front_wide_120fov: 45.0
+
+  # Render Tests (full)
+  ## Test render-grpc client - Jira NRE-1295
+  - name: nre_render_grpc--mode-full--obfuscation-no--dataset-H81_Panda128_6b0e750d_1cam_1lidar--config-hyperion8.1_sqa_default--artifact_source-train_val
+    manual_validation: "[Rendering of training views test](README.md#rendering-of-training-views-test)"
+  - name: nre_render_grpc--mode-full--obfuscation-no--dataset-H81_Panda128_6b0e750d_1cam_1lidar--config-hyperion8.1_sqa_default--artifact_source-train_val--use_gsplat-yes
+    manual_validation: "[Rendering of training views test](README.md#rendering-of-training-views-test)"
+  - name: nre_render_grpc--mode-full--obfuscation-no--dataset-H81_Panda128_6b0e750d_1cam_1lidar--config-hyperion8.1_sqa_default_gsplat--artifact_source-train_val--use_gsplat-yes
+    manual_validation: "[Rendering of training views test](README.md#rendering-of-training-views-test)"
+  ## Control Actor - Jira NRE-1199
+  - name: nre_render_grpc--mode-full--obfuscation-no--dataset-H81_Panda128_6b0e750d_1cam_1lidar--config-hyperion8.1_sqa_default--artifact_source-train_val--test_control_actor-yes
+    manual_validation: "[Control Actor Test](README.md#control-actor-test)"
+  ## Asset Edit - Jira NRE-3324
+  - name: nre_render_grpc--mode-full--obfuscation-no--dataset-H81_Panda128_6b0e750d_1cam_1lidar--config-hyperion8.1_sqa_default--artifact_source-train_val--edit_assets_scenario-sqa_scene_6b0e750d
+    manual_validation: "[Asset edit test](README.md#asset-edit-test)"
+  ## Render Test Cases - Jira NRE-1296
+  - name: nre_image_render--mode-full--obfuscation-no--dataset-H81_Panda128_6b0e750d_1cam_1lidar--config-hyperion8.1_sqa_default--artifact_source-train_val
+    manual_validation: "[Rendering of training views test](README.md#rendering-of-training-views-test)"
+
+  ## Forward rendering capability of previous release artifacts - Jira NRE-1355
+  # Use artifacts generated in older release with the same inputs and configuration as above Render Tests.
+  - name: nre_render_grpc--mode-full--obfuscation-no--dataset-H81_Panda128_6b0e750d_1cam_1lidar--artifact_source-H81_Panda128_6b0e750d_1cam_1lidar_sqa_default_25.07_artifacts
+  - name: nre_render_grpc--mode-full--obfuscation-no--dataset-H81_Panda128_6b0e750d_1cam_1lidar--artifact_source-H81_Panda128_6b0e750d_1cam_1lidar_sqa_default_25.08_artifacts
+  - name: nre_render_grpc--mode-full--obfuscation-no--dataset-H81_Panda128_6b0e750d_1cam_1lidar--artifact_source-H81_Panda128_6b0e750d_1cam_1lidar_sqa_default_25.09_artifacts
+  - name: nre_render_grpc--mode-full--obfuscation-no--dataset-H81_Panda128_6b0e750d_1cam_1lidar--artifact_source-H81_Panda128_6b0e750d_1cam_1lidar_sqa_default_25.11_artifacts
+  - name: nre_render_grpc--mode-full--obfuscation-no--dataset-H81_Panda128_6b0e750d_1cam_1lidar--artifact_source-H81_Panda128_6b0e750d_1cam_1lidar_sqa_default_25.12_artifacts
+  - name: nre_render_grpc--mode-full--obfuscation-no--dataset-H81_Panda128_6b0e750d_1cam_1lidar--artifact_source-H81_Panda128_6b0e750d_1cam_1lidar_sqa_default_26.01_artifacts
+
+  # Nre Tools(Aux) (lite)
+  - name: nre_tools--mode-lite--obfuscation-no--dataset-test_data_ncore
+  - name: nre_tools--mode-lite--obfuscation-yes--dataset-test_data_ncore
+
+  # Nre Tools(Aux) - Jira NRE-1197
+  - name: nre_tools--mode-full--obfuscation-yes--dataset-H81_Panda128_6b0e750d_4cam_1lidar
+  - name: nre_tools--mode-full--obfuscation-no--dataset-H81_Panda128_6b0e750d_4cam_1lidar
+
+  - name: nre_tools--mode-full--obfuscation-yes--dataset-H81_Panda128_0d59b8c8_4cam_1lidar
+  - name: nre_tools--mode-full--obfuscation-no--dataset-H81_Panda128_0d59b8c8_4cam_1lidar
+
+  - name: nre_tools--mode-full--obfuscation-yes--dataset-Waymo_11017034898130016754_697_830_717_830_3cam_1lidar
+  - name: nre_tools--mode-full--obfuscation-no--dataset-Waymo_11017034898130016754_697_830_717_830_3cam_1lidar
+
+  # Asset Harvester - Jira NRE-1327
+  - name: asset_harvest--mode-full--obfuscation-yes--dataset-H81_Panda128_6b0e750d_4cam_1lidar_v4
+    manual_validation: "[Asset Harvester Test](README.md#asset-harvester-test)"
+  - name: asset_harvest--mode-full--obfuscation-no--dataset-H81_Panda128_6b0e750d_4cam_1lidar_v4
+    manual_validation: "[Asset Harvester Test](README.md#asset-harvester-test)"
+
+  - name: asset_harvest--mode-full--obfuscation-yes--dataset-H81_Panda128_0d59b8c8_4cam_1lidar_v4
+    manual_validation: "[Asset Harvester Test](README.md#asset-harvester-test)"
+  - name: asset_harvest--mode-full--obfuscation-no--dataset-H81_Panda128_0d59b8c8_4cam_1lidar_v4
+    manual_validation: "[Asset Harvester Test](README.md#asset-harvester-test)"
+
+  # Run each example script (lite)
+  - name: run_example--mode-lite--obfuscation-no--script_filename-example_losses
+    description: Lite test validating that the example_losses.py example script runs without errors.
+    owner: amaximo

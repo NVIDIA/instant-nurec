@@ -1,0 +1,44 @@
+defaults:
+  - base
+
+name: bilateral-grid-per-camera
+
+# From the appendix of the original publication:
+# "In our experiments for NeRF training with 3D bilateral grids, we set the resolution (W, H, M)
+# to (8, 8, 4) for scenes with moderate photometric variation and (16, 16, 8) for scenes with
+# relatively large variation."
+width: 8
+height: 8
+depth: 6
+
+optimizer:
+  name: fused_adam
+  args:
+    lr: 0.01
+    eps: 1.e-15
+    betas: [0.9, 0.99]
+
+start_global_step: 1000       # freeze all estimated parameters until this global optimization step
+scheduler:
+  name: SequentialLR
+  interval: step
+  milestones:
+    - ${...start_global_step}
+    - ${add:${...start_global_step},${system.warmup_steps}}
+  schedulers:
+    - name: ConstantLR # skip until `start_global_step`
+      args:
+        factor: 0.0
+        total_iters: ${.....start_global_step}
+    - name: LinearLR # linear warm-up in the first system.warmup_steps steps
+      interval: step
+      args:
+        start_factor: 0.01
+        end_factor: 1.0
+        total_iters: ${system.warmup_steps}
+    - name: StepFunCosineAnnealingLR
+      interval: step
+      args:
+        T_max: ${sub:${mul:${trainer.max_epochs},${dataset.n_samples_per_epoch}},${add:${.....start_global_step},${system.warmup_steps}}}
+        min_factor: 0.0333
+        update_every_n_steps: ${trainer.annealing_update_every_n_steps}

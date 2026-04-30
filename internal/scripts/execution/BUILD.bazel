@@ -1,0 +1,32 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+load("@aspect_rules_py//py:defs.bzl", "py_binary")
+load("@mypy_integration//:mypy.bzl", "mypy_test")
+load("@nre_pip_deps//:requirements.bzl", pip_requirement = "requirement")
+
+py_binary(
+    name = "create_jira_key_results",
+    srcs = [
+        "create_jira_key_results.py",
+    ],
+    main = "create_jira_key_results.py",
+    deps = [
+        pip_requirement("requests"),
+    ],
+)
+
+mypy_test(
+    name = "create_jira_key_results_mypy",
+    timeout = "short",
+    deps = [
+        ":create_jira_key_results",
+    ],
+)

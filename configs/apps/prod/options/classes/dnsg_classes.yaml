@@ -1,0 +1,37 @@
+# @package _global_
+
+model:
+  primitives:
+    rigids:
+      tracks:
+        label_classes:
+          [
+            "vehicle",
+            "automobile",
+            "heavy_truck",
+            "bus",
+            "other_vehicle",
+            "protruding_object",
+            "trailer",
+            "train_or_tram_car",
+            "trolley_bus",
+          ]
+
+    non_rigids:
+        tracks:
+          label_classes:
+            [
+              "pedestrian",
+              "cyclist",
+              "stroller",
+              "person",
+              "person_group",
+              "rider",
+              "animal",
+              "bicycle_with_rider",
+              "bicycle",
+              "CYCLIST",
+              "motorcycle",
+              "motorcycle_with_rider",
+              "cycle",
+            ]

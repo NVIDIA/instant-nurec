@@ -1,0 +1,26 @@
+rgb:
+  fn: mse
+  reduce:
+    name: mean
+  lambda_: 1.0
+  # Use lower weight for synthetic views
+  # For static models, hood and dynamic objects will be marked as invalid.
+  mask_semantic_classes: ["~synthetic", "synthetic"]
+  semantic_lambdas: [1.0, 0.25]
+
+ssim:
+  fn: ssim
+  reduce:
+    name: mean
+  lambda_: 0.2
+  window_size: 11
+  channel: 3
+  mask:
+    mode: "GT"  # choose from (constant, GT)
+    value: 0
+
+primitive_visibility_regularization:
+  fn: mse
+  reduce:
+    name: mean
+  lambda_: 1.

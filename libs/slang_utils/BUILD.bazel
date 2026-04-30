@@ -1,0 +1,52 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+load("@rules_python//python:defs.bzl", "py_library")
+
+DEFAULT_VISIBILITY = ["//:core_package_group"]
+
+package(default_visibility = DEFAULT_VISIBILITY)
+
+filegroup(
+    name = "py_files",
+    srcs = glob(["*.py"]),
+)
+
+# Filegroup for extensions slang file to be reused by other packages
+filegroup(
+    name = "extensions_slang",
+    srcs = ["extensions.slang"],
+    visibility = ["//visibility:public"],
+)
+
+# Filegroup for constants slang file to be reused by other packages
+filegroup(
+    name = "constants_slang",
+    srcs = ["constants.slang"],
+    visibility = ["//visibility:public"],
+)
+
+# Ninja runtime dependency for slangtorch
+genrule(
+    name = "ninja_runtime",
+    srcs = ["@ninja"],
+    outs = ["ninja"],
+    cmd = "cp $< $@",
+    executable = True,
+)
+
+py_library(
+    name = "pylib_utils",
+    srcs = ["utils.py"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "@rules_python//python/runfiles",
+    ],
+)

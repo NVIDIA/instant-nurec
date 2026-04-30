@@ -1,0 +1,24 @@
+defaults:
+  - ../mixed@_here_
+  - /nrm/dataset@mixture.dataverse-dl3dv.config: dataverse
+
+name: nrm-mixed
+
+shared_config: {}
+
+mixture:
+  dataverse-dl3dv:
+    sample_ratio: 1.0
+    config:
+      frame_batch_samplers:
+        varying_interval:
+          sequence_gap_timestamp_us_min: 15
+          sequence_gap_timestamp_us_max: 30
+          n_samples_per_sequence: 30
+
+      supervision_frame_batch:
+        include_context_frames: true
+
+      subset_spec:
+        target: "dl3dv.DL3DV10K"
+        root_path: "/lustre/fsw/portfolios/av/projects/av_alpamayo_cosmos/users/jiaweir/datasets/DL3DV-ALL-960P"

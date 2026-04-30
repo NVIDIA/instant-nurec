@@ -1,0 +1,24 @@
+# @package _global_
+# Owner: nicolasm
+
+# Reference 3DGUT NRend configuration file for testing the NRend library integration :
+# - to evaluate and debug the rendering accuracy
+# - to evaluate the rendering performances
+# - to create unittests.
+
+# order in which configs override each other (/* - denotes a relative search path)
+defaults:
+  - /experimental/3dgut/3dgut_colmap.yaml
+  - override /system: nrend_test_gaussians
+  
+system:
+  test:
+    nrend:
+      enabled: True
+      log_level: 4
+
+dataset:
+  camera_ids:
+     - camera1_4
+  val_camera_frame_step: 8 
+  train_sequential_camera_frame_step: 8

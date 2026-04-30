@@ -1,0 +1,169 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+---
+- name: Common Setup - NVIDIA Drivers, Docker, and Container Toolkit
+  hosts: all
+  become: yes
+  vars:
+    # NVIDIA driver and Docker configuration
+    nvidia_driver_version: "570"
+    docker_version: "28.3.3" # Stay on known working version, 29.0 introduced incompatibility with our GitLab
+    docker_gid: 141  # Required GID for NRE's dev image compatibility (999 also supported but already in use on Colossus)
+  vars_files:
+    - vars-ansible.yml
+
+  tasks:
+    - name: Update package cache and packages
+      apt:
+        update_cache: "yes"
+        upgrade: "yes"
+        cache_valid_time: 3600
+      register: apt_update
+
+    - name: Install curl
+      apt:
+        name:
+          - curl
+        state: present
+      register: curl_install
+
+    - name: Add nvidia container toolkit GPG key
+      shell: |
+        curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | \
+        gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+      args:
+        creates: /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+        # Silence warning about curl usage
+        warn: false
+      register: nvidia_gpg
+
+    - name: Add nvidia container toolkit repository
+      shell: |
+        curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
+        sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+        tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+      args:
+        creates: /etc/apt/sources.list.d/nvidia-container-toolkit.list
+        # Silence warning about curl usage
+        warn: false
+      when: nvidia_gpg.changed
+
+    - name: Install ca-certificates for Docker
+      apt:
+        name:
+          - ca-certificates
+        state: present
+        update_cache: yes
+      register: ca_certs
+
+    - name: Create directory for Docker GPG key
+      file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: '0755'
+      register: docker_keyring_dir
+
+    - name: Download Docker GPG key
+      get_url:
+        url: "https://download.docker.com/linux/ubuntu/gpg"
+        dest: "/etc/apt/keyrings/docker.asc"
+        mode: '0644'
+        validate_certs: yes
+      register: docker_gpg
+
+    - name: Get Ubuntu codename
+      shell: . /etc/os-release && echo "$VERSION_CODENAME"
+      register: ubuntu_codename
+      changed_when: false
+
+    - name: Get architecture
+      shell: dpkg --print-architecture
+      register: architecture
+      changed_when: false
+
+    - name: Add Docker repository
+      apt_repository:
+        repo: "deb [arch={{ architecture.stdout }} signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu {{ ubuntu_codename.stdout }} stable"
+        filename: docker
+        state: present
+        update_cache: yes
+      register: docker_repo
+
+    - name: Update package cache after repositories
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      when: apt_update.changed or ca_certs.changed or docker_repo.changed
+
+    - name: Get current NVIDIA driver version
+      shell: dpkg -l | grep nvidia-driver- | awk '{print $2}' | cut -d'-' -f3
+      register: current_driver_version
+      changed_when: false
+      failed_when: false
+
+    - name: Remove existing nvidia drivers
+      apt:
+        name:
+          - "nvidia-*"
+          - "libxnvctrl*"
+        state: absent
+        autoremove: yes
+        purge: yes
+      when: current_driver_version.stdout != nvidia_driver_version
+      register: nvidia_removal
+
+    - name: Install nvidia driver
+      apt:
+        name: "nvidia-driver-{{ nvidia_driver_version }}"
+        state: present
+        install_recommends: no
+      register: nvidia_install
+
+    - name: Configure NVIDIA profiling permissions for non-admin users
+      copy:
+        content: "options nvidia NVreg_RestrictProfilingToAdminUsers=0\n"
+        dest: /etc/modprobe.d/nvidia-profiling.conf
+        owner: root
+        group: root
+        mode: '0644'
+      register: nvidia_profiling_conf
+
+    - name: Update initramfs after modprobe config change
+      command: update-initramfs -u
+      when: nvidia_profiling_conf.changed
+
+    - name: Install nvidia container toolkit
+      apt:
+        name: nvidia-container-toolkit
+        state: present
+      register: nvidia_container_install
+
+    - name: Create docker group with specific GID
+      group:
+        name: docker
+        gid: "{{ docker_gid }}"
+        state: present
+      register: docker_group
+
+    - name: Install Docker packages for version {{ docker_version }})
+      apt:
+        name:
+          - "docker-ce=5:{{ docker_version }}-1~ubuntu.{{ ansible_distribution_version }}~{{ ubuntu_codename.stdout }}"
+          - "docker-ce-cli=5:{{ docker_version }}-1~ubuntu.{{ ansible_distribution_version }}~{{ ubuntu_codename.stdout }}"
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+        state: present
+        force: yes
+      register: docker_install
+
+
+

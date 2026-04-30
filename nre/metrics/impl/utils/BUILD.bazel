@@ -1,0 +1,73 @@
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+load("@nre_pip_deps//:requirements.bzl", pip_requirement = "requirement")
+load("@rules_python//python:defs.bzl", "py_library")
+load("//bazel/pytest:defs.bzl", "pytest_test")
+
+DEFAULT_VISIBILITY = [
+    "//:core_package_group",
+    "//bazel/docs:__pkg__",
+]
+
+package(default_visibility = DEFAULT_VISIBILITY)
+
+filegroup(
+    name = "py_files",
+    srcs = glob(["**/*.py"]),
+    visibility = [
+        "//internal/scripts/pycena:__pkg__",
+    ],
+)
+
+py_library(
+    name = "pylib",
+    srcs = [
+        "feature_extractor.py",
+        "perceptual_utils.py",
+    ],
+    visibility = DEFAULT_VISIBILITY + [
+        # Add visibility for //internal/scripts/bench
+        "//internal/scripts/bench:__pkg__",
+    ],
+    deps = [
+        pip_requirement("numpy"),
+        pip_requirement("opencv-python"),
+        pip_requirement("pillow"),
+        pip_requirement("scikit-image"),
+        pip_requirement("scipy"),
+        pip_requirement("torch"),
+        pip_requirement("torchvision"),
+        pip_requirement("transformers"),
+    ],
+)
+
+pytest_test(
+    name = "feature_extractor_test",
+    size = "medium",
+    srcs = [
+        "feature_extractor_test.py",
+    ],
+    deps = [
+        ":pylib",
+        "//nre/metrics:pylib_utils",
+    ],
+)
+
+pytest_test(
+    name = "perceptual_utils_test",
+    size = "small",
+    srcs = [
+        "perceptual_utils_test.py",
+    ],
+    deps = [
+        ":pylib",
+    ],
+)

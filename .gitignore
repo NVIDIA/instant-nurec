@@ -6,6 +6,7 @@ __pycache__/
 .eggs/
 build/
 dist/
+.ipynb_checkpoints/
 
 # Virtual envs
 .venv/
@@ -19,29 +20,116 @@ env/
 .vscode/
 .cursor/
 .DS_Store
+.devcontainer/
+.vs/
+pyrightconfig.json
+compile_commands.json
 
 # Tooling caches
 .mypy_cache/
 .ruff_cache/
 .pytest_cache/
 .test_cache/
+.ci-keep/
 .coverage
 htmlcov/
+.sonar/
+.claude/
 
 # Bazel (Phase 0-2 only; whole bazel system is removed in Phase 3)
+/bazel-*
 bazel-out/
 bazel-bin/
 bazel-testlogs/
 bazel-nre/
 bazel-instant-nurec/
+.bazelrc.user
+
+# Bazel-fetched / external NRE deps (symlinked from /storage/projects/nre/external in Phase 0;
+# torn out in Phase 3 along with bazel)
+/external
 
 # Large generated artifacts
 *.pt
 *.ckpt
+*.pkl
+*.pth
+*.so
+*.swp
+*.swo
 kelvin_full.pt
 
 # Reference baselines (2.7 GB of PLYs); kept out of git, used only locally
 baselines/
+
+# NRE legacy ignores (kept while NRE source is still in this repo, removed in Phase 3)
+data/
+out/
+exp/
+results/
+wandb/
+logs/
+ptlflow_logs/
+outputs/
+ckpts/
+checkpoints/
+backup/
+benchmarking/
+lightning_logs/
+tmp*
+trial*/
+debug*
+*data_sample/
+infra/torch-ngp-extension
+infra/data_sample
+ci_analytics
+image_analysis_results
+
+# NRE bazel external repo trees (would otherwise show up under external/* if anyone hand-clones them)
+external/optical_flow/
+external/segmentation/
+external/apex/
+external/feature-vdb/
+external/tiny-cuda-nn/
+external/mmseg_repo/
+external/pretrained_models_repo/
+external/trt_pretrained_models_repo/
+external/unimatch/
+
+libs/ray_utils/external/.cache/
+libs/ray_utils/external/
+libs/ray_utils/build/
+libs/ray_utils/ray_utils.egg-info/
+libs/ray_utils/dist/
+lib/external/.cache/
+lib/external/
+lib/build/
+lib/ray_utils.egg-info/
+lib/dist/
+
+# repoman build files (NRE)
+libs/nrend/_repo
+libs/nrend/_build
+libs/nrend/tools
+libs/nrend/repo.bat
+libs/nrend/repo.sh
+libs/nrend/deps/slang
+libs/nrend/deps/optix
+libs/nrend/dist
+
+# slang
+.slangtorch_cache/
+
+# user-specific NRE bits
+internal/scripts/personal/
+internal/scripts/release/licenses/
+internal/workflows/cluster_toolbox/*/personal/
+configs/personal/
+
+# Ignore .lock files except top-level uv.lock
+*.lock
+!uv.lock
+!MODULE.bazel.lock
 
 # Stray shell/profile dotfiles that landed in the working dir
 .bash_profile
@@ -56,3 +144,8 @@ baselines/
 
 # Prior-agent prompt history
 prompts.yaml
+
+# Backwards-compat patterns from NRE
+feature-vdb/
+apex/
+tiny-cuda-nn/

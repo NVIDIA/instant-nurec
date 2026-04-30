@@ -1,0 +1,3 @@
+# Disable temporal appearance by setting fourier_features_dim to 1
+
+fourier_features_dim: 1

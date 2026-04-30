@@ -1,0 +1,100 @@
+defaults:
+  - base
+
+name: "sh-gaussians"
+
+debug_viz: false
+
+density_activation: sigmoid
+scale_activation: exp
+rotation_activation: normalize
+precision: ${trainer.precision}
+fourier_features_dim: 1 # Set fourier_features_dim > 1 to enable temporal appearance (Encode the albedo with a DFT)
+time_embed:
+  name: holistic-remap-time-input-embedding
+  remap_min: 0
+  remap_max: 1
+
+tracks:
+  is_standalone: true # A stand-alone model that does not depend on tracks (tracks_calib will be ignored)
+
+extra_signal: {}
+
+particle:
+  density_kernel_planar: false
+  density_kernel_degree: 2
+  density_kernel_min_response: 0.0113
+  ray_spread_filter_enabled: false
+  radiance_sph_degree: 3
+  radiance_sph_O0: true  # SH degree 0 coefficients directly encode radiance (no SH basis scaling)
+  
+  # Automatic dimension calculation for sensor-specific extra signals
+  # These expressions dynamically compute the total dimensions needed for each signal type
+  # based on the extra_signal configuration above
+  extra_signal_dim: ${eval:'sum([v["n_signal_dim"] if v["sensor_type"] == "common" else 0 for k,v in ${..extra_signal}.items()])'}
+  camera_extra_signal_dim: ${eval:'sum([v["n_signal_dim"] if v["sensor_type"] == "camera" else 0 for k,v in ${..extra_signal}.items()])'}
+  lidar_extra_signal_dim: ${eval:'sum([v["n_signal_dim"] if v["sensor_type"] == "lidar" else 0 for k,v in ${..extra_signal}.items()])'}
+  
+  # Spherical harmonics degree for lidar extra signals (optional optimization)
+  # Set > 0 to use spherical harmonics encoding for lidar signals (signal_dim must be <= 3)
+  lidar_extra_signal_sph_degree: 0
+
+transmittance_threshold: 0.0001
+
+progressive_training:
+  init_n_features: 0 # sh: initial sh deg | mlp: num of dims initially unmasked
+  max_n_features: ${..particle.radiance_sph_degree} # sh: maximum sh deg | mlp: total num of dims finally unmasked
+
+  increase_frequency: 1000 # unmask more feature dimensions every N global steps
+  increase_step: 1 # sh: how many degrees unmasked per step | mlp: how many dims unmasked per step
+
+scale_pos_lr_by_scene_extent: true
+
+optimizers:
+  - name: fused_adam
+    args:
+      lr: 0.01
+      eps: 1.e-15
+      betas: [0.9, 0.99]
+    params:
+      positions:
+        args:
+          # 3DGS value: 0.00016 initial and decayed to 0.0000016
+          # Note: The position lr gets multiplied by the scene scale in gaussians_model
+          lr: 0.00016
+    scheduler:
+      name: ExponentialLR
+      interval: step
+      args:
+        gamma:  ${calc_exp_lr_decay_rate:0.01,${mul:${trainer.max_epochs},${dataset.n_samples_per_epoch}}}
+
+  - name: fused_adam
+    args:
+      lr: 0.01
+      eps: 1.e-15
+      betas: [0.9, 0.99]
+    params:
+      densities:
+        args:
+          lr: 0.05 # 3DGS value: 0.05
+      features_albedo:
+        args:
+          lr: 0.0025 # 3DGS value: 0.0025
+      features_specular:
+        args:
+          lr: ${div:0.0025,20} # 3DGS value 20x smaller than lr of features_albedo
+      rotations:
+        args:
+          lr: 0.001 # 3DGS value: 0.001
+      scales:
+        args:
+          lr: 0.005 # 3DGS value: 0.005
+      extra_signal:
+        args:
+          lr: 0.01 
+      camera_extra_signal:
+        args:
+          lr: 0.01 
+      lidar_extra_signal:
+        args:
+          lr: 0.01 

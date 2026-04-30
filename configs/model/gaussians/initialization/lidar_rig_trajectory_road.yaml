@@ -1,0 +1,25 @@
+defaults:
+  - base
+
+name: lidar-rig-trajectory-road
+
+num_point_cloud_points: 200_000
+
+num_random_points: 100_000
+far_radius_factor: 20 # Multiplies the extent of the scene to get the radius of the far points
+observation_scale_factor: 0.01 # Used only for the scale of the random far points
+
+default_density: ${eval:'0.5 if ("${model.strategy.name}"=="mcmc") else 0.99'}
+default_scale: [0.1, 0.1, 0.001]
+
+lidar_ids: null
+camera_ids: null
+
+step_frame: 1
+
+project_to_z_offset: true # If true, the z value (in ego space) of each Gaussian is adjusted by adding the `z_offset` of its nearest ego position; if false, the z value remains unchanged.
+z_offset: 0  # The z-value offset (in ego space) applied to each Gaussian's position relative to its nearest ego position; only applied when `project_to_z_offset` is true.
+projection: orthographic
+
+non_dynamic_points_only: true # By default, only keep lidar points outside of dynamic tracks
+init_with_normals: false # By default, do not use normals to initialize the Road Gaussiansss

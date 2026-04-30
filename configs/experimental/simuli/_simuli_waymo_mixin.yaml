@@ -1,0 +1,33 @@
+# @package _global_
+# Owner: Haithem Turki
+
+dataset:
+  n_val_image_subsample: 1
+
+  # evaluation setup from NFL paper
+  # Validate on frames 4,9,14,...
+  val_camera_frame_start: 4
+  val_camera_frame_step: 5
+  val_lidar_frame_start: 4
+  val_lidar_frame_step: 5
+  duration_sec: 5.05
+
+  samplers:
+    batch_sampler:
+      camera_pixel_sampler:
+        crop_type: full_image
+        subsample: 1
+      camera_frame_sampler:
+        name: holdout
+        # Exclude frames used during validation from the training set.
+        exclude_frames_start: 4
+        exclude_every_n_frames: 5
+        include_frames_start: null
+        include_every_n_frames: null
+      lidar_frame_sampler:
+        name: holdout
+        # Exclude frames used during validation from the training set.
+        exclude_frames_start: 4
+        exclude_every_n_frames: 5
+        include_frames_start: null
+        include_every_n_frames: null

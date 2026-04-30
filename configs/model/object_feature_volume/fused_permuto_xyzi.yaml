@@ -1,0 +1,10 @@
+defaults:
+  - fused_xyzi
+
+hash_grid_encoding_config:
+  otype: Permuto
+  max_input_grad_dims: 3 # We only need first three dimensions of input gradients.
+
+encoding_interp_config:
+  interp_type: linear # smooth_st not supported for Permuto grids yet
+

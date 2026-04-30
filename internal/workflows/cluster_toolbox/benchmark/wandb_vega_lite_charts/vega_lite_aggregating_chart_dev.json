@@ -1,0 +1,202 @@
+{
+  "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+  "config": {
+    "scale": { "continuousPadding": 30 }
+  },
+  "data": {
+    "name": "my_table",
+    "values": [
+      {
+        "version": "aaaaaa",
+        "commit_date": "2024-03-29T08:00:12-08:00",
+        "accuracy": 20.0,
+        "dataset": "dataset1",
+        "sweep": "sweep1"
+      },
+      {
+        "version": "aaaaaa",
+        "commit_date": "2024-03-29T08:00:12-08:00",
+        "accuracy": 22.0,
+        "dataset": "dataset2",
+        "sweep": "sweep1"
+      },
+      {
+        "version": "aaaaaa",
+        "commit_date": "2024-03-29T08:00:12-08:00",
+        "accuracy": 18.0,
+        "dataset": "dataset3",
+        "sweep": "sweep1"
+      },
+      {
+        "version": "bbbbbb",
+        "commit_date": "2024-03-29T10:00:23-08:00",
+        "accuracy": 25.0,
+        "dataset": "dataset1",
+        "sweep": "sweep2"
+      },
+      {
+        "version": "bbbbbb",
+        "commit_date": "2024-03-29T10:00:23-08:00",
+        "accuracy": 27.0,
+        "dataset": "dataset2",
+        "sweep": "sweep2"
+      },
+      {
+        "version": "bbbbbb",
+        "commit_date": "2024-03-29T10:00:23-08:00",
+        "accuracy": 24.0,
+        "dataset": "dataset3",
+        "sweep": "sweep2"
+      },
+      {
+        "version": "cccccc",
+        "commit_date": "2024-03-29T14:00:34-08:00",
+        "accuracy": 32.0,
+        "dataset": "dataset1",
+        "sweep": "sweep3"
+      },
+      {
+        "version": "cccccc",
+        "commit_date": "2024-03-29T14:00:34-08:00",
+        "accuracy": 30.0,
+        "dataset": "dataset2",
+        "sweep": "sweep3"
+      },
+      {
+        "version": "cccccc",
+        "commit_date": "2024-03-29T14:00:34-08:00",
+        "accuracy": 33.0,
+        "dataset": "dataset3",
+        "sweep": "sweep3"
+      },
+      {
+        "version": "dddddd",
+        "commit_date": "2024-03-29T16:00:45-08:00",
+        "accuracy": 15.0,
+        "dataset": "dataset1",
+        "sweep": "sweep4"
+      },
+      {
+        "version": "dddddd",
+        "commit_date": "2024-03-29T16:00:45-08:00",
+        "accuracy": 13.0,
+        "dataset": "dataset2",
+        "sweep": "sweep4"
+      },
+      {
+        "version": "dddddd",
+        "commit_date": "2024-03-29T16:00:45-08:00",
+        "accuracy": 16.0,
+        "dataset": "dataset3",
+        "sweep": "sweep4"
+      }
+    ]
+  },
+  "width": 600,
+  "height": 500,
+  "title": "MyPlot",
+  "encoding": {
+    "x": {
+      "field": "commit_date",
+      "type": "temporal",
+      "title": "Commit Date",
+      "timeUnit": "utcyearmonthdatehoursminutes",
+      "axis": {
+        "labelAngle": -70
+      }
+    },
+    "y": {
+      "field": "accuracy",
+      "type": "quantitative",
+      "title": "Mean accuracy",
+      "scale": { "zero": false }
+    }
+  },
+  "layer": [
+    {
+      "selection": {
+        "grid": {
+          "type": "interval",
+          "bind": "scales"
+        }
+      },
+      "mark": {
+        "type": "point",
+        "size": 30,
+        "opacity": 0.3
+      },
+      "encoding": {
+        "tooltip": [
+          {
+            "field": "version",
+            "title": "Version",
+            "type": "nominal"
+          },
+          {
+            "field": "commit_date",
+            "title": "Commit Date",
+            "type": "nominal",
+            "timeUnit": "utcyearmonthdatehoursminutesseconds",
+            "scale": { "type": "utc" }
+          },
+          {
+            "field": "dataset",
+            "title": "Dataset",
+            "type": "nominal"
+          },
+          {
+            "field": "accuracy",
+            "title": "Accuracy",
+            "type": "quantitative"
+          }
+        ]
+      }
+    },
+    {
+      // Interactive zooming (see https://vega.github.io/vega-lite-v4/docs/zoom.html)
+      "transform": [
+        {
+          "aggregate": [
+            { "op": "mean", "field": "accuracy", "as": "accuracy" },
+            { "op": "max", "field": "commit_date", "as": "commit_date" },
+            { "op": "max", "field": "version", "as": "version" }
+          ],
+          "groupby": ["sweep"]
+        }
+      ],
+      "mark": {
+        "type": "line",
+        "size": 2,
+        "interpolate": "monotone",
+        "color": "#467fb4",
+        "point": {
+          "shape": "circle",
+          "filled": false,
+          "fill": "white",
+          "size": 50
+        }
+      },
+      "encoding": {
+        "tooltip": [
+          {
+            "field": "version",
+            "title": "Version",
+            "type": "nominal"
+          },
+          {
+            "field": "commit_date",
+            "title": "Commit Date",
+            "type": "nominal",
+            "timeUnit": "utcyearmonthdatehoursminutesseconds",
+            "scale": { "type": "utc" }
+          },
+          {
+            "field": "accuracy",
+            "title": "Mean Accuracy",
+            "type": "quantitative"
+          }
+        ]
+      }
+    }
+  ]
+}

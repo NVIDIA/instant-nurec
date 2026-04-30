@@ -1,0 +1,35 @@
+# @package _global_
+
+dataset:
+  valid_measurements_method: EGO
+  n_val_image_subsample: 4
+  val_camera_frame_step: 3
+
+  camera_ids:
+    - camera_front_wide_120fov
+    - camera_front_tele_30fov
+    - camera_cross_left_120fov
+    - camera_cross_right_120fov
+
+  cuboid_tracks_params:
+    track_label_sources:
+      - AUTOLABEL
+
+
+checkpoint:
+  artifact:
+    enabled: true
+    rig_trajectories:
+      enabled: true
+    sequence_tracks:
+      enabled: true
+    mesh:
+      generic:
+        enabled: true
+      ground:
+        enabled: true
+
+    nrend:
+      enabled: true
+      use_legacy_model_dict: false # Export the legacy model dictionary (for OV rendering support)
+

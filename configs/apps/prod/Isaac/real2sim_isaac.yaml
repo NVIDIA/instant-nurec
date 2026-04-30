@@ -1,0 +1,87 @@
+# @package _global_
+# Owner: Weihan Wang
+# Dedicated robotics configuration based on 3dgut_static (no dynamic layers, no LiDAR). 
+# Isaac NuRec is a Real-to-Sim neural reconstruction pipeline.
+
+defaults:
+  - /apps/AV/NV/3dgut_static.yaml
+  - /apps/prod/options/artifact: default
+  - /apps/prod/options/nrend: disabled
+  - /apps/prod/options/difix/3dgut: disabled
+  - /apps/prod/options/mesh: disabled
+  # Enable the calibration module to optimize per-frame poses
+  - /apps/prod/options/calib: enabled
+  # Enable MCMC strategy
+  - /apps/AV/module_mixins/_mcmc_mixin.yaml
+  - override /model/gaussians/strategy@model.strategy: mcmc
+  # robotics initialization
+  - override /model/gaussians/initialization@model.layers.background.initialization: accumulated_point_cloud
+  - override /model/post_processing@model.post_processing.b: ppisp 
+  - override /model/post_processing@model.post_processing.c: null
+  - override /model/background: color
+  - override /logger: dummy
+
+loss:
+  lidar:
+    lambda_: 0.0
+  normal:
+    lambda_: 0.0  # suggested default weight is 0.1 when enabled
+  # gaussian_flatten:
+  #   lambda_: 0.005  # suggested default weight is 0.005 when enabled
+  #   max_to_median_ratio_threshold: 5.0
+  # Supervision by predicted metric depth
+  distance:
+    fn: log_l1
+    reduce:
+      name: mean
+    lambda_: 0.01
+    min_distance: 0.01
+    max_distance: 10.0
+    allow_missing_supervision: false # it is set as true in car2sim_lidarfree.yaml
+    normalize_by_opacity: false
+    mask_semantic_classes: ["~road", "road"]
+    semantic_lambdas: [1.0, 3.0]
+
+dataset:
+  n_samples_per_epoch: 30000
+  interp_with_rig: false
+  # No lidar for robotics
+  lidar_ids: []
+  n_train_sample_lidar_rays: 0
+  samplers:
+    batch_sampler:
+      camera_pixel_sampler:
+        subsample: 1
+
+checkpoint:
+  every_n_train_steps: ${mul:${trainer.max_epochs},${dataset.n_samples_per_epoch}}
+
+model:
+  # disabling calibration for lidar
+  calib:
+    lidar:
+      enabled: false
+  background:
+    color: white
+  strategy:
+    add:
+      max_n_gaussians: 2300000 # Maximum number of Gaussians
+  layers:
+    # Enable temporal appearance for background and dynamic rigids
+    background:
+      fourier_features_dim: 1
+      initialization:
+        num_point_cloud_points: 800000
+        num_near_points: 100000
+        num_far_points: 100000
+        non_dynamic_points_only: true
+        # point_cloud_path should be provided via command line
+  
+  # renderer:
+  #   outputs:
+  #     camera:
+  #       enable_normals: true # Enable normal rendering for normal loss computation
+
+# system:
+#   collect_garbage_mem_usage: 0.75  # Trigger when 75% of GPU memory is used, avoid out-of-memory issues due to memory fragmentation in maglev workflows
+#   collect_garbage_check_interval: 100  # Check memory every 100 steps

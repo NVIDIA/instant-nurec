@@ -1,0 +1,33 @@
+# Import all regular requirements
+
+-r requirements_3_11_x86_64.txt
+
+# GenMO/HMR4D dependencies
+ultralytics==8.2.42  # YOLO
+open3d==0.19.0
+cython-bbox
+wis3d
+smplx
+orjson  # Fast JSON parsing for datasets
+hydra-zen
+imageio==2.34.1
+chumpy @ https://gitlab-master.nvidia.com/api/v4/projects/85874/packages/generic/chumpy/0.71/chumpy-0.71-py3-none-any.whl
+einops>=0.8.0  # Need einsum function for GenMO
+colorlog  # GenMO logging
+yacs  # Yet Another Configuration System
+pytorch3d  # We actually only needs matrix_to_axis_angle
+av==12.1.0
+lapx>=0.5.2
+moviepy==1.0.3  # Video editing
+scenepic  # 3D visualization
+aist-plusplus-api @ git+https://github.com/google/aistplusplus_api.git@2dd7b3e946b794fd0081c98e2e2433545abf8b87  # AIST++ dataset tools
+sentencepiece  # For T5 tokenizer
+
+# Internal visualization dependencies
+polyscope >= 2.4
+cuda-python  # required for polyscope direct GPU-tensor buffer updates
+cupy-cuda12x # required for polyscope direct GPU-tensor buffer updates
+
+# Mamba-SSM for faster NRM network
+causal-conv1d==1.5.2+git9332030pt2.7.0cu128sm80to120
+mamba-ssm==2.2.5+gite0761ecpt2.7.0cu128sm80to120

@@ -1,0 +1,10 @@
+name: nrm
+
+train:
+  name: nrm-dummy
+val:
+  name: nrm-dummy
+test:
+  name: nrm-dummy
+predict:
+  name: nrm-dummy

@@ -1,0 +1,81 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+load("@nre_pip_deps//:requirements.bzl", pip_requirement = "requirement")
+load("@rules_python//python:defs.bzl", "py_library")
+load("//bazel/pytest:defs.bzl", "pytest_test")
+load("//bazel/slang:defs.bzl", "slangtorch_library")
+
+package(default_visibility = [
+    "//:core_package_group",
+    "//internal/scripts/pycena:__pkg__",
+])
+
+filegroup(
+    name = "py_files",
+    srcs = glob(["**/*.py"]),
+    visibility = [
+        "//internal/scripts/pycena:__pkg__",
+    ],
+)
+
+# Compile the PPISP Slang module into a SlangTorch C++ CUDA extension
+slangtorch_library(
+    name = "ppisp_slang_cc",
+    srcs = [
+        "ppisp.slang",
+    ],
+    extra_cmd_args = "$$(cat $(location //libs/losses/kernel:constants_txt)) -I$$(dirname $(location //libs/slang_utils:extensions_slang))",
+    visibility = ["//:core_package_group"],
+    deps = [
+        "//libs/losses/kernel:constants_txt",
+        "//libs/slang_utils:extensions_slang",
+    ],
+)
+
+# Compile the PPISP test Slang module (exposes helper functions for testing)
+slangtorch_library(
+    name = "ppisp_slang_helper_test_cc",
+    srcs = [
+        "ppisp_slang_helper_test.slang",
+    ],
+    extra_cmd_args = "$$(cat $(location //libs/losses/kernel:constants_txt)) -I$$(dirname $(location //libs/slang_utils:extensions_slang)) -I$$(dirname $(location ppisp.slang))",
+    deps = [
+        "ppisp.slang",
+        "//libs/losses/kernel:constants_txt",
+        "//libs/slang_utils:extensions_slang",
+    ],
+)
+
+# PPISP SlangTorch C++ CUDA extension library
+py_library(
+    name = "pylib",
+    srcs = [
+        "__init__.py",
+        "ppisp.py",
+    ],
+    deps = [
+        ":ppisp_slang_cc",
+        "//libs/slang_utils:pylib_utils",
+        "//nre/utils:pylib",
+        pip_requirement("torch"),
+    ],
+)
+
+pytest_test(
+    name = "ppisp_slang_helper_test",
+    srcs = [
+        "ppisp_slang_helper_test.py",
+    ],
+    deps = [
+        "//nre/models/post_processings/ppisp:pylib",
+        "//nre/models/post_processings/ppisp/slang:ppisp_slang_helper_test_cc",
+    ],
+)

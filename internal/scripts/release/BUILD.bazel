@@ -1,0 +1,131 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+load("@aspect_rules_py//py:defs.bzl", "py_binary", "py_library")
+load("@nre_pip_deps//:requirements.bzl", pip_requirement = "requirement")
+
+filegroup(
+    name = "py_files",
+    srcs = [
+        "utils.py",
+    ],
+    visibility = [
+        "//visibility:public",
+    ],
+)
+
+py_library(
+    name = "pylib",
+    srcs = [
+        ":py_files",
+    ],
+)
+
+py_binary(
+    name = "sbom-diff",
+    srcs = ["sbom-diff.py"],
+    main = "sbom-diff.py",
+    visibility = ["//visibility:public"],
+)
+
+py_binary(
+    name = "update-version-mr",
+    srcs = [
+        "update_version_mr.py",
+    ],
+    data = ["//bazel/version:VERSION_FILE"],
+    main = "update_version_mr.py",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//internal/scripts/release:pylib",
+        pip_requirement("click"),
+        pip_requirement("gitpython"),
+    ],
+)
+
+py_binary(
+    name = "create-release-branch",
+    srcs = [
+        "create_release_branch.py",
+    ],
+    data = ["//bazel/version:VERSION_FILE"],
+    main = "create_release_branch.py",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//internal/scripts/release:pylib",
+        pip_requirement("click"),
+        pip_requirement("gitpython"),
+    ],
+)
+
+py_binary(
+    name = "retag-release-images",
+    srcs = ["retag_release_images.py"],
+    main = "retag_release_images.py",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//internal/scripts/release:pylib",
+        pip_requirement("click"),
+    ],
+)
+
+py_binary(
+    name = "fetch-licenses",
+    srcs = ["fetch_licenses.py"],
+    data = ["license_overrides.toml"],
+    main = "fetch_licenses.py",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//internal/scripts:stream_read",
+    ],
+)
+
+py_library(
+    name = "fetch-licenses-lib",
+    srcs = ["fetch_licenses.py"],
+    deps = [
+        "//internal/scripts:stream_read",
+    ],
+)
+
+py_binary(
+    name = "generate-sbom",
+    srcs = ["generate_sbom.py"],
+    main = "generate_sbom.py",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//internal/scripts/release:pylib",
+        pip_requirement("click"),
+        pip_requirement("gitpython"),
+    ],
+)
+
+py_binary(
+    name = "download-new-sources",
+    srcs = ["download_new_sources.py"],
+    main = "download_new_sources.py",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//internal/scripts/release:fetch-licenses-lib",
+        "//internal/scripts/release:pylib",
+        pip_requirement("click"),
+    ],
+)
+
+py_binary(
+    name = "update-license-overrides",
+    srcs = ["update_license_overrides.py"],
+    data = ["license_overrides.toml"],
+    main = "update_license_overrides.py",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//internal/scripts:stream_read",
+    ],
+)

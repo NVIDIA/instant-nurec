@@ -1,0 +1,7 @@
+# @package _global_
+# Owner: Haithem Turki
+
+defaults:
+  - 3dgut_static_road_semantic_mcmc.yaml
+  - /apps/AV/module_mixins/_calib_mixin.yaml
+  - override /model/calib: free_pose

@@ -1,0 +1,4 @@
+defaults:
+  - ncore_c1_pp_train
+
+ncore_json_list_path: /lustre/fsw/portfolios/nvr/users/jiahuih/nre_experiments/data/data_split/celsius1_protoplus_1k/val.lst

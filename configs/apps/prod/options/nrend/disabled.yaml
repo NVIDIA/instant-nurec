@@ -1,0 +1,13 @@
+# @package _global_
+
+system:
+  test:
+    nrend:
+      # Enable/disable NRend/accelerated rendering in inference time
+      enabled: false
+
+checkpoint:
+  artifact:
+    nrend:
+      # Option to save data required for NRend/accelerated rendering into the artifact
+      enabled: ${system.test.nrend.enabled}

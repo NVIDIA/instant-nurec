@@ -1,0 +1,9 @@
+# NRM Celsius_2.0.0-6f1c pretrained model living at NGC
+
+model_url: https://api.ngc.nvidia.com/v2/org/nvstaging/team/nre/models/nrm-celsius/versions/c200_6f1c/files/c200_6f1c.ckpt
+model_config: https://api.ngc.nvidia.com/v2/org/nvstaging/team/nre/models/nrm-celsius/versions/c200_6f1c/files/c200_6f1c.yaml
+model_config_overrides:
+  - +model.renderer.prepare_before_render=False # add missing config entry for backward compatibility
+  - +model.activations.xyz_type=none
+
+model_cache_dir: ${oc.env:HOME}/.cache/nrm/pretrained_models/c200_6f1c # update as required

@@ -1,0 +1,25 @@
+defaults:
+  - base
+
+name: lidar-ground-mesh-road
+
+num_random_points: 0
+default_density: 0.99
+default_scale: [0.1, 0.1, 0.001]
+scale_multiplier: 1.0
+step_frame: 1
+
+# Ground mesh reconstruction parameters (same defaults as GroundMeshConfig)
+min_ray_length: 0.1
+voxel_size: 0.1
+smoothing_passes: 10
+ground_compat_max_distance: 0.5
+ground_compat_max_angle_deg: 60.0
+num_plane_hypotheses: 100
+plane_max_distance: 0.3
+plane_max_angle_deg: 30
+plane_min_eval_points: 1000
+plane_max_eval_points: 10000
+plane_min_inliers: 1000
+enable_plane_extension: false
+min_points_per_voxel: 1

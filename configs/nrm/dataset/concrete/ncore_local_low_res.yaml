@@ -1,0 +1,14 @@
+defaults:
+  - ../ncore@_here_
+
+ncore_json_base_path: /nrm_debug/data/celsius2_l3_55k_720p/
+ncore_json_list_path: /nrm_debug/data/celsius2_l3_55k_720p/all.lst
+
+# Add a Gen3C view for testing purpose (below is a temporary key)
+gen3c_camera_ids:
+  # Moving left
+  - ncore_path: gen3c/0.zarr.itar
+    camera_id: camera_front_wide_120fov
+    unique_sensor_idx: 0
+
+supervision_camera_ids: ${add:${.context_camera_ids},${.gen3c_camera_ids}}

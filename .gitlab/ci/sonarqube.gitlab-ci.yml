@@ -1,0 +1,46 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+sonarqube_scan:
+  stage: security
+  # Decouple from unrelated upstream jobs (e.g. maglev benchmark stages)
+  # so a failure there doesn't prevent the scan from starting.
+  needs:
+    - build+test
+  variables:
+    # Full git history is needed for accurate New Code analysis
+    # GIT_DEPTH: "0" disables shallow clones, allowing SonarQube to compare against reference branches
+    GIT_DEPTH: "0"
+  script:
+    - echo "Generating compile_commands.json..."
+    - bazelisk run @hedron_compile_commands//:refresh_all
+    - echo "compile_commands.json generated successfully"
+    - echo "Filtering nvcc entries from compile_commands.json..."
+    - jq '[.[] | select(.arguments[0] | test("nvcc") | not)]' compile_commands.json > compile_commands_filtered.json && mv compile_commands_filtered.json compile_commands.json
+    - echo "Running SonarQube analysis..."
+    - sonar-scanner
+  # Allow failure for now to avoid blocking CI pipelines because we have unresolved security hostspots and issues that will require some time to fix. We can re-enable this once we have addressed the issues.
+  # TODO: Disable allowing failure once we have addressed the unresolved security hotspots and issues.
+  allow_failure: true
+  rules:
+    # Run nightly for now to gather data and identify issues
+    # TODO: Adjust rules to run post-merge on main and release branches once we have addressed any critical/high issues identified in the initial scans.
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $SCHEDULE_TYPE == "nightly"
+      when: on_success
+    # Auto-run on release branches and MRs targeting release/YY.MM. The
+    # nre-sast PLC bot consumes the resulting findings; RC tags inherit
+    # the most recent branch scan and aren't triggered separately.
+    - if: '$CI_COMMIT_BRANCH =~ /^release\/[0-9]{2}\.(0[1-9]|1[0-2])$/'
+      when: on_success
+    - if: '$CI_MERGE_REQUEST_TARGET_BRANCH_NAME =~ /^release\/[0-9]{2}\.(0[1-9]|1[0-2])$/'
+      when: on_success
+    # Manual trigger for verifying fixes 
+    - when: manual
+      

@@ -1,0 +1,12 @@
+# @package _global_
+
+defaults:
+- /apps/prod/options/mesh/default
+
+checkpoint:
+  artifact:
+    enabled: true
+    mesh:
+      generic:
+        enabled: true
+        smooth: false

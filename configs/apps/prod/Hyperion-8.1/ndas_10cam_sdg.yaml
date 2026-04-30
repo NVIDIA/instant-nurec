@@ -1,0 +1,56 @@
+# @package _global_
+
+defaults:
+  - car2sim
+  - override /apps/prod/Hyperion-8.1/options/validation: default
+  - override /apps/prod/Hyperion-8.1/options/sensors: hyperion8.1_10cam_1lidar
+  - override /apps/prod/options/subsampling/3dgut: batch_sampler_2
+  - override /apps/prod/options/nrend: disabled
+  - override /apps/prod/options/difix/3dgut: disabled
+  - override /apps/prod/options/mesh: disabled
+  - override /apps/prod/options/ground: disabled
+
+dataset:
+  n_val_image_subsample: 2
+  n_samples_per_epoch: 40_000
+  samplers:
+    batch_sampler:
+      camera_sensor_sampler:
+        name: weighted
+        sample_all_sensors: false
+        # per_camera_probabilities[i] is the sampling probability for the i-th camera
+        # in `dataset.camera_ids` (defined in
+        # configs/apps/prod/Hyperion-8.1/options/sensors/hyperion8.1_10cam_1lidar.yaml).
+        # Current order:
+        #   [0] camera_front_wide_120fov     pinhole
+        #   [1] camera_front_tele_30fov      pinhole
+        #   [2] camera_cross_left_120fov     pinhole
+        #   [3] camera_cross_right_120fov    pinhole
+        #   [4] camera_rear_left_70fov       pinhole
+        #   [5] camera_rear_right_70fov      pinhole
+        #   [6] camera_front_fisheye_200fov  fisheye
+        #   [7] camera_left_fisheye_200fov   fisheye
+        #   [8] camera_right_fisheye_200fov  fisheye
+        #   [9] camera_rear_fisheye_200fov   fisheye
+        # Boost fisheye (6-9) to 15% each, downweight pinhole (0-5) to ~6.7% each.
+        # Sum: 0.0666*2 + 0.0667*4 + 0.15*4 = 1.0000
+        per_camera_probabilities: [0.0666, 0.0666, 0.0667, 0.0667, 0.0667, 0.0667, 0.15, 0.15, 0.15, 0.15]
+
+model:
+  strategy:
+    add:
+      max_n_gaussians: 2_500_000
+      start_iteration: 20_000
+      end_iteration: 35_000
+
+    relocate:
+      end_iteration: 35_000
+
+    perturb:
+      start_iteration: 1
+      end_iteration: ${dataset.n_samples_per_epoch}
+      frequency: 1
+
+loss:
+  lidar:
+    lambda_: 0.005

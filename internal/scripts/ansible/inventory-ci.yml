@@ -1,0 +1,62 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+---
+all:
+  vars:
+    # Local username for NCA account "nurec-ci" used to lease the machines
+    ansible_user: "local-HvujS85MaqVjpd"
+    # Alpasim runner is only enabled for specific hosts
+    alpasim_runner_enabled: false
+    # Sauron runner is only enabled for specific hosts
+    sauron_runner_enabled: false
+
+  children:
+    # NRS group and Alpasim project runners
+    nrs_and_alpasim:
+      vars:
+        alpasim_runner_enabled: true
+      hosts:
+        colossus-gitlab-runner-l40s-1:
+          ansible_host: "1u1g-spr-0164.ipp2a2.colossus.nvidia.com"
+        colossus-gitlab-runner-l40s-2:
+          ansible_host: "1u1g-spr-0166.ipp2a2.colossus.nvidia.com"
+        colossus-gitlab-runner-l40s-3:
+          ansible_host: "1u1g-spr-0167.ipp2a2.colossus.nvidia.com"
+        colossus-gitlab-runner-l40s-4:
+          ansible_host: "1u1g-spr-0169.ipp2a2.colossus.nvidia.com"
+        colossus-gitlab-runner-l40s-5:
+          ansible_host: "1u1g-spr-0170.ipp2a2.colossus.nvidia.com"
+
+    # NRS group and Sauron project runners
+    nrs_and_sauron:
+      vars:
+        sauron_runner_enabled: true
+      hosts:
+        colossus-gitlab-runner-2xl40s-1:
+          ansible_host: "2u2g-gen-0945.ipp6a1.colossus.nvidia.com"
+        colossus-gitlab-runner-2xl40s-2:
+          ansible_host: "2u2g-gen-0946.ipp6a1.colossus.nvidia.com"
+        colossus-gitlab-runner-2xl40s-3:
+          ansible_host: "2u2g-gen-0947.ipp6a1.colossus.nvidia.com"
+        colossus-gitlab-runner-2xl40s-4:
+          ansible_host: "2u2g-gen-0949.ipp6a1.colossus.nvidia.com"
+        colossus-gitlab-runner-2xl40s-5:
+          ansible_host: "2u2g-gen-0951.ipp6a1.colossus.nvidia.com"
+        colossus-gitlab-runner-2xl40s-6:
+          ansible_host: "2u2g-gen-0952.ipp6a1.colossus.nvidia.com"
+        colossus-gitlab-runner-2xl40s-7:
+          ansible_host: "2u2g-gen-0953.ipp6a1.colossus.nvidia.com"
+        colossus-gitlab-runner-2xl40s-8:
+          ansible_host: "2u2g-gen-0955.ipp6a1.colossus.nvidia.com"
+        colossus-gitlab-runner-2xl40s-9:
+          ansible_host: "2u2g-gen-0970.ipp6a1.colossus.nvidia.com"
+        colossus-gitlab-runner-2xl40s-10:
+          ansible_host: "2u2g-gen-0973.ipp6a1.colossus.nvidia.com"

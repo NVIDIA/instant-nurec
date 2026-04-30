@@ -1,0 +1,28 @@
+# Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
+method: grid
+metric:
+  goal: maximize
+  name: train/psnr
+parameters:
+  model.acc_structure.grid_resolution:
+    values: 
+      - 64
+      - 128
+      - 256
+  dataset.n_train_sample_camera_rays:
+    values:
+      - 2048
+      - 4096
+      - 8192
+
+command:
+    - /bin/bash
+    - -euxc
+    - |
+      ./run_image.binary \
+          --config-name=apps/AV/NV/ncore_ds_nerfacc_acc_hash_fv_sky_bckg.yaml \
+          out_dir=./out \
+          mode=trainval \
+          dataset.path=/lustre/fsw/portfolios/nvr/users/rdelutio/data/nre/76b46042-ba8f-11eb-a9b2-00044baf74dc@1621641716100213-1621641729800003/76b46042-ba8f-11eb-a9b2-00044baf74dc@1621641716100213-1621641729800003/76b46042-ba8f-11eb-a9b2-00044baf74dc@1621641716100213-1621641729800003.json \
+          $0 "$@"
+    - ${args_no_hyphens}

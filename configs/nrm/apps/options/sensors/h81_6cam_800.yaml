@@ -1,0 +1,11 @@
+context_camera_ids:
+  - camera_front_wide_120fov
+  - camera_cross_left_120fov
+  - camera_cross_right_120fov
+  - camera_front_tele_30fov
+  - camera_rear_left_70fov
+  - camera_rear_right_70fov
+
+camera_subsampler:
+  frame_width: 800
+  frame_height: 448

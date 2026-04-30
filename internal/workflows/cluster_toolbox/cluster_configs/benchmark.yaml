@@ -1,0 +1,13 @@
+# @package _global_
+
+defaults:
+  - maglev
+  - _self_
+
+name: benchmark
+
+wandb:
+  api_key: null
+  entity: nvidia-toronto
+  project: nre-benchmark
+  tags: ["benchmark"]

@@ -1,0 +1,9 @@
+defaults:
+  - image_crop
+
+batch_sampler:
+  camera_frame_sampler:
+    name: timestamp # Type of the camera frame sampler one of [uniform, timestamp, holdout, skip]
+
+  lidar_frame_sampler:
+    name: timestamp # Type of the lidar frame sampler one of [uniform, timestamp, holdout, skip]

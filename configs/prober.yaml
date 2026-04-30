@@ -1,0 +1,8 @@
+# Configuration for TensorProber
+# This file controls the debugging tensor prober utility
+
+prober:
+  enabled: false  # Set to false to disable tensor saving/loading
+  test_data_dir: test_data  # Directory where tensors are saved/loaded 
+  every_n_steps: 5000  # Save every n steps
+  batch_limit: 0  # Limit the number of elements saved to this value (0 = unlimited)

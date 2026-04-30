@@ -1,0 +1,6 @@
+# @package _global_
+# Owner: Haithem Turki
+
+defaults:
+  - /apps/AV/_base_3dgut_static.yaml
+  - _waymo_mixin.yaml

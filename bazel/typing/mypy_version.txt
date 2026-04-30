@@ -1,0 +1,9 @@
+# These hashes correspond to the following wheels on PyPi, which provide a version of the tool
+# compiled with mypyc for greatly improved perf compared to interpreted code:
+# - x86_64:  mypy-1.15.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.manylinux_2_28_x86_64.whl
+# - aarch64: mypy-1.15.0-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.manylinux_2_28_aarch64.whl
+mypy==1.15.0 \
+  --hash=sha256:5a95fb17c13e29d2d5195869262f8125dfdb5c134dc8d9a9d0aecf7525b10c2c \
+  --hash=sha256:973500e0774b85d9689715feeffcc980193086551110fd678ebe1f4342fb7c5e
+typing-extensions==4.12.2
+mypy-extensions==1.0.0
