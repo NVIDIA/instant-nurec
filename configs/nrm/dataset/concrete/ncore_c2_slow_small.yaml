@@ -1,4 +1,0 @@
-defaults:
-  - ncore_c2_slow
-
-ncore_json_list_path: /lustre/fsw/portfolios/nvr/users/jiahuih/nre_experiments/data/data_split/merged/slow_small.lst

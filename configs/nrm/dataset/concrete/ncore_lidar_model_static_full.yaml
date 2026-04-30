@@ -1,7 +1,0 @@
-defaults:
-  - ../ncore@_here_
-
-ncore_json_base_path: /lustre/fsw/portfolios/nvr/projects/nvr_torontoai_3dscenerecon/nre-ff/lidar_model_static_full
-ncore_json_list_path: /lustre/fsw/portfolios/nvr/users/jiahuih/nre_experiments/data/data_split/lidar_model_static_full/all.lst
-cuboid_tracks_params:
-  lidar_id: lidar_gt_top_p128_v4p5
