@@ -253,3 +253,36 @@ def test_subcommand_required(tmp_path: Path) -> None:
 def test_unknown_subcommand_rejected(tmp_path: Path) -> None:
     proc = _run("frobnicate")
     assert proc.returncode != 0
+
+
+# ---------- self-test against the real baselines ----------
+# These touch the actual 100-200 MB PLY files in baselines/original_baseline.
+# They confirm the script can read the real schema and that the baseline
+# compares equal to itself. Skipped if the baselines are not on disk.
+
+_BASELINE_MERGE_PLY = next(
+    iter(REPO_ROOT.glob("baselines/original_baseline/merge/*/ply/*/*.ply")),
+    None,
+)
+_BASELINE_NO_MERGE_DIR = next(
+    iter(REPO_ROOT.glob("baselines/original_baseline/no_merge/*/ply/*/")),
+    None,
+)
+
+
+@pytest.mark.skipif(_BASELINE_MERGE_PLY is None, reason="baselines/ not on disk")
+def test_self_compare_merge_baseline_passes(tmp_path: Path) -> None:
+    proc = _run(
+        "--tolerance-json", _empty_tol(tmp_path),
+        "merge", _BASELINE_MERGE_PLY, _BASELINE_MERGE_PLY,
+    )
+    assert proc.returncode == 0, proc.stderr
+
+
+@pytest.mark.skipif(_BASELINE_NO_MERGE_DIR is None, reason="baselines/ not on disk")
+def test_self_compare_no_merge_baseline_passes(tmp_path: Path) -> None:
+    proc = _run(
+        "--tolerance-json", _empty_tol(tmp_path),
+        "no_merge", _BASELINE_NO_MERGE_DIR, _BASELINE_NO_MERGE_DIR,
+    )
+    assert proc.returncode == 0, proc.stderr
