@@ -24,7 +24,6 @@ import torch.nn.functional as F
 
 from libs.geometry.kernels.pose import se3pose_from_matrix
 from libs.sensors.kernels.cameras import image_points_to_world_rays_shutter_pose
-from libs.sensors.kernels.lidars import generate_spinning_lidar_rays
 from ncore.data import (
     ConcreteCameraModelParametersUnion,
     ConcreteLidarModelParametersUnion,

@@ -238,7 +238,6 @@ py_library(
     name = "lidar_kernels",
     srcs = [
         "kernels/lidars/__init__.py",
-        "kernels/lidars/bindings.py",
         "kernels/lidars/parameters.py",
     ],
     deps = [
