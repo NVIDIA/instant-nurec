@@ -254,6 +254,7 @@ py_library(
         pip_requirement("tensorboardx"),
         pip_requirement("pydantic"),
         pip_requirement("pillow"),
+        pip_requirement("point-cloud-utils"),
         pip_requirement("wandb"),
         pip_requirement("pytorch-lightning"),
         pip_requirement("pyyaml"),

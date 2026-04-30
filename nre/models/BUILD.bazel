@@ -1,81 +1,39 @@
 # SPDX-FileCopyrightText: Copyright (c) 2023-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: LicenseRef-NvidiaProprietary
 #
-# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
-# property and proprietary rights in and to this material, related
-# documentation and any modifications thereto. Any use, reproduction,
-# disclosure or distribution of this material and related documentation
-# without an express license agreement from NVIDIA CORPORATION or
-# its affiliates is strictly prohibited.
+# Phase 1 step 4.3: predict-only standalone keeps __init__.py + nn_extensions.py
+# + nrenderable.py + utils.py. The full nre/models/ tree (background, calib,
+# feature_volume, input_embedding, object_feature_volume, tracks_calib,
+# composite, custom_modules, post_processing, post_processings/) was for
+# training/eval and has been removed.
 
 load("@nre_pip_deps//:requirements.bzl", pip_requirement = "requirement")
 load("@rules_python//python:defs.bzl", "py_library")
-load("//bazel/pytest:defs.bzl", "pytest_test")
 
-package(default_visibility = [
-    "//:asset_harvester_package_group",
-    "//:core_package_group",
-    "//bazel/docs:__pkg__",
-    # Add visibility for ppisp_report package
-])
+package(default_visibility = ["//:core_package_group"])
 
 filegroup(
     name = "py_files",
     srcs = glob(["**/*.py"]),
-    visibility = [
-    ],
-)
-
-py_library(
-    name = "pylib_custom_modules",
-    srcs = [
-        "custom_modules.py",
-    ],
-    deps = [
-        pip_requirement("omegaconf"),
-        pip_requirement("torch"),
-        "//libs/vren:pylib",
-        "//libs/vren:pylib_cc",
-        "//nre/models/post_processings/bilateral_grid/cuda:pylib_cc",
-        "//nre/utils:pylib_misc",
-        "//nre/utils:pylib_packed_ops",
-        "//nre/utils:pylib_types",
-    ],
+    visibility = [],
 )
 
 py_library(
     name = "pylib_nn_extensions",
-    srcs = [
-        "nn_extensions.py",
-    ],
+    srcs = ["nn_extensions.py"],
     deps = [
         pip_requirement("torch"),
         pip_requirement("lietorch"),
-        # Add runfiles dependency for Bazel file path resolution
         "//nre/utils:pylib_geometry",
-    ],
-)
-
-pytest_test(
-    name = "nn_extensions_test",
-    srcs = [
-        "nn_extensions_test.py",
-    ],
-    deps = [
-        ":pylib_nn_extensions",
-        pip_requirement("torch"),
     ],
 )
 
 py_library(
     name = "pylib_utils",
-    srcs = [
-        "utils.py",
-    ],
+    srcs = ["utils.py"],
     deps = [
         pip_requirement("torch"),
         pip_requirement("omegaconf"),
-        pip_requirement("pytorch-lightning"),
         "//nre/models/base:pylib",
         "//nre/utils:pylib",
         "//nre/utils:pylib_misc",
@@ -86,74 +44,18 @@ py_library(
     name = "pylib",
     srcs = [
         "__init__.py",
-        "background.py",
-        "calib.py",
-        "composite.py",
-        "feature_volume.py",
-        "input_embedding.py",
         "nrenderable.py",
-        "object_feature_volume.py",
-        "post_processing.py",
-        "tracks_calib.py",
     ],
     deps = [
-        pip_requirement("omegaconf"),
-        pip_requirement("kornia"),
-        pip_requirement("matplotlib"),
-        pip_requirement("msgpack"),
-        pip_requirement("nvidia-ncore"),
-        pip_requirement("numpy"),
-        pip_requirement("pytorch-lightning"),
-        pip_requirement("torch"),
-        pip_requirement("torch_scatter"),
-        pip_requirement("tqdm"),
-        pip_requirement("lietorch"),
-        pip_requirement("einops"),
-        pip_requirement("nvdiffrast"),
-        pip_requirement("simple_lama_inpainting"),
-        # Add runfiles dependency for Bazel file path resolution
-        "@rules_python//python/runfiles",
-        ":pylib_custom_modules",
         ":pylib_nn_extensions",
         ":pylib_utils",
-        "//nre/models/post_processings:pylib_bilateral_grid",
-        "//nre/models/post_processings:pylib_ppisp",
+        pip_requirement("torch"),
+        pip_requirement("nvidia-ncore"),
+        pip_requirement("numpy"),
+        pip_requirement("lietorch"),
         "//libs/nrend:pylib",
-        "//libs/slang_gaussians:pylib",
-        "//libs/vren:pylib",
-        "//libs/vren:pylib_cc",
-        "//nre/config:pylib",
-        "//nre/datasets:pylib",
         "//nre/models/base:pylib",
         "//nre/utils:pylib",
-        "//nre/utils:pylib_optim",
-        "//nre/utils:pylib_prober",
         "//nre/utils:pylib_types",
-    ],
-)
-
-pytest_test(
-    name = "background_test",
-    srcs = ["background_test.py"],
-    deps = [
-        ":pylib",
-        "//nre/config:pylib",
-        pip_requirement("torch"),
-        pip_requirement("omegaconf"),
-    ],
-)
-
-pytest_test(
-    name = "calib_test",
-    srcs = ["calib_test.py"],
-    data = [
-        "//configs",
-        "@test_data_ncore//:ncore_clipgt_1sec",
-    ],
-    deps = [
-        ":pylib",
-        "//nre/config:pylib",
-        "//nre/datasets:pylib",
-        "@rules_python//python/runfiles",
     ],
 )

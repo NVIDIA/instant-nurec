@@ -17,8 +17,10 @@ from pathlib import Path
 from typing import List, Optional, TypeAlias, TypeVar
 
 import numpy as np
-import point_cloud_utils as pcu
 import torch
+
+
+import point_cloud_utils as pcu
 
 from torch import nn
 

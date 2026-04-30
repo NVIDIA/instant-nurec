@@ -19,8 +19,10 @@ from typing import Any
 
 import imageio
 import numpy as np
-import point_cloud_utils as pcu
 import wandb
+
+
+import point_cloud_utils as pcu
 
 from PIL import Image as _PILImage
 from pytorch_lightning import LightningModule

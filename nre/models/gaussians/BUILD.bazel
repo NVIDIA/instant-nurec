@@ -1,36 +1,29 @@
 # SPDX-FileCopyrightText: Copyright (c) 2024-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: LicenseRef-NvidiaProprietary
 #
-# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
-# property and proprietary rights in and to this material, related
-# documentation and any modifications thereto. Any use, reproduction,
-# disclosure or distribution of this material and related documentation
-# without an express license agreement from NVIDIA CORPORATION or
-# its affiliates is strictly prohibited.
+# Phase 1 step 4.3: predict-only standalone keeps just the renderer + ply
+# writer helpers. Strategies, initializations, gaussians_composite, the
+# full gaussian model, and the strategy/collect submodules are all training-
+# only and have been removed.
 
 load("@nre_pip_deps//:requirements.bzl", pip_requirement = "requirement")
 load("@rules_python//python:defs.bzl", "py_library")
-load("//bazel/pytest:defs.bzl", "pytest_test")
 
 package(default_visibility = [
     "//:core_package_group",
-    # Add visibility for nvhuman animation scripts
 ])
 
 filegroup(
     name = "py_files",
     srcs = glob(["**/*.py"]),
-    visibility = [
-    ],
+    visibility = [],
 )
 
-# Selection between local and remote gsplat repository
+# gsplat is selected by config but the predict path with render_video.enabled=false
+# does not exercise it. The dep is kept so renderers.py imports resolve.
 py_library(
     name = "pylib_cc_gsplat",
-    visibility = [
-        "//bazel/typing:__pkg__",
-        "//nre/models/gaussians:__pkg__",
-    ],
+    visibility = ["//nre/models/gaussians:__pkg__"],
     deps = select({
         "//bazel/conditions:local_gsplat": [
             "@gsplat_repo_local//:pylib_cc",
@@ -45,148 +38,24 @@ py_library(
     name = "pylib",
     srcs = [
         "__init__.py",
-        "gaussians_model.py",
-        "initializations.py",
         "renderers.py",
         "utils.py",
     ],
-    visibility = [
-        "//:core_package_group",
-    ],
+    visibility = ["//:core_package_group"],
     deps = [
         pip_requirement("nvidia-ncore"),
         pip_requirement("numpy"),
+        pip_requirement("point-cloud-utils"),
         pip_requirement("torch"),
         pip_requirement("tqdm"),
         pip_requirement("lietorch"),
-        pip_requirement("point-cloud-utils"),
         ":pylib_cc_gsplat",
-        "//libs/gaussian_mcmc:pylib_cc",
         "//libs/geometry/kernels:pylib",
         "//nre/datasets:pylib",
         "//nre/models:pylib",
         "//nre/models/base:pylib",
-        "//nre/models/gaussians/collect:pylib",
         "//nre/utils:pylib",
         "//nre/utils:pylib_optim",
         "//nre/utils:pylib_types",
-        "//nre/utils/io:pylib",
-    ],
-)
-
-py_library(
-    name = "pylib_gaussians_composite",
-    srcs = [
-        "gaussians_composite.py",
-    ],
-    deps = [
-        ":pylib",
-        "//nre/models/gaussians/strategies:pylib",
-    ],
-)
-
-pytest_test(
-    name = "utils_test",
-    srcs = ["utils_test.py"],
-    deps = [
-        ":pylib",
-        "//nre/models:pylib",
-        "//nre/utils:pylib",
-    ],
-)
-
-pytest_test(
-    name = "initializations_test",
-    srcs = ["initializations_test.py"],
-    deps = [
-        ":pylib",
-        "//nre/models:pylib",
-        "//nre/utils:pylib",
-    ],
-)
-
-pytest_test(
-    name = "gaussians_test",
-    srcs = [
-        "gaussians_test.py",
-    ],
-    deps = [
-        ":pylib",
-        "//nre/datasets:pylib",
-        pip_requirement("torch"),
-    ],
-)
-
-pytest_test(
-    name = "gsplat_import_test",
-    srcs = ["gsplat_import_test.py"],
-    deps = [
-        pip_requirement("torch"),
-        ":pylib_cc_gsplat",
-    ],
-)
-
-pytest_test(
-    name = "gsplat_render_test",
-    timeout = "long",
-    srcs = ["gsplat_render_test.py"],
-    data = [
-        "@nrend_test_assets//:msgpack_test_cases",
-    ],
-    deps = [
-        ":pylib",
-        pip_requirement("msgpack"),
-        pip_requirement("numpy"),
-        pip_requirement("nvidia-ncore"),
-        pip_requirement("torch"),
-        "//nre/models:pylib",
-        "//nre/models/base:pylib",
-        "//nre/utils:pylib",
-        "@rules_python//python/runfiles",
-    ],
-)
-
-pytest_test(
-    name = "gsplat_renderer_training_test",
-    srcs = ["gsplat_renderer_training_test.py"],
-    deps = [
-        ":pylib",
-        pip_requirement("numpy"),
-        pip_requirement("torch"),
-        ":pylib_cc_gsplat",
-        "//nre/datasets:pylib",
-        "//nre/models:pylib",
-        "//nre/utils:pylib",
-        "//nre/utils:pylib_types",
-    ],
-)
-
-pytest_test(
-    name = "gsplat_lidar_test",
-    srcs = ["gsplat_lidar_test.py"],
-    data = [
-        "//configs",
-    ],
-    deps = [
-        ":pylib_cc_gsplat",
-        pip_requirement("nvidia-ncore"),
-        pip_requirement("omegaconf"),
-        pip_requirement("torch"),
-        "//libs/vren:pylib",
-        "//nre/config:pylib",
-    ],
-)
-
-pytest_test(
-    name = "gsplat_viewmat_test",
-    srcs = ["gsplat_viewmat_test.py"],
-    data = [
-        "@test_data_prober_generated//:gsplat_viewmat",
-    ],
-    deps = [
-        ":pylib",
-        pip_requirement("torch"),
-        "//libs/geometry/kernels:pylib",
-        "//nre/utils:pylib",
     ],
 )
