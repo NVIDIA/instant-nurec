@@ -108,20 +108,6 @@ class KelvinDAv3EncoderConfig(BaseConfigSchema):
     )
 
 
-class KelvinTokenGSDecoderConfig(BaseConfigSchema):
-    name: Literal["token-gs-decoder"]
-    depth: int
-    use_qk_norm: bool = Field(default=True)
-    layer_scale_init_values: Optional[float] = Field(
-        default=1e-4, description="The initial values for the layer scale. If None, no layer scale is used."
-    )
-    num_gaussian_tokens: int = Field(default=1024, description="Number of Gaussian tokens")
-    gaussian_token_init_std: float = Field(
-        default=0.02, description="Standard deviation for the Gaussian token initialization"
-    )
-    use_decoder_norm: bool = Field(default=False, description="Whether to use layer normalization after the decoder")
-
-
 class KelvinDPTDecoderConfig(BaseConfigSchema):
     name: Literal["dpt-decoder"]
     dpt_dim: int
@@ -142,39 +128,6 @@ class KelvinDPTDecoderConfig(BaseConfigSchema):
     # Motion-related:
     time_encoding_dim: int = Field(default=256, description="Dimension of the time sinusoidal encoding")
     motion_depth: int = Field(default=4, description="Depth of the motion head (V-DPM setup is equivalent to 8)")
-
-    def model_post_init(self, __context) -> None:
-        assert self.dpt_dim > 0, "DPT dimension must be positive"
-
-
-class KelvinPointQueryCADecoderConfig(BaseConfigSchema):
-    """Decoder that keeps DPT depth/context/motion heads but replaces the DPT gaussian head
-    with a cross-attention head using depth-derived xyz positions (2D grid tokenization) as queries."""
-
-    name: Literal["point-query-ca-decoder"]
-
-    # Shared DPT fields (for depth, context, motion heads)
-    dpt_dim: int
-    dpt_reassemble_hidden_dims: List[int]
-    checkpointing: bool = Field(default=False, description="Whether to use checkpointing for the DPT heads")
-    dpt_chunk_size: int = Field(default=-1, description="Chunk size for the DPT heads. -1 to disable.")
-    time_encoding_dim: int = Field(default=256, description="Dimension of the time sinusoidal encoding")
-    motion_depth: int = Field(default=4, description="Depth of the motion head")
-
-    # Cross-attention gaussian head
-    ca_depth: int = Field(default=1, description="Number of cross-attention decoder blocks")
-    use_qk_norm: bool = Field(default=True, description="Whether to use QK normalization in cross-attention")
-    layer_scale_init_values: Optional[float] = Field(default=1e-4, description="Layer scale init values for CA blocks")
-    xyz_downsample_stride: int = Field(default=4, description="Stride for downsampling depth map")
-    grid_center_stride: int = Field(
-        default=4,
-        description="Grouping stride relative to the candidate grid. "
-        "Each token covers a grid_center_stride x grid_center_stride block, so gs_per_token = grid_center_stride^2.",
-    )
-    use_gt_semantic_mask: bool = Field(
-        default=False,
-        description="If True, use ground-truth semantic labels instead of predicted semantics for the sky/ego opacity mask.",
-    )
 
     def model_post_init(self, __context) -> None:
         assert self.dpt_dim > 0, "DPT dimension must be positive"
@@ -236,9 +189,7 @@ class KelvinModelConfig(BaseModelConfig):
     patch_shape: Tuple[int, int] = Field(default=(8, 8))
 
     encoder: KelvinTokenGSEncoderConfig | KelvinDAv3EncoderConfig = Field(discriminator="name")
-    decoder: KelvinTokenGSDecoderConfig | KelvinDPTDecoderConfig | KelvinPointQueryCADecoderConfig = Field(
-        discriminator="name"
-    )
+    decoder: KelvinDPTDecoderConfig = Field(discriminator="name")
     post_processing: KelvinPostProcessingConfig = Field(default_factory=KelvinPostProcessingConfig)
     init_weights_paths: dict[str, str] = Field(
         default_factory=dict,
