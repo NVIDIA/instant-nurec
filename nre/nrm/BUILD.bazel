@@ -28,6 +28,7 @@ py_library(
     name = "pylib",
     srcs = ["run.py"],
     data = ["//configs"],
+    visibility = ["//visibility:public"],
     deps = [
         pip_requirement("click"),
         pip_requirement("click-default-group"),
