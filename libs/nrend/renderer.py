@@ -372,18 +372,6 @@ class Renderer:
         success = self._nrenderer_wrapper.update_model_parameters(parameters, deep_copy)
         assert success, "NRenderer.update_model_parameters failed."
 
-    @ScopedTimer("NRender.detach_model_parameters")
-    def detach_model_parameters(self, cuda_device_index: int, deep_copy: bool = True):
-        """
-        Detach all previously attached model parameters tensors
-
-        Args:
-          deep_copy: if true  : copy the attached parameters into internal host buffer before detaching
-        """
-        success = self._nrenderer_wrapper.detach_model_parameters(cuda_device_index, deep_copy)
-        assert success, "NRenderer.detach_model_parameters failed."
-        self._cached_model_state_dict = None
-
     def collect_profilings(self) -> dict[str, float]:
         """
         Collect all profilings
