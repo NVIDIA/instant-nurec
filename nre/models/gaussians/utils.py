@@ -25,7 +25,6 @@ import point_cloud_utils as pcu
 from torch import nn
 
 from nre.utils.geometry import quat_to_so3_matrix, so3_matrix_to_quat
-from nre.utils.types import PointCloud
 
 
 log = logging.getLogger(__name__)

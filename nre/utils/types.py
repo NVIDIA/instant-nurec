@@ -76,15 +76,6 @@ from nre.utils.misc import (
     flatten_list,
     unpack_optional,
 )
-# visualdebugger is replaced by an inline no-op at the only call site below
-# (PointCloud.visualize); kept as a stub so polyscope is not in the predict
-# image at all.
-def get_visualdebugger():
-    class _NullDebugger:
-        def __getattr__(self, _name):
-            return lambda *a, **k: None
-    return _NullDebugger()
-
 
 M = TypeVar("M", bound=torch.nn.Module)
 # ModuleRef is an annotation for a getter of torch Modules. It is used when we want to pass a module
@@ -381,94 +372,6 @@ class TorchChunkable(Chunkable):
         return self.apply(lambda t: t.gather(dim, index))
 
 
-@chunkable_dataclass_decorator(slots=True, kw_only=True)
-class PointCloud(TorchChunkable):
-    """
-    Represents a 3d point cloud consisting of corresponding start and end points
-    Optionally can contain per-point colors and flags (see RayFlags)
-    and per point semantic class ids.
-    """
-
-    xyz_start: torch.Tensor  # [N,3] coordinates of the start points [float32]
-    xyz_end: torch.Tensor  # [N,3] coordinates of the end points [float32]
-    normal: Optional[torch.Tensor] = None  # [N,3] normal vector of each point [float32]
-    color: Optional[torch.Tensor] = None  # [N,3] RGB color of each point [uint8]
-    flags: Optional[torch.Tensor] = None  # [N,]-sized tensor of RayFlags
-    semantic_class_id: Optional[torch.Tensor] = None  # [N,]-sized tensor of per point semantic class id
-    intensity: Optional[torch.Tensor] = None  # [N, ]-sized tensor of per point intensity [float32]
-    camera_footprint_scale: Optional[torch.Tensor] = None  # [N] observation scale of each point [float32]
-    sensor_type: Optional[List[Literal["camera", "lidar"]]] = None  # one of "camera" or "lidar" if specified [str]
-
-    def __post_init__(self) -> None:
-        # dimension checks
-        assert self.xyz_start.shape == (self.n_points, 3)
-        assert self.xyz_end.shape == self.xyz_start.shape
-        assert self.normal is None or self.normal.shape == self.xyz_start.shape
-        assert self.color is None or self.color.shape == self.xyz_start.shape
-        assert self.flags is None or self.flags.shape == (self.n_points,)
-        assert self.semantic_class_id is None or self.semantic_class_id.shape == (self.n_points,)
-        assert self.intensity is None or self.intensity.shape == (self.n_points,)
-        assert self.camera_footprint_scale is None or self.camera_footprint_scale.shape == (self.n_points,)
-
-        # type checks
-        assert self.color is None or self.color.dtype == torch.uint8
-
-    def visualize(self) -> None:
-        visualizer = get_visualdebugger()
-        visualizer.add_point_cloud(
-            "pc",
-            self.xyz_end.cpu().numpy(),
-            colors_quantities=({"color": self.color.cpu().numpy()} if self.color is not None else None),
-        )
-        visualizer.show()
-
-    def flipped(self, axis: AxisType = "Y") -> PointCloud:
-        """Returns a new PointCloud with end-points flipped along the specified axis"""
-        match axis:
-            case "X":
-                return PointCloud(
-                    xyz_start=self.xyz_start,
-                    xyz_end=self.xyz_end * torch.tensor([-1, 1, 1], device=self.xyz_start.device),
-                    color=self.color,
-                    flags=self.flags,
-                    semantic_class_id=self.semantic_class_id,
-                    intensity=self.intensity,
-                    camera_footprint_scale=self.camera_footprint_scale,
-                )
-            case "Y":
-                return PointCloud(
-                    xyz_start=self.xyz_start,
-                    xyz_end=self.xyz_end * torch.tensor([1, -1, 1], device=self.xyz_start.device),
-                    color=self.color,
-                    flags=self.flags,
-                    semantic_class_id=self.semantic_class_id,
-                    intensity=self.intensity,
-                    camera_footprint_scale=self.camera_footprint_scale,
-                )
-            case "Z":
-                return PointCloud(
-                    xyz_start=self.xyz_start,
-                    xyz_end=self.xyz_end * torch.tensor([1, 1, -1], device=self.xyz_end.device),
-                    color=self.color,
-                    flags=self.flags,
-                    semantic_class_id=self.semantic_class_id,
-                    intensity=self.intensity,
-                    camera_footprint_scale=self.camera_footprint_scale,
-                )
-            case _:
-                raise ValueError(f"Unsupported axis {axis}")
-
-    @property
-    def n_points(self) -> int:
-        return len(self.xyz_end)
-
-
-# Defining this inside PointCloud feels more elegant but it leads to this mypy error:
-# error: Type aliases inside dataclass definitions are not supported at runtime  [misc]
-# generic-data is for color loaded from sfm point data
-PointCloudColorType: TypeAlias = Optional[Literal["camera-rgb", "semantics", "generic-data"]]
-
-AxisType: TypeAlias = Literal["X", "Y", "Z"]
 
 
 class RayFlags(IntFlag):

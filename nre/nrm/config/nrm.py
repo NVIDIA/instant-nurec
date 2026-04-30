@@ -15,7 +15,7 @@ import os
 import re
 
 from pathlib import Path
-from typing import Any, Literal, Optional, Union
+from typing import Any, Literal, Optional
 
 import hydra
 
@@ -166,14 +166,6 @@ class GaussiansNRMSystemConfig(BaseNRMSystemConfig):
     name: Literal["base-nrm-system"]
 
 
-class TestDataNRMSystemConfig(BaseNRMSystemConfig):
-    """
-    System config for testing data loading. Uses TestIndexNRMDataset and prints batch indices each epoch.
-    """
-
-    name: Literal["test-data-system"]
-
-
 class _CheckpointConfig(BaseConfigSchema):
     save_top_k: int
     monitor: str | None
@@ -223,7 +215,7 @@ class NRMConfig(BaseConfigSchema):
 
     profiling: _ProfilingConfig = Field(default_factory=_ProfilingConfig, description="Profiling configuration.")
 
-    system: Union[GaussiansNRMSystemConfig, TestDataNRMSystemConfig] = Field(discriminator="name")
+    system: GaussiansNRMSystemConfig = Field(discriminator="name")
     dataset: NRMSplitsConfig = Field(discriminator="name")
 
     model: KelvinModelConfig = Field(discriminator="name")

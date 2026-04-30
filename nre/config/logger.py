@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import os
 
-from typing import Literal, Optional, Union
+from typing import Literal
 
 import shortuuid
 
@@ -35,48 +35,6 @@ class BaseLoggerConfig(BaseConfigSchema):
                 self.run_id = shortuuid.uuid()
 
 
-class WandbLoggerConfig(BaseLoggerConfig):
-    name: Literal["wandb"]
-
-    run_name: Optional[str]
-    anonymous: bool  # enable anonymous logging
-    offline: bool
-    group: str
-    tags: list[str]
-    job_type: str
-    entity: str
-    log_model: bool
-
-    project: str
-
-    def model_post_init(self, __context) -> None:
-        super().model_post_init(__context)
-        if self.enabled is None:
-            self.enabled = True
-        self._add_git_sha()
-        if self.save_dir is not None:
-            self.save_dir = os.path.join(os.path.normpath(self.save_dir), self.run_id)
-
-    def _add_git_sha(self) -> None:
-        if (sha := os.environ.get("GIT_SHA")) is not None:
-            # TODO: figure out logging - logging.getLogger().warning() has no effect here  ¯\_(ツ)_/¯
-            # logging.getLogger(__name__).warning("Adding git sha to wandb run as a tag: %s", sha)
-            self.tags.append(f"git-sha={sha}")
-
-
-class TensorboardLoggerConfig(BaseLoggerConfig):
-    name: Literal["tensorboard"]
-    run_name: Optional[str]
-    log_graph: bool
-    default_hp_metric: bool
-    prefix: str
-
-    def model_post_init(self, __context) -> None:
-        super().model_post_init(__context)
-        if self.enabled is None:
-            self.enabled = True
-
-
 class DummyLoggerConfig(BaseLoggerConfig):
     name: Literal["dummy"]
 
@@ -86,7 +44,7 @@ class DummyLoggerConfig(BaseLoggerConfig):
             self.enabled = False
 
 
-LoggerConfigType = Union[WandbLoggerConfig, TensorboardLoggerConfig, DummyLoggerConfig]
+LoggerConfigType = DummyLoggerConfig
 
 
 class BatchMediaLoggerConfigMixin(BaseConfigSchema):

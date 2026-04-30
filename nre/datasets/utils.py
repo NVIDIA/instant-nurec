@@ -52,7 +52,7 @@ from nre.utils.misc import (
     to_torch,
     unpack_optional,
 )
-from nre.utils.types import CuboidTracksData, HalfClosedInterval, PointCloud, TracksData
+from nre.utils.types import CuboidTracksData, HalfClosedInterval, TracksData
 def compute_cuboid_df(
     sequence_loader: ncore.data.SequenceLoaderProtocol,
     time_range_us: HalfClosedInterval,
