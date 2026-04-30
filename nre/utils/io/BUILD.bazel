@@ -27,13 +27,6 @@ filegroup(
 py_library(
     name = "pylib",
     srcs = [
-        "artifact_cache.py",
-        "checkpoint.py",
-        "ground_mesh.py",
-        "mesh.py",
-        "metadata.py",
-        "ply.py",
-        "rig_trajectories.py",
         "sequence_tracks.py",
         "usd_default_layer.py",
         "usd_nrend.py",
