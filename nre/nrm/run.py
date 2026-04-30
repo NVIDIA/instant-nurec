@@ -229,18 +229,10 @@ def launch_trainer_loop(config: NRMConfig, system: BaseNRMSystem, logger: loggin
     ):
         system.model.on_train_from_scratch_start(system)
 
-    if "train" in config.mode or "trainval" in config.mode:
-        trainer.fit(system, datamodule=system.datamodule, ckpt_path=ckpt_path)
-
-    elif "val" in config.mode:
-        trainer.validate(system, datamodule=system.datamodule, ckpt_path=ckpt_path)
-
-    elif "test" in config.mode:
-        trainer.test(system, datamodule=system.datamodule, ckpt_path=ckpt_path)
-
-    elif "predict" in config.mode:
-        # Set return_predictions to False since we return primitives which is memory-consuming.
-        trainer.predict(system, datamodule=system.datamodule, ckpt_path=ckpt_path, return_predictions=False)
+    if "predict" not in config.mode:
+        raise ValueError(f"Only predict mode is supported in this standalone; got mode={config.mode}.")
+    # Set return_predictions to False since we return primitives which is memory-consuming.
+    trainer.predict(system, datamodule=system.datamodule, ckpt_path=ckpt_path, return_predictions=False)
 
 
 @click.command("main")
