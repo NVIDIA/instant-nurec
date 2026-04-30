@@ -28,7 +28,6 @@ py_library(
         "__init__.py",
         "base.py",
         "gaussians_nrm.py",
-        "test_data_system.py",
     ],
     visibility = DEFAULT_VISIBILITY,
     deps = [

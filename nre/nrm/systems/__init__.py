@@ -16,7 +16,6 @@ import torch
 
 from nre.nrm.systems.base import BaseNRMSystem
 from nre.nrm.systems.gaussians_nrm import GaussiansNRMSystem
-from nre.nrm.systems.test_data_system import TestDataSystemNRMSystem
 
 
 if TYPE_CHECKING:
@@ -28,10 +27,8 @@ logger = logging.getLogger(__name__)
 def make(name: str, config: "NRMConfig", load_from_checkpoint: Optional[str] = None) -> "BaseNRMSystem":
     if name == "base-nrm-system":
         system_cls = GaussiansNRMSystem
-    elif name == "test-data-system":
-        system_cls = TestDataSystemNRMSystem
     else:
-        raise NotADirectoryError(f"Unknown NRM system name: {name}")
+        raise ValueError(f"Unknown NRM system name: {name}")
 
     if load_from_checkpoint is not None:
         # Load checkpoint to check its format
@@ -63,6 +60,5 @@ def make(name: str, config: "NRMConfig", load_from_checkpoint: Optional[str] = N
 # we can make the autodiscovery of the modules work with sphinx
 __all__ = [
     "BaseNRMSystem",
-    "TestDataSystemNRMSystem",
     "GaussiansNRMSystem",
 ]
