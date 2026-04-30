@@ -1,4 +1,0 @@
-defaults:
-  - celsius
-
-patch_shape: [16, 16]

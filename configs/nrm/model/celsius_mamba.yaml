@@ -1,5 +1,0 @@
-defaults:
-  - celsius
-
-encoder:
-  block_pattern: MMMMMMMT
