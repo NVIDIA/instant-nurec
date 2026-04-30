@@ -21,7 +21,9 @@ import torch.utils.checkpoint
 from omegaconf import DictConfig, OmegaConf
 
 from nre.config.version import get_version
-from nre.difix.model import DifixModel
+class DifixModel:
+    """Stub for predict-only standalone (real Difix lives in NRE training)."""
+    pass
 from nre.models.gaussians.renderers import BaseGaussianRenderer, Gaussian3DNRenderer
 from nre.models.nrenderable import NRenderableModel
 from nre.nrm.config.models import PrimitiveExportPreprocessConfig

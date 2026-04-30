@@ -38,7 +38,6 @@ py_library(
         "weighted.py",
     ],
     deps = [
-        "//nre/difix:pylib",
         "//nre/utils:pylib",
         "//nre/utils:pylib_misc",
         "//nre/utils:pylib_types",
