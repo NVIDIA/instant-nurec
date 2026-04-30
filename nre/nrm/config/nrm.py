@@ -33,7 +33,7 @@ from nre.config.version import Version, get_version
 from nre.config.viewer import ViewerConfig
 from nre.nrm.config.dataset import NRMSplitsConfig
 from nre.nrm.config.models import KelvinModelConfig
-from nre.nrm.config.predict import PredictConfig, SensorOverrideConfig
+from nre.nrm.config.predict import PredictConfig
 from nre.repo_root import __reporoot__
 from nre.utils.model_registry import create_model_registry
 
@@ -77,11 +77,6 @@ class BaseNRMSystemConfig(BatchMediaLoggerConfigMixin, BaseConfigSchema):
         default="context",
         description="Whether to log rig trajectories videos during validation. If 'context', will log the context rig trajectories. If 'supervision', will log the supervision rig trajectories.",
     )
-    log_novel_view_overrides: list[SensorOverrideConfig] = Field(
-        default_factory=list,
-        description="List of additional sensors to log validation videos for.",
-    )
-
     # Number of devices per node.
     device_count: int = Field(
         default=0,
