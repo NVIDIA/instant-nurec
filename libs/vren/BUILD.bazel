@@ -107,7 +107,6 @@ filegroup(
     name = "py_files",
     srcs = [
         "__init__.py",
-        "ensemble.py",
         "interface.py",
         "lidars.py",
     ],
@@ -149,98 +148,3 @@ py_wheel(
     deps = [":pkg"],
 )
 
-py_binary(
-    name = "rm_mask_benchmark",
-    srcs = ["rm_mask_benchmark.py"],
-    main = "rm_mask_benchmark.py",
-    deps = [
-        pip_requirement("torch"),
-        "//libs/vren:pylib",
-        "//nre/models:pylib_custom_modules",
-    ],
-)
-
-mypy_test(
-    name = "rm_mask_benchmark_mypy",
-    timeout = "long",
-    deps = [
-        ":rm_mask_benchmark",
-    ],
-)
-
-pytest_test(
-    name = "alphacompositing_test",
-    srcs = ["alphacompositing_test.py"],
-    deps = [
-        ":pylib",
-        pip_requirement("torch"),
-        pip_requirement("numpy"),
-        "//libs:pylib",
-        "//nre/models:pylib_custom_modules",
-    ],
-)
-
-pytest_test(
-    name = "intersection_test",
-    srcs = ["intersection_test.py"],
-    deps = [
-        ":pylib",
-        pip_requirement("torch"),
-        pip_requirement("numpy"),
-        "//libs:pylib",
-    ],
-)
-
-pytest_test(
-    name = "cameras_test",
-    timeout = "long",
-    srcs = ["cameras_test.py"],
-    data = [
-        "@test_data_ncore//:ncore_1sec",
-    ],
-    tags = ["exclusive"],  # test can potentially timeout (in particular on CI when competing for resources) -> execute in isolation
-    deps = [
-        ":pylib",
-        pip_requirement("torch"),
-        pip_requirement("parameterized"),
-        pip_requirement("numpy"),
-        pip_requirement("nvidia-ncore"),
-        pip_requirement("nvidia-ncore-internal"),
-        "//libs:pylib",
-        "//nre/utils:pylib_geometry",
-        "//nre/utils:pylib_misc",
-        "@rules_python//python/runfiles",
-    ],
-)
-
-pytest_test(
-    name = "lidars_test",
-    srcs = ["lidars_test.py"],
-    data = [
-        "//libs/vren:test_data/row-offset-spinning-lidar-model-parameters.json",
-        "//libs/vren:test_data/row-offset-spinning-lidar-model-parameters-hesai-at128.json",
-        "//libs/vren:test_data/row-offset-spinning-lidar-model-parameters-pandaset.json",
-        "//libs/vren:test_data/row-offset-spinning-lidar-model-parameters-waymo.json",
-    ],
-    deps = [
-        ":pylib",
-        pip_requirement("torch"),
-        pip_requirement("numpy"),
-        pip_requirement("nvidia-ncore"),
-        pip_requirement("scipy"),
-        pip_requirement("parameterized"),
-        "//libs:pylib",
-        "//nre/utils:pylib",
-    ],
-)
-
-pytest_test(
-    name = "ensemble_test",
-    srcs = ["ensemble_test.py"],
-    deps = [
-        ":pylib",
-        pip_requirement("torch"),
-        pip_requirement("numpy"),
-        "//libs:pylib",
-    ],
-)
