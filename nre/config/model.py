@@ -59,66 +59,11 @@ class BaseBackgroundConfig(BaseConfigSchema):
     composite_in_linear_space: bool = False
 
 
-class SkyEnvMapBackgroundConfig(BaseBackgroundConfig):
-    """Sky environment map background configuration."""
-
-    name: Literal["sky-env-map"]
-
-    # Required for env map
-    width: int = Field(ge=1)
-    height: int = Field(ge=1)
-    envmap_type: Literal["cubemap", "equirectangular"]
-    should_inpaint: bool
-    inpaint_threshold: float
-    inpaint_kernel_size: int = Field(ge=1)
-    min_grad_updates: int = Field(ge=0)
-    saturate_radiance: bool = True
-
-
-class SkyMlpBackgroundConfig(BaseBackgroundConfig):
-    """Sky MLP background configuration."""
-
-    name: Literal["sky-mlp"]
-
-    # Required for MLP
-    dir_encoding_config: Any
-    mlp_network_config: Any
-    enable_jit_if_supported: bool
-    seed: int
-    saturate_radiance: bool = True
-
-
-class ExtraSignalSkyMlpBackgroundConfig(SkyMlpBackgroundConfig):
-    """Sky MLP with extra signal support."""
-
-    name: Literal["extra-signal-sky-mlp"]  # type: ignore[assignment]
-
-    extra_signal: Any
-
-
-class BackgroundColorConfig(BaseBackgroundConfig):
-    """Solid color background configuration."""
-
-    name: Literal["background-color"]
-
-    color: Literal["white", "black", "random"]
-    random_eval_color: list[float] | None = None
-
-
-class SkipBackgroundConfig(BaseBackgroundConfig):
-    """Skip/no-op background configuration."""
-
-    name: Literal["skip-background"]
-
-
-# Discriminated union of all background types
-BackgroundConfigType = (
-    SkyEnvMapBackgroundConfig
-    | SkyMlpBackgroundConfig
-    | ExtraSignalSkyMlpBackgroundConfig
-    | BackgroundColorConfig
-    | SkipBackgroundConfig
-)
+# Discriminated background subclasses (sky env map / sky MLP / solid color /
+# skip) were training-only — predict's renderer config has background: null.
+# Keeping the BaseBackgroundConfig stub above so the optional field still
+# accepts None.
+BackgroundConfigType = BaseBackgroundConfig
 
 
 class ProjectionConfig(BaseConfigSchema):
@@ -697,10 +642,10 @@ class ModelConfig(BaseConfigSchema):
     calib: CalibConfig | None = Field(default=None, description="Calibration component configuration")
 
     background: BackgroundConfigType | None = Field(
-        default=None, discriminator="name", description="Background component configuration"
+        default=None, description="Background component configuration"
     )
 
-    renderer: RendererConfigType = Field(discriminator="name", description="Renderer configuration")
+    renderer: RendererConfigType = Field(description="Renderer configuration")
 
     strategy: StrategyConfigType = Field(
         discriminator="name", description="Gaussian densification/pruning strategy configuration"
