@@ -19,7 +19,6 @@ from pytorch_lightning.plugins.precision.amp import MixedPrecision
 from torch import nn
 from torch.cuda.amp.grad_scaler import GradScaler
 
-from nre.config.model import ModelConfig
 from nre.models.base import BaseModel
 from nre.utils.misc import dataclass_items
 from nre.utils.profiling import ScopedTimer
