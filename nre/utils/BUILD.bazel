@@ -207,11 +207,7 @@ py_library(
     srcs = [
         "profiling.py",
     ],
-    deps = [
-        pip_requirement("torch"),
-        ":pylib_trainer",
-        "//nre/config:pylib",
-    ],
+    deps = [],
 )
 
 py_library(
