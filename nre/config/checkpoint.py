@@ -206,23 +206,3 @@ class ArtifactConfig(BaseConfigSchema):
     )
 
 
-class CheckpointConfig(BaseConfigSchema):
-    every_n_train_steps: int | None
-    save_top_k: int
-    monitor: str | None
-    mode: Literal["min", "max"]
-    save_on_train_epoch_end: bool
-    save_on_preemption: bool = Field(
-        default=False, description="Save checkpoint on SLURM preemption for single-scene optimization"
-    )
-    fp16: bool = Field(
-        default=False,
-        description="Cast training checkpoint (.ckpt) tensors from fp32 to fp16 to reduce storage. "
-        "fp16 checkpoints are automatically upcast to fp32 on load.",
-    )
-    strip_optimizer: bool = Field(
-        default=False,
-        description="Remove optimizer state, lr schedulers, loops, and callbacks from the training checkpoint (.ckpt). "
-        "Stripped checkpoints cannot be used with resume=.",
-    )
-    artifact: ArtifactConfig
