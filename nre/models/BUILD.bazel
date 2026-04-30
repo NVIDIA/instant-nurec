@@ -53,7 +53,6 @@ py_library(
         pip_requirement("nvidia-ncore"),
         pip_requirement("numpy"),
         pip_requirement("lietorch"),
-        "//libs/nrend:pylib",
         "//nre/models/base:pylib",
         "//nre/utils:pylib",
         "//nre/utils:pylib_types",

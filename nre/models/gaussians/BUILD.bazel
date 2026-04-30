@@ -51,6 +51,7 @@ py_library(
         pip_requirement("lietorch"),
         ":pylib_cc_gsplat",
         "//libs/geometry/kernels:pylib",
+        "//libs/nrend:pylib",
         "//nre/datasets:pylib",
         "//nre/models:pylib",
         "//nre/models/base:pylib",
