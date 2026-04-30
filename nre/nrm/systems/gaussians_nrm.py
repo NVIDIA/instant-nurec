@@ -35,7 +35,6 @@ from nre.nrm.models.base import BaseNRMSupervisionPack
 from nre.nrm.models.kelvin_backbone.base import KelvinNRMSupervisionPack
 from nre.nrm.models.kelvin_model import KelvinNRM
 from nre.nrm.predict.export_ply import export_ply
-from nre.nrm.predict.export_usdz import build_artifact_cache
 from nre.nrm.predict.primitive_merge import make as make_primitive_merge
 from nre.nrm.primitives.base import BaseNRMPrimitive
 from nre.nrm.systems.base import BaseNRMSystem
@@ -756,7 +755,9 @@ class GaussiansNRMSystem(BaseNRMSystem):
         if out_batch.meta is None or out_batch.context_rig is None:
             return
 
-        # Helper to export PLY and USDZ for one chunk
+        # Helper to export PLY for one chunk. Standalone build does not export
+        # USDZ artifacts and does not render videos (those code paths were
+        # removed in Phase 1 step 4.3).
         def export_chunk(primitive: BaseNRMPrimitive, rig: RigTrajectories, meta: dict, chunk_suffix: str) -> None:
             if self.predict_config.export_ply.enabled:
                 path = os.path.join(
@@ -772,22 +773,6 @@ class GaussiansNRMSystem(BaseNRMSystem):
                     rig_trajectories=rig,
                     path=Path(path),
                 )
-            if self.predict_config.artifact.enabled:
-                path = os.path.join(
-                    self.out_dir,
-                    self.run_id,
-                    "artifacts",
-                    meta["sequence_id"],
-                    "last" + chunk_suffix + ".usdz",
-                )
-                artifact_cache = build_artifact_cache(
-                    nrm_config=self.cached_config,
-                    artifact_config=self.predict_config.artifact,
-                    primitive=primitive,
-                    rig_trajectories=rig,
-                    meta_data=meta,
-                )
-                artifact_cache.write_to_usdz(file_path=Path(path))
 
         for chunk_idx in range(n_chunks):
             meta = out_batch.meta[chunk_idx]
@@ -800,67 +785,3 @@ class GaussiansNRMSystem(BaseNRMSystem):
                 chunk_suffix,
             )
 
-        # Export rendered videos only for merged output (single primitive/batch)
-        if n_chunks != 1:
-            return
-
-        merged_primitive: BaseNRMPrimitive = primitives_list[0]
-        merged_rig: RigTrajectories = out_batch.context_rig[0]
-        meta = out_batch.meta[0]
-
-        if self.predict_config.render_video.enabled:
-            os.makedirs(
-                video_dir := os.path.join(self.out_dir, self.run_id, "videos", meta["sequence_id"]),
-                exist_ok=True,
-            )
-            timestamps_us_range = self._extract_render_timestamps_us(merged_rig)
-            # Determine what cameras to render
-            camera_unique_ids: list[str] = []
-            camera_overrides: list[SensorOverride | None] = []
-            camera_save_names: list[str] = []
-            # Check if any camera overrides are provided
-            if self.predict_config.render_video.override_sensors is None:
-                camera_unique_ids = list(merged_rig.camera_calibrations.keys())
-                camera_overrides = [None for _ in camera_unique_ids]
-                camera_save_names = camera_unique_ids[:]
-            else:
-                for idx, override_sensor in enumerate(self.predict_config.render_video.override_sensors):
-                    if override_sensor.sensor_id not in merged_rig.camera_calibrations:
-                        logger.warning(f"Camera {override_sensor.sensor_id} not found in merged rig, skipping")
-                        continue
-                    camera_unique_ids.append(override_sensor.sensor_id)
-                    camera_overrides.append(SensorOverride.from_config(override_sensor))
-                    camera_save_names.append(f"override_{idx}")
-            # Perform actual rendering
-            for camera_unique_id, camera_override, camera_save_name in zip(
-                camera_unique_ids, camera_overrides, camera_save_names
-            ):
-                ims: list[np.ndarray] = []
-                for rendered_camera_frame in self.render_rig_trajectories_video(
-                    camera_unique_id,
-                    merged_primitive,
-                    merged_rig,
-                    timestamps_us_range,
-                    self.predict_config.render_video.fps,
-                    camera_override,
-                ):
-                    im_pd_rgb = np.clip(rendered_camera_frame.color_image.cpu().numpy() * 255.0, 0, 255).astype(
-                        np.uint8
-                    )
-                    if self.predict_config.render_video.depth:
-                        im_pd_distance = self._rendered_to_distance_img(
-                            rendered_camera_frame.distance_image.reshape(-1),
-                            rendered_camera_frame.opacity_image.reshape(-1),
-                            im_pd_rgb.shape[1],
-                            im_pd_rgb.shape[0],
-                        )
-                        ims.append(np.concatenate([im_pd_rgb, im_pd_distance], axis=1))
-                    else:
-                        ims.append(im_pd_rgb)
-                imageio.v2.mimwrite(
-                    os.path.join(video_dir, f"{camera_save_name}.mp4"),
-                    ims,  # type: ignore
-                    fps=self.predict_config.render_video.fps,
-                    macro_block_size=1,
-                )
-                logger.info(f"Exported video for camera {camera_unique_id} ({camera_save_name}) under {video_dir}")
