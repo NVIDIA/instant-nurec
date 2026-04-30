@@ -19,7 +19,6 @@ from nre.nrm.models.blocks.embeds import (
     NormalizedPositionalEmbed,
     PatchEmbed,
     PositionalEmbed,
-    TabbedPositionalEmbed,
 )
 from nre.nrm.models.blocks.layers import (
     FeedForwardMLP,
@@ -41,7 +40,6 @@ __all__ = [
     "ModulatedAttentionBlock",
     "PatchEmbed",
     "PositionalEmbed",
-    "TabbedPositionalEmbed",
     "NormalizedPositionalEmbed",
     "ContinuousTimeEmbed",
     "LayerScale",

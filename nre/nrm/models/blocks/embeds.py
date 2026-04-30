@@ -114,42 +114,6 @@ class PositionalEmbed(nn.Module):
         raise NotImplementedError("Please use child-classes instead.")
 
 
-class TabbedPositionalEmbed(PositionalEmbed):
-    """
-    Tabbed positional embedding as used in ViT/STORM.
-    It uses a predefined (0..u)x(0..v) grid of positions, and perform bicubic interpolation to get the
-    embedding for arbitrary resolution inputs.
-    """
-
-    def __init__(self, width: int, height: int, embed_dim: int, T: float = 10000.0):
-        super().__init__()
-
-        # size is (height, width, embed_dim)
-        w, h = torch.arange(width), torch.arange(height)
-        self.embedding = nn.Parameter(self.get_2d_sincos_grid_embed(w, h, embed_dim, T), requires_grad=True)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Args:
-            x: (B, h, w, embed_dim) input image features
-        Returns:
-            (1, h, w, embed_dim) image features with positional embeddings
-        """
-        assert (embed_dim := x.shape[-1]) == self.embedding.shape[-1], (
-            "Input tensor and positional embedding must have the same dimension."
-        )
-
-        embed_height, embed_width = self.embedding.shape[:2]
-        _, new_height, new_width, _ = x.shape
-
-        if embed_height == new_height and embed_width == new_width:
-            return self.embedding[None]
-
-        embed_interp = nn.functional.interpolate(
-            self.embedding.permute(2, 0, 1)[None], size=(new_height, new_width), mode="bicubic", antialias=True
-        )
-        return embed_interp.permute(0, 2, 3, 1)
-
 
 class NormalizedPositionalEmbed(PositionalEmbed):
     """
