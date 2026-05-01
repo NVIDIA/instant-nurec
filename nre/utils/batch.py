@@ -1019,7 +1019,7 @@ class CameraFreePoseViewGeometry(torch.nn.Module):
 
     @staticmethod
     def from_rig_trajectories(
-        rig_trajectories: RigTrajectories, enable_calib: bool = False, interp_with_rig: bool = True
+        rig_trajectories: RigTrajectories, enable_calib: bool = False
     ) -> CameraFreePoseViewGeometry:
         """
         Initialize a `CameraFreePoseViewGeometry` from a `NCOREDataSource`.
@@ -1050,14 +1050,9 @@ class CameraFreePoseViewGeometry(torch.nn.Module):
             )
             rig_trajectory = candidate_trajectories[0]
 
-            if interp_with_rig:
-                pose_interpolator = PoseInterpolator(
-                    rig_trajectory.T_rig_worlds.cpu(), rig_trajectory.T_rig_world_timestamps_us.cpu()
-                )
-            elif rig_trajectory.cameras_frame_T_rig_worlds is not None:
-                poses = rig_trajectory.cameras_frame_T_rig_worlds[sensor_id]
-            else:
-                raise ValueError("Expected cameras_frame_T_rig_worlds to be available when interp_with_rig is False")
+            pose_interpolator = PoseInterpolator(
+                rig_trajectory.T_rig_worlds.cpu(), rig_trajectory.T_rig_world_timestamps_us.cpu()
+            )
 
             timestamps_us = rig_trajectory.cameras_frame_timestamps_us[sensor_id]
             assert timestamps_us.ndim == 2 and timestamps_us.shape[1] == 2, (
@@ -1066,12 +1061,8 @@ class CameraFreePoseViewGeometry(torch.nn.Module):
             timestamps_startend_us_allviews.append(timestamps_us)
 
             T_sensor_rig_np = camera_calibration.T_sensor_rig.cpu().numpy()
-            for frame_idx, timestamp_us in enumerate(timestamps_us):
-                if interp_with_rig:
-                    T_rig_world_startend = pose_interpolator.interpolate_to_timestamps(timestamp_us.cpu())
-                else:
-                    # directly fetch the per-frame pose
-                    T_rig_world_startend = poses[frame_idx].numpy()
+            for timestamp_us in timestamps_us:
+                T_rig_world_startend = pose_interpolator.interpolate_to_timestamps(timestamp_us.cpu())
                 T_sensor_world_startend = world_to_nre.transform_poses(T_rig_world_startend @ T_sensor_rig_np)
                 T_sensor_world_startend_allviews.append(torch.from_numpy(T_sensor_world_startend).to(torch.float32))
 

@@ -208,9 +208,6 @@ class RigTrajectories:
         T_rig_worlds: torch.Tensor
         T_rig_world_timestamps_us: torch.Tensor
 
-        # Timestamped trajectory of the per-camera rig frame in NCore world coordinates (free poses)
-        cameras_frame_T_rig_worlds: Optional[dict[str, torch.Tensor]] = None
-
         def __post_init__(self):
             assert self.T_rig_world_timestamps_us.ndim == 1, "T_rig_world_timestamps_us must be 1D"
             assert len(self.T_rig_worlds) == len(self.T_rig_world_timestamps_us)
