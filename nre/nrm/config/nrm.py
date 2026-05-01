@@ -52,31 +52,6 @@ class BaseNRMSystemConfig(BatchMediaLoggerConfigMixin, BaseConfigSchema):
     Note that this is a merge of NRE's system config, trainer config, and datamodule config for the ease of use.
     """
 
-    warmup_steps: int = Field(
-        default=0,
-        description=(
-            "A placeholder variable to be easily referenced in optimizer scheduler configurations. "
-            "Note that the actual warmup step is not automatically applied but rather used as a reference."
-        ),
-    )
-
-    optimizer: Optional[Any] = None
-    scheduler: Optional[Any] = Field(
-        default=None,
-        description="Examples: SequentialLR, ChainedScheduler",
-    )
-    enable_render_global_step: int = Field(
-        default=0,
-        description="Enable rendering (and hence losses) at this global step. <=0 means always enable.",
-    )
-
-    log_every_n_steps: int = Field(description="Number of steps between logging numerical training metrics.")
-
-    log_rig_trajectories_video: Literal["none", "context", "supervision"] = Field(
-        default="context",
-        description="Whether to log rig trajectories videos during validation. If 'context', will log the context rig trajectories. If 'supervision', will log the supervision rig trajectories.",
-    )
-    # Number of devices per node.
     device_count: int = Field(
         default=0,
         description="Number of devices per node. If set to 0, will be inferred automatically.",
@@ -86,44 +61,17 @@ class BaseNRMSystemConfig(BatchMediaLoggerConfigMixin, BaseConfigSchema):
         default=0,
         description="Number of nodes to use for distributed training. If set to 0, will be inferred automatically.",
     )
-    strategy: Literal["auto", "ddp_find_unused_parameters"] = Field(
-        default="auto",
-        description="Strategy to use for distributed training. If set to 'auto', will be inferred automatically.",
-    )
 
-    max_epochs: int = Field(description="Maximum number of epochs to train the model. ")
-    check_val_every_n_epoch: int
     precision: int | str = Field(
         description="https://lightning.ai/docs/pytorch/stable/common/trainer.html#precision",
     )
-    num_sanity_val_steps: int
-
-    train_num_workers: int = Field(default=0, description="Number of workers for the training dataloader per-node.")
-    train_batch_size: int
-    train_prefetch_factor: int = Field(default=2, description="Prefetch factor for the training dataloader.")
-
-    val_num_workers: int = Field(default=0, description="Number of workers for the validation dataloader per-node.")
-    val_batch_size: int
-    val_prefetch_factor: int = Field(default=2, description="Prefetch factor for the validation dataloader.")
-
-    test_num_workers: int = Field(default=0, description="Number of workers for the test dataloader per-node.")
-    test_batch_size: int
-    test_prefetch_factor: int = Field(default=2, description="Prefetch factor for the test dataloader.")
 
     predict_num_workers: int = Field(default=0, description="Number of workers for the predict dataloader per-node.")
     predict_batch_size: int = Field(default=1, description="Batch size for the predict dataloader. Typically set to 1.")
 
-    @property
-    def world_size(self) -> int:
-        world_size = self.device_count * self.num_nodes
-        assert world_size > 0, "Please ensure that device_count and num_nodes are set correctly."
-        return world_size
-
     def model_post_init(self, __context) -> None:
         super().model_post_init(__context)
 
-        # Use SLURM environment variables to set device_count and num_nodes if not set
-        # If SLURM is not detected, assuming single-node training
         slurm_environment = infer_slurm_environment()
 
         if self.device_count == 0:
@@ -132,11 +80,6 @@ class BaseNRMSystemConfig(BatchMediaLoggerConfigMixin, BaseConfigSchema):
         if self.num_nodes == 0:
             self.num_nodes = slurm_environment.num_nodes if slurm_environment else 1
 
-        if self.enable_render_global_step > 0 and self.device_count > 1:
-            cmd_logger.warning(
-                "enable_render_global_step > 0 and multi-GPU training. Forcing strategy to ddp_find_unused_parameters."
-            )
-            self.strategy = "ddp_find_unused_parameters"
 
 class GaussiansNRMSystemConfig(BaseNRMSystemConfig):
     """
