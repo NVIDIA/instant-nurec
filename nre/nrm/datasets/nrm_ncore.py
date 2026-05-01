@@ -183,7 +183,7 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
         logger.info(f"Loaded {len(self.ncore_json_paths)} samples from {self.ncore_json_list_path}")
 
         self.num_samples_per_sequence: int = config.frame_batch_sampler.n_samples_per_sequence
-        self.non_concrete_config = config
+        self.config = config
 
     def __len__(self) -> int:
         return len(self.ncore_json_paths) * self.num_samples_per_sequence
@@ -777,9 +777,7 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
         sequence_idx: int = batch_idx // self.num_samples_per_sequence
         sample_idx: int = batch_idx % self.num_samples_per_sequence
 
-        concrete_config = self.non_concrete_config
-
-        frame_batch_sampler = AdaptiveSequentialFrameBatchSampler(concrete_config.frame_batch_sampler)
+        frame_batch_sampler = AdaptiveSequentialFrameBatchSampler(self.config.frame_batch_sampler)
         assert sample_idx < frame_batch_sampler.n_samples_per_sequence, "Sample index out of bounds"
 
         context_id_lookup = {str(c): c for c in self.all_context_camera_ids}
@@ -787,11 +785,11 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
 
         context_camera_ids: list[NCoreNRMDataset.ExtendedCameraId] = [
             context_id_lookup[str(NCoreNRMDataset.ExtendedCameraId.from_config(camera_id))]
-            for camera_id in concrete_config.context_camera_ids
+            for camera_id in self.config.context_camera_ids
         ]
         supervision_camera_ids: list[NCoreNRMDataset.ExtendedCameraId] = [
             supervision_id_lookup[str(NCoreNRMDataset.ExtendedCameraId.from_config(camera_id))]
-            for camera_id in concrete_config.supervision_camera_ids
+            for camera_id in self.config.supervision_camera_ids
         ]
         assert set(map(str, context_camera_ids)) <= set(map(str, supervision_camera_ids)), (
             f"context_camera_ids must be a subset of supervision_camera_ids; "
@@ -851,7 +849,7 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
         )
 
         # Load context frames.
-        context_camera_subsampler = CameraSubsampler(concrete_config.camera_subsampler)
+        context_camera_subsampler = CameraSubsampler(self.config.camera_subsampler)
         context_rig_trajectory, context_camera_mapping, context_lidar_mapping = self._get_rig_trajectory(
             "context-",
             context_frame_batch,
