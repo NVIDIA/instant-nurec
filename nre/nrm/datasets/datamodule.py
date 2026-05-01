@@ -8,45 +8,28 @@
 # without an express license agreement from NVIDIA CORPORATION or
 # its affiliates is strictly prohibited.
 
-import logging
-
 from torch.utils.data import DataLoader
 
-from nre.nrm.config.dataset import NRMSplitsConfig
 from nre.nrm.config.nrm import NRMConfig
 from nre.nrm.datasets.nrm_ncore import NCoreNRMDataset
 from nre.utils.batch import NRMDataBatch
-from nre.utils.misc import unpack_optional
-
-
-log = logging.getLogger(__name__)
 
 
 class NRMDataModule:
-    nrm_config: NRMConfig
-    dataset_config: NRMSplitsConfig
-
-    predict_dataset: NCoreNRMDataset | None = None
-
     def __init__(self, nrm_config: NRMConfig) -> None:
         self.nrm_config = nrm_config
-        assert isinstance(nrm_config.dataset, NRMSplitsConfig)
-        self.dataset_config = nrm_config.dataset
+        self.predict_dataset: NCoreNRMDataset | None = None
 
     def predict_dataloader(self) -> DataLoader:
-        """Returns a predict dataloader."""
-        dataset_config = self.dataset_config.predict
+        dataset_config = self.nrm_config.dataset.predict
         assert dataset_config is not None, "dataset.predict has to be specified in the config to use the predict mode"
 
         self.predict_dataset = NCoreNRMDataset(dataset_config, split="predict")
-
         return DataLoader(
-            unpack_optional(self.predict_dataset),
+            self.predict_dataset,
             num_workers=self.nrm_config.system.predict_num_workers,
             persistent_workers=False,
             batch_size=self.nrm_config.system.predict_batch_size,
             pin_memory=True,
             collate_fn=NRMDataBatch.collate_fn,
         )
-
-
