@@ -12,9 +12,6 @@ from nre.nrm.datasets.datamodule import NRMDataModule
 from nre.nrm.datasets.nrm_base import (
     BaseNRMDataset,
     BaseNRMIndexableDataset,
-    BaseNRMIterableDataset,
-    DummyNRMDataset,
-    MixedNRMDataset,
 )
 from nre.nrm.datasets.nrm_ncore import NCoreNRMDataset
 from nre.nrm.datasets.registry import make, register
@@ -24,8 +21,5 @@ __all__ = [
     "NRMDataModule",
     "BaseNRMDataset",
     "BaseNRMIndexableDataset",
-    "BaseNRMIterableDataset",
     "NCoreNRMDataset",
-    "DummyNRMDataset",
-    "MixedNRMDataset",
 ]

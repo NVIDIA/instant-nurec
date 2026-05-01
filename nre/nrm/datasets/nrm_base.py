@@ -16,7 +16,7 @@ import os
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Iterator, Literal, Sized, Tuple
+from typing import Literal, Sized, Tuple
 
 import numpy as np
 import torch
@@ -28,13 +28,7 @@ import ncore.impl.common.transformations as ncore_transformations
 from ncore.sensors import CameraModel
 from nre.nrm.config.dataset import (
     CameraSubsamplerConfig,
-    DummyNRMDatasetConfig,
-    NRMMixedDatasetConfig,
-    SingleNRMDatasetConfig,
-    TestIndexNRMDatasetConfig,
 )
-from nre.nrm.datasets.registry import make as make_dataset
-from nre.nrm.datasets.registry import register as register_dataset
 from nre.utils.batch import NRMDataBatch, RectSubsampled
 
 
@@ -314,128 +308,3 @@ class BaseNRMIndexableDataset(BaseNRMDataset, Sized):
 
     @abstractmethod
     def getitem_allow_exceptions(self, batch_idx: int, rng: np.random.Generator) -> NRMDataBatch: ...
-
-
-class BaseNRMIterableDataset(torch.utils.data.IterableDataset[NRMDataBatch], BaseNRMDataset):
-    """
-    Base class for the NRM dataset where the dataset is iterable via __iter__.
-    """
-
-    @abstractmethod
-    def __iter__(self) -> Iterator[NRMDataBatch]:
-        """Returns an iterator over the dataset"""
-        ...
-
-
-@register_dataset("nrm-dummy")
-class DummyNRMDataset(BaseNRMIndexableDataset):
-    """
-    Dummy dataset as a placeholder for testing-only configs, or to override a mixture to empty.
-    """
-
-    def __init__(self, config: DummyNRMDatasetConfig, split: str = "train"):
-        pass
-
-    def __len__(self) -> int:
-        """Returns number of items in the dataset"""
-        return 0
-
-    def getitem_allow_exceptions(self, batch_idx: int, rng: np.random.Generator) -> NRMDataBatch:
-        raise NRMDataError("Should not sample from dummy dataset.")
-
-
-@register_dataset("nrm-test-index")
-class TestIndexNRMDataset(BaseNRMIndexableDataset):
-    """
-    TestIndexNRMDataset is a dataset class that returns a batch of data at the given index.
-    """
-
-    def __init__(self, config: TestIndexNRMDatasetConfig, split: str = "train"):
-        self.size = config.size
-
-    def __len__(self) -> int:
-        return self.size
-
-    def getitem_allow_exceptions(self, batch_idx: int, rng: np.random.Generator) -> NRMDataBatch:
-        return NRMDataBatch(
-            context=[],
-            meta=[{"index": batch_idx}],
-        )
-
-
-@register_dataset("nrm-mixed")
-class MixedNRMDataset(BaseNRMIndexableDataset):
-    """
-    MixedNRMDataset is a dataset class that combines multiple NRM datasets into a single dataset.
-    """
-
-    @dataclass
-    class SubDataset:
-        name: str
-        config: SingleNRMDatasetConfig
-        dataset: BaseNRMIndexableDataset
-        sample_ratio: float
-
-        full_length: int = field(init=False)
-        sampled_length: int = field(init=False)
-
-        def __post_init__(self):
-            self.full_length = len(self.dataset)
-            assert self.full_length > 0, f"Dataset {self.name} is empty."
-            self.sampled_length = int(self.full_length * self.sample_ratio)
-            logger.info(f"Dataset {self.name} has {self.full_length} samples, sampling {self.sampled_length} samples.")
-
-        def sample_at(self, idx: int, rng: np.random.Generator) -> NRMDataBatch:
-            """
-            Sample a batch from the dataset at the given index.
-            """
-            assert 0 <= idx < self.sampled_length, f"Sub-index {idx} out of range for dataset {self.name}."
-
-            # Always ensure all data is iterated over if over/full-sampling
-            if self.sampled_length >= self.full_length and idx < self.full_length:
-                return self.dataset[idx]
-
-            # Otherwise we just do random sampling
-            idx = rng.integers(self.full_length)
-            return self.dataset[idx]
-
-    def __init__(self, config: NRMMixedDatasetConfig, split: str = "train"):
-        self.datasets: list[MixedNRMDataset.SubDataset] = []
-        self.split = split
-
-        for sub_config_name, sub_config in config.mixture.items():
-            # Avoid creating empty datasets.
-            if sub_config.sample_ratio == 0:
-                continue
-            sub_dataset = make_dataset(sub_config.config.name, sub_config.config, split=split)
-            assert isinstance(sub_dataset, BaseNRMIndexableDataset), (
-                f"Dataset {sub_config_name} instantiated is not a BaseNRMIndexableDataset, found {sub_dataset.__class__.__name__} instead."
-            )
-            self.datasets.append(
-                MixedNRMDataset.SubDataset(
-                    name=sub_config_name,
-                    dataset=sub_dataset,
-                    config=sub_config.config,
-                    sample_ratio=sub_config.sample_ratio,
-                )
-            )
-
-    def __len__(self) -> int:
-        return sum(sub_dataset.sampled_length for sub_dataset in self.datasets)
-
-    def getitem_allow_exceptions(self, batch_idx: int, rng: np.random.Generator) -> NRMDataBatch:
-        for sub_dataset in self.datasets:
-            if batch_idx < sub_dataset.sampled_length:
-                return sub_dataset.sample_at(batch_idx, rng)
-            batch_idx -= sub_dataset.sampled_length
-        raise IndexError(f"Batch index {batch_idx} out of range for mixed dataset.")
-
-    def set_rng_epoch(self, rng_epoch):
-        super().set_rng_epoch(rng_epoch)
-        for sub_dataset in self.datasets:
-            sub_dataset.dataset.set_rng_epoch(rng_epoch)
-
-    def set_epoch(self, epoch: int) -> None:
-        super().set_epoch(epoch)
-        for sub_dataset in self.datasets:
-            sub_dataset.dataset.set_epoch(epoch)
