@@ -10,71 +10,37 @@
 
 import logging
 import os
-import sys
 
 import click
 import click_default_group
 import pytorch_lightning as pl
-import torch
 
 from lightning_utilities.core.rank_zero import rank_zero_info
-from pytorch_lightning.callbacks.callback import Callback
 
 import nre.nrm.datasets  # noqa: F401  (populates dataset registry)
 import nre.nrm.systems
 
-from nre.config.parse import assert_no_out_dir_override_in_resume, dump_config
+from nre.config.parse import dump_config
 from nre.config.version import get_version
 from nre.nrm.config.nrm import NRMConfig, parse_typed_nrm_config
-from nre.nrm.datasets.datamodule import NRMDataModule
 from nre.nrm.systems.base import BaseNRMSystem
-from nre.utils.callbacks import (
-    PreemptionInterruptException,
-    TQDMProgressBar,
-    make_logger,
-)
-from nre.utils.misc import is_env_true, rank_zero_only, unpack_optional
+from nre.utils.callbacks import TQDMProgressBar, make_logger
+from nre.utils.misc import rank_zero_only, unpack_optional
 
 
 def setup_environment_and_logger(config: NRMConfig) -> logging.Logger:
-    if (local_rank := os.environ.get("LOCAL_RANK")) is not None:
-        torch.cuda.set_device(int(local_rank))
-        logging.getLogger(__name__).info(
-            f"[info] Distributed training detected. LOCAL_RANK = {local_rank}, device = {torch.cuda.current_device()}"
-        )
-
-    if is_env_true("CUDA_SYNC_DEBUG", False):
-        torch.cuda.set_sync_debug_mode("warn")
-        logging.getLogger(__name__).info("CUDA synchronization debug mode enabled (CUDA_SYNC_DEBUG=1)")
-
     logger = logging.getLogger(__name__)
     if config.verbose:
         logger.setLevel(logging.DEBUG)
-
     pl.seed_everything(config.seed, workers=True)
-
     return logger
 
 
-def make_callbacks(config: NRMConfig, datamodule: NRMDataModule) -> list[Callback]:
-    # Predict-only standalone: only the progress bar matters at this stage.
-    # Training callbacks (ModelCheckpoint / LearningRateMonitor / TimingLogger /
-    # ResumableDataModuleCallback / SLURM-timeout / preempt-on-interrupt /
-    # ScopedTimer / MemoryProfiling / ForceValidate / lightning-viewer) were
-    # removed in Phase 1 step 4.3.
-    del config, datamodule
-    return [TQDMProgressBar(refresh_rate=1)]
-
-
-def launch_trainer_loop(config: NRMConfig, system: BaseNRMSystem, logger: logging.Logger) -> None:
-    pl_logger = make_logger(config.logger)
-
-    callbacks = make_callbacks(config, system.datamodule)
-
+def launch_trainer_loop(config: NRMConfig, system: BaseNRMSystem) -> None:
     trainer = pl.Trainer(
         devices=unpack_optional(config.system.device_count),
-        callbacks=callbacks,
-        logger=pl_logger,
+        callbacks=[TQDMProgressBar(refresh_rate=1)],
+        logger=make_logger(config.logger),
         precision=config.system.precision,
         enable_progress_bar=True,
         num_nodes=config.system.num_nodes,
@@ -95,7 +61,6 @@ def launch_trainer_loop(config: NRMConfig, system: BaseNRMSystem, logger: loggin
 
     if "predict" not in config.mode:
         raise ValueError(f"Only predict mode is supported in this standalone; got mode={config.mode}.")
-    # Set return_predictions to False since we return primitives which is memory-consuming.
     trainer.predict(system, datamodule=system.datamodule, ckpt_path=ckpt_path, return_predictions=False)
 
 
@@ -110,28 +75,17 @@ def launch_trainer_loop(config: NRMConfig, system: BaseNRMSystem, logger: loggin
 def main(config_name: str, hydra_args: list[str]) -> None:
     """Main entry point for the standalone Kelvin predict pipeline."""
 
-    assert_no_out_dir_override_in_resume(hydra_args)
     config = parse_typed_nrm_config(config_name=config_name, hydra_args=hydra_args)
 
-    # Save the parsed config at early stage
     rank_zero_only(os.makedirs)(config.config_dir, exist_ok=True)
     dump_config(os.path.join(config.config_dir, "parsed.yaml"), config)
 
-    logger = setup_environment_and_logger(config)
+    setup_environment_and_logger(config)
     rank_zero_info("NRM RUN 🆔: %s", config.run_id)
 
     checkpoint = None if (not config.resume_weights_only or not config.resume) else config.resume
-    system = nre.nrm.systems.make(
-        config.system.name,
-        config,
-        load_from_checkpoint=checkpoint,
-    )
-
-    try:
-        launch_trainer_loop(config, system, logger)
-    except PreemptionInterruptException as e:
-        rank_zero_info(f"Preemption detected: {e}. Exiting with code 1.")
-        sys.exit(1)
+    system = nre.nrm.systems.make(config.system.name, config, load_from_checkpoint=checkpoint)
+    launch_trainer_loop(config, system)
 
 
 @click.group(cls=click_default_group.DefaultGroup, default="main", default_if_no_args=True)
