@@ -848,20 +848,11 @@ class NCoreNRMDataset(BaseNRMIndexableDataset):
 
                 try:
                     if self.aux_data_params.enabled:
-                        signal_override_paths: dict[str, UPath] = {}
-                        if isinstance(self.aux_data_params.depth, str):
-                            depth_override_path = parse_universal_path(
-                                self.aux_data_params.depth.replace("{{clip_id}}", sequence_loader.sequence_id),
-                                s3_block_size_mb=self.non_concrete_config.s3_block_size_mb,
-                                s3_cache_type=self.non_concrete_config.s3_cache_type,
-                            )
-                            if depth_override_path.exists():
-                                signal_override_paths["depth"] = depth_override_path
                         aux_loaders[camera_id.loader_key] = ncore_utils.AuxShardDataLoader(
                             sequence_id=sequence_loader.sequence_id,
                             dataset_paths=current_dataset_paths,
                             open_consolidated=self.open_consolidated,
-                            signal_override_paths=signal_override_paths,
+                            signal_override_paths={},
                         )
                 except ValueError as e:
                     raise NRMDataError(f"Failed to load auxiliary data for sequence {ncore_json_path.stem}.") from e

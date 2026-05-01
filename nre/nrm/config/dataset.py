@@ -27,14 +27,7 @@ class NCoreNRMAuxDataConfig(BaseConfigSchema):
     enabled: bool
     enabled_context: bool
     semantic_segmentation: bool
-    depth: bool | str = Field(
-        default=False,
-        description=(
-            "True to load depth from the ncore aux data, False to disable, "
-            "or a path to load depth from another aux file store. "
-            "Supported template variable: {{clip_id}}."
-        ),
-    )
+    depth: bool = Field(default=False, description="Load depth from the ncore aux data.")
     egomask: bool
 
 
