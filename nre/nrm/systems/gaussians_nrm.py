@@ -15,36 +15,23 @@ import logging
 import os
 
 from pathlib import Path
-from typing import Literal, cast
 
-import imageio
 import numpy as np
 import torch
 
-from einops import rearrange
-from torchmetrics.aggregation import MeanMetric
-from torchmetrics.image import PeakSignalNoiseRatio
 from tqdm import tqdm
 
-import ncore.impl.common.transformations as ncore_transformations
-
-from libs.losses.orchestration.config import LossAggregatorBatchReturn, LossAggregatorReturn
 from nre.datasets.tracks import CuboidTracks
 from nre.nrm.config.nrm import NRMConfig
 from nre.nrm.models.base import BaseNRMSupervisionPack
-from nre.nrm.models.kelvin_backbone.base import KelvinNRMSupervisionPack
 from nre.nrm.models.kelvin_model import KelvinNRM
 from nre.nrm.predict.export_ply import export_ply
 from nre.nrm.predict.primitive_merge import make as make_primitive_merge
 from nre.nrm.primitives.base import BaseNRMPrimitive
 from nre.nrm.systems.base import BaseNRMSystem
-from nre.utils.batch import DataAndRenderingBatch, NRMDataBatch
-from nre.utils.geometry import se3_matrix_to_tquat
-from nre.utils.misc import unpack_optional
+from nre.utils.batch import NRMDataBatch
 from nre.utils.types import (
     GaussiansCompositeReturn,
-    GaussiansRenderReturn,
-    RayFlags,
     RigTrajectories,
 )
 
