@@ -206,11 +206,6 @@ class RigTrajectories:
             BBox3 | None
         ]  # if available, the 3d bbox of the sensor rig (vehicle / robot) relative to the rig frame
 
-        # maps of *unique* sensor ids to linear start frame indices (across all rig trajectories and cameras)
-        # None if not available (backward compatibility with older artifacts)
-        cameras_linear_start_frame_indices: Optional[dict[str, int]] = None
-        lidars_linear_start_frame_indices: Optional[dict[str, int]] = None
-
         cameras_frame_timestamps_us: dict[str, torch.Tensor]
         lidars_frame_timestamps_us: dict[str, torch.Tensor]
 
@@ -224,14 +219,10 @@ class RigTrajectories:
         def __post_init__(self):
             assert self.T_rig_world_timestamps_us.ndim == 1, "T_rig_world_timestamps_us must be 1D"
             assert len(self.T_rig_worlds) == len(self.T_rig_world_timestamps_us)
-            if self.cameras_linear_start_frame_indices is not None:
-                assert self.cameras_linear_start_frame_indices.keys() == self.cameras_frame_timestamps_us.keys()
             assert all(
                 camera_frame_timestamps_us.shape[1:] == (2,)
                 for camera_frame_timestamps_us in self.cameras_frame_timestamps_us.values()
             )
-            if self.lidars_linear_start_frame_indices is not None:
-                assert self.lidars_linear_start_frame_indices.keys() == self.lidars_frame_timestamps_us.keys()
             assert all(
                 lidar_frame_timestamps_us.shape[1:] == (2,)
                 for lidar_frame_timestamps_us in self.lidars_frame_timestamps_us.values()
