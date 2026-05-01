@@ -12,7 +12,7 @@ import torch
 
 
 from nre.nrm.config.models import PrimitiveExportPreprocessConfig
-from nre.nrm.primitives.base import BaseGaussiansNRMPrimitive
+from nre.nrm.primitives.base import BaseNRMPrimitive
 from nre.nrm.utils.cubemap import rotate_sky_cubemap
 from nre.utils.batch import DataAndRenderingBatch
 from nre.utils.geometry import quat_mult_xyzw, so3_matrix_to_quat
@@ -243,7 +243,7 @@ class KelvinDynamicLayer(KelvinLayer):
         )
 
 
-class KelvinNRMPrimitive(BaseGaussiansNRMPrimitive):
+class KelvinNRMPrimitive(BaseNRMPrimitive):
     """
     Kelvin NRM primitive containing static and dynamic layers, with the following additional attributes:
         - sky_cubemap:         The sky cubemap for rendering the sky                            [6, height, width, 3]

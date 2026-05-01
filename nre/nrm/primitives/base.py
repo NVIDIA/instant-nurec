@@ -50,11 +50,3 @@ class BaseNRMPrimitive(NRenderableModel):
 
 
 NRMPrimitiveType = TypeVar("NRMPrimitiveType", bound=BaseNRMPrimitive)
-
-
-class BaseGaussiansNRMPrimitive(BaseNRMPrimitive):
-    """Marker base class for Gaussian-primitive NRMs. The NRE-side renderer
-    plumbing (gaussians_renderer, checkpointing, shared_gaussian_parameters)
-    was removed in Phase 1 step 4.3 -- predict never invokes
-    `primitive.forward()` / `render()`, so the renderer was always None and
-    the checkpointing/shared-param flags went unread."""
