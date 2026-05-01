@@ -30,17 +30,6 @@ class PrimitivePLYExportConfig(BaseConfigSchema):
         description="The inv activation function to apply to the scales before exporting.",
     )
     color_mode: Literal["rgb", "sh"] = Field(default="sh", description="The color representation to export.")
-    apply_affine_mtx: bool = Field(
-        default=False,
-        description="Whether to apply the affine matrix to the rgb values before exporting. "
-        "Only works when exporting a single camera.",
-    )
-    falloff_sigma_timestamp_us: int | None = Field(
-        default=None,
-        description="The relative timestamp to apply the falloff sigma, used to filter the gaussians before export. "
-        "A value of 0 will use the minimum timestamp, -1 will use the maximum, and None applies no filtering. "
-        "Other int values will be added to the minimum timestamp (in us).",
-    )
     minimum_density: float | None = Field(
         ge=0.0,
         default=0.0,
