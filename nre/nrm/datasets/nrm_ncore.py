@@ -805,12 +805,11 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
                 )
 
                 try:
-                    if self.aux_data_params.enabled:
-                        aux_loaders[camera_id.loader_key] = ncore_utils.AuxShardDataLoader(
-                            sequence_id=sequence_loader.sequence_id,
-                            dataset_paths=current_dataset_paths,
-                            open_consolidated=self.open_consolidated,
-                        )
+                    aux_loaders[camera_id.loader_key] = ncore_utils.AuxShardDataLoader(
+                        sequence_id=sequence_loader.sequence_id,
+                        dataset_paths=current_dataset_paths,
+                        open_consolidated=self.open_consolidated,
+                    )
                 except ValueError as e:
                     raise NRMDataError(f"Failed to load auxiliary data for sequence {ncore_json_path.stem}.") from e
 
@@ -941,7 +940,7 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
                 camera_sensors,
                 context_lidar_mapping,
                 lidar_sensors,
-                aux_loaders if self.aux_data_params.enabled_context else {},
+                aux_loaders,
                 context_camera_subsampler,
             )
         )

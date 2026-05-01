@@ -23,8 +23,6 @@ dataset:
     camera_max_fov_deg: 190.0
     n_camera_mask_dilation_iterations: 10
     aux_data:
-      enabled: true
-      enabled_context: true
       semantic_segmentation: true
       depth: true
       egomask: true

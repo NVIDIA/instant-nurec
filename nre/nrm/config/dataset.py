@@ -21,8 +21,6 @@ logger = logging.getLogger(__name__)
 
 
 class NCoreNRMAuxDataConfig(BaseConfigSchema):
-    enabled: bool
-    enabled_context: bool
     semantic_segmentation: bool
     depth: bool = Field(default=False, description="Load depth from the ncore aux data.")
     egomask: bool
