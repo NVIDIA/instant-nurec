@@ -16,7 +16,6 @@ from typing import Self
 import torch
 import torch.nn as nn
 
-from einops import rearrange
 from torch import Tensor
 
 from nre.nrm.config.models import GaussiansActivationConfig
@@ -121,16 +120,6 @@ class GaussianParams:
             activated=self.activated,
         )
 
-    def rearrange(self, pattern: str, **axes_lengths: int) -> Self:
-        return type(self)(
-            rgb=rearrange(self.rgb, pattern, **axes_lengths),
-            scale=rearrange(self.scale, pattern, **axes_lengths),
-            rotation=rearrange(self.rotation, pattern, **axes_lengths),
-            opacity=rearrange(self.opacity, pattern, **axes_lengths),
-            xyz=rearrange(self.xyz, pattern, **axes_lengths),
-            activated=self.activated,
-        )
-
     def flatten(self) -> Self:
         return type(self)(
             rgb=self.rgb.reshape(-1, 3),
@@ -147,14 +136,6 @@ class GaussianParams:
         assert self.rotation.shape[:-1] == prefix_shape, "Rotation shape must match prefix shape"
         assert self.opacity.shape[:-1] == prefix_shape, "Opacity shape must match prefix shape"
         assert self.xyz.shape[:-1] == prefix_shape, "XYZ shape must match prefix shape"
-
-    @property
-    def prefix_shape(self) -> tuple[int, ...]:
-        return self.rgb.shape[:-1]
-
-    @property
-    def device(self) -> torch.device:
-        return self.rgb.device
 
 
 class GaussianActivations(nn.Module):
