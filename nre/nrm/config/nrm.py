@@ -88,12 +88,6 @@ class GaussiansNRMSystemConfig(BaseNRMSystemConfig):
     name: Literal["base-nrm-system"]
 
 
-class _CheckpointConfig(BaseConfigSchema):
-    save_top_k: int
-    monitor: str | None
-    mode: Literal["min", "max"]
-
-
 class NRMConfig(BaseConfigSchema):
     """
     Top-level configuration for NRM training/validation/testing.
@@ -116,8 +110,6 @@ class NRMConfig(BaseConfigSchema):
 
     out_dir: str
     logger: LoggerConfigType = Field(discriminator="name")
-
-    checkpoint: _CheckpointConfig
 
     system: GaussiansNRMSystemConfig = Field(discriminator="name")
     dataset: NRMSplitsConfig = Field(discriminator="name")
