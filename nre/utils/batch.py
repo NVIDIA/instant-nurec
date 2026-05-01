@@ -35,7 +35,6 @@ from ncore.sensors import (
 )
 from nre.utils.geometry import tquat_to_se3_matrix
 from nre.utils.misc import assert_same_type, collate_fn, to_torch, unpack_optional
-from nre.utils.prober import get_global_prober
 from nre.utils.profiling import ScopedTimer
 from nre.utils.sensors import (
     RectSubsampledSensor,
@@ -1261,7 +1260,6 @@ class CameraFreePoseViewGeometry(torch.nn.Module):
         data_batch: DataBatch.Camera,
         cache_sensor_params: bool = False,
         skip_calib: bool = False,
-        global_step_for_prober: Optional[int] = None,
         enable_torch_compile: bool = False,
     ) -> RenderingData:
         """
@@ -1277,7 +1275,6 @@ class CameraFreePoseViewGeometry(torch.nn.Module):
                 data_batch,
                 cache_sensor_params=cache_sensor_params,
                 skip_calib=skip_calib,
-                global_step_for_prober=global_step_for_prober,
                 enable_torch_compile=enable_torch_compile,
             )
         else:
@@ -1288,7 +1285,6 @@ class CameraFreePoseViewGeometry(torch.nn.Module):
                         data_batch[bidx],
                         cache_sensor_params=cache_sensor_params,
                         skip_calib=skip_calib,
-                        global_step_for_prober=global_step_for_prober,
                         enable_torch_compile=enable_torch_compile,
                     )
                 )
@@ -1299,7 +1295,6 @@ class CameraFreePoseViewGeometry(torch.nn.Module):
         data_batch: DataBatch.Camera,
         cache_sensor_params: bool = False,
         skip_calib: bool = False,
-        global_step_for_prober: Optional[int] = None,
         enable_torch_compile: bool = False,
     ) -> RenderingData:
         """
@@ -1387,19 +1382,6 @@ class CameraFreePoseViewGeometry(torch.nn.Module):
                 end_timestamp_us=int(timestamps_cpu[1].item()),
                 return_timestamps=True,
             )
-
-        if global_step_for_prober is not None:
-            if (
-                prober_result := get_global_prober()(
-                    global_step_for_prober,
-                    "sensor_to_world_rays_shutter_pose",
-                    T_sensor_world_startend=T_sensor_world_startend,
-                    timestamps_startend_us=timestamps_startend_us,
-                    world_rays_grad=world_rays,
-                )
-            ) is not None:
-                # Connect the gradient probing to the rest of the computation graph
-                (world_rays,) = prober_result
 
         rays = unpack_optional(world_rays)  # camera rays are in nre space
         rays = rays.reshape(sensorlib_parameters.resolution[1], sensorlib_parameters.resolution[0], 6)

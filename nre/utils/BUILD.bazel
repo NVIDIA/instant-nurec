@@ -33,18 +33,6 @@ py_library(
 )
 
 py_library(
-    name = "pylib_prober",
-    srcs = ["prober.py"],
-    deps = [
-        "//nre/config:pylib",
-        "@rules_python//python/runfiles",
-        pip_requirement("torch"),
-        pip_requirement("hydra-core"),
-        pip_requirement("omegaconf"),
-    ],
-)
-
-py_library(
     name = "pylib_types",
     srcs = [
         "batch.py",
@@ -59,7 +47,7 @@ py_library(
         ":pylib_fields",
         ":pylib_geometry",
         ":pylib_misc",
-        ":pylib_prober",
+        ":pylib_profiling",
         ":pylib_torch_compile",
         "//libs/geometry/kernels:pylib",
         "//libs/sensors:pylib_slang",
@@ -67,12 +55,10 @@ py_library(
         "//nre/utils/sensors:pylib_ncore_sensors_converters",
         pip_requirement("dataclasses-json"),
         pip_requirement("numpy"),
-        pip_requirement("opencv-python"),
         pip_requirement("nvidia-ncore"),
         pip_requirement("torch"),
         pip_requirement("usd-core"),
         pip_requirement("lietorch"),
-        pip_requirement("omegaconf"),
     ],
 )
 
@@ -185,7 +171,6 @@ py_library(
         pip_requirement("flow_vis"),
         pip_requirement("scipy"),
         pip_requirement("lietorch"),
-        pip_requirement("hydra-core"),
         pip_requirement("shortuuid"),
         pip_requirement("tensorboardx"),
         pip_requirement("pydantic"),
