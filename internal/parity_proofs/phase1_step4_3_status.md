@@ -20,11 +20,21 @@ bit-identical (every property max-diff = 0.0 vs `baselines/original_baseline`).
 | `38e84c9` | Drop `libs/{nrend,packed_ops,pytorch3d_knn,gaussian_mcmc,ray_utils}` keeps + visualdebugger stub (then restored 4 of 5 libs that the predict path actually imports) |
 | `4ed3ad5` | Drop `internal/`, `nre/internal/`, image-build infra (~16K LOC) |
 | `bde8f01` | Drop `apps/`, root `run.py`/`setup.py`, image rules from root BUILD.bazel |
+| `a233ca8` | Drop `libs/pytorch3d_knn` (zero-ref CUDA kNN subtree; doc on line below was stale) |
+| `191d864` | Drop dead `CuboidTracks.Ops.{clone,concatenate}` |
+| `5bee2d6` | Drop unused `Pose` import + 3 unused locals (ruff F401/F841) |
+| `4992e5a` | Drop `unsqueeze_if_zero_dim` arg + dead `SE3PoseToInverseMatrixFunction` |
+| `380ecde` | Drop dead helpers: `from_static_pose`, `_tokengs_init_weights`, `get_timestamps`, `U/KT/VT` TypeVars |
+| `b2486c6` | Drop unused predict-step idx params (Lightning-era signature carry-over) |
+| `9fbd4a4` | Drop always-true `resume_weights_only` field |
+| `9e63a88` | Restore `Hashable` import (fix for 380ecde overshoot — merge mode was silently broken) |
+| `36ec9e7` | Drop unused method args + loop control vars (ruff ARG/B007 sweep) |
+| `4141072` | Drop write-only `downloaded_size` + write-only `*_init_values` attrs |
 
 ## Rough scope
 
-- **.py file count**: 1801 → 427 (-76%)
-- **.py LOC**: ~440K → ~149K (-66%)
+- **.py file count**: 1801 → 427 → 426 (-76%; pytorch3d_knn deletion)
+- **.py LOC**: ~440K → ~149K → 13806 (-97% from initial NRE; vast majority from earlier 4.3 commits)
 
 ## What still needs Phase 1
 
@@ -71,10 +81,9 @@ Both must exit 0 with `tests/tolerance.json` (every property = 0.0).
 
 ## Notes for next agent
 
-- The repo no longer has `nre/{benchmark,grpc,metrics,run,systems,render,viewer,visualdebugger}` (visualdebugger is a 30-LOC stub) or any of `internal/`, `nre/internal/`, `apps/`, `libs/{ray_utils,nerfacc,optixtracer}`.
-- `libs/{nrend, packed_ops, pytorch3d_knn, gaussian_mcmc}` are kept because the predict path imports them transitively.
-- `libs/losses/models/primitive_losses.py` has stubbed Celsius classes (a pre-4.5 hack).
-- `nre/utils/callbacks.py` has stubbed BaseSystem / BaseSystemSO classes (the real nre/systems was deleted).
-- `nre/utils/types.py` has an inline get_visualdebugger() stub.
-- `nre/visualdebugger/` is a tiny shim (`__init__.py` returns a no-op debugger).
-- All BUILD.bazel files under nre/, libs/, configs/, bazel/version/ are now free of //internal, //apps, //nre/{benchmark,grpc,...} references.
+- The repo no longer has `nre/{benchmark,grpc,metrics,run,systems,render,viewer,visualdebugger,callbacks}`, `internal/` (besides this doc), `nre/internal/`, `apps/`, `libs/{ray_utils,nerfacc,optixtracer,gaussian_mcmc,nrend,pytorch3d_knn}`, `libs/losses/`.
+- `libs/{packed_ops}` is kept because tracks.py uses it (`linstep_interleave`).
+- `libs/{geometry,kernel_utils,sensors,slang_utils,vren}` are kept because the predict path imports them transitively.
+- All BUILD.bazel files under nre/, libs/, configs/, bazel/version/ are free of //internal, //apps, //nre/{benchmark,grpc,...} references.
+- Vulture / ruff strip is converged at the high-confidence level. Remaining flags are signature-contract params (pydantic `__context`, `__getattr__`, mesh.vertex_data.colors which is third-party), pre-load `import torch` comments in libs/* `__init__`s, and similar.
+- The bigger remaining wins are not strip-shaped: Phase 1.5 `torch.save(model)` to delete factory + config-only branches, and Phase 2.7 `nvdiffrast.dr.texture` → `grid_sample` in `cubemap.rotate_sky_cubemap`.
