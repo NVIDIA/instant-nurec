@@ -492,10 +492,6 @@ class DataBatch:
                 labels=self.labels[item],
             )
 
-    idx: int | None = None
-    worker_id: List[int] | None = None
-    sequence_id: List[str] | None = None
-
     camera: Camera | None = None
     lidar: Lidar | None = None
 
@@ -505,18 +501,6 @@ class DataBatch:
         seq: List[DataBatch],
         device: torch.device = torch.device("cpu"),
     ) -> DataBatch:
-        assert all(item.idx == seq[0].idx for item in seq), "All items must have the same idx"
-
-        if any(item.worker_id is None for item in seq):
-            worker_id = None
-        else:
-            worker_id = [worker_id for item in seq for worker_id in unpack_optional(item.worker_id)]
-
-        if any(item.sequence_id is None for item in seq):
-            sequence_id = None
-        else:
-            sequence_id = [sequence_id for item in seq for sequence_id in unpack_optional(item.sequence_id)]
-
         if any(item.camera is None for item in seq):
             camera = None
         else:
@@ -527,19 +511,10 @@ class DataBatch:
         else:
             lidar = DataBatch.Lidar.collate_fn([unpack_optional(item.lidar) for item in seq], device)
 
-        return cls(
-            idx=seq[0].idx,
-            worker_id=worker_id,
-            sequence_id=sequence_id,
-            camera=camera,
-            lidar=lidar,
-        )
+        return cls(camera=camera, lidar=lidar)
 
     def to(self, *args, **kwargs) -> Self:
         return self.__class__(
-            idx=self.idx,
-            worker_id=self.worker_id,
-            sequence_id=self.sequence_id,
             camera=self.camera.to(*args, **kwargs) if self.camera is not None else None,
             lidar=self.lidar.to(*args, **kwargs) if self.lidar is not None else None,
         )
