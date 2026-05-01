@@ -90,54 +90,6 @@ class SE3PoseFromMatrixFunction(torch.autograd.Function):
         return grad_matrix
 
 
-class SE3PoseToInverseMatrixFunction(torch.autograd.Function):
-    """Differentiable SE3 pose to inverse 4x4 matrix conversion."""
-
-    @staticmethod
-    def forward(ctx, translation: torch.Tensor, rotation: torch.Tensor, wxyz_format: bool = False) -> torch.Tensor:
-        translation = translation.contiguous()
-        rotation = rotation.contiguous()
-        N = translation.shape[0]
-        result = torch.empty((N, 16), device=translation.device, dtype=translation.dtype)
-
-        blocks = _calculate_grid_size(N)
-        if blocks > 0:
-            pose_kernels_slang.se3pose_to_inverse_matrix_kernel(
-                (_THREADS_PER_BLOCK, 1, 1),
-                (blocks, 1, 1),
-                (translation, (translation,)),
-                (rotation, (rotation,)),
-                (result, (result,)),
-                wxyz_format,
-            )
-
-        ctx.save_for_backward(translation, rotation, result)
-        ctx.N = N
-        ctx.wxyz_format = wxyz_format
-        return result.reshape(N, 4, 4)
-
-    @staticmethod
-    def backward(ctx, *grad_outputs: Any):
-        grad_result = grad_outputs[0]
-        translation, rotation, result = ctx.saved_tensors
-        grad_result = grad_result.contiguous().reshape(ctx.N, 16)
-        grad_translation = torch.empty_like(translation)
-        grad_rotation = torch.empty_like(rotation)
-
-        blocks = _calculate_grid_size(ctx.N)
-        if blocks > 0:
-            pose_kernels_slang.se3pose_to_inverse_matrix_kernel_bwd_diff(
-                (_THREADS_PER_BLOCK, 1, 1),
-                (blocks, 1, 1),
-                (translation, (grad_translation,)),
-                (rotation, (grad_rotation,)),
-                (result, (grad_result,)),
-                ctx.wxyz_format,
-            )
-
-        return grad_translation, grad_rotation, None
-
-
 def se3pose_from_matrix(matrix: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     """Convert 4x4 transformation matrices to SE3 poses (batched, GPU accelerated, differentiable).
 
@@ -152,18 +104,5 @@ def se3pose_from_matrix(matrix: torch.Tensor) -> tuple[torch.Tensor, torch.Tenso
         # turn matrix from (N, 4, 4) to (N, 16)
         matrix = matrix.reshape(matrix.shape[0], -1)
     return SE3PoseFromMatrixFunction.apply(matrix)
-
-
-def se3pose_to_inverse_matrix(
-    translation: torch.Tensor, rotation: torch.Tensor, wxyz_format: bool = False
-) -> torch.Tensor:
-    """Convert SE3 poses to inverse 4x4 transformation matrices (batched, GPU accelerated, differentiable).
-
-    Args:
-        translation: (N, 3) translation vectors
-        rotation: (N, 4) quaternions in xyzw format
-        wxyz_format: If true, input is (w,x,y,z) and will be converted to (x,y,z,w)
-    """
-    return SE3PoseToInverseMatrixFunction.apply(translation, rotation, wxyz_format)
 
 

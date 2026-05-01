@@ -918,7 +918,6 @@ class NRMDataBatch:
         cls,
         seq: Sequence[NRMDataBatch],
         device: torch.device = torch.device("cpu"),
-        unsqueeze_if_zero_dim: bool = True,
     ) -> Self:
         T = TypeVar("T")
 
