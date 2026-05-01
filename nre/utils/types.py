@@ -54,10 +54,6 @@ class HalfClosedInterval:
 
         return HalfClosedInterval(max(self.start, other.start), min(self.end, other.end))
 
-    @property
-    def length(self) -> int:
-        return self.end - self.start
-
 
 
 
@@ -321,18 +317,6 @@ class TracksData:
             tracks_flags=self.tracks_flags.to(device),
         )
 
-    @classmethod
-    def empty(cls, device: torch.device) -> Self:
-        """A factory method to create an empty TracksData instance (length zero)."""
-        return cls(
-            tracks_id=[],
-            max_track_n_poses=0,
-            tracks_packinfo=torch.tensor([], dtype=torch.int32, device=device).reshape(0, 2),
-            tracks_poses=lt.SE3.Identity(0, dtype=torch.float32, device=device),
-            tracks_timestamps_us=torch.tensor([], dtype=torch.int64, device=device),
-            tracks_flags=torch.tensor([], dtype=torch.int32, device=device),
-        )
-
 
 @dataclass(kw_only=True, slots=True)
 class CuboidTracksData:
@@ -361,13 +345,6 @@ class CuboidTracksData:
             cuboids_dims=self.cuboids_dims.to(device),
         )
 
-    @classmethod
-    def empty(cls, device: torch.device) -> Self:
-        """A factory method to create an empty CuboidTracksData instance (length zero)."""
-        return cls(
-            cuboids_dims=torch.tensor([], dtype=torch.float32, device=device).reshape(0, 3),
-        )
-
 
 @dataclass(kw_only=True, slots=True)
 class CuboidTracksDataPack:
@@ -393,13 +370,5 @@ class CuboidTracksDataPack:
             raise ValueError(
                 f"Number of tracks ({self.tracks_data.n_tracks}) does not match number of cuboid tracks ({self.cuboidtracks_data.n_tracks})"
             )
-
-    @classmethod
-    def empty(cls, device: torch.device) -> Self:
-        """A factory method to create an empty CuboidTracksDataPack instance (length zero)."""
-        return cls(
-            tracks_data=TracksData.empty(device),
-            cuboidtracks_data=CuboidTracksData.empty(device),
-        )
 
 
