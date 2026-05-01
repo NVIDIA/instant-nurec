@@ -91,56 +91,8 @@ def _get_rank() -> int:
         return local_rank
 
 
-def _get_local_rank() -> int:
-    return max(int(os.environ.get("LOCAL_RANK", "0")), int(os.environ.get("SLURM_LOCALID", "0")))
-
-
 # Reset global rank correctly
 rank_zero_only.rank = _get_rank()
-
-
-def set_default_device(local_rank: int | None = None) -> None:
-    """Set the default CUDA device for the current process in distributed training.
-
-    In distributed training, each process typically manages one GPU. The local_rank
-    identifies which GPU this process should use within the current node/machine.
-
-    Args:
-        local_rank: The local GPU index within the current node to use as default.
-            If None, automatically determines the local rank from environment variables
-            (LOCAL_RANK, RANK, SLURM_PROCID, JSM_NAMESPACE_RANK, etc.) or the current
-            distributed context if available.
-
-    Returns:
-        None
-    """
-    torch.cuda.set_device(_get_local_rank() if local_rank is None else local_rank)
-
-
-def assert_default_device_on_local_rank(local_rank: int | None = None) -> None:
-    """Verify that PyTorch's default CUDA device matches the expected local rank.
-
-    This is a safety check to ensure the process is using the correct GPU in distributed
-    training. Helps catch configuration errors where the wrong GPU is being used.
-
-    In distributed setups, it's critical that each process uses its assigned GPU to
-    avoid memory conflicts and ensure proper data placement.
-
-    Args:
-        local_rank: The expected local GPU index within the current node.
-            If None, automatically determines the expected local rank from environment
-            variables or distributed context if available.
-
-    Returns:
-        None
-
-    Raises:
-        AssertionError: If the current default CUDA device doesn't match the expected local_rank.
-    """
-    local_rank = _get_local_rank() if local_rank is None else local_rank
-    assert local_rank == torch.cuda.current_device(), (
-        f"Default CUDA device {torch.cuda.current_device()} does not match local rank {local_rank}"
-    )
 
 
 def get_pack_info_from_n(n_per_pack: torch.Tensor) -> torch.Tensor:

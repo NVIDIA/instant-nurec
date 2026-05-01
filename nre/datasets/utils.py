@@ -47,8 +47,6 @@ from nre.utils.geometry import (
     se3_matrix_to_tquat,
 )
 from nre.utils.misc import (
-    assert_default_device_on_local_rank,
-    set_default_device,
     to_torch,
     unpack_optional,
 )
