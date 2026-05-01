@@ -13,45 +13,18 @@ from __future__ import annotations
 import logging
 
 from pathlib import Path
-from typing import List, Optional, TypeAlias, TypeVar
+from typing import TypeVar
 
 import numpy as np
-import torch
-
-
 import point_cloud_utils as pcu
-
-from torch import nn
-
-from nre.utils.geometry import quat_to_so3_matrix, so3_matrix_to_quat
+import torch
 
 
 log = logging.getLogger(__name__)
 
-## NOTE: SPH code from gaussian-splatting, from plenoctree, from ???
+# SH degree-0 coefficient -- the only SH constant the predict-only standalone
+# uses (RGB <-> SH band-0 round-trip in export_ply).
 C0 = 0.28209479177387814
-C1 = 0.4886025119029199
-C2 = [1.0925484305920792, -1.0925484305920792, 0.31539156525252005, -1.0925484305920792, 0.5462742152960396]
-C3 = [
-    -0.5900435899266435,
-    2.890611442640554,
-    -0.4570457994644658,
-    0.3731763325901154,
-    -0.4570457994644658,
-    1.445305721320277,
-    -0.5900435899266435,
-]
-C4 = [
-    2.5033429417967046,
-    -1.7701307697799304,
-    0.9461746957575601,
-    -0.6690465435572892,
-    0.10578554691520431,
-    -0.6690465435572892,
-    0.47308734787878004,
-    -1.7701307697799304,
-    0.6258357354491761,
-]
 
 T = TypeVar("T", np.ndarray, torch.Tensor)
 
@@ -72,7 +45,6 @@ def write_ply_3dgs(
     scales: torch.Tensor,
     densities: torch.Tensor,
     features_albedo: torch.Tensor,
-    features_specular: torch.Tensor | None = None,
     color: torch.Tensor | None = None,
     normals: torch.Tensor | None = None,
     custom_attributes: dict[str, torch.Tensor] = {},
@@ -109,24 +81,9 @@ def write_ply_3dgs(
     for attr_i in range(3):
         mesh.vertex_data.custom_attributes[f"f_dc_{attr_i}"] = features_albedo_numpy[..., attr_i]
 
-    num_gaussians = positions.shape[0]
-    if features_specular is not None:
-        num_speculars = features_specular.shape[-1] // 3
-        features_specular_numpy = (
-            features_specular.reshape((num_gaussians, num_speculars, 3))
-            .transpose(2, 1)
-            .reshape((num_gaussians, num_speculars * 3))
-            .cpu()
-            .numpy()
-        )
-        for attr_i in range(features_specular.shape[-1]):
-            mesh.vertex_data.custom_attributes[f"f_rest_{attr_i}"] = features_specular_numpy[..., attr_i]
-
     for key, value in custom_attributes.items():
         mesh.vertex_data.custom_attributes[key] = value.cpu().numpy()
 
     path.parent.mkdir(parents=True, exist_ok=True)
     mesh.save(str(path))
     log.info(f"Wrote {path.suffix}-file: {path.absolute()}")
-
-
