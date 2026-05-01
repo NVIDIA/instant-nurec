@@ -34,14 +34,6 @@ py_library(
 )
 
 py_library(
-    name = "pylib_morph",
-    srcs = ["morph.py"],
-    deps = [
-        pip_requirement("torch"),
-    ],
-)
-
-py_library(
     name = "pylib_prober",
     srcs = ["prober.py"],
     deps = [
@@ -138,7 +130,6 @@ py_library(
         "//:core_package_group",
     ],
     deps = [
-        ":pylib_morph",
         ":pylib_types",
         pip_requirement("nvidia-ncore"),
         pip_requirement("numpy"),

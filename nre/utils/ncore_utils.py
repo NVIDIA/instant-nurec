@@ -39,7 +39,6 @@ import ncore.impl.data.stores as ncore_data_stores
 import ncore_internal.data
 import ncore_internal.data.v3
 
-from nre.utils.morph import MorphOp
 from nre.utils.types import HalfClosedInterval
 
 
