@@ -215,14 +215,6 @@ class RenderingData:
         return self.rays.shape[0]
 
     @property
-    def h(self) -> int:
-        return self.rays.shape[1]
-
-    @property
-    def w(self) -> int:
-        return self.rays.shape[2]
-
-    @property
     @torch.autocast(device_type="cuda", enabled=False)
     def distance_to_depth_scale(self) -> torch.Tensor:
         """Compute the multiplication factor to convert depth to distance.
