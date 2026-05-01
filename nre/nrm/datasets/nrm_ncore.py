@@ -230,8 +230,6 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
         self.num_samples_per_sequence: int = config.frame_batch_sampler.n_samples_per_sequence
 
         # Camera and lidar id mappings
-        self.camera_id_mapping = config.camera_id_mapping
-        self.lidar_id_mapping = config.lidar_id_mapping
 
         # Current config might not be concrete (i.e. augmentations might not be applied yet)
         self.non_concrete_config = config
@@ -426,7 +424,7 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
                 # Load auxiliary information
                 if camera_id.loader_key in aux_loaders:
                     aux_loader = aux_loaders[camera_id.loader_key]
-                    data_camera_id = self.camera_id_mapping.get(camera_id.camera_id, camera_id.camera_id)
+                    data_camera_id = camera_id.camera_id
                     sky_mask: np.ndarray | bool = False
                     if self.aux_data_params.semantic_segmentation and aux_loader.has_semantic_segmentation(
                         data_camera_id
@@ -817,9 +815,7 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
                     raise NRMDataError(f"Failed to load auxiliary data for sequence {ncore_json_path.stem}.") from e
 
             # Load the camera sensors
-            camera_sensors[camera_id] = sequence_loader.get_camera_sensor(
-                self.camera_id_mapping.get(camera_id.camera_id, camera_id.camera_id)
-            )
+            camera_sensors[camera_id] = sequence_loader.get_camera_sensor(camera_id.camera_id)
 
             # Load all the lidar sensors for the first time meeting a main loader.
             # Allow multiple possibilities of lidar ids separated by semicolon.
@@ -827,7 +823,7 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
                 lidar_sensors = {
                     lidar_id: get_lidar_sensor_from_sequence_loader(
                         sequence_loader,
-                        lidar_id_candidates=[self.lidar_id_mapping.get(p, p) for p in lidar_id.split(";")],
+                        lidar_id_candidates=lidar_id.split(";"),
                     )
                     for lidar_id in self.lidar_ids
                 }

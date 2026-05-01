@@ -112,14 +112,6 @@ class BaseNCoreNRMDatasetConfig(BaseConfigSchema):
     # Note: this is not the same as the other cuboid tracks params
     cuboid_tracks_params: NCoreNRMCuboidTracksParamsConfig
 
-    camera_id_mapping: dict[str, str] = Field(
-        default_factory=dict,
-        description="Map logical camera ids to ids used inside ncore archives if they are different.",
-    )
-    lidar_id_mapping: dict[str, str] = Field(
-        default_factory=dict,
-        description="Map logical lidar ids to ids used inside ncore archives if they are different.",
-    )
 
 
 

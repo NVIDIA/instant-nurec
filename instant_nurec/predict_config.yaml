@@ -45,8 +45,6 @@ dataset:
       track_min_centroid_rig_dist_m: 3.0
       track_extrapolate_timestamps_us: 1000000
       track_label_source: AUTOLABEL
-    camera_id_mapping: {}
-    lidar_id_mapping: {}
 model:
   track_padding_m:
     - 1.0
