@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import logging
 
-from typing import Annotated, Literal, Optional
+from typing import Literal, Optional
 
 from pydantic import model_validator
 
@@ -136,12 +136,7 @@ class BaseNCoreNRMDatasetConfig(BaseConfigSchema):
 
 
 class NCoreNRMDatasetConfig(BaseNCoreNRMDatasetConfig):
-    """Standard NCore dataset config."""
-
-    name: Literal["nrm-ncore"]
-
-
-NRMSplitConfig = Annotated[NCoreNRMDatasetConfig, Field(discriminator="name")]
+    """Standard NCore dataset config (only variant the standalone supports)."""
 
 
 class NRMSplitsConfig(BaseConfigSchema):
@@ -149,6 +144,4 @@ class NRMSplitsConfig(BaseConfigSchema):
     split; pydantic extras="ignore" drops the train/val/test entries that the
     pretrained parsed.yaml still carries."""
 
-    name: Literal["nrm"]
-
-    predict: NRMSplitConfig | None = Field(default=None, description="Dataset to use in prediction mode")
+    predict: NCoreNRMDatasetConfig | None = Field(default=None, description="Dataset to use in prediction mode")

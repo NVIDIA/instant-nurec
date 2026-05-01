@@ -15,7 +15,6 @@ system:
   predict_batch_size: 8
   name: base-nrm-system
 dataset:
-  name: nrm
   predict:
     poses_component_group: default
     intrinsics_component_group: default
@@ -51,7 +50,6 @@ dataset:
       track_label_source: AUTOLABEL
     camera_id_mapping: {}
     lidar_id_mapping: {}
-    name: nrm-ncore
 model:
   name: kelvin
   track_padding_m:
