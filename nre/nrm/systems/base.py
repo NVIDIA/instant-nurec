@@ -22,7 +22,6 @@ from nre.nrm.config.nrm import BaseNRMSystemConfig, NRMConfig
 from nre.nrm.datasets.datamodule import NRMDataModule
 from nre.nrm.models.base import BaseNRM
 from nre.utils.batch import NRMDataBatch
-from nre.utils.log import BatchMediaLogger
 from nre.utils.types import Checkpoint
 
 
@@ -51,7 +50,7 @@ class BaseNRMSystem(LightningModule, ABC):
         # Slang could not properly dispatch disabled loss functions, giving empty tensors.
         self.loss = LossAggregator(config.loss, force_disable_cuda=True)
 
-        self.media_logger = BatchMediaLogger(self, self.config)
+        self.media_logger = None
 
 
 
