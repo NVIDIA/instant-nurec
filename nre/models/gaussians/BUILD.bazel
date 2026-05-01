@@ -19,21 +19,6 @@ filegroup(
     visibility = [],
 )
 
-# gsplat is selected by config but the predict path with render_video.enabled=false
-# does not exercise it. The dep is kept so renderers.py imports resolve.
-py_library(
-    name = "pylib_cc_gsplat",
-    visibility = ["//nre/models/gaussians:__pkg__"],
-    deps = select({
-        "//bazel/conditions:local_gsplat": [
-            "@gsplat_repo_local//:pylib_cc",
-        ],
-        "//conditions:default": [
-            "@gsplat_repo//:pylib_cc",
-        ],
-    }),
-)
-
 py_library(
     name = "pylib",
     srcs = [
@@ -43,19 +28,8 @@ py_library(
     ],
     visibility = ["//:core_package_group"],
     deps = [
-        pip_requirement("nvidia-ncore"),
         pip_requirement("numpy"),
         pip_requirement("point-cloud-utils"),
         pip_requirement("torch"),
-        pip_requirement("tqdm"),
-        pip_requirement("lietorch"),
-        ":pylib_cc_gsplat",
-        "//libs/geometry/kernels:pylib",
-        "//libs/nrend:pylib",
-        "//nre/datasets:pylib",
-        "//nre/models:pylib",
-        "//nre/models/base:pylib",
-        "//nre/utils:pylib",
-        "//nre/utils:pylib_types",
     ],
 )

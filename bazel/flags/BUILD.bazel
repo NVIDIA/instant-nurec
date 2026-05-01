@@ -46,14 +46,3 @@ bool_flag(
     visibility = ["//bazel/conditions:__pkg__"],
 )
 
-bool_flag(
-    name = "skip_nrend_obfuscation",
-    build_setting_default = False,
-    visibility = ["//bazel/conditions:__pkg__"],
-)
-
-bool_flag(
-    name = "local_gsplat",
-    build_setting_default = False,
-    visibility = ["//bazel/conditions:__pkg__"],
-)

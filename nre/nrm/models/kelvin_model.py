@@ -15,7 +15,6 @@ from einops import rearrange
 from safetensors.torch import load_file
 
 from nre.datasets.tracks import CuboidTracks
-from nre.models.gaussians.renderers import BaseGaussianRenderer
 from nre.nrm.config.models import KelvinModelConfig
 from nre.nrm.models.base import BaseNRM
 from nre.nrm.models.kelvin_backbone.decoders import KelvinDPTDecoder, make_decoder
@@ -59,13 +58,11 @@ class KelvinNRM(BaseNRM[KelvinNRMPrimitive]):
             for param in self.encoder.parameters():
                 param.requires_grad = False
 
-        # Prepare gaussian renderer
+        # Predict mode never invokes primitive.forward()/render(), so the
+        # gaussians_renderer is set to None and the factory + nrend deps are
+        # not exercised.
         self.use_2dgs = self.config.use_2dgs
-        self.gaussians_renderer = BaseGaussianRenderer.factory(
-            self.config.renderer.name,
-            self.config.renderer,
-            self,  # type: ignore
-        )
+        self.gaussians_renderer = None
 
     def serialize_to_json_dict(self, with_state_dict: bool = True) -> dict[str, Any]:
         # nrend init just need the particle configuration part.

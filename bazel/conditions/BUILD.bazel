@@ -13,7 +13,6 @@ config_setting(
     flag_values = {"//bazel/flags:internal": "True"},
     visibility = [
         "//deps/docker:__pkg__",
-        "//libs/nrend:__pkg__",
         "//nre:__pkg__",
     ],
 )
@@ -107,21 +106,6 @@ config_setting(
     ],
 )
 
-config_setting(
-    name = "skip_nrend_obfuscation",
-    flag_values = {"//bazel/flags:skip_nrend_obfuscation": "True"},
-    visibility = [
-        "//libs/nrend:__pkg__",
-    ],
-)
-
-config_setting(
-    name = "local_gsplat",
-    flag_values = {"//bazel/flags:local_gsplat": "True"},
-    visibility = [
-        "//nre/models/gaussians:__pkg__",
-    ],
-)
 
 config_setting(
     name = "coverage_mode",

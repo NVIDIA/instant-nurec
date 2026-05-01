@@ -1,8 +1,0 @@
-{
-    "name": "3dgs-nrend",
-    "culling": {
-        "rect_bounding": true,
-        "tight_opacity_bounding": true,
-        "tile_based": true
-     }
-}

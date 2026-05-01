@@ -1,5 +1,0 @@
-# Copyright (c) 2025 NVIDIA CORPORATION.  All rights reserved.
-
-# NREND dependencies version number should only be increased when a dependency is changed
-variables:
-  NREND_DEPS_VERSION: 6
