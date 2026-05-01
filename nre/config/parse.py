@@ -113,19 +113,3 @@ def parse_untyped_config(
 
     return config
 
-
-def assert_no_out_dir_override_in_resume(hydra_args: list[str]) -> None:
-    """Checks hydra overrides to prevent changing the out_dir if resume is set and mode=train"""
-
-    resume_true = any([param.startswith("resume=") for param in hydra_args])
-    # Don't fail when using resume=auto with wandb sweeps
-    resume_auto = any([(param.startswith("resume=") and "auto" in param) for param in hydra_args])
-    mode_is_train = any([(param.startswith("mode=") and "train" in param) for param in hydra_args])
-    if (
-        (resume_true and not resume_auto)
-        and mode_is_train
-        and any([param.startswith("out_dir=") for param in hydra_args])
-    ):
-        raise AssertionError("out_dir cannot be changed when resuming training")
-
-
