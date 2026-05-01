@@ -461,48 +461,6 @@ class NCoreNRMDatasetConfig(BaseNCoreNRMDatasetConfig):
     name: Literal["nrm-ncore"]
 
 
-class DataverseNRMDatasetConfig(BaseConfigSchema):
-    """
-    Specifies parameters for a mixture of datasets supported by Dataverse
-    """
-
-    class Re10kParams(BaseConfigSchema):
-        target: Literal["re10k.RealEstate10K"]
-        root_path: str = Field(description="Path to the dataset root")
-        annotation_json: str = Field(description="Path to the annotation json file (e.g. train_all.json)")
-
-    class MVImgNetParams(BaseConfigSchema):
-        target: Literal["mvimgnet.MVImgNet"]
-        root_path: str = Field(description="Path to the dataset root")
-
-    class DL3DVParams(BaseConfigSchema):
-        target: Literal["dl3dv.DL3DV10K"]
-        root_path: str = Field(description="Path to the dataset root")
-
-    name: Literal["nrm-dataverse"]
-
-    camera_subsampler: CameraSubsamplerConfig = Field(description="Image resize to a given height/width.")
-
-    frame_batch_samplers: Dict[str, BatchSamplerConfigType]
-    supervision_frame_batch: SupervisionFrameBatchParamsConfig = Field(
-        description="As our supervision always enforces stratified sampling, so no sampler needed here"
-    )
-
-    subset_spec: Re10kParams | MVImgNetParams | DL3DVParams = Field(
-        discriminator="target", description="The specific dataset to sample from."
-    )
-    camera_ref_normalization: Literal["first_frame", "mean_camera"] = Field(
-        default="mean_camera",
-        description="How to compute T_world_ref when not provided. "
-        "'first_frame' uses the inverse of the first camera pose; "
-        "'mean_camera' averages all camera poses via Gram-Schmidt orthogonalization.",
-    )
-
-    def model_post_init(self, __context) -> None:
-        if self.supervision_frame_batch.camera_subsampler is None:
-            self.supervision_frame_batch.camera_subsampler = self.camera_subsampler
-
-
 class DummyNRMDatasetConfig(BaseConfigSchema):
     """
     Dummy dataset as a placeholder for testing-only configs, or to override a mixture to empty.
@@ -521,7 +479,7 @@ class TestIndexNRMDatasetConfig(BaseConfigSchema):
 
 
 SingleNRMDatasetConfig = Union[
-    NCoreNRMDatasetConfig, DataverseNRMDatasetConfig, DummyNRMDatasetConfig, TestIndexNRMDatasetConfig
+    NCoreNRMDatasetConfig, DummyNRMDatasetConfig, TestIndexNRMDatasetConfig
 ]
 
 
@@ -539,27 +497,12 @@ class NRMMixedDatasetConfig(BaseConfigSchema):
     mixture: Dict[str, MixtureComponentConfig] = Field(description="List of mixture components")
 
 
-class WebSocketNCoreNRMDatasetConfig(BaseNCoreNRMDatasetConfig):
-    """Config for WebSocketNCoreNRMDataset: listens to WebSocket requests for sequence selection."""
-
-    name: Literal["nrm-websocket-ncore"]
-    ws_server_addr: str = Field(
-        description="WebSocket server address.",
-    )
-    ws_server_port: int = Field(
-        default=7000,
-        description="WebSocket server port.",
-    )
-
-
 NRMSplitConfig = Annotated[
     Union[
-        DataverseNRMDatasetConfig,
         NCoreNRMDatasetConfig,
         NRMMixedDatasetConfig,
         DummyNRMDatasetConfig,
         TestIndexNRMDatasetConfig,
-        WebSocketNCoreNRMDatasetConfig,
     ],
     Field(discriminator="name"),
 ]
