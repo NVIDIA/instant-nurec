@@ -25,34 +25,23 @@ logger = logging.getLogger(__name__)
 
 
 def make(name: str, config: "NRMConfig", load_from_checkpoint: Optional[str] = None) -> "BaseNRMSystem":
-    if name == "base-nrm-system":
-        system_cls = GaussiansNRMSystem
-    else:
+    """Predict-only standalone: NRE handled both Lightning checkpoint loading
+    and weights-only loading; the pretrained config always sets
+    resume_weights_only=true so we keep just that branch."""
+    if name != "base-nrm-system":
         raise ValueError(f"Unknown NRM system name: {name}")
 
-    if load_from_checkpoint is not None:
-        # Load checkpoint to check its format
-        try:
-            checkpoint = torch.load(load_from_checkpoint, map_location="cpu", weights_only=False)
-        except Exception as e:
-            raise RuntimeError(f"Failed to load checkpoint from {load_from_checkpoint}: {e}")
+    system = GaussiansNRMSystem(config)
+    if load_from_checkpoint is None:
+        return system
 
-        # Check if this is a PyTorch Lightning checkpoint
-        if config.resume_weights_only:
-            # Create system first, then manually load the state dict
-            system = system_cls(config)
-            if "state_dict" in checkpoint:
-                # Standard Lightning checkpoint format but missing version info
-                system.load_state_dict(checkpoint["state_dict"], strict=True)
-            else:
-                # Assume the entire checkpoint is the state dict
-                system.load_state_dict(checkpoint, strict=True)
-            return system
-        else:
-            # Standard Lightning checkpoint loading
-            return system_cls.load_from_checkpoint(load_from_checkpoint, strict=True, config=config)
+    if not config.resume_weights_only:
+        raise NotImplementedError("resume_weights_only=False was a Lightning-only path; not supported.")
 
-    return system_cls(config)
+    checkpoint = torch.load(load_from_checkpoint, map_location="cpu", weights_only=False)
+    state_dict = checkpoint["state_dict"] if "state_dict" in checkpoint else checkpoint
+    system.load_state_dict(state_dict, strict=True)
+    return system
 
 
 # These imports in __all__ are only used for documentation and shouldn't
