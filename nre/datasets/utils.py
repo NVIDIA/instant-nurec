@@ -71,7 +71,7 @@ def consolidate_cuboid_tracks(
     sequence_loader: ncore.data.SequenceLoaderProtocol,
     track_label_sources: list[str],
     track_min_centroid_rig_dist_m: float,
-    T_world_world_base: np.ndarray | None,
+    T_world_world_base: np.ndarray,
 ) -> dict[str, dict]:
     """
     Gather the cuboid track observations into a set of named tracks with timestamped poses relative to the world frame.
@@ -81,7 +81,7 @@ def consolidate_cuboid_tracks(
         sequence_loader (ncore.data.SequenceLoaderProtocol): The sequence loader to load the data from
         track_label_sources (list[str]): List of label sources to consider for track consolidation
         track_min_centroid_rig_dist_m (float): Minimum distance of the track centroid to the rig frame to consider the observation
-        T_world_world_base (np.ndarray | None): Optional base transformation to apply to all world poses
+        T_world_world_base (np.ndarray): Base transformation to apply to all world poses
 
     Returns:
         dict[str, dict]: Consolidated cuboid tracks (indexed by track-id) with elements:
@@ -108,11 +108,7 @@ def consolidate_cuboid_tracks(
         T_reference_world = sequence_loader.pose_graph.evaluate_poses(
             reference_frame_id, "world", np.array(reference_frame_timestamp_us, dtype=np.uint64)
         )
-
-        if T_world_world_base is not None:
-            T_reference_world = T_world_world_base @ T_reference_world
-
-        return T_reference_world
+        return T_world_world_base @ T_reference_world
 
     @lru_cache(maxsize=n_expected_poses)
     def get_T_reference_rig(reference_frame_id: str, reference_frame_timestamp_us: int) -> Optional[np.ndarray]:
