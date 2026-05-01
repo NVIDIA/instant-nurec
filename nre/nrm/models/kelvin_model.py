@@ -63,14 +63,6 @@ class KelvinNRM(BaseNRM[KelvinNRMPrimitive]):
         self.use_2dgs = self.config.use_2dgs
         self.gaussians_renderer = None
 
-    def serialize_to_json_dict(self, with_state_dict: bool = True) -> dict[str, Any]:
-        # nrend init just need the particle configuration part.
-        return KelvinNRMPrimitive.random(
-            1,
-            use_2dgs=self.use_2dgs,
-            device=torch.device("cpu"),
-        ).serialize_to_json_dict(with_state_dict=with_state_dict)
-
     @staticmethod
     def _maybe_derive_normals_from_distance(batch: DataAndRenderingBatch) -> DataAndRenderingBatch:
         """Compute world-space normals + VALID_NORMAL flag from metric_distance via

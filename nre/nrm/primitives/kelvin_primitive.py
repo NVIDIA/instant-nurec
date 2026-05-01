@@ -119,14 +119,6 @@ class KelvinLayer:
         return self.rotations.shape[0]
 
     @staticmethod
-    def _random(n_gaussians: int, device: torch.device) -> KelvinLayer:
-        return KelvinLayer(
-            rotations=torch.nn.functional.normalize(torch.randn(n_gaussians, 4, device=device), dim=1),
-            scales=torch.rand(n_gaussians, 3, device=device),
-            rgb=torch.rand(n_gaussians, 3, device=device),
-        )
-
-    @staticmethod
     def _detach_base(layer: KelvinLayer) -> KelvinLayer:
         return KelvinLayer(
             rotations=layer.rotations.detach(),
@@ -200,14 +192,6 @@ class KelvinStaticLayer(KelvinLayer):
             assert self.semantic_class.dtype == torch.uint8, "semantic_class must be uint8"
         if self.normals is not None:
             assert self.normals.shape == (len(self), 3), "normals must have shape (n_gaussians, 3)"
-
-    @staticmethod
-    def random(n_gaussians: int, device: torch.device) -> KelvinStaticLayer:
-        return KelvinStaticLayer(
-            positions=torch.rand(n_gaussians, 3, device=device),
-            densities=torch.rand(n_gaussians, 1, device=device),
-            **asdict(KelvinLayer._random(n_gaussians, device)),
-        )
 
     def detach(self) -> Self:
         return self.__class__(
@@ -332,15 +316,6 @@ class KelvinDynamicLayer(KelvinLayer):
     def n_keyframes(self) -> int:
         return self.keyframe_positions.shape[1]
 
-    @staticmethod
-    def random(n_gaussians: int, n_keyframes: int, device: torch.device) -> KelvinDynamicLayer:
-        keyframe_timestamps_us = torch.randint(0, 100, (n_gaussians, n_keyframes), device=device).sort(dim=1).values
-        return KelvinDynamicLayer(
-            max_densities=torch.rand(n_gaussians, 1, device=device),
-            keyframe_positions=torch.rand(n_gaussians, n_keyframes, 3, device=device),
-            keyframe_timestamps_us=keyframe_timestamps_us,
-            **asdict(KelvinLayer._random(n_gaussians, device)),
-        )
 
     def detach(self) -> Self:
         return self.__class__(
@@ -527,17 +502,6 @@ class KelvinNRMPrimitive(BaseGaussiansNRMPrimitive):
             affine_matrix=self.affine_matrix,
             use_2dgs=self.use_2dgs,
             gaussians_renderer=self.gaussians_renderer,
-        )
-
-    @staticmethod
-    def random(n_gaussians: int, use_2dgs: bool, device: torch.device) -> KelvinNRMPrimitive:
-        return KelvinNRMPrimitive(
-            static_layer=KelvinStaticLayer.random(n_gaussians, device),
-            dynamic_layers=[KelvinDynamicLayer.random(n_gaussians, 4, device)],
-            sky_cubemap=torch.rand(6, 16, 16, 3, device=device),
-            affine_matrix=torch.rand(1, 3, 4, device=device),
-            use_2dgs=use_2dgs,
-            gaussians_renderer=None,
         )
 
     def state_dict_and_config(self) -> tuple[dict[str, Any], DictConfig]:
