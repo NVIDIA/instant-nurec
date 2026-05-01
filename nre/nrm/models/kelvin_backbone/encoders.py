@@ -10,7 +10,6 @@
 
 import logging
 
-from abc import ABC, abstractmethod
 from typing import cast
 
 import numpy as np
@@ -43,23 +42,7 @@ from nre.utils.profiling import ScopedTimer
 logger = logging.getLogger(__name__)
 
 
-class KelvinEncoderBase(nn.Module, ABC):
-    @abstractmethod
-    def encode(
-        self,
-        batches: list[DataAndRenderingBatch],
-        time_remappings: list[TimeRemapping],
-        scene_rescale: float = 1.0,
-    ) -> KelvinLatent:
-        """
-        Encode the input batch into a latent representation.
-        """
-
-    def forward(self, *args, **kwargs):
-        raise NotImplementedError("Please call encode() method directly.")
-
-
-class KelvinDAv3Encoder(KelvinEncoderBase):
+class KelvinDAv3Encoder(nn.Module):
     def __init__(self, config: KelvinDAv3EncoderConfig, model_config: KelvinModelConfig):
         super().__init__()
         self.rgb_normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225], inplace=False)
@@ -156,7 +139,5 @@ class KelvinDAv3Encoder(KelvinEncoderBase):
         return KelvinMultiscaleFeaturesLatent(features=img_feats, cls_tokens=cls_tokens)
 
 
-def make_encoder(config: KelvinModelConfig) -> KelvinEncoderBase:
-    if isinstance(config.encoder, KelvinDAv3EncoderConfig):
-        return KelvinDAv3Encoder(config.encoder, config)
-    raise ValueError(f"Unsupported encoder config: {config.encoder}")
+def make_encoder(config: KelvinModelConfig) -> KelvinDAv3Encoder:
+    return KelvinDAv3Encoder(config.encoder, config)

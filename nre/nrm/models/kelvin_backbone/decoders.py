@@ -11,7 +11,6 @@
 import logging
 import math
 
-from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 import torch
@@ -55,26 +54,7 @@ class KelvinDecoderReturn:
     dynamic_layers: list[KelvinDynamicLayer]
 
 
-class KelvinDecoderBase(nn.Module, ABC):
-    @abstractmethod
-    def decode(
-        self,
-        encoded_latent: KelvinLatent,
-        batches: list[DataAndRenderingBatch],
-        cuboid_tracks: list[CuboidTracks] | None,
-        time_remappings: list[TimeRemapping],
-        scene_rescale: float = 1.0,
-    ) -> list[KelvinDecoderReturn]:
-        """
-        Decode from the encoded latent into Gaussian parameters.
-        Batches are used to pass in useful information about the raw context (e.g. timestamps, etc.)
-        """
-
-    def forward(self, *args, **kwargs):
-        raise NotImplementedError("Please call decode() method directly.")
-
-
-class KelvinDPTDecoder(KelvinDecoderBase):
+class KelvinDPTDecoder(nn.Module):
     """
     DPT Head (compared to corresponding encoder this is ~5-10% of parameters & FLOPS)
     TODO: Compare SDT head from https://aigeeksgroup.github.io/AnyDepth/
@@ -529,7 +509,5 @@ class KelvinDPTDecoder(KelvinDecoderBase):
         return return_values
 
 
-def make_decoder(config: KelvinModelConfig) -> KelvinDecoderBase:
-    if isinstance(config.decoder, KelvinDPTDecoderConfig):
-        return KelvinDPTDecoder(config.decoder, config)
-    raise ValueError(f"Unsupported decoder config: {config.decoder}")
+def make_decoder(config: KelvinModelConfig) -> KelvinDPTDecoder:
+    return KelvinDPTDecoder(config.decoder, config)

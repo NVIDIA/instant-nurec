@@ -8,8 +8,6 @@
 # without an express license agreement from NVIDIA CORPORATION or
 # its affiliates is strictly prohibited.
 
-from abc import ABC, abstractmethod
-
 import torch
 import torchvision.transforms as transforms
 
@@ -30,17 +28,7 @@ from nre.utils.batch import DataAndRenderingBatch
 from nre.utils.misc import unpack_optional
 
 
-class KelvinSkyBase(nn.Module, ABC):
-    @abstractmethod
-    def decode(self, encoded_latent: KelvinLatent, batches: list[DataAndRenderingBatch]) -> torch.Tensor:
-        """
-        Decode the encoded latent into a sky cubemap.
-        Returns:
-            The sky cubemap. [6, cubemap_size, cubemap_size, 3]
-        """
-
-
-class CubemapDecoderSky(KelvinSkyBase):
+class CubemapDecoderSky(nn.Module):
     """
     Let's start with brute force decoding.
     """
@@ -202,7 +190,5 @@ class CubemapDecoderSky(KelvinSkyBase):
         return queries
 
 
-def make_sky(config: KelvinModelConfig) -> KelvinSkyBase:
-    if isinstance(config.sky, KelvinSkyCubemapDecoderConfig):
-        return CubemapDecoderSky(config.sky, config)
-    raise ValueError(f"Unsupported sky config: {config.sky}")
+def make_sky(config: KelvinModelConfig) -> CubemapDecoderSky:
+    return CubemapDecoderSky(config.sky, config)
