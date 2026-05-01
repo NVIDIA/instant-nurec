@@ -14,8 +14,9 @@ import os
 
 from typing import Literal
 
+import shortuuid
+
 from nre.config.base_schema import BaseConfigSchema, Field
-from nre.config.logger import LoggerConfigType
 from nre.nrm.config.dataset import NRMSplitsConfig
 from nre.nrm.config.models import KelvinModelConfig
 from nre.nrm.config.predict import PredictConfig
@@ -43,7 +44,6 @@ class NRMConfig(BaseConfigSchema):
     resume_weights_only: bool
 
     out_dir: str
-    logger: LoggerConfigType
 
     system: GaussiansNRMSystemConfig
     dataset: NRMSplitsConfig
@@ -59,8 +59,11 @@ class NRMConfig(BaseConfigSchema):
         description="Directory where parsed.yaml is dumped. Auto-derived as out_dir/run_id/config.",
     )
     run_id: str = Field(
-        default=SENTINEL,
-        description="Unique identifier of this run; populated from logger.run_id at post-init.",
+        default_factory=shortuuid.uuid,
+        description=(
+            "Unique identifier of this run; auto-generated as a shortuuid unless "
+            "overridden via the NRE_ENV_RUN_ID environment variable."
+        ),
     )
 
     def model_post_init(self, __context) -> None:
@@ -69,5 +72,6 @@ class NRMConfig(BaseConfigSchema):
                 self.resume += ".ckpt"
             if not os.path.exists(self.resume):
                 raise FileNotFoundError(f"Checkpoint {self.resume!r} does not exist")
-        self.run_id = self.logger.run_id
+        if (env_run_id := os.environ.get("NRE_ENV_RUN_ID")) is not None:
+            self.run_id = env_run_id
         self.config_dir = os.path.join(self.out_dir, self.run_id, "config")

@@ -10,11 +10,6 @@
 # pretrained predict run (Phase 1 step 4.4: drop hydra/yaml composition).
 seed: 38
 resume_weights_only: true
-logger:
-  enabled: false
-  run_id: "<generate>"
-  save_dir: /results/render-rc4-nos_04-26_230005
-  name: dummy
 system:
   predict_num_workers: 4
   predict_batch_size: 8
