@@ -42,12 +42,8 @@ class PrimitiveMergeConfig(BaseConfigSchema):
     frustum_ownership_max_diff_m: float = Field(
         default=0.0,
         description="Maximum distance in meters between the distances from one GS to non-owned chunks and owned chunks",
+        ge=0.0,
     )
-
-    def __post_init__(self):
-        assert self.frustum_ownership_max_diff_m >= 0.0, (
-            f"{self.__class__.__name__}: 'frustum_ownership_max_diff_m' must be non-negative"
-        )
 
 
 class PredictConfig(BaseConfigSchema):
