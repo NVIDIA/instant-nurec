@@ -20,12 +20,6 @@ from nre.config.base_schema import BaseConfigSchema, Field
 logger = logging.getLogger(__name__)
 
 
-class NCoreNRMAuxDataConfig(BaseConfigSchema):
-    semantic_segmentation: bool
-    depth: bool = Field(default=False, description="Load depth from the ncore aux data.")
-    egomask: bool
-
-
 class NCoreNRMCuboidTracksParamsConfig(BaseConfigSchema):
     lidar_id: Optional[str]
     track_min_travel_distance_m: float = Field(ge=0.0)
@@ -93,8 +87,6 @@ class BaseNCoreNRMDatasetConfig(BaseConfigSchema):
         "max_angle = min(max_fov / 2, camera_model.max_angle). This will make boundary pixels classified as invalid",
     )
     n_camera_mask_dilation_iterations: int = Field(default=10)
-
-    aux_data: NCoreNRMAuxDataConfig
 
     camera_subsampler: CameraSubsamplerConfig = Field(description="Image resize to a given height/width.")
 

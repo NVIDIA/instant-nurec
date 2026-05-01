@@ -190,7 +190,6 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
                 ) from e
             self.all_context_camera_ids.append(self.all_supervision_camera_ids[camera_id_idx])
 
-        self.aux_data_params = config.aux_data
         self.cuboid_tracks_params = config.cuboid_tracks_params
 
         # V3 sequence loader parameters
@@ -426,9 +425,7 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
                     aux_loader = aux_loaders[camera_id.loader_key]
                     data_camera_id = camera_id.camera_id
                     sky_mask: np.ndarray | bool = False
-                    if self.aux_data_params.semantic_segmentation and aux_loader.has_semantic_segmentation(
-                        data_camera_id
-                    ):
+                    if aux_loader.has_semantic_segmentation(data_camera_id):
                         semantics = np.asarray(
                             aux_loader.get_semantic_segmentation(data_camera_id, frame_end_timestamp_us)
                         )
@@ -449,7 +446,7 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
                         # We rely fully on flags to store semantic information, so no need to pass on labels.semantic
                         # labels.semantic = to_torch(semantics, device="cpu")[None, ..., None]
 
-                    if self.aux_data_params.depth and aux_loader.has_depth(data_camera_id):
+                    if aux_loader.has_depth(data_camera_id):
                         # Distance map already processed by the data pre-processing stage
                         depth = aux_loader.get_depth(data_camera_id, frame_end_timestamp_us)
                         # For DS-based data, depth is nan/inf for sky regions, correct them to be 0.
@@ -460,7 +457,7 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
                         labels.metric_distance = to_torch(depth, device="cpu")[None, ..., None]
                         depth_aux_loaded = True
 
-                    if self.aux_data_params.egomask and aux_loader.has_egomask(data_camera_id):
+                    if aux_loader.has_egomask(data_camera_id):
                         egomask = aux_loader.get_egomask(data_camera_id, 0)
                         egomask = camera_subsampler.apply_frame_data(egomask)
                         egomask = ndimage.binary_dilation(egomask, iterations=self.n_camera_mask_dilation_iterations)

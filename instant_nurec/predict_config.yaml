@@ -22,10 +22,6 @@ dataset:
     open_consolidated: true
     camera_max_fov_deg: 190.0
     n_camera_mask_dilation_iterations: 10
-    aux_data:
-      semantic_segmentation: true
-      depth: true
-      egomask: true
     camera_subsampler:
       frame_width: 784
       frame_height: 448
