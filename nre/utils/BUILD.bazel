@@ -304,15 +304,6 @@ pytest_test(
 )
 
 pytest_test(
-    name = "scopedtimer_test",
-    srcs = ["scopedtimer_test.py"],
-    deps = [
-        ":pylib",
-        "//nre/config:pylib_scopedtimer",
-    ],
-)
-
-pytest_test(
     name = "misc_test",
     srcs = ["misc_test.py"],
     deps = [
@@ -325,7 +316,6 @@ pytest_test(
 py_library(
     name = "pylib_trainer",
     deps = [
-        "//nre/config:pylib_scopedtimer",
         "//nre/config:pylib_trainer_config",
         pip_requirement("torch"),
         pip_requirement("pytorch-lightning"),

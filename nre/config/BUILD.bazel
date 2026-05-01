@@ -61,14 +61,6 @@ py_library(
 )
 
 py_library(
-    name = "pylib_scopedtimer",
-    srcs = ["scopedtimer.py"],
-    deps = [
-        ":pylib_base_schema",
-    ],
-)
-
-py_library(
     name = "pylib",
     srcs = [
         "__init__.py",
@@ -91,7 +83,6 @@ py_library(
         pip_requirement("hydra-core"),
         pip_requirement("nvidia-ncore"),
         ":pylib_base_schema",
-        ":pylib_scopedtimer",
         ":pylib_trainer_config",
         ":pylib_version",
         "//nre:pylib_reporoot",
