@@ -33,7 +33,6 @@ py_library(
         pip_requirement("omegaconf"),
         "//nre:pylib",
         "//nre/utils:pylib_misc",
-        "//nre/utils:pylib_optim",
         "//nre/utils:pylib_types",
     ],
 )

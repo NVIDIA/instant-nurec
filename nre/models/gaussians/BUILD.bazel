@@ -56,7 +56,6 @@ py_library(
         "//nre/models:pylib",
         "//nre/models/base:pylib",
         "//nre/utils:pylib",
-        "//nre/utils:pylib_optim",
         "//nre/utils:pylib_types",
     ],
 )

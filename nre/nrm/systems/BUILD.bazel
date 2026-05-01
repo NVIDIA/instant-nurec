@@ -43,7 +43,6 @@ py_library(
         "//nre/utils:pylib",
         "//nre/utils:pylib_geometry",
         "//nre/utils:pylib_misc",
-        "//nre/utils:pylib_optim",
         "//nre/utils:pylib_types",
         pip_requirement("torch"),
         pip_requirement("pytorch-lightning"),

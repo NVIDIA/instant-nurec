@@ -95,7 +95,6 @@ py_library(
         ":pylib_cubemap",
         ":pylib_motion",
         ":pylib_trajectory",
-        "//nre/utils:pylib_optim",
         pip_requirement("torch"),
         pip_requirement("omegaconf"),
         pip_requirement("nvidia-ncore"),

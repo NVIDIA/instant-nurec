@@ -247,21 +247,6 @@ pytest_test(
     ],
 )
 
-py_library(
-    name = "pylib_optim",
-    srcs = [
-        "optim.py",
-    ],
-    deps = [
-        pip_requirement("apex"),
-        pip_requirement("torch"),
-        pip_requirement("numpy"),
-        pip_requirement("omegaconf"),
-        pip_requirement("lietorch"),
-        "//nre/config:pylib",
-        "//nre/utils:pylib_trainer",
-    ],
-)
 
 py_library(
     name = "pylib_callbacks",
