@@ -572,7 +572,6 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
             )
 
         ## Load lidars (always assume loader key is "main")
-        lidar_loader_key = NCoreNRMDataset.ExtendedCameraId.main_loader_key()
         lidar_frame_timestamps_us: dict[str, torch.Tensor] = {}
         all_lidar_model_parameters: dict[str, ncore.data.ConcreteLidarModelParametersUnion | None] = {}
         lidar_idx_mapping: dict[NCoreNRMDataset.UniqueFrameId, int] = {}
@@ -631,7 +630,7 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
                 RigTrajectories.RigTrajectory(
                     sequence_id=sequence_id_prefix + loader_key,
                     cameras_frame_timestamps_us=camera_frame_timestamps_us[loader_key],
-                    lidars_frame_timestamps_us=lidar_frame_timestamps_us if loader_key == lidar_loader_key else {},
+                    lidars_frame_timestamps_us=lidar_frame_timestamps_us,
                     T_rig_worlds=to_torch(T_world_ref @ T_rig_worlds, device="cpu", dtype=torch.float64),
                     T_rig_world_timestamps_us=to_torch(T_rig_world_timestamps_us, device="cpu", dtype=torch.int64),
                 )
@@ -657,7 +656,7 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
                 (
                     str(lidar_id),
                     RigTrajectories.LidarCalibration(
-                        sequence_id=sequence_id_prefix + lidar_loader_key,
+                        sequence_id=sequence_id_prefix + "main",
                         unique_sensor_idx=self.lidar_ids.index(lidar_id),
                         T_sensor_rig=to_torch(unpack_optional(lidar_sensors[lidar_id].T_sensor_rig), device="cpu"),
                         lidar_model_parameters=all_lidar_model_parameters[lidar_id],
