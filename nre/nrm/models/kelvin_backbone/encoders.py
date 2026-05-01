@@ -36,7 +36,6 @@ from nre.nrm.utils.sensor import to_simple_pinhole_model_parameters
 from nre.utils.batch import DataAndRenderingBatch
 from nre.utils.geometry import tquat_to_se3_matrix
 from nre.utils.misc import unpack_optional
-from nre.utils.profiling import ScopedTimer
 
 
 logger = logging.getLogger(__name__)
@@ -81,7 +80,6 @@ class KelvinDAv3Encoder(nn.Module):
         fov_h = 2 * np.arctan2(pinhole_parameters.resolution[1] / 2, pinhole_parameters.focal_length[1])
         return torch.tensor([fov_w, fov_h]).float()
 
-    @ScopedTimer("KelvinDAv3Encoder.encode")
     @torch.autocast("cuda", enabled=False)
     def encode(
         self,

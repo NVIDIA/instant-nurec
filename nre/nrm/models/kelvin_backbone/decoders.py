@@ -41,7 +41,6 @@ from nre.nrm.primitives.kelvin_primitive import (
 from nre.nrm.utils.motion import TimeRemapping, warp_points_with_cuboid_tracks
 from nre.utils.batch import DataAndRenderingBatch
 from nre.utils.misc import unpack_optional
-from nre.utils.profiling import ScopedTimer
 
 
 logger = logging.getLogger(__name__)
@@ -144,7 +143,6 @@ class KelvinDPTDecoder(nn.Module):
             t_embed = rearrange(t_embed, "(B V) 1 1 C -> B V C", B=B, V=V)
             return t_embed
 
-        @ScopedTimer("KelvinDPTDecoder.motion_head")
         def forward(
             self,
             encoded_latent: KelvinMultiscaleFeaturesLatent,
@@ -282,7 +280,6 @@ class KelvinDPTDecoder(nn.Module):
         self.cuboids_dims_padding = nn.Buffer(torch.tensor(model_config.track_padding_m, dtype=torch.float32))
         self.gaussian_activations = GaussianActivations(model_config.activations)
 
-    @ScopedTimer("KelvinDPTDecoder.decode")
     @torch.autocast("cuda", enabled=False)
     def decode(
         self,

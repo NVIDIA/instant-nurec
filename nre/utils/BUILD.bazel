@@ -46,7 +46,6 @@ py_library(
     deps = [
         ":pylib_geometry",
         ":pylib_misc",
-        ":pylib_profiling",
         "//libs/geometry/kernels:pylib",
         "//libs/sensors:pylib_slang",
         "//nre/utils/sensors:pylib",
@@ -101,19 +100,10 @@ py_library(
         # Add visibility for aux_gen estimators
     ],
     deps = [
-        ":pylib_profiling",
         pip_requirement("torch"),
         pip_requirement("lietorch"),
         pip_requirement("numpy"),
     ],
-)
-
-py_library(
-    name = "pylib_profiling",
-    srcs = [
-        "profiling.py",
-    ],
-    deps = [],
 )
 
 py_library(
@@ -135,7 +125,6 @@ py_library(
         ":pylib_geometry",
         ":pylib_misc",
         ":pylib_packed_ops",
-        ":pylib_profiling",
         ":pylib_types",
         "//nre:pylib",
         "//nre/config:pylib",

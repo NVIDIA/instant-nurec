@@ -49,7 +49,6 @@ py_library(
         "//nre/utils:pylib",
         "//nre/utils:pylib_files",
         "//nre/utils:pylib_misc",
-        "//nre/utils:pylib_profiling",
         "//nre/utils:pylib_types",
     ],
 )

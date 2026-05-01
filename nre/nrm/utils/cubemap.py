@@ -15,7 +15,6 @@ from einops import rearrange
 
 from libs.vren.interface import camera_rays_to_image_points
 from ncore.impl.data.types import CameraModelParameters
-from nre.utils.profiling import ScopedTimer
 
 
 def cubemap_ray_directions(size: int, device: torch.device) -> torch.Tensor:
@@ -38,7 +37,6 @@ def cubemap_ray_directions(size: int, device: torch.device) -> torch.Tensor:
     return torch.stack([right_dirs, left_dirs, top_dirs, bottom_dirs, front_dirs, back_dirs], dim=0)
 
 
-@ScopedTimer("nrm.utils.unproject_to_sky_cubemap")
 @torch.compile
 def unproject_to_sky_cubemap(
     sky_cubemap_size: int,

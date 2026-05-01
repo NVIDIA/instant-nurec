@@ -22,7 +22,6 @@ from nre.nrm.primitives.kelvin_primitive import KelvinNRMPrimitive
 from nre.nrm.utils.motion import TimeRemapping
 from nre.utils.batch import DataAndRenderingBatch
 from nre.utils.misc import unpack_optional
-from nre.utils.profiling import ScopedTimer
 from nre.utils.types import RayFlags
 
 
@@ -93,7 +92,6 @@ class KelvinNRM(nn.Module):
             ),
         )
 
-    @ScopedTimer("KelvinModel.prepare_context")
     def prepare_context(
         self,
         context: list[DataAndRenderingBatch],
@@ -127,7 +125,6 @@ class KelvinNRM(nn.Module):
 
         return num_imgs, num_views, torch.stack(batch_camera_idxs, dim=0), time_remappings
 
-    @ScopedTimer("KelvinModel.reconstruct")
     def reconstruct(
         self,
         context: list[DataAndRenderingBatch],

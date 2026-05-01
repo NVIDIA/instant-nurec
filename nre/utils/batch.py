@@ -34,7 +34,6 @@ from ncore.sensors import (
     OpenCVPinholeCameraModel,
 )
 from nre.utils.misc import assert_same_type, collate_fn, to_torch, unpack_optional
-from nre.utils.profiling import ScopedTimer
 from nre.utils.sensors import (
     RectSubsampledSensor,
     SensorModelComputations,
@@ -900,7 +899,6 @@ class CameraFreePoseViewGeometry(torch.nn.Module):
             unique_sensor_idx_str=unpack_optional(meta.unique_sensor_idx_str),
         )
 
-    @ScopedTimer("CameraFreePoseViewGeometry/to_rendering_data")
     def to_rendering_data(
         self,
         data_batch: DataBatch.Camera,
@@ -934,80 +932,76 @@ class CameraFreePoseViewGeometry(torch.nn.Module):
         assert data_batch.b == 1, "Only one frame is supported"
         meta = data_batch.meta[0]
 
-        with ScopedTimer("CameraFreePoseViewGeometry/to_rendering_data/get_poses_and_timestamps_startend"):
-            pose_and_timestamps_startend_return = self.get_poses_and_timestamps_startend(meta)
+        pose_and_timestamps_startend_return = self.get_poses_and_timestamps_startend(meta)
 
-            T_sensor_world_startend = pose_and_timestamps_startend_return.T_sensor_world_startend
-            timestamps_startend_us = pose_and_timestamps_startend_return.timestamps_startend_us
-            timestamps_startend_us_gpu = pose_and_timestamps_startend_return.timestamps_startend_us_gpu
-            timestamps_startend_us_cpu = pose_and_timestamps_startend_return.timestamps_startend_us_cpu
+        T_sensor_world_startend = pose_and_timestamps_startend_return.T_sensor_world_startend
+        timestamps_startend_us = pose_and_timestamps_startend_return.timestamps_startend_us
+        timestamps_startend_us_gpu = pose_and_timestamps_startend_return.timestamps_startend_us_gpu
+        timestamps_startend_us_cpu = pose_and_timestamps_startend_return.timestamps_startend_us_cpu
 
-        with ScopedTimer("CameraFreePoseViewGeometry/to_rendering_data/cache_sensor_params"):
-            subsample_unique_sensor_idx = (meta.subsample, meta.unique_sensor_idx)
-            if subsample_unique_sensor_idx in self.cached_sensor_subsample:
-                sensor_model = self.cached_sensor_subsample[subsample_unique_sensor_idx]
+        subsample_unique_sensor_idx = (meta.subsample, meta.unique_sensor_idx)
+        if subsample_unique_sensor_idx in self.cached_sensor_subsample:
+            sensor_model = self.cached_sensor_subsample[subsample_unique_sensor_idx]
+        else:
+            sensor_model = cast(ConcreteCameraModelsUnion, self.get_sensor_model(meta))
+            self.cached_sensor_subsample[subsample_unique_sensor_idx] = sensor_model
+
+        if not cache_sensor_params:
+            _, sensor_rays = self._compute_elements_and_sensor_rays(sensor_model, T_sensor_world_startend.device)
+            # Note(ruilong): footprints are only required when AAA is on. Should be optional but here we always compute
+            # it to be aligned with the old batch format.
+            footprints = compute_pixel_footprint(sensor_rays)[..., None]  # (height, width, 1)
+            sensor_model_parameters = sensor_model.get_parameters()
+            sensorlib_parameters = CameraModelConverter.convert(sensor_model, device=T_sensor_world_startend.device)
+        else:
+            subsample = meta.subsample
+            unique_sensor_idx = meta.unique_sensor_idx if meta.unique_sensor_idx >= 0 else 0
+            cached_sensor_params = self.cached_sensor_params[str(unique_sensor_idx)]
+            if (cached_sensor_params["rect_subsampled"] == subsample) and (
+                cached_sensor_params["sensorlib_parameters"] is not None
+            ):
+                # Cache hit: subsampled footprints, ncore parameters, and sensorlib parameters.
+
+                footprints = cached_sensor_params["footprints"]
+                sensor_model_parameters = cached_sensor_params["parameters"]
+                sensorlib_parameters = cached_sensor_params["sensorlib_parameters"]
             else:
-                sensor_model = cast(ConcreteCameraModelsUnion, self.get_sensor_model(meta))
-                self.cached_sensor_subsample[subsample_unique_sensor_idx] = sensor_model
-
-            if not cache_sensor_params:
-                _, sensor_rays = self._compute_elements_and_sensor_rays(sensor_model, T_sensor_world_startend.device)
-                # Note(ruilong): footprints are only required when AAA is on. Should be optional but here we always compute
-                # it to be aligned with the old batch format.
+                # Subsample changed or cache empty: recompute footprints and sensorlib parameters.
+                _, sensor_rays = self._compute_elements_and_sensor_rays(
+                    sensor_model, T_sensor_world_startend.device
+                )
                 footprints = compute_pixel_footprint(sensor_rays)[..., None]  # (height, width, 1)
                 sensor_model_parameters = sensor_model.get_parameters()
-                sensorlib_parameters = CameraModelConverter.convert(sensor_model, device=T_sensor_world_startend.device)
-            else:
-                subsample = meta.subsample
-                unique_sensor_idx = meta.unique_sensor_idx if meta.unique_sensor_idx >= 0 else 0
-                cached_sensor_params = self.cached_sensor_params[str(unique_sensor_idx)]
-                if (cached_sensor_params["rect_subsampled"] == subsample) and (
-                    cached_sensor_params["sensorlib_parameters"] is not None
-                ):
-                    # Cache hit: subsampled footprints, ncore parameters, and sensorlib parameters.
+                sensorlib_parameters = CameraModelConverter.convert(
+                    sensor_model, device=T_sensor_world_startend.device
+                )
+                self.cached_sensor_params[str(unique_sensor_idx)] = {
+                    "rect_subsampled": subsample,
+                    "footprints": footprints,
+                    "parameters": sensor_model_parameters,
+                    "sensorlib_parameters": sensorlib_parameters,
+                }
 
-                    footprints = cached_sensor_params["footprints"]
-                    sensor_model_parameters = cached_sensor_params["parameters"]
-                    sensorlib_parameters = cached_sensor_params["sensorlib_parameters"]
-                else:
-                    # Subsample changed or cache empty: recompute footprints and sensorlib parameters.
-                    _, sensor_rays = self._compute_elements_and_sensor_rays(
-                        sensor_model, T_sensor_world_startend.device
-                    )
-                    footprints = compute_pixel_footprint(sensor_rays)[..., None]  # (height, width, 1)
-                    sensor_model_parameters = sensor_model.get_parameters()
-                    sensorlib_parameters = CameraModelConverter.convert(
-                        sensor_model, device=T_sensor_world_startend.device
-                    )
-                    self.cached_sensor_params[str(unique_sensor_idx)] = {
-                        "rect_subsampled": subsample,
-                        "footprints": footprints,
-                        "parameters": sensor_model_parameters,
-                        "sensorlib_parameters": sensorlib_parameters,
-                    }
+        translations, rotations = se3pose_from_matrix(T_sensor_world_startend)
+        poses_tquat_startend = torch.cat([translations, rotations], dim=1)
+        poses_tquat_startend = poses_tquat_startend.unsqueeze(0)
 
-        with ScopedTimer("CameraFreePoseViewGeometry/to_rendering_data/se3pose_from_matrix"):
-            translations, rotations = se3pose_from_matrix(T_sensor_world_startend)
-            poses_tquat_startend = torch.cat([translations, rotations], dim=1)
-            poses_tquat_startend = poses_tquat_startend.unsqueeze(0)
+        timestamps_cpu = timestamps_startend_us_cpu.flatten()
 
-        with ScopedTimer("CameraFreePoseViewGeometry/to_rendering_data/pixels_to_world_rays_shutter_pose"):
-            timestamps_cpu = timestamps_startend_us_cpu.flatten()
-
-            (world_rays, timestamps_us, _, _) = image_points_to_world_rays_shutter_pose(
-                image_points=None,
-                projection=sensorlib_parameters.projection,
-                external_distortion=sensorlib_parameters.external_distortion,
-                resolution=sensorlib_parameters.resolution,
-                shutter_type=sensorlib_parameters.shutter_type,
-                dynamic_pose=DynamicPose(
-                    start_pose=Pose(translation=translations[0], rotation=rotations[0]),
-                    end_pose=Pose(translation=translations[1], rotation=rotations[1]),
-                ),
-                start_timestamp_us=int(timestamps_cpu[0].item()),
-                end_timestamp_us=int(timestamps_cpu[1].item()),
-                return_timestamps=True,
-            )
+        (world_rays, timestamps_us, _, _) = image_points_to_world_rays_shutter_pose(
+            image_points=None,
+            projection=sensorlib_parameters.projection,
+            external_distortion=sensorlib_parameters.external_distortion,
+            resolution=sensorlib_parameters.resolution,
+            shutter_type=sensorlib_parameters.shutter_type,
+            dynamic_pose=DynamicPose(
+                start_pose=Pose(translation=translations[0], rotation=rotations[0]),
+                end_pose=Pose(translation=translations[1], rotation=rotations[1]),
+            ),
+            start_timestamp_us=int(timestamps_cpu[0].item()),
+            end_timestamp_us=int(timestamps_cpu[1].item()),
+            return_timestamps=True,
+        )
 
         rays = unpack_optional(world_rays)  # camera rays are in nre space
         rays = rays.reshape(sensorlib_parameters.resolution[1], sensorlib_parameters.resolution[0], 6)

@@ -54,7 +54,6 @@ py_library(
     visibility = DEFAULT_VISIBILITY,
     deps = [
         "//libs/vren:pylib",
-        "//nre/utils:pylib_profiling",
         pip_requirement("torch"),
         pip_requirement("einops"),
         pip_requirement("nvidia-ncore"),
