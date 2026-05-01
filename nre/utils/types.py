@@ -29,7 +29,6 @@ except ImportError:
 from dataclasses import dataclass, field, replace
 from enum import IntEnum, IntFlag, auto
 
-import dataclasses_json
 import lietorch as lt
 import numpy as np
 import numpy.typing as npt
@@ -107,7 +106,7 @@ class RayFlags(IntFlag):
 
 
 @dataclass(slots=True, kw_only=True)
-class FrameConversion(dataclasses_json.DataClassJsonMixin):
+class FrameConversion:
     """Represents parameters and functions to convert frame-associated data between different (potentially uniformly scaled) canonical 3d frames"""
 
     #: Homogeneous source -> target transformation matrix; its dtype declares the output dtype of this conversion.
@@ -198,7 +197,7 @@ class FrameConversion(dataclasses_json.DataClassJsonMixin):
 
 
 @dataclass(slots=True, kw_only=True)
-class RigTrajectories(dataclasses_json.DataClassJsonMixin):
+class RigTrajectories:
     """Represents a list of rig trajectories (using NCore frame conventions)"""
 
     # NCore world frame -> base frame rigid transformation (potentially geo-located)
@@ -208,7 +207,7 @@ class RigTrajectories(dataclasses_json.DataClassJsonMixin):
     world_to_nre: FrameConversion
 
     @dataclass(slots=True, kw_only=True)
-    class RigTrajectory(dataclasses_json.DataClassJsonMixin):
+    class RigTrajectory:
         """Represents a single rig trajectory with associated sensor and frame timestamps"""
 
         sequence_id: str  # the source sequence id of the current trajectory (might be shared with other trajectories)
@@ -259,7 +258,7 @@ class RigTrajectories(dataclasses_json.DataClassJsonMixin):
     rig_trajectories: list[RigTrajectory]  # indexed by trajectory index
 
     @dataclass(slots=True, kw_only=True)
-    class SensorCalibration(dataclasses_json.DataClassJsonMixin):
+    class SensorCalibration:
         """Represents a generic sensor-associated calibration"""
 
         sequence_id: str  # sequence id
