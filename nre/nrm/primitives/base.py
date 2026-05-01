@@ -38,10 +38,6 @@ class BaseNRMPrimitive(NRenderableModel):
     def state_dict_and_config(self) -> tuple[dict[str, Any], DictConfig]:
         """Used for serialization to be used in nrend."""
 
-    @abstractmethod
-    def get_checkpoint(self) -> Checkpoint:
-        """Used for serialization to be used in render."""
-
     @torch.no_grad()
     def serialize_to_json_dict(self, with_state_dict: bool = True) -> dict[str, Any]:
         """Used only during initialization time, and/or test time with nrend."""

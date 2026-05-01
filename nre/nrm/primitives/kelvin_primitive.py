@@ -18,7 +18,7 @@ from nre.nrm.primitives.base import BaseGaussiansNRMPrimitive
 from nre.nrm.utils.cubemap import rotate_sky_cubemap
 from nre.utils.batch import CameraFrameLabels, DataAndRenderingBatch, LidarFrameLabels, RenderingData
 from nre.utils.geometry import quat_mult_xyzw, so3_matrix_to_quat
-from nre.utils.types import Checkpoint, RayFlags, RigTrajectories
+from nre.utils.types import RayFlags, RigTrajectories
 
 
 logger = logging.getLogger(__name__)
@@ -118,13 +118,6 @@ class KelvinLayer:
     def __len__(self) -> int:
         return self.rotations.shape[0]
 
-    def get_checkpoint(self) -> Checkpoint:
-        return {
-            "rotations": self.rotations,
-            "scales": self.scales,
-            "rgb": self.rgb,
-        }
-
     @staticmethod
     def _validate_quaternion(quaternion: torch.Tensor) -> torch.Tensor:
         quat_norm_invalid = torch.norm(quaternion, dim=-1) < 1.0e-6
@@ -142,14 +135,6 @@ class KelvinLayer:
         rotations = self._validate_quaternion(self.rotations)
         rotations = quat_mult_xyzw(q_new.repeat(len(self), 1), rotations[:, [1, 2, 3, 0]])[:, [3, 0, 1, 2]]
         return replace(self, rotations=rotations)
-
-    @classmethod
-    def load_from_checkpoint(cls, checkpoint: Checkpoint) -> Self:
-        return cls(
-            rotations=checkpoint["rotations"],
-            scales=checkpoint["scales"],
-            rgb=checkpoint["rgb"],
-        )
 
     @classmethod
     def _concatenate_base(cls, layers: Sequence[KelvinLayer]) -> KelvinLayer:
@@ -185,30 +170,8 @@ class KelvinStaticLayer(KelvinLayer):
         if self.normals is not None:
             assert self.normals.shape == (len(self), 3), "normals must have shape (n_gaussians, 3)"
 
-    def get_checkpoint(self) -> Checkpoint:
-        ckpt: Checkpoint = {
-            "positions": self.positions,
-            "densities": self.densities,
-            **super().get_checkpoint(),
-        }
-        if self.semantic_class is not None:
-            ckpt["semantic_class"] = self.semantic_class
-        if self.normals is not None:
-            ckpt["normals"] = self.normals
-        return ckpt
-
     def __repr__(self) -> str:
         return f"StaticLayer(#GS={len(self) / 1e6:.2f}M)"
-
-    @classmethod
-    def load_from_checkpoint(cls, checkpoint: Checkpoint) -> Self:
-        return cls(
-            positions=checkpoint["positions"],
-            densities=checkpoint["densities"],
-            semantic_class=checkpoint.get("semantic_class"),
-            normals=checkpoint.get("normals"),
-            **asdict(KelvinLayer.load_from_checkpoint(checkpoint)),
-        )
 
     @torch.autocast(device_type="cuda", enabled=False)
     def rigid_transform(self, T_new: torch.Tensor) -> Self:
@@ -302,25 +265,6 @@ class KelvinDynamicLayer(KelvinLayer):
 
     def __repr__(self) -> str:
         return f"DynamicLayer(#GS={len(self) / 1e6:.2f}M, #KF={self.n_keyframes})"
-
-    def get_checkpoint(self) -> Checkpoint:
-        return {
-            "max_densities": self.max_densities,
-            "keyframe_positions": self.keyframe_positions,
-            "keyframe_timestamps_us": self.keyframe_timestamps_us,
-            "falloff": self.falloff,
-            **super().get_checkpoint(),
-        }
-
-    @classmethod
-    def load_from_checkpoint(cls, checkpoint: Checkpoint) -> Self:
-        return cls(
-            max_densities=checkpoint["max_densities"],
-            keyframe_positions=checkpoint["keyframe_positions"],
-            keyframe_timestamps_us=checkpoint["keyframe_timestamps_us"],
-            falloff=checkpoint["falloff"],
-            **asdict(KelvinLayer.load_from_checkpoint(checkpoint)),
-        )
 
     @torch.autocast(device_type="cuda", enabled=False)
     def rigid_transform(self, T_new: torch.Tensor) -> Self:
@@ -490,28 +434,6 @@ class KelvinNRMPrimitive(BaseGaussiansNRMPrimitive):
                     "density_kernel_planar": self.use_2dgs,
                 },
             }
-        )
-
-    def get_checkpoint(self) -> Checkpoint:
-        return {
-            "static_layer": self.static_layer.get_checkpoint(),
-            "dynamic_layers": [layer.get_checkpoint() for layer in self.dynamic_layers],
-            "sky_cubemap": self.sky_cubemap,
-            "affine_matrix": self.affine_matrix,
-            "use_2dgs": self.use_2dgs,
-        }
-
-    @classmethod
-    def load_from_checkpoint(
-        cls, checkpoint: Checkpoint, gaussians_renderer: BaseGaussianRenderer | None = None
-    ) -> Self:
-        return cls(
-            static_layer=KelvinStaticLayer.load_from_checkpoint(checkpoint["static_layer"]),
-            dynamic_layers=[KelvinDynamicLayer.load_from_checkpoint(layer) for layer in checkpoint["dynamic_layers"]],
-            sky_cubemap=checkpoint["sky_cubemap"],
-            affine_matrix=checkpoint["affine_matrix"],
-            use_2dgs=checkpoint["use_2dgs"],
-            gaussians_renderer=gaussians_renderer,
         )
 
     @torch.autocast(device_type="cuda", enabled=False)
