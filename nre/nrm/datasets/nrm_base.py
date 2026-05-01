@@ -23,9 +23,7 @@ import torch
 import torch.nn.functional as F
 
 import ncore.data
-import ncore.impl.common.transformations as ncore_transformations
 
-from ncore.sensors import CameraModel
 from nre.nrm.config.dataset import (
     CameraSubsamplerConfig,
 )
@@ -155,57 +153,6 @@ class CameraSubsampler:
             pixel_rect.j : pixel_rect.j + pixel_rect.height, pixel_rect.i : pixel_rect.i + pixel_rect.width
         ]
         return frame_data if batch_dim else frame_data[..., 0]
-
-    def apply_T_sensor_startend_timestamps(
-        self,
-        T_sensor_startend: np.ndarray,
-        frame_start_timestamp_us: int,
-        frame_end_timestamp_us: int,
-        camera_parameters: ncore.data.ConcreteCameraModelParametersUnion,
-    ) -> tuple[np.ndarray, int, int]:
-        """
-        Apply cropping to the start/end poses and timestamps.
-        T_sensor_startend represents start/end poses relative to nre frame,
-        which are interpolated to potentially _restricted_ local relative frame
-        times due to cropping
-        """
-        original_width = camera_parameters.resolution[0].item()
-        original_height = camera_parameters.resolution[1].item()
-        pixel_rect, _ = self._compute_pixel_rect(original_width, original_height)
-
-        rect_image_points_lt_rb = 0.5 + pixel_rect.subsample_factor * np.array(
-            [
-                [pixel_rect.i, pixel_rect.j],
-                [
-                    pixel_rect.i + (pixel_rect.width - 1.0 / pixel_rect.subsample_factor),
-                    pixel_rect.j + (pixel_rect.height - 1.0 / pixel_rect.subsample_factor),
-                ],
-            ],
-            dtype=np.float32,
-        )
-
-        camera_model = CameraModel.from_parameters(camera_parameters, device="cpu", dtype=torch.float32)
-        # Compute relative frame times for the cropped region
-        rect_relative_frame_times = np.sort(camera_model.image_points_relative_frame_times(rect_image_points_lt_rb))
-
-        # Interpolate sensor poses to the cropped region's relative frame times
-        T_sensor_startend_rect = ncore_transformations.PoseInterpolator(
-            T_sensor_startend,
-            [0.0, 1.0],
-        ).interpolate_to_timestamps(rect_relative_frame_times)
-
-        # Convert relative times to absolute timestamps
-        camera_frame_duration_us = frame_end_timestamp_us - frame_start_timestamp_us
-
-        frame_start_timestamp_us_rect = frame_start_timestamp_us + int(
-            rect_relative_frame_times[0] * camera_frame_duration_us
-        )
-        frame_end_timestamp_us_rect = frame_start_timestamp_us + int(
-            rect_relative_frame_times[1] * camera_frame_duration_us
-        )
-
-        return T_sensor_startend_rect, frame_start_timestamp_us_rect, frame_end_timestamp_us_rect
-
 
 class NRMDataError(Exception):
     """
