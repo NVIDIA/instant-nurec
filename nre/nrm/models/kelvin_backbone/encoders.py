@@ -27,7 +27,7 @@ from nre.nrm.config.models import (
     KelvinModelConfig,
 )
 from nre.nrm.models.blocks.aa_vit import AlternateAttentionVisionTransformer
-from nre.nrm.models.blocks.dav3 import CameraEncoder, convert_dav3_state_dict_to_nrm
+from nre.nrm.models.blocks.dav3 import CameraEncoder
 from nre.nrm.models.blocks.embeds import PatchEmbed
 from nre.nrm.models.kelvin_backbone.base import (
     KelvinLatent,
@@ -45,12 +45,6 @@ logger = logging.getLogger(__name__)
 
 
 class KelvinEncoderBase(nn.Module, ABC):
-    @abstractmethod
-    def initialize_weights(self, loaded_state_dicts: dict[str, dict[str, torch.Tensor]]):
-        """
-        Initialize the weights of the model from the loaded state dicts.
-        """
-
     @abstractmethod
     def encode(
         self,
@@ -96,23 +90,6 @@ class KelvinDAv3Encoder(KelvinEncoderBase):
             checkpointing=config.checkpointing,
         )
         self.take_block_indices = config.take_block_indices
-
-    def initialize_weights(self, loaded_state_dicts: dict[str, dict[str, torch.Tensor]]):
-        if "dav3" not in loaded_state_dicts:
-            logger.warning("[KelvinDAv3Encoder] No dav3 state dict found, skipping weight initialization.")
-            return
-
-        state_dict = convert_dav3_state_dict_to_nrm(
-            loaded_state_dicts["dav3"],
-            patch_embed_name="patch_embed_img",
-            backbone_name="vit",
-            dpt_reassemble_name=None,
-            dpt_depth_head_name=None,
-            dpt_rays_head_name=None,
-            camera_encoder_name="embed_camera",
-        )
-        del state_dict["vit.default_global_cls_tokens"]
-        self.load_state_dict(state_dict, strict=True)
 
     @staticmethod
     def _fov_wh_from_pinhole(pinhole_parameters: OpenCVPinholeCameraModelParameters) -> torch.Tensor:

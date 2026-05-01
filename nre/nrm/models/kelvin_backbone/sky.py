@@ -36,12 +36,6 @@ from nre.utils.misc import unpack_optional
 
 class KelvinSkyBase(nn.Module, ABC):
     @abstractmethod
-    def initialize_weights(self, loaded_state_dicts: dict[str, dict[str, torch.Tensor]]):
-        """
-        Initialize the weights of the model from the loaded state dicts.
-        """
-
-    @abstractmethod
     def decode(self, encoded_latent: KelvinLatent, batches: list[DataAndRenderingBatch]) -> torch.Tensor:
         """
         Decode the encoded latent into a sky cubemap.
@@ -180,9 +174,6 @@ class CubemapDecoderSky(KelvinSkyBase):
 
         self.fusion_dim = config.fusion_dim
         self.upsample = self.DPTFusionUpsampler(self.embed_dim, 128, self.sky_cubemap_size, self.fusion_dim)
-
-    def initialize_weights(self, loaded_state_dicts: dict[str, dict[str, torch.Tensor]]):
-        pass
 
     def decode(self, encoded_latent: KelvinLatent, batches: list[DataAndRenderingBatch]) -> torch.Tensor:
         """

@@ -31,7 +31,6 @@ from nre.nrm.config.models import (
 from nre.nrm.models.activations import GaussianActivations, GaussianParams
 from nre.nrm.models.blocks.aa_vit import AlternateAttentionVisionTransformer
 from nre.nrm.models.blocks.attention import CrossAttentionBlock, KVProjector
-from nre.nrm.models.blocks.dav3 import convert_dav3_state_dict_to_nrm
 from nre.nrm.models.blocks.dpt import DPTFullHead
 from nre.nrm.models.blocks.embeds import ContinuousTimeEmbed
 from nre.nrm.models.kelvin_backbone.base import (
@@ -61,12 +60,6 @@ class KelvinDecoderReturn:
 
 
 class KelvinDecoderBase(nn.Module, ABC):
-    @abstractmethod
-    def initialize_weights(self, loaded_state_dicts: dict[str, dict[str, torch.Tensor]]):
-        """
-        Initialize the weights of the model from the loaded state dicts.
-        """
-
     @abstractmethod
     def decode(
         self,
@@ -325,33 +318,6 @@ class KelvinDPTDecoder(KelvinDecoderBase):
 
         self.cuboids_dims_padding = nn.Buffer(torch.tensor(model_config.track_padding_m, dtype=torch.float32))
         self.gaussian_activations = GaussianActivations(model_config.activations)
-
-    def initialize_weights(self, loaded_state_dicts: dict[str, dict[str, torch.Tensor]]):
-        if "dav3" not in loaded_state_dicts:
-            logger.warning("[KelvinDPTDecoder] No dav3 state dict found, skipping weight initialization.")
-            return
-
-        state_dict = convert_dav3_state_dict_to_nrm(
-            loaded_state_dicts["dav3"],
-            patch_embed_name=None,
-            backbone_name=None,
-            dpt_reassemble_name="depth_head.reassemble",
-            dpt_depth_head_name="depth_head.fusion_head",
-            dpt_rays_head_name=None,
-            camera_encoder_name=None,
-        )
-        self.context_head.zero_init(init_values=self.context_head_init_values)
-        self.gaussians_head.zero_init(init_values=self.gaussians_head_init_values)
-        for prefix, module_state_dict in (
-            ("rgb_fusion", self.rgb_fusion.state_dict()),
-            ("context_head", self.context_head.state_dict()),
-            ("context_motion_head", self.context_motion_head.state_dict()),
-            ("gaussians_head", self.gaussians_head.state_dict()),
-        ):
-            state_dict |= {f"{prefix}.{k}": v for k, v in module_state_dict.items()}
-
-        state_dict["cuboids_dims_padding"] = self.cuboids_dims_padding.data
-        self.load_state_dict(state_dict, strict=True)
 
     @ScopedTimer("KelvinDPTDecoder.decode")
     @torch.autocast("cuda", enabled=False)
