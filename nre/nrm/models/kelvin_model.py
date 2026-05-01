@@ -45,7 +45,7 @@ class KelvinNRM(BaseNRM[KelvinNRMPrimitive]):
         self.post_processing: Optional[PerCameraAffinePostProcessing] = None
         if config.post_processing.enabled:
             self.post_processing = PerCameraAffinePostProcessing(
-                embed_dim=config.encoder.embed_dim, init_token_scale=0.02, cross_attend=True, kv_norm=True
+                embed_dim=config.encoder.embed_dim, init_token_scale=0.02
             )
         self.scene_rescale = self.config.scene_rescale
         self.cuboids_dims_padding = torch.nn.Buffer(torch.tensor(self.config.track_padding_m, dtype=torch.float32))
