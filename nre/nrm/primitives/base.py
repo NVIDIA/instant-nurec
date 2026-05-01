@@ -15,13 +15,12 @@ from typing import Self
 
 import torch
 
-from nre.models.nrenderable import NRenderableModel
 from nre.nrm.config.models import PrimitiveExportPreprocessConfig
 from nre.utils.batch import DataAndRenderingBatch
 from nre.utils.types import RigTrajectories
 
 
-class BaseNRMPrimitive(NRenderableModel):
+class BaseNRMPrimitive:
     """
     Base class for all renderable primitives reconstructed by an NRM.
     """
