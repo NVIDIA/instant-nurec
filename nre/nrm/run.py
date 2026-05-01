@@ -17,7 +17,6 @@ import nre.nrm.datasets  # noqa: F401  (populates dataset registry)
 import nre.nrm.systems
 
 from nre.nrm.config.nrm import NRMConfig
-from nre.nrm.systems.base import BaseNRMSystem
 
 
 logger = logging.getLogger(__name__)
@@ -28,32 +27,24 @@ def _seed_everything(seed: int) -> None:
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(seed)
+    torch.cuda.manual_seed_all(seed)
 
 
-def _select_device() -> torch.device:
-    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-
-def setup_environment_and_logger(config: NRMConfig) -> logging.Logger:
-    log = logging.getLogger(__name__)
-    if config.verbose:
-        log.setLevel(logging.DEBUG)
-    _seed_everything(config.seed)
-    return log
-
-
-def dump_parsed_config(path: str, config: NRMConfig) -> None:
-    """Dump the typed config to ``path`` as plain YAML (no hydra/omegaconf)."""
-    with open(path, "w") as fp:
+def run_predict(config: NRMConfig) -> None:
+    """Run the standalone Kelvin predict pipeline against an already-typed config."""
+    os.makedirs(config.config_dir, exist_ok=True)
+    with open(os.path.join(config.config_dir, "parsed.yaml"), "w") as fp:
         yaml.safe_dump(config.model_dump(mode="json"), fp, sort_keys=False)
 
+    _seed_everything(config.seed)
+    logger.info("NRM RUN \U0001f194: %s", config.run_id)
 
-def launch_predict_loop(system: BaseNRMSystem) -> None:
-    device = _select_device()
-    system.to(device)
-    system.eval()
+    assert config.resume_weights_only and config.resume, (
+        "Standalone predict requires resume_weights_only=True with a checkpoint path."
+    )
+    system = nre.nrm.systems.make(config.system.name, config, load_from_checkpoint=config.resume)
+    device = torch.device("cuda")
+    system.to(device).eval()
 
     dataloader = system.datamodule.predict_dataloader()
     with torch.inference_mode():
@@ -62,16 +53,3 @@ def launch_predict_loop(system: BaseNRMSystem) -> None:
             system.on_predict_batch_start(batch, batch_idx)
             outputs = system.predict_step(batch, batch_idx)
             system.on_predict_batch_end(outputs, batch, batch_idx)
-
-
-def run_predict(config: NRMConfig) -> None:
-    """Run the standalone Kelvin predict pipeline against an already-typed config."""
-    os.makedirs(config.config_dir, exist_ok=True)
-    dump_parsed_config(os.path.join(config.config_dir, "parsed.yaml"), config)
-
-    setup_environment_and_logger(config)
-    logger.info("NRM RUN 🆔: %s", config.run_id)
-
-    assert config.resume_weights_only and config.resume, "Standalone predict requires resume_weights_only=True with a checkpoint path."
-    system = nre.nrm.systems.make(config.system.name, config, load_from_checkpoint=config.resume)
-    launch_predict_loop(system)
