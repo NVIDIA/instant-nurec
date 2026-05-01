@@ -8,24 +8,14 @@
 
 from __future__ import annotations
 
-from enum import IntEnum
 from typing import Any, Callable
-
-
-class TimingTag(IntEnum):
-    DEFAULT = 0
-    DATALOADER = 1
-    TRAIN_STEP = 2
-    BACKWARD = 3
-    OPTIMIZER = 4
 
 
 class ScopedTimer:
     """No-op context manager + decorator. Real implementation removed."""
 
-    def __init__(self, name: str = "", tag: TimingTag = TimingTag.DEFAULT, *_args: Any, **_kwargs: Any):
+    def __init__(self, name: str = "", *_args: Any, **_kwargs: Any):
         self.name = name
-        self.tag = tag
 
     def __enter__(self) -> "ScopedTimer":
         return self
@@ -35,7 +25,3 @@ class ScopedTimer:
 
     def __call__(self, fn: Callable[..., Any]) -> Callable[..., Any]:
         return fn
-
-
-def mark_frame_boundary(_name: str | None = None) -> None:
-    return None
