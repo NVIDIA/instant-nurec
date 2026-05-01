@@ -57,10 +57,6 @@ class Version(BaseModel):
             git_commit_date=datetime.fromtimestamp(0),
         )
 
-    @classmethod
-    def from_components(cls, major: int, minor: int, patch: int) -> "Version":
-        return cls(version_major=major, version_minor=minor, version_patch=patch)
-
     def semantic_string(self) -> str:
         """Returns string-representation of semantic version part 'VERSION_MAJOR.VERSION_MINOR.VERSION_PATCH'"""
         return f"{self.version_major}.{self.version_minor}.{self.version_patch}"
@@ -77,39 +73,6 @@ class Version(BaseModel):
             and repr(self) == repr(other)
             and self.git_commit_date == other.git_commit_date
         )
-
-    def __ne__(self, other: object) -> bool:
-        return not self.__eq__(other)
-
-    def __lt__(self, other: object) -> bool:
-        """Compare versions based on semantic version components only."""
-        if not isinstance(other, self.__class__):
-            return NotImplemented
-
-        # Compare major, minor, patch in order
-        if self.version_major != other.version_major:
-            return self.version_major < other.version_major
-        if self.version_minor != other.version_minor:
-            return self.version_minor < other.version_minor
-        return self.version_patch < other.version_patch
-
-    def __le__(self, other: object) -> bool:
-        """Less than or equal comparison based on semantic version components only."""
-        if not isinstance(other, self.__class__):
-            return NotImplemented
-        return not (other < self)
-
-    def __gt__(self, other: object) -> bool:
-        """Greater than comparison based on semantic version components only."""
-        if not isinstance(other, self.__class__):
-            return NotImplemented
-        return other < self
-
-    def __ge__(self, other: object) -> bool:
-        """Greater than or equal comparison based on semantic version components only."""
-        if not isinstance(other, self.__class__):
-            return NotImplemented
-        return not (self < other)
 
     def model_post_init(self, __context) -> None:
         self.version_string = repr(self)
