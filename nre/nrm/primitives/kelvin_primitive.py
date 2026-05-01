@@ -313,7 +313,6 @@ class KelvinNRMPrimitive(BaseGaussiansNRMPrimitive):
         dynamic_layers: list[KelvinDynamicLayer],
         sky_cubemap: torch.Tensor,
         affine_matrix: torch.Tensor,
-        use_2dgs: bool,
         gaussians_renderer: BaseGaussianRenderer | None,
     ):
         super().__init__(
@@ -325,7 +324,6 @@ class KelvinNRMPrimitive(BaseGaussiansNRMPrimitive):
         self.dynamic_layers = dynamic_layers
         self.sky_cubemap = sky_cubemap
         self.affine_matrix = affine_matrix
-        self.use_2dgs = use_2dgs
         self._post_init_validation()
 
     def _post_init_validation(self):
@@ -366,7 +364,6 @@ class KelvinNRMPrimitive(BaseGaussiansNRMPrimitive):
             dynamic_layers=new_dynamic_layers,
             sky_cubemap=self.sky_cubemap,
             affine_matrix=self.affine_matrix,
-            use_2dgs=self.use_2dgs,
             gaussians_renderer=self.gaussians_renderer,
         )
 
@@ -377,7 +374,6 @@ class KelvinNRMPrimitive(BaseGaussiansNRMPrimitive):
             dynamic_layers=[layer.rigid_transform(T_new) for layer in self.dynamic_layers],
             sky_cubemap=rotate_sky_cubemap(self.sky_cubemap, T_new[:3, :3]),
             affine_matrix=self.affine_matrix,
-            use_2dgs=self.use_2dgs,
             gaussians_renderer=self.gaussians_renderer,
         )
 

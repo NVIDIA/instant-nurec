@@ -57,7 +57,6 @@ class KelvinNRM(BaseNRM[KelvinNRMPrimitive]):
         # Predict mode never invokes primitive.forward()/render(), so the
         # gaussians_renderer is set to None and the factory + nrend deps are
         # not exercised.
-        self.use_2dgs = self.config.use_2dgs
         self.gaussians_renderer = None
 
     @staticmethod
@@ -189,7 +188,6 @@ class KelvinNRM(BaseNRM[KelvinNRMPrimitive]):
                 dynamic_layers=dynamic_layers[bidx],
                 sky_cubemap=sky_cubemaps[bidx],
                 affine_matrix=affine_matrix[bidx],
-                use_2dgs=self.use_2dgs,
                 gaussians_renderer=self.gaussians_renderer,
             )
             primitives.append(primitive)

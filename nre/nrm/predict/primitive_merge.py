@@ -395,14 +395,12 @@ class KelvinPrimitiveMerge:
             [p.sky_cubemap for p in all_primitives], batch, batch_rig_transforms
         )
 
-        first_primitive = all_primitives[0]
         merged_primitive = KelvinNRMPrimitive(
             static_layer=KelvinStaticLayer.concatenate(all_static_layers),
             dynamic_layers=[KelvinDynamicLayer.concatenate(all_dynamic_layers)],
             sky_cubemap=merged_sky_cubemap,
             affine_matrix=merged_affine_matrix,
-            use_2dgs=first_primitive.use_2dgs,
-            gaussians_renderer=first_primitive.gaussians_renderer,
+            gaussians_renderer=all_primitives[0].gaussians_renderer,
         )
         return merged_primitive
 
