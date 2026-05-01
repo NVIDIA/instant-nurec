@@ -225,31 +225,6 @@ class BivariateWindshieldDistortion(ExternalDistortion):
             v_poly_degree=v_poly_degree,
         )
 
-    @property
-    def h_poly(self) -> Tensor:
-        """(MAX_H_POLYNOMIAL_TERMS,) horizontal polynomial coefficients (padded to size MAX_H_POLYNOMIAL_TERMS)."""
-        return self.distortion_coeffs[0:MAX_H_POLYNOMIAL_TERMS]
-
-    @property
-    def v_poly(self) -> Tensor:
-        """(MAX_V_POLYNOMIAL_TERMS,) vertical polynomial coefficients (padded to size MAX_V_POLYNOMIAL_TERMS)."""
-        return self.distortion_coeffs[MAX_H_POLYNOMIAL_TERMS : MAX_H_POLYNOMIAL_TERMS + MAX_V_POLYNOMIAL_TERMS]
-
-    @property
-    def h_poly_inv(self) -> Tensor:
-        """(MAX_H_POLYNOMIAL_TERMS,) horizontal inverse polynomial coefficients (padded to size MAX_H_POLYNOMIAL_TERMS)."""
-        return self.distortion_coeffs[
-            MAX_H_POLYNOMIAL_TERMS + MAX_V_POLYNOMIAL_TERMS : 2 * MAX_H_POLYNOMIAL_TERMS + MAX_V_POLYNOMIAL_TERMS
-        ]
-
-    @property
-    def v_poly_inv(self) -> Tensor:
-        """(MAX_V_POLYNOMIAL_TERMS,) vertical inverse polynomial coefficients (padded to size MAX_V_POLYNOMIAL_TERMS)."""
-        return self.distortion_coeffs[
-            2 * MAX_H_POLYNOMIAL_TERMS + MAX_V_POLYNOMIAL_TERMS : 2 * (MAX_H_POLYNOMIAL_TERMS + MAX_V_POLYNOMIAL_TERMS)
-        ]
-
-
 # Camera projection parameter structures
 @dataclass
 class CameraProjection:
@@ -498,11 +473,6 @@ class OpenCVFisheyeProjection(CameraProjection):
     def forward_poly(self) -> Tensor:
         """(4,) [k1, k2, k3, k4] forward distortion coefficients."""
         return self.intrinsics[4:8]
-
-    @property
-    def approx_backward_factor(self) -> Tensor:
-        """(1,) approximate backward factor for back projection."""
-        return self.intrinsics[8]
 
     @property
     def resolution(self) -> Tensor:
