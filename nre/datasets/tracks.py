@@ -373,84 +373,6 @@ class CuboidTracks(Tracks):
             )
 
         @staticmethod
-        def transform_with_frame_conversion(
-            cuboid_tracks: CuboidTracks,
-            source_to_target_frame_conversion: FrameConversion | None,
-            T_local_to_common_target: np.ndarray | torch.Tensor | None,
-        ) -> CuboidTracks:
-            """Transforms the cuboid tracks from their current frame to a target frame"""
-
-            if not cuboid_tracks.n_tracks:
-                # no need to transform empty tracks
-                return cuboid_tracks
-
-            # Convert from 7d to SE3 matrix and apply transformation
-            tracks_poses = cuboid_tracks.tracks_poses.matrix()
-
-            if isinstance(T_local_to_common_target, np.ndarray):
-                T_local_to_common_target = torch.from_numpy(T_local_to_common_target)
-
-            if T_local_to_common_target is not None:
-                tracks_poses = T_local_to_common_target.to(tracks_poses) @ tracks_poses
-
-            cuboids_dims = cuboid_tracks.cuboids_dims
-            if source_to_target_frame_conversion is not None:
-                T_np, S_np = source_to_target_frame_conversion.get_transformation_matrices()
-                T = torch.from_numpy(T_np).to(tracks_poses)
-                S = torch.from_numpy(S_np).to(tracks_poses)
-                tracks_poses = T @ tracks_poses @ S
-
-                # Apply transform's scale to the cuboid dimensions
-                cuboids_dims = cuboids_dims / torch.diag(S)[None, :3]
-
-            return CuboidTracks(
-                # base tracks part
-                tracks_data=TracksData(
-                    tracks_id=cuboid_tracks.tracks_id,
-                    tracks_packinfo=cuboid_tracks.tracks_packinfo,
-                    tracks_poses=lt.SE3(se3_matrix_to_tquat(tracks_poses)),
-                    tracks_timestamps_us=cuboid_tracks.tracks_timestamps_us,
-                    tracks_flags=cuboid_tracks.tracks_flags,
-                    max_track_n_poses=cuboid_tracks.max_track_n_poses,
-                    tracks_label_class=cuboid_tracks.tracks_label_class,
-                ),
-                # cuboid-tracks-specific part
-                cuboidtracks_data=CuboidTracksData(
-                    cuboids_dims=cuboids_dims,
-                ),
-            )
-
-        @staticmethod
-        def transform_with_delta_poses(
-            cuboid_tracks: CuboidTracks,
-            delta_poses: lt.SE3,
-            left_multiply: bool = True,
-        ) -> CuboidTracks:
-            """Transforms the cuboid tracks according to the delta poses"""
-
-            if left_multiply:
-                tracks_poses = delta_poses * cuboid_tracks.tracks_poses
-            else:
-                tracks_poses = cuboid_tracks.tracks_poses * delta_poses
-
-            return CuboidTracks(
-                # base tracks part
-                tracks_data=TracksData(
-                    tracks_id=cuboid_tracks.tracks_id,
-                    tracks_packinfo=cuboid_tracks.tracks_packinfo,
-                    tracks_poses=tracks_poses,
-                    tracks_timestamps_us=cuboid_tracks.tracks_timestamps_us,
-                    tracks_flags=cuboid_tracks.tracks_flags,
-                    max_track_n_poses=cuboid_tracks.max_track_n_poses,
-                    tracks_label_class=cuboid_tracks.tracks_label_class,
-                ),
-                # cuboid-tracks-specific part
-                cuboidtracks_data=CuboidTracksData(
-                    cuboids_dims=cuboid_tracks.cuboids_dims,
-                ),
-            )
-
-        @staticmethod
         def freeze(
             cuboid_tracks: CuboidTracks,
             min_timestamps_us: torch.Tensor,
@@ -581,15 +503,6 @@ class CuboidTracks(Tracks):
             )
 
         @staticmethod
-        def subset_from_tracks_id(cuboid_tracks: CuboidTracks, tracks_id: list[str]) -> CuboidTracks:
-            """
-            Subsets the cuboid tracks so that the new tracks_id matches argument tracks_id
-            This operation keeps the gradient flow.
-            """
-            indices = [cuboid_tracks.tracks_id.index(tid) for tid in tracks_id]
-            return CuboidTracks.Ops.subset_from_indices(cuboid_tracks, indices)
-
-        @staticmethod
         def subset_from_mask(cuboid_tracks: CuboidTracks, mask: torch.Tensor) -> CuboidTracks:
             """
             Subsets the cuboid tracks so that the new tracks_id matches the mask
@@ -597,36 +510,6 @@ class CuboidTracks(Tracks):
             """
             indices = torch.nonzero(mask, as_tuple=False).squeeze(1)
             return CuboidTracks.Ops.subset_from_indices(cuboid_tracks, indices)
-
-        @staticmethod
-        def clean_track_ids(cuboid_tracks: CuboidTracks, cleaner_fn: Callable[[str], str]) -> CuboidTracks:
-            """
-            Cleans the track IDs using the provided cleaner function.
-            Returns a new CuboidTracks with cleaned track IDs.
-
-            Args:
-                cuboid_tracks: The cuboid tracks to clean
-                cleaner_fn: A function that takes a track ID string and returns a cleaned version
-
-            Returns:
-                A new CuboidTracks with cleaned track IDs
-            """
-            cleaned_tracks_id = [cleaner_fn(tid) for tid in cuboid_tracks.tracks_id]
-
-            return CuboidTracks(
-                tracks_data=TracksData(
-                    tracks_id=cleaned_tracks_id,
-                    tracks_packinfo=cuboid_tracks.tracks_packinfo,
-                    tracks_poses=cuboid_tracks.tracks_poses,
-                    tracks_timestamps_us=cuboid_tracks.tracks_timestamps_us,
-                    tracks_flags=cuboid_tracks.tracks_flags,
-                    max_track_n_poses=cuboid_tracks.max_track_n_poses,
-                    tracks_label_class=cuboid_tracks.tracks_label_class,
-                ),
-                cuboidtracks_data=CuboidTracksData(
-                    cuboids_dims=cuboid_tracks.cuboids_dims,
-                ),
-            )
 
     def to_device(self, device):
         return CuboidTracks(
@@ -734,27 +617,6 @@ class CuboidTracks(Tracks):
         )
         return interpolated_poses, interpolated_tracks_idx.reshape(data_shape)
 
-    def frame_poses_interpolation(
-        self,
-        frame_timestamps_us: torch.Tensor,
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        """
-        Computes the interpolated poses for a given frame that has been captured between the given timestamps pair
-
-        Inputs:
-        - frame_timestamps_us: frame start and end timestamps between which the frame has been captured , 2 [int64]
-
-        Returns:
-        - num_valid_tracks : number of track having a valid poses within the frame capture time, 1 [int]
-        - track_ids : tracks mapping idx and unique ids corresponding to the return poses, num_valid_tracks [intx2]
-        - start_poses : interpolated poses at the frame start timestamp, num_valid_tracks x 7 [float]
-        - end_poses : interpolated poses at the frame end timestamp, num_valid_tracks x 7 [float]
-        """
-
-        return vren.cuboidtracks_frame_poses_interpolation(
-            frame_timestamps_us, self.tracks_packinfo, self.tracks_poses.data, self.tracks_timestamps_us
-        )
-
     def interpolate_tracks_poses(
         self,
         timestamps_us: torch.Tensor,
@@ -814,48 +676,4 @@ class CuboidTracks(Tracks):
 
         return (interpolated_pose, interpolated_mask)
 
-    @torch.autocast("cuda", enabled=False)
-    def warp_world_points_to_timestamps(
-        self,
-        world_points: torch.Tensor,
-        points_timestamps_us: torch.Tensor,
-        target_timestamps_us: torch.Tensor,
-        cuboids_dims_padding: torch.Tensor | None = None,
-    ) -> torch.Tensor:
-        """
-        Warp the world points to the target timestamps using the cuboid tracks.
-
-        Inputs:
-        - world_points: The world points to warp. [..., 3] (float32)
-        - points_timestamps_us: The timestamps of the world points. [...,] (int64)
-        - target_timestamps_us: The target timestamps to warp to. [...,] (int64)
-
-        Returns:
-        - The warped world points. [..., 3] (float32)
-        """
-        data_shape = world_points.shape[:-1]
-
-        world_points = world_points.reshape(-1, 3)
-        points_timestamps_us = points_timestamps_us.reshape(-1)
-        target_timestamps_us = target_timestamps_us.reshape(-1)
-
-        interpolated_poses, interpolated_tracks_idx = self.point_intersection_interpolate_pose(
-            points=world_points,
-            points_timestamps_us=points_timestamps_us,
-            cuboids_dims_padding=cuboids_dims_padding,
-        )
-
-        # Subselect dynamic points to save computation.
-        new_world_points = world_points.clone()
-        dynamic_mask = torch.where(interpolated_tracks_idx != -1)[0]
-        if len(dynamic_mask) > 0:
-            interpolated_poses = interpolated_poses[dynamic_mask]
-            current_pose = self.interpolate_tracks_poses(
-                timestamps_us=target_timestamps_us[dynamic_mask],
-                tracks_idx=interpolated_tracks_idx[dynamic_mask],
-            )
-            xyz_rel_pose = current_pose * interpolated_poses.inv()
-            new_world_points[dynamic_mask] = xyz_rel_pose * new_world_points[dynamic_mask]  # type: ignore
-
-        return new_world_points.reshape(data_shape + (3,))
 
