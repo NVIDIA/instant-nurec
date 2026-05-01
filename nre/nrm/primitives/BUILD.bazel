@@ -34,7 +34,6 @@ py_library(
     deps = [
         pip_requirement("omegaconf"),
         pip_requirement("torch"),
-        "//nre/config:pylib_version",
         "//nre/models:pylib",
         "//nre/models/gaussians:pylib",
         "//nre/nrm/config:pylib",

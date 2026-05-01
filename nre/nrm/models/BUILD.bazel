@@ -40,7 +40,6 @@ py_library(
         pip_requirement("numpy"),
         pip_requirement("einops"),
         pip_requirement("safetensors"),
-        "//nre/config:pylib_version",
         "//nre/datasets:pylib_tracks",
         "//nre/models:pylib_nn_extensions",
         "//nre/nrm/config:pylib",

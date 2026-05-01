@@ -23,26 +23,6 @@ filegroup(
     ],
 )
 
-# Please see bazel/version/BUILD.bazel for more information on NRE's version determination system
-py_library(
-    name = "pylib_version",
-    srcs = [
-        "version.py",
-    ],
-    data = ["//bazel/version:workspace_status.sh"],
-    visibility = DEFAULT_VISIBILITY + [
-        # Add visibility for //:run
-        "//:__pkg__",
-        # Add visibility for //apps
-        # Add visibility for //internal/scripts/kratos
-        # Add visibility for //internal/workflows
-    ],
-    deps = [
-        pip_requirement("pydantic"),
-        pip_requirement("pyyaml"),
-    ],
-)
-
 py_library(
     name = "pylib_base_schema",
     srcs = ["base_schema.py"],
@@ -70,7 +50,6 @@ py_library(
         pip_requirement("hydra-core"),
         pip_requirement("nvidia-ncore"),
         ":pylib_base_schema",
-        ":pylib_version",
         "//nre:pylib_reporoot",
         "//nre/utils:pylib_misc",
     ],

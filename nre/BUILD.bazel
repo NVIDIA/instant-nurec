@@ -47,7 +47,6 @@ py_library(
     ],
     deps = [
         ":pylib_reporoot",
-        "//nre/config:pylib_version",
         "//nre/utils:pylib_colored_exceptions",
         "//nre/utils:pylib_misc",
     ] + select({
