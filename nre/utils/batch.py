@@ -13,7 +13,7 @@ from __future__ import annotations
 import queue
 
 from dataclasses import dataclass, fields, is_dataclass
-from typing import Any, List, Optional, Self, Sequence, Tuple, TypeAlias, TypeVar, Union, cast
+from typing import Any, List, Self, Sequence, Tuple, TypeAlias, TypeVar, Union, cast
 
 import torch
 

@@ -13,7 +13,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-from typing import Optional, Self, TypeAlias, Union, cast
+from typing import Self, TypeAlias, Union, cast
 
 import torch
 
