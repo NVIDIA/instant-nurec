@@ -68,7 +68,7 @@ class BaseNRMSystem(LightningModule, ABC):
         assert config.loss is not None
 
         # Slang could not properly dispatch disabled loss functions, giving empty tensors.
-        self.loss = LossAggregator(config.loss, config.system.trainer, force_disable_cuda=True)
+        self.loss = LossAggregator(config.loss, force_disable_cuda=True)
 
         self.media_logger = BatchMediaLogger(self, self.config)
         self.last_loss_return = None

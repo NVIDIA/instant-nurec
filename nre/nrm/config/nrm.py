@@ -28,7 +28,7 @@ import nre.config.parse  # noqa: F401
 from libs.losses.orchestration.config import LossConfig
 from nre.config.base_schema import BaseConfigSchema, Field
 from nre.config.logger import BatchMediaLoggerConfigMixin, LoggerConfigType
-from nre.config.trainer import TrainerConfig, infer_slurm_environment
+from nre.config.trainer import infer_slurm_environment
 from nre.config.version import Version, get_version
 from nre.nrm.config.dataset import NRMSplitsConfig
 from nre.nrm.config.models import KelvinModelConfig
@@ -137,25 +137,6 @@ class BaseNRMSystemConfig(BatchMediaLoggerConfigMixin, BaseConfigSchema):
                 "enable_render_global_step > 0 and multi-GPU training. Forcing strategy to ddp_find_unused_parameters."
             )
             self.strategy = "ddp_find_unused_parameters"
-
-    @property
-    def trainer(self) -> TrainerConfig:
-        return TrainerConfig(
-            world_size=self.world_size,
-            device_count=self.device_count,
-            max_epochs=self.max_epochs,
-            check_val_every_n_epoch=self.check_val_every_n_epoch,
-            precision=self.precision,
-            log_every_n_steps=self.log_every_n_steps,
-            enable_progress_bar=False,
-            num_sanity_val_steps=self.num_sanity_val_steps,
-            num_nodes=self.num_nodes,
-            # Do not rescale training schedule
-            relative_lr=False,
-            relative_schedule=False,
-            relative_num_workers=False,
-        )
-
 
 class GaussiansNRMSystemConfig(BaseNRMSystemConfig):
     """
