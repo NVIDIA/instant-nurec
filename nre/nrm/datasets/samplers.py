@@ -110,37 +110,6 @@ def random_valid_start_time_from_intervals(
         sample_time -= interval.valid_integers
     raise RuntimeError("Should not reach here")
 
-
-def random_valid_start_value_from_intervals(
-    rng: np.random.Generator,
-    intervals: list[tuple[float, float]],
-    total_value_gap: float,
-) -> float:
-    """
-    Args:
-        rng (np.random.Generator): Random number generator.
-        intervals (list[tuple[float, float]]): List of intervals to sample from (inclusive).
-        total_value_gap (float): Total value gap to ensure the selected value is valid.
-
-    Returns:
-        float: A valid start value where [ans, ans + total_value_gap] is within one of the intervals.
-    """
-
-    valid_start_intervals: list[tuple[float, float]] = [
-        (st, ed - total_value_gap) for (st, ed) in intervals if (ed - st) >= total_value_gap
-    ]
-    assert len(valid_start_intervals) > 0, "No valid intervals to sample from"
-
-    # Pick a random start time from the valid intervals
-    total_sampled_value = sum((ed - st) for (st, ed) in valid_start_intervals)
-    sample_value = rng.uniform(0, total_sampled_value)
-    for st, ed in valid_start_intervals:
-        if sample_value < (ed - st):
-            return st + sample_value
-        sample_value -= ed - st
-    raise RuntimeError("Should not reach here")
-
-
 def sample_supervision_frame_batch(
     config: SupervisionFrameBatchParamsConfig,
     rng: np.random.Generator,

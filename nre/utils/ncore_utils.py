@@ -309,13 +309,6 @@ class AuxShardDataLoader:
         """Check if ego-mask data exists. If camera_id is provided, check availability for that camera."""
         return self._has_base_group(EGO_MASK_BASE_GROUP, camera_id)
 
-    def get_egomask_meta(self, camera_id: str) -> dict:
-        """Return metadata for ego-mask estimation for a given camera."""
-        if not self.has_egomask(camera_id):
-            raise KeyError(f"No ego-mask data found for {camera_id}")
-        # Take meta from first shard
-        return dict(self.base_groups[EGO_MASK_BASE_GROUP][0][camera_id].attrs)
-
     def get_egomask(self, camera_id: str, frame_timestamps_us: int) -> np.ndarray:
         """Retrieve the ego-mask (binary numpy array) for a given camera using the first available timestamp."""
         # camera_id is the camera to retrieve the ego-mask for
