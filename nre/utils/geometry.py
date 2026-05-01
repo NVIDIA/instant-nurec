@@ -252,34 +252,6 @@ def tquat_to_se3_matrix(tquat: torch.Tensor | np.ndarray, unbatch: bool = True) 
     return ret  # (N,4,4) or (4,4)
 
 
-def rotation_6d_to_matrix(d6_id: torch.Tensor) -> torch.Tensor:
-    """
-    Converts 6D rotation representation by Zhou et al. [1] to rotation matrix
-    using Gram--Schmidt orthogonalization per Section B of [1]. Adapted from pytorch3d.
-    Args:
-        d6: 6D rotation representation, of size (*, 6), around identity element
-
-    Returns:
-        batch of rotation matrices of size (*, 3, 3)
-
-    [1] Zhou, Y., Barnes, C., Lu, J., Yang, J., & Li, H.
-    On the Continuity of Rotation Representations in Neural Networks.
-    IEEE Conference on Computer Vision and Pattern Recognition, 2019.
-    Retrieved from http://arxiv.org/abs/1812.07035
-    """
-
-    assert d6_id.shape[-1] == 6, "6d rotations need to have six parameters"
-
-    a1 = torch.stack((d6_id[..., 0] + 1.0, d6_id[..., 1], d6_id[..., 2]), dim=-1)
-    a2 = torch.stack((d6_id[..., 3], d6_id[..., 4] + 1.0, d6_id[..., 5]), dim=-1)
-    b1 = torch.nn.functional.normalize(a1, dim=-1)
-    b2 = a2 - (b1 * a2).sum(-1, keepdim=True) * b1
-    b2 = torch.nn.functional.normalize(b2, dim=-1)
-    b3 = torch.cross(b1, b2, dim=-1)
-
-    return torch.stack((b1, b2, b3), dim=-2)
-
-
 def quat_mult_xyzw(q1: torch.Tensor, q2: torch.Tensor) -> torch.Tensor:
     """
     Multiplies two quaternions.

@@ -33,14 +33,6 @@ class BaseInvertibleActivation(nn.Module):
         raise NotImplementedError(f"{self.__class__.__name__} inverse function not defined for activation")
 
 
-class SkipActivation(BaseInvertibleActivation):
-    def function(self, x: torch.Tensor) -> torch.Tensor:
-        return x
-
-    def inverse_function(self, x: torch.Tensor) -> torch.Tensor:
-        return x
-
-
 class SigmoidActivation(BaseInvertibleActivation):
     def function(self, x: torch.Tensor) -> torch.Tensor:
         return torch.sigmoid(x)
@@ -57,55 +49,14 @@ class ExpActivation(BaseInvertibleActivation):
         return torch.log(x)
 
 
-class NormalizeActivation(BaseInvertibleActivation):
-    def function(self, x: torch.Tensor) -> torch.Tensor:
-        return nn.functional.normalize(x)
-
-
-class SaturateActivation(BaseInvertibleActivation):
-    def function(self, x: torch.Tensor) -> torch.Tensor:
-        return torch.clamp(x, min=0, max=1)
-
-
-class SoftmaxChannel0Activation(BaseInvertibleActivation):
-    """
-    Applies softmax to the last dimension and returns the first channel.
-    """
-
-    def function(self, x: torch.Tensor) -> torch.Tensor:
-        return torch.softmax(x, dim=-1)[..., 0]
-
-
 def get_activation(activation_name: str, inverse: bool = False) -> nn.Module:
+    """Predict-only standalone restricts activation_name to {"sigmoid", "exp"};
+    NRE supported many more, but the ExportPLYConfig Literal locks the field to
+    those two."""
     match activation_name.lower():
-        case "relu":
-            if inverse:
-                raise NotImplementedError(f"inverse of {activation_name} currently not supported")
-            else:
-                return nn.ReLU(inplace=True)
-        case "softplus":
-            if inverse:
-                raise NotImplementedError(f"inverse of {activation_name} currently not supported")
-            else:
-                return nn.Softplus(beta=10)
         case "sigmoid":
             return SigmoidActivation(inverse=inverse)
         case "exp":
             return ExpActivation(inverse=inverse)
-        case "normalize":
-            return NormalizeActivation(inverse=inverse)
-        case "saturate":
-            if inverse:
-                raise NotImplementedError(f"inverse of {activation_name} currently not supported")
-            else:
-                return SaturateActivation()
-        case "softmax-channel-0":
-            return SoftmaxChannel0Activation(inverse=inverse)
-        case "none":
-            return SkipActivation(inverse=inverse)
-        case "skip":
-            return SkipActivation(inverse=inverse)
         case _:
             raise ValueError(f"activation function {activation_name} not supported.")
-
-
