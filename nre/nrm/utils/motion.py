@@ -89,12 +89,6 @@ class TimeRemapping:
             return torch.zeros_like(timestamps_us, dtype=torch.float32)
         return (timestamps_us - self.start_timestamp_us) / span
 
-    def continuous_times_to_timestamps_us(self, continuous_times: torch.Tensor) -> torch.Tensor:
-        return (continuous_times * (self.end_timestamp_us - self.start_timestamp_us)).long() + self.start_timestamp_us
-
-    def time_span_s(self) -> float:
-        return (self.end_timestamp_us - self.start_timestamp_us) / 1e6
-
 
 def warp_points_with_cuboid_tracks(
     points: torch.Tensor,
