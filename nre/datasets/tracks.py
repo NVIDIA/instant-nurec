@@ -11,7 +11,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable, Literal, Optional, Self, cast
+from typing import Iterable, Literal, Self, cast
 
 import lietorch as lt
 import numpy as np
@@ -352,9 +352,6 @@ class CuboidTracks(Tracks):
         intersections_tracks_idx: (
             torch.Tensor
         )  # for each intersection, the index of the intersected track, N_rays x max_intersections_per_ray [int]
-        intersections_ts: Optional[
-            torch.Tensor
-        ]  # for each intersection, the start / end distances of each intersection, N_rays x max_intersections_per_ray x 2 [float]
 
     def ray_intersection(
         self,
@@ -363,7 +360,6 @@ class CuboidTracks(Tracks):
         rays_timestamps_us: torch.Tensor,
         cuboids_dims_padding: torch.Tensor | None = None,
         max_intersections_per_ray: int = 32,
-        with_intersections_ts: bool = True,
     ) -> CuboidTracks.RayIntersectionResult:
         """
         Computes the intersection of all cuboid tracks with timed world rays
@@ -374,7 +370,6 @@ class CuboidTracks(Tracks):
         - rays_timestamps_us: per ray timestamp, N_rays [int64]
         - cuboids_dims_padding: if non-None, 3d padding to add to cuboids, broadcastable to N_tracks x 3 [float]
         - max_intersections_per_ray: upper limit of intersections to return [int]
-        - with_intersections_ts: if True, intersections_ts will be returned, otherwise only intersections_cnt and intersections_tracks_idx will be returned [bool]
 
         Returns:
         - RayIntersectionResult: result of the ray intersection
@@ -395,13 +390,12 @@ class CuboidTracks(Tracks):
             cuboids_dims,
             self.max_track_n_poses,
             max_intersections_per_ray,
-            with_intersections_ts,
+            False,  # with_intersections_ts: standalone never reads .intersections_ts
         )
 
         return CuboidTracks.RayIntersectionResult(
             intersections_cnt=intersection_result[0],
             intersections_tracks_idx=intersection_result[1],
-            intersections_ts=intersection_result[2] if with_intersections_ts else None,
         )
 
     def point_intersection_interpolate_pose(

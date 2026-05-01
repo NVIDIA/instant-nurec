@@ -381,7 +381,6 @@ class KelvinDPTDecoder(nn.Module):
                     source_timestamps_us[bidx, ..., 0][movable_mask],
                     None,
                     max_intersections_per_ray=2,
-                    with_intersections_ts=False,
                 )
                 aux_movable_tracks_idx = aux_ray_intersection_result.intersections_tracks_idx[..., 0]
                 aux_movable_tracks_idx[aux_ray_intersection_result.intersections_cnt != 1] = -1
