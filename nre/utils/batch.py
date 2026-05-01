@@ -51,35 +51,6 @@ ConcreteCameraModelsUnion: TypeAlias = FThetaCameraModel | OpenCVFisheyeCameraMo
 ConcreteSensorModelParametersUnion: TypeAlias = ConcreteCameraModelParametersUnion | ConcreteLidarModelParametersUnion
 
 
-@dataclass(kw_only=True, slots=True)
-class RectSubsampled(RectSubsampledSensor):
-    """
-    Subsampled rectangular pixel region with offset i/j and dimension height/width.
-
-    Note that the offset i/j and dimension height/width are relative to the scaled pixel domain. I.e., subsampling is applied first, then cropping.
-
-    The fields are:
-    - original_width: The original width of the sensor. [int]
-    - original_height: The original height of the sensor. [int]
-    - width: The width of the pixel region. [int]
-    - height: The height of the pixel region. [int]
-    - i: Optional. The offset in the x-direction. Default is 0. [int]
-    - j: Optional. The offset in the y-direction. Default is 0. [int]
-    - subsample_factor: Optional. The amount of isotropic subsampling. The larger the value is, the smaller the sampled region will be. 1 means no subsampling. Default is 1. [float]
-    """
-
-    def _identity(self) -> tuple:
-        return (self.original_width, self.original_height, self.width, self.height, self.i, self.j, self.subsample_factor)
-
-    def __hash__(self) -> int:
-        return hash(self._identity())
-
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, RectSubsampled):
-            return False
-        return self._identity() == other._identity()
-
-
 def generate_grid_2d_indices(
     resolution: Tuple[int, int], device: torch.device | str = "cpu"
 ) -> torch.Tensor:

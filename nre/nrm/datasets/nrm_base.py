@@ -21,7 +21,7 @@ import torch.nn.functional as F
 import ncore.data
 
 from nre.nrm.config.dataset import CameraSubsamplerConfig
-from nre.utils.batch import RectSubsampled
+from nre.utils.sensors import RectSubsampledSensor
 
 
 logger = logging.getLogger(__name__)
@@ -37,13 +37,15 @@ class CameraSubsampler:
         self.frame_width = config.frame_width
         self.frame_height = config.frame_height
 
-    def _compute_pixel_rect(self, original_width: int, original_height: int) -> Tuple[RectSubsampled, Tuple[int, int]]:
+    def _compute_pixel_rect(
+        self, original_width: int, original_height: int
+    ) -> Tuple[RectSubsampledSensor, Tuple[int, int]]:
         scale_factor = max(self.frame_width / original_width, self.frame_height / original_height)
         scaled_w = round(original_width * scale_factor)
         scaled_h = round(original_height * scale_factor)
         offset_w = (scaled_w - self.frame_width) // 2
         offset_h = (scaled_h - self.frame_height) // 2
-        return RectSubsampled(
+        return RectSubsampledSensor(
             subsample_factor=1.0 / scale_factor,
             i=offset_w,
             j=offset_h,
