@@ -17,7 +17,6 @@ import logging
 
 from collections import defaultdict
 from dataclasses import dataclass
-from enum import Enum
 from pathlib import Path
 from typing import DefaultDict, Optional, Protocol, Tuple
 
@@ -376,16 +375,11 @@ def get_camera_sensor_mask(
     return get_mask_image(camera_mask_image, tuple(resolution))
 
 
-# Common V3 / V4 sequence data loading
-NCoreDataFormat = Enum("NCoreDataFormat", "V3 V4")
+def parse_sequence_meta_file(sequence_meta_file: UPath) -> tuple[str, HalfClosedInterval, list[UPath]]:
+    """Parse a NCore V4 single-sequence meta JSON; return ``(sequence_id, time_range_us, component_store_paths)``.
 
-
-def parse_sequence_meta_file(sequence_meta_file: UPath) -> tuple[NCoreDataFormat, str, HalfClosedInterval, list[UPath]]:
-    """
-    Parse sequence meta file to extract data format, time interval, and dataset file paths.
-
-    Args:
-        sequence_meta_file (UPath): Path to the sequence meta file.
+    Predict-only standalone consumes ncorev4 archives only; the NRE-side V3
+    branch was dropped (Phase 1 step 4.3).
     """
 
     assert sequence_meta_file.is_file(), f"{__name__} provided path {sequence_meta_file} not a file"
@@ -396,84 +390,40 @@ def parse_sequence_meta_file(sequence_meta_file: UPath) -> tuple[NCoreDataFormat
         except ValueError as e:
             raise ValueError(f"{__name__} provided file {sequence_meta_file} not a json file") from e
 
-    if not ((version := dataset_meta.get("version")) is not None and version.startswith("v4")):
-        # V3 single-sequence meta file
+    version = dataset_meta.get("version")
+    assert version is not None and version.startswith("v4"), (
+        f"{__name__} provided json file {sequence_meta_file} is not a NCore V4 single-sequence file (version={version!r})"
+    )
+    assert all(
+        key in dataset_meta
+        for key in ("sequence_id", "sequence_timestamp_interval_us", "version", "component_stores")
+    ), f"{__name__} provided json file {sequence_meta_file} not a NCore V4 single-sequence file"
 
-        # sanity check schema
-        assert all((key in dataset_meta for key in ("sequence_id", "pose-range", "shards", "shard-ids"))), (
-            f"{__name__} provided json file {sequence_meta_file} not a NCore V3 single-sequence file"
-        )
+    time_range_us = HalfClosedInterval(
+        dataset_meta["sequence_timestamp_interval_us"]["start"],
+        dataset_meta["sequence_timestamp_interval_us"]["stop"],
+    )
+    dataset_paths = [
+        sequence_meta_file.parent / component_store["path"] for component_store in dataset_meta["component_stores"]
+    ]
 
-        # this is V3
-        data_format = NCoreDataFormat.V3
-
-        # determine time-range
-        time_range_us = HalfClosedInterval(
-            dataset_meta["pose-range"]["start-timestamp_us"],
-            # make sure that the final value is included in the half-closed interval
-            dataset_meta["pose-range"]["end-timestamp_us"] + 1,
-        )
-
-        # collect shards paths relative to meta file
-        dataset_paths = [sequence_meta_file.parent / shard["path"] for shard in dataset_meta["shards"]]
-    else:
-        # V4 single-sequence meta file
-
-        # sanity check schema
-        assert all(
-            (
-                key in dataset_meta
-                for key in ("sequence_id", "sequence_timestamp_interval_us", "version", "component_stores")
-            )
-        ), f"{__name__} provided json file {sequence_meta_file} not a NCore V4 single-sequence file"
-
-        # this is V4
-        data_format = NCoreDataFormat.V4
-
-        # determine time-range of subsection
-        time_range_us = HalfClosedInterval(
-            dataset_meta["sequence_timestamp_interval_us"]["start"],
-            dataset_meta["sequence_timestamp_interval_us"]["stop"],
-        )
-
-        # collect component store paths relative to meta file
-        dataset_paths = [
-            sequence_meta_file.parent / component_store["path"] for component_store in dataset_meta["component_stores"]
-        ]
-
-    return data_format, dataset_meta["sequence_id"], time_range_us, dataset_paths
+    return dataset_meta["sequence_id"], time_range_us, dataset_paths
 
 
 def create_sequence_loader(
-    # Common attributes
-    data_format: NCoreDataFormat,
     dataset_paths: list[UPath],
     open_consolidated: bool,
-    # V3-specific attributes
-    v3_cuboid_loading_max_workers: Optional[int],
-    # V4-specific attributes
     v4_poses_component_group: str,
     v4_intrinsics_component_group: str,
     v4_masks_component_group: str,
     v4_cuboids_component_group: str,
 ) -> ncore.data.SequenceLoaderProtocol:
-    """
-    Create a sequence loader for the specified NCore data format (V3 or V4).
-    """
-    match data_format:
-        case NCoreDataFormat.V3:
-            return ncore_internal.data.v3.SequenceLoaderV3(
-                ncore_internal.data.v3.ShardDataLoader(shard_paths=dataset_paths, open_consolidated=open_consolidated),
-                cuboid_loading_max_workers=v3_cuboid_loading_max_workers,
-            )
-        case NCoreDataFormat.V4:
-            return ncore.data.v4.SequenceLoaderV4(
-                ncore.data.v4.SequenceComponentGroupsReader(dataset_paths, open_consolidated=open_consolidated),
-                poses_component_group_name=v4_poses_component_group,
-                intrinsics_component_group_name=v4_intrinsics_component_group,
-                masks_component_group_name=v4_masks_component_group,
-                cuboids_component_group_name=v4_cuboids_component_group,
-            )
-        case _:
-            raise ValueError(f"{__name__} create_sequence_loader: unsupported data format {data_format}")
+    """Create a NCore V4 sequence loader."""
+    return ncore.data.v4.SequenceLoaderV4(
+        ncore.data.v4.SequenceComponentGroupsReader(dataset_paths, open_consolidated=open_consolidated),
+        poses_component_group_name=v4_poses_component_group,
+        intrinsics_component_group_name=v4_intrinsics_component_group,
+        masks_component_group_name=v4_masks_component_group,
+        cuboids_component_group_name=v4_cuboids_component_group,
+    )
 

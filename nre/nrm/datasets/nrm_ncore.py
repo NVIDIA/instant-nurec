@@ -194,7 +194,6 @@ class NCoreNRMDataset(BaseNRMIndexableDataset):
         self.cuboid_tracks_params = config.cuboid_tracks_params
 
         # V3 sequence loader parameters
-        self.cuboid_loading_max_workers: Optional[int] = config.cuboid_loading_max_workers
 
         # V4 sequence loader parameters
         self.poses_component_group: str = config.poses_component_group
@@ -761,10 +760,9 @@ class NCoreNRMDataset(BaseNRMIndexableDataset):
         given ncore sequence meta path. Returns a LoadersAndSensorsResult dataclass.
         """
         (
-            data_format,
             _,  # sequence_id
             _,  # time_range_us
-            # contains either V3 zarr.itar shards, or V4 zarr.itar archives / zarr directories
+            # V4 zarr.itar archives / zarr directories
             dataset_paths,
         ) = ncore_utils.parse_sequence_meta_file(ncore_json_path)
 
@@ -788,10 +786,8 @@ class NCoreNRMDataset(BaseNRMIndexableDataset):
             if (sequence_loader := sequence_loaders.get(camera_id.loader_key)) is None:
                 try:
                     sequence_loader = sequence_loaders[camera_id.loader_key] = ncore_utils.create_sequence_loader(
-                        data_format=data_format,
                         dataset_paths=current_dataset_paths,
                         open_consolidated=self.open_consolidated,
-                        v3_cuboid_loading_max_workers=self.cuboid_loading_max_workers,
                         v4_poses_component_group=self.poses_component_group,
                         v4_intrinsics_component_group=self.intrinsics_component_group,
                         v4_masks_component_group=self.masks_component_group,

@@ -17,7 +17,6 @@ system:
 dataset:
   name: nrm
   predict:
-    cuboid_loading_max_workers: 0
     poses_component_group: default
     intrinsics_component_group: default
     masks_component_group: default

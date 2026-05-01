@@ -66,13 +66,6 @@ class CameraSubsamplerConfig(BaseConfigSchema):
 class BaseNCoreNRMDatasetConfig(BaseConfigSchema):
     """Base config for NCore-based datasets. Subclasses must define `name`."""
 
-    # V3 sequence loader parameters
-    cuboid_loading_max_workers: Optional[int] = Field(
-        description="If specified, set the max_workers for thread parallel cuboid loading in the V3 sequence loader"
-        " (automatically infered number for 'null' - serial execution with '0')",
-        default=0,
-    )
-
     # V4 component group names
     poses_component_group: str = Field(
         description="Name of the V4 component group for poses",
