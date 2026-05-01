@@ -237,9 +237,6 @@ class TrackFlags(IntFlag):
     # Dynamic flags in accordance with the dataset loader
     DYNAMIC = auto()
 
-    # Controllable flags in accordance with the model
-    CONTROLLABLE = auto()
-
 
 @dataclass(kw_only=True, slots=True)
 class TracksData:
