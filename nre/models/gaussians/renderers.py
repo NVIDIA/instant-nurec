@@ -44,7 +44,6 @@ from nre.config.model import BaseRendererConfig, NRendRendererConfig, SensorOutp
 from nre.models.base import BaseModel
 from nre.utils.batch import FrameMeta, RenderingData
 from nre.utils.misc import get_union_types
-from nre.utils.prober import get_global_prober
 from nre.utils.profiling import ScopedTimer
 from nre.utils.types import (
     ExtraSignal,
