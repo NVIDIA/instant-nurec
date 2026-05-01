@@ -10,7 +10,6 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Self
 
 import torch
 
@@ -53,23 +52,6 @@ class KelvinLatent(ABC):
         Note this is not necessarily normalized via layer norm.
         Size will be (B, V, h, w, C)
         """
-
-
-@dataclass(kw_only=True, slots=True)
-class KelvinFeatureLatent(KelvinLatent):
-    feature: torch.Tensor
-
-    @property
-    def batch_size(self) -> int:
-        return self.feature.shape[0]
-
-    @property
-    def device(self) -> torch.device:
-        return self.feature.device
-
-    @property
-    def deepest(self) -> torch.Tensor:
-        return self.feature
 
 
 @dataclass(kw_only=True, slots=True)
