@@ -1273,10 +1273,6 @@ class CameraFreePoseViewGeometry(torch.nn.Module):
             enable_calib=enable_calib,
         )
 
-    def get_frame_ranges_per_sensor(self) -> dict[str, range]:
-        """Get the frame ranges per sensor."""
-        return self.sensor_ids_to_frame_range
-
     def get_timestamps(self, unique_frame_idx: int | None = None) -> torch.Tensor:
         """Get frame start/end timestamps of either a selected training frame or all training frames from all cameras.
 
@@ -1322,20 +1318,6 @@ class CameraFreePoseViewGeometry(torch.nn.Module):
         elements = elements.reshape(height, width, 2)
         sensor_rays = sensor_rays.reshape(height, width, 3)
         return elements, sensor_rays
-
-    def get_poses(self, unique_frame_idx: int | None = None, skip_calib: bool = False) -> torch.Tensor:
-        """
-        Get the calibrated poses for a given frame.
-        """
-        return SensorModelComputations.get_poses_calib(
-            embeds=self.embeds,
-            T_sensor_world_startend_allviews=self.T_sensor_world_startend_allviews,
-            unique_frame_idx=unique_frame_idx,
-            unique_frame_idx_tensor=torch.tensor([unique_frame_idx], dtype=torch.int32)
-            if unique_frame_idx is not None and unique_frame_idx != -1
-            else None,
-            enable_calib=self.enable_calib and not skip_calib,
-        )
 
     def get_poses_and_timestamps_startend(
         self,
