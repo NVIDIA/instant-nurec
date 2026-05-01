@@ -12,16 +12,6 @@ import torch
 
 from torch import nn
 
-from nre.models.base import BaseModel
-from nre.utils.profiling import ScopedTimer
-
-
-def update_module_step(m: BaseModel, epoch: int, global_step: int, system, **kwargs) -> dict[str, torch.Tensor]:
-    with ScopedTimer(f"{m.__class__.__name__}/update_step_train_batch_start"):
-        additional_parameters = m.update_step_train_batch_start(epoch, global_step, system, **kwargs)
-    return additional_parameters
-
-
 
 class BaseInvertibleActivation(nn.Module):
     inverse: bool
