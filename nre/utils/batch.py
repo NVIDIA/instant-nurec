@@ -1375,7 +1375,10 @@ class NRMDataBatch:
                 # Do not re-compute if rendering data already exists.
                 if data.rendering is not None:
                     continue
-                # Note here that data.data.{camera,lidar} are supposed to be fp32 in their post-init checks.
+                # Standalone predict only computes camera rendering data; lidar rendering was the
+                # `LidarFreePoseViewGeometry` path which the prune dropped (and `data.data.lidar`
+                # is None at this point in the standalone predict pipeline).
+                assert data.data.lidar is None, "Lidar rendering data is not supported in the standalone."
                 camera_rendering_data = (
                     CameraFreePoseViewGeometry.from_rig_trajectories(rig)
                     .to(device=device)
@@ -1383,14 +1386,7 @@ class NRMDataBatch:
                     if data.data.camera is not None
                     else None
                 )
-                lidar_rendering_data = (
-                    LidarFreePoseViewGeometry.from_rig_trajectories(rig)
-                    .to(device=device)
-                    .to_rendering_data(data.data.lidar.to(device), cache_sensor_params=True)
-                    if data.data.lidar is not None
-                    else None
-                )
-                data.rendering = RenderingBatch(camera=camera_rendering_data, lidar=lidar_rendering_data)
+                data.rendering = RenderingBatch(camera=camera_rendering_data, lidar=None)
 
     @classmethod
     def collate_fn(
