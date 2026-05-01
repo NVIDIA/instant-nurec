@@ -47,7 +47,6 @@ py_library(
         pip_requirement("shortuuid"),
         pip_requirement("nvidia-ncore"),
         ":pylib_base_schema",
-        "//nre:pylib_reporoot",
         "//nre/utils:pylib_misc",
     ],
 )
