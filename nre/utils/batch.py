@@ -16,9 +16,7 @@ from dataclasses import dataclass, fields, is_dataclass
 from typing import Any, List, Optional, Self, Sequence, Tuple, TypeAlias, TypeVar, Union, cast
 
 import numpy as np
-import numpy.typing as npt
 import torch
-import torch.nn.functional as F
 
 from libs.geometry.kernels.pose import se3pose_from_matrix
 from libs.sensors.kernels.cameras import image_points_to_world_rays_shutter_pose
@@ -33,7 +31,7 @@ from ncore.sensors import (
     OpenCVFisheyeCameraModel,
     OpenCVPinholeCameraModel,
 )
-from nre.utils.misc import assert_same_type, collate_fn, to_torch, unpack_optional
+from nre.utils.misc import assert_same_type, collate_fn, unpack_optional
 from nre.utils.sensors import (
     RectSubsampledSensor,
     SensorModelComputations,
@@ -83,61 +81,6 @@ class RectSubsampled(RectSubsampledSensor):
         return self._identity() == other._identity()
 
 
-@torch.autocast(device_type="cuda", enabled=False)
-def compute_pixel_footprint(camera_rays: torch.Tensor | np.ndarray, pixel_offset: int = 10):
-    """Computes the cone footprint of a pixel at unit length (diameter of a cone
-    carved by the pixel). Predict-only standalone keeps just the "cone" mode;
-    "plane_intersect" had no callers.
-    """
-
-    assert pixel_offset != 0, "pixel_offset must not be zero to avoid division by zero in footprint calculation"
-
-    is_input_numpy = isinstance(camera_rays, np.ndarray)
-    if is_input_numpy:
-        camera_rays = to_torch(cast(npt.NDArray, camera_rays), device="cpu", dtype=torch.float32)
-    assert isinstance(camera_rays, torch.Tensor)
-
-    # Convert to float32 on CUDA unconditionally to avoid mixed precision issues
-    if camera_rays.device.type == "cuda":
-        camera_rays = camera_rays.float()
-
-    # Normalize camera rays to unit length
-    camera_rays = F.normalize(camera_rays, dim=-1)
-
-    # Bottom right corner
-    dot_product = torch.einsum(
-        "ijk, ijk -> ij", camera_rays[pixel_offset:, pixel_offset:], camera_rays[:-pixel_offset, :-pixel_offset]
-    )
-    # Clamp between [-1, 1] to avoid NaN in arccos.
-    dot_product = torch.clamp(dot_product, -1.0, 1.0)
-    solid_angle_bottom_right = torch.arccos(
-        F.pad(dot_product.unsqueeze(0), (0, pixel_offset, 0, pixel_offset), mode="replicate").squeeze(0)
-    )
-
-    # Top right corner
-    dot_product = torch.einsum(
-        "ijk, ijk -> ij",
-        camera_rays[pixel_offset:, :-pixel_offset],
-        camera_rays[:-pixel_offset, pixel_offset:],
-    )
-    dot_product = torch.clamp(dot_product, -1.0, 1.0)
-    solid_angle_top_right = torch.arccos(
-        F.pad(dot_product.unsqueeze(0), (0, pixel_offset, pixel_offset, 0), mode="replicate").squeeze(0)
-    )
-
-    solid_angle = torch.mean(
-        torch.cat([solid_angle_bottom_right[:, :, None], solid_angle_top_right[:, :, None]], dim=-1), dim=-1
-    )
-
-    # Some angles can be zero due to precision. Replace with a small value to
-    # avoid NaNs through the exp/log activation chain.
-    solid_angle.masked_fill_(solid_angle == 0, 1e-12)
-
-    footprint = 2 * torch.tan(0.5 * solid_angle) / pixel_offset
-
-    return footprint.numpy() if is_input_numpy else footprint
-
-
 def generate_grid_2d_indices(
     resolution: Tuple[int, int], device: torch.device | str = "cpu"
 ) -> torch.Tensor:
@@ -182,7 +125,6 @@ class RenderingData:
     poses_tquat_startend: torch.Tensor  # (B, 2, 7)
     timestamps_startend_us: torch.Tensor  # (B, 2) - kept on GPU for GPU operations
     rays_timestamps_us: torch.Tensor | None = None  # (B, height, width, 1)
-    _rays_footprints: torch.Tensor | None = None  # (B, height, width, 1)
     timestamps_startend_us_cpu: torch.Tensor  # (B, 2) - cpu copy to avoid .item() calls
     _distance_to_depth_scale: torch.Tensor | None = None  # [Tensor[float32]] (B, height, width, 1)
 
@@ -196,10 +138,6 @@ class RenderingData:
         if self.rays_timestamps_us is not None:
             assert self.rays_timestamps_us.ndim == 4 and self.rays_timestamps_us.shape[3] == 1, (
                 f"Rays timestamps must be a 4D tensor (B, height, width, 1), but got {self.rays_timestamps_us.shape}"
-            )
-        if self._rays_footprints is not None:
-            assert self._rays_footprints.ndim == 4 and self._rays_footprints.shape[3] == 1, (
-                f"Rays footprints must be a 4D tensor (B, height, width, 1), but got {self._rays_footprints.shape}"
             )
         if self._distance_to_depth_scale is not None:
             assert (
@@ -232,11 +170,6 @@ class RenderingData:
             self._distance_to_depth_scale = torch.stack(scales, dim=0).unsqueeze(-1)
         return self._distance_to_depth_scale
 
-    @property
-    def ray_footprints(self) -> torch.Tensor:
-        assert self._rays_footprints is not None, "Rays footprints must be set"
-        return self._rays_footprints
-
     @classmethod
     def collate_fn(
         cls,
@@ -247,10 +180,6 @@ class RenderingData:
             rays_timestamps_us = None
         else:
             rays_timestamps_us = collate_fn([item.rays_timestamps_us for item in seq], device)
-        if any(item._rays_footprints is None for item in seq):
-            _rays_footprints = None
-        else:
-            _rays_footprints = collate_fn([item._rays_footprints for item in seq], device)
         # Keep GPU version on target device, CPU copy on CPU
         timestamps_startend_us = collate_fn([item.timestamps_startend_us for item in seq], device)
         timestamps_startend_us_cpu = collate_fn([item.timestamps_startend_us_cpu for item in seq], torch.device("cpu"))
@@ -264,7 +193,6 @@ class RenderingData:
             poses_tquat_startend=collate_fn([item.poses_tquat_startend for item in seq], device),
             timestamps_startend_us=timestamps_startend_us,
             rays_timestamps_us=rays_timestamps_us,
-            _rays_footprints=_rays_footprints,
             timestamps_startend_us_cpu=timestamps_startend_us_cpu,
             _distance_to_depth_scale=_distance_to_depth_scale,
         )
@@ -278,7 +206,6 @@ class RenderingData:
             rays_timestamps_us=self.rays_timestamps_us.to(*args, **kwargs)
             if self.rays_timestamps_us is not None
             else None,
-            _rays_footprints=self._rays_footprints.to(*args, **kwargs) if self._rays_footprints is not None else None,
             # CPU copy stays on CPU - don't move it
             timestamps_startend_us_cpu=self.timestamps_startend_us_cpu,
             _distance_to_depth_scale=self._distance_to_depth_scale.to(*args, **kwargs)
@@ -297,7 +224,6 @@ class RenderingData:
             poses_tquat_startend=self.poses_tquat_startend[item],
             timestamps_startend_us=self.timestamps_startend_us[item],
             rays_timestamps_us=self.rays_timestamps_us[item] if self.rays_timestamps_us is not None else None,
-            _rays_footprints=self._rays_footprints[item] if self._rays_footprints is not None else None,
             timestamps_startend_us_cpu=self.timestamps_startend_us_cpu[item],
             _distance_to_depth_scale=self._distance_to_depth_scale[item]
             if self._distance_to_depth_scale is not None
@@ -868,19 +794,6 @@ class CameraFreePoseViewGeometry(torch.nn.Module):
         else:
             return sensor_model
 
-    def _compute_elements_and_sensor_rays(
-        self, sensor_model: CameraModel, device: torch.device
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        Compute the camera rays for a given frame.
-        """
-        width, height = sensor_model.resolution.tolist()
-        elements = generate_grid_2d_indices((width, height), device=device)
-        sensor_rays = sensor_model.pixels_to_camera_rays(elements)
-        elements = elements.reshape(height, width, 2)
-        sensor_rays = sensor_rays.reshape(height, width, 3)
-        return elements, sensor_rays
-
     def get_poses_and_timestamps_startend(
         self,
         meta: FrameMeta,
@@ -947,10 +860,6 @@ class CameraFreePoseViewGeometry(torch.nn.Module):
             self.cached_sensor_subsample[subsample_unique_sensor_idx] = sensor_model
 
         if not cache_sensor_params:
-            _, sensor_rays = self._compute_elements_and_sensor_rays(sensor_model, T_sensor_world_startend.device)
-            # Note(ruilong): footprints are only required when AAA is on. Should be optional but here we always compute
-            # it to be aligned with the old batch format.
-            footprints = compute_pixel_footprint(sensor_rays)[..., None]  # (height, width, 1)
             sensor_model_parameters = sensor_model.get_parameters()
             sensorlib_parameters = CameraModelConverter.convert(sensor_model, device=T_sensor_world_startend.device)
         else:
@@ -960,24 +869,17 @@ class CameraFreePoseViewGeometry(torch.nn.Module):
             if (cached_sensor_params["rect_subsampled"] == subsample) and (
                 cached_sensor_params["sensorlib_parameters"] is not None
             ):
-                # Cache hit: subsampled footprints, ncore parameters, and sensorlib parameters.
-
-                footprints = cached_sensor_params["footprints"]
+                # Cache hit: ncore parameters and sensorlib parameters.
                 sensor_model_parameters = cached_sensor_params["parameters"]
                 sensorlib_parameters = cached_sensor_params["sensorlib_parameters"]
             else:
-                # Subsample changed or cache empty: recompute footprints and sensorlib parameters.
-                _, sensor_rays = self._compute_elements_and_sensor_rays(
-                    sensor_model, T_sensor_world_startend.device
-                )
-                footprints = compute_pixel_footprint(sensor_rays)[..., None]  # (height, width, 1)
+                # Subsample changed or cache empty: recompute sensorlib parameters.
                 sensor_model_parameters = sensor_model.get_parameters()
                 sensorlib_parameters = CameraModelConverter.convert(
                     sensor_model, device=T_sensor_world_startend.device
                 )
                 self.cached_sensor_params[str(unique_sensor_idx)] = {
                     "rect_subsampled": subsample,
-                    "footprints": footprints,
                     "parameters": sensor_model_parameters,
                     "sensorlib_parameters": sensorlib_parameters,
                 }
@@ -1015,7 +917,6 @@ class CameraFreePoseViewGeometry(torch.nn.Module):
             poses_tquat_startend=poses_tquat_startend,
             timestamps_startend_us=timestamps_startend_us_gpu,
             rays_timestamps_us=timestamps.unsqueeze(0),
-            _rays_footprints=footprints.unsqueeze(0),
             timestamps_startend_us_cpu=timestamps_startend_us_cpu,
         )
 
