@@ -100,11 +100,6 @@ class KelvinDPTDecoder(KelvinDecoderBase):
 
         def __init__(self, config: KelvinDPTDecoderConfig, model_config: KelvinModelConfig):
             super().__init__()
-            ffn_type = (
-                "mlp"
-                if not isinstance(model_config.encoder, KelvinDAv3EncoderConfig)
-                else model_config.encoder.ffn_type
-            )
             self.embed_dim = model_config.encoder.embed_dim // 2
             self.vit = AlternateAttentionVisionTransformer(
                 depth=config.motion_depth,
@@ -116,7 +111,6 @@ class KelvinDPTDecoder(KelvinDecoderBase):
                 n_cls_tokens=0,
                 with_default_global_cls_tokens=False,
                 rope_frequency=100.0,
-                ffn_type=ffn_type,
                 checkpointing="all" if config.checkpointing else "none",
                 n_cls_tokens_aa=2,  # [CLS + SRC-Time]
                 use_modulated_attention=True,

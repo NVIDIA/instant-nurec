@@ -58,39 +58,6 @@ class FeedForwardMLP(nn.Module):
         return x
 
 
-class FeedForwardSwiGLU(nn.Module):
-    """FeedForward MLP with SwiGLU activation."""
-
-    def __init__(
-        self,
-        input_dim: int,
-        hidden_dim: int,
-        output_dim: int,
-        bias: bool = True,
-    ) -> None:
-        super().__init__()
-
-        # Since this class is typically used exchangeably with FeedForwardMLP, we keep the same arg name
-        # with "hidden_dim". However in order to match the FLOPS & number of parameters, we reduce it by 1/3.
-        # Further make it a multiple of 8 for efficient fusion.
-        hidden_dim = (int(hidden_dim * 2 / 3) + 7) // 8 * 8
-
-        self.w12 = nn.Linear(input_dim, 2 * hidden_dim, bias=bias)
-        self.w3 = nn.Linear(hidden_dim, output_dim, bias=bias)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Input:
-            x: (..., dim) tensor
-        Output:
-            (..., dim) tensor
-        """
-        x12 = self.w12(x)
-        x1, x2 = x12.chunk(2, dim=-1)
-        hidden = torch.nn.functional.silu(x1) * x2
-        return self.w3(hidden)
-
-
 class LayerNorm2d(nn.Module):
     """
     Perform Layer Norm on 2D input tensor.

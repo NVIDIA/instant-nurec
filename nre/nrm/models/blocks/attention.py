@@ -16,7 +16,7 @@ Hierarchy of the modules in this file:
   - [CrossAttention] = [KVProjector] + Q-Projector + SDPA
 """
 
-from typing import Literal, Optional
+from typing import Optional
 
 import torch
 import torch.nn as nn
@@ -25,7 +25,7 @@ from einops import rearrange
 
 from nre.models.nn_extensions import module_call_type
 from nre.nrm.models.blocks.embeds import RotaryPositionEmbed2D
-from nre.nrm.models.blocks.layers import FeedForwardMLP, FeedForwardSwiGLU, LayerScale
+from nre.nrm.models.blocks.layers import FeedForwardMLP, LayerScale
 
 
 class SelfAttention(nn.Module):
@@ -280,9 +280,15 @@ def _maybe_layer_scale(dim: int, init_values: Optional[float]) -> LayerScale | n
 
 
 class AttentionBlock(nn.Module):
-    """Standard Transformer block that contains one application of self-attention and MLP."""
+    """Standard Transformer block that contains one application of self-attention and MLP.
 
-    mlp: FeedForwardMLP | FeedForwardSwiGLU
+    Predict-only standalone hardcodes the FFN to `FeedForwardMLP`; the
+    NRE-side `swiglu` branch (`FeedForwardSwiGLU`) was unreachable because
+    `KelvinDAv3EncoderConfig.ffn_type` is "mlp" and the decoder doesn't
+    plumb `ffn_type` to the AA-ViT.
+    """
+
+    mlp: FeedForwardMLP
 
     def __init__(
         self,
@@ -295,7 +301,6 @@ class AttentionBlock(nn.Module):
         layer_norm_eps: float = 1e-5,
         layer_scale_init_values: Optional[float] = 1e-5,
         qk_norm: bool = False,
-        ffn_type: Literal["mlp", "swiglu"] = "mlp",
         rope: RotaryPositionEmbed2D | None = None,
     ):
         super().__init__()
@@ -311,22 +316,12 @@ class AttentionBlock(nn.Module):
         )
         self.ls1 = _maybe_layer_scale(input_dim, layer_scale_init_values)
         self.norm2 = nn.LayerNorm(input_dim, eps=layer_norm_eps)
-        if ffn_type == "mlp":
-            self.mlp = FeedForwardMLP(
-                input_dim=input_dim,
-                hidden_dim=int(input_dim * mlp_ratio),
-                output_dim=input_dim,
-                dropout=proj_drop,
-            )
-        elif ffn_type == "swiglu":
-            assert proj_drop == 0.0, "Dropout is not supported for SwiGLU FFN"
-            self.mlp = FeedForwardSwiGLU(
-                input_dim=input_dim,
-                hidden_dim=int(input_dim * mlp_ratio),
-                output_dim=input_dim,
-            )
-        else:
-            raise ValueError(f"Invalid Feed-forward network type: {ffn_type}")
+        self.mlp = FeedForwardMLP(
+            input_dim=input_dim,
+            hidden_dim=int(input_dim * mlp_ratio),
+            output_dim=input_dim,
+            dropout=proj_drop,
+        )
         self.ls2 = _maybe_layer_scale(input_dim, layer_scale_init_values)
 
     def forward(self, x: torch.Tensor, rope_positions: torch.Tensor | None = None) -> torch.Tensor:

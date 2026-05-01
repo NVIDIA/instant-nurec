@@ -44,7 +44,6 @@ class AlternateAttentionVisionTransformer(nn.Module):
         n_cls_tokens: int,
         with_default_global_cls_tokens: bool,
         rope_frequency: float,
-        ffn_type: Literal["mlp", "swiglu"] = "mlp",
         checkpointing: Literal["all", "local", "none"] = "none",
         n_cls_tokens_aa: int | None = None,
         use_modulated_attention: bool = False,
@@ -99,7 +98,6 @@ class AlternateAttentionVisionTransformer(nn.Module):
                     layer_norm_eps=1e-6,
                     layer_scale_init_values=1.0,
                     qk_norm=i >= aa_start_block_idx,
-                    ffn_type=ffn_type,
                     rope=self.rope if i >= aa_start_block_idx else None,
                 )
                 for i in range(depth)

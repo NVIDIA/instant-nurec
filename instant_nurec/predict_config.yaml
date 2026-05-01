@@ -80,7 +80,6 @@ model:
       - 9
       - 11
     aa_start_block_idx: 4
-    ffn_type: mlp
     checkpointing: all
   decoder:
     name: dpt-decoder

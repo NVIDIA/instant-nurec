@@ -86,7 +86,6 @@ class KelvinDAv3Encoder(KelvinEncoderBase):
             n_cls_tokens=1,
             with_default_global_cls_tokens=False,
             rope_frequency=100.0,
-            ffn_type=config.ffn_type,
             checkpointing=config.checkpointing,
         )
         self.take_block_indices = config.take_block_indices

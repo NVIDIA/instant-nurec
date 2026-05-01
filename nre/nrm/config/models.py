@@ -71,7 +71,6 @@ class KelvinDAv3EncoderConfig(BaseConfigSchema):
     embed_dim: int
     take_block_indices: List[int]
     aa_start_block_idx: int
-    ffn_type: Literal["mlp", "swiglu"]
     checkpointing: Literal["all", "local", "none"] = Field(
         default="none", description="Whether to checkpoint the encoder"
     )
