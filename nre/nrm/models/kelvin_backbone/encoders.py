@@ -37,7 +37,6 @@ from nre.nrm.utils.motion import TimeRemapping
 from nre.nrm.utils.sensor import to_simple_pinhole_model_parameters
 from nre.utils.batch import DataAndRenderingBatch
 from nre.utils.geometry import tquat_to_se3_matrix
-from nre.utils.log import BatchMediaLogger
 from nre.utils.misc import unpack_optional
 from nre.utils.profiling import ScopedTimer
 
@@ -58,7 +57,6 @@ class KelvinEncoderBase(nn.Module, ABC):
         batches: list[DataAndRenderingBatch],
         time_remappings: list[TimeRemapping],
         scene_rescale: float = 1.0,
-        media_logger: BatchMediaLogger | None = None,
     ) -> KelvinLatent:
         """
         Encode the input batch into a latent representation.
@@ -140,7 +138,6 @@ class KelvinDAv3Encoder(KelvinEncoderBase):
         batches: list[DataAndRenderingBatch],
         time_remappings: list[TimeRemapping],
         scene_rescale: float = 1.0,
-        media_logger: BatchMediaLogger | None = None,
     ) -> KelvinLatent:
         batch_rgbs: list[torch.Tensor] = []
         batch_c2ws: list[torch.Tensor] = []

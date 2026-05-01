@@ -26,16 +26,14 @@ from nre.nrm.models.kelvin_backbone.encoders import make_encoder
 from nre.nrm.models.kelvin_backbone.sky import make_sky
 from nre.nrm.models.post_processing import PerCameraAffinePostProcessing
 from nre.nrm.primitives.kelvin_primitive import KelvinNRMPrimitive
-from nre.nrm.utils.cubemap import layout_sky_cubemap, unproject_to_sky_cubemap
+from nre.nrm.utils.cubemap import unproject_to_sky_cubemap
 from nre.nrm.utils.motion import TimeRemapping
 from nre.utils.batch import DataAndRenderingBatch
 from nre.utils.files import local_temp_file, parse_universal_path
 from nre.utils.geometry import tquat_to_se3_matrix
-from nre.utils.log import BatchMediaLogger
 from nre.utils.misc import unpack_optional
 from nre.utils.profiling import ScopedTimer
 from nre.utils.types import RayFlags
-from nre.utils.visualize import make_image_grid
 
 
 logger = logging.getLogger(__name__)
@@ -132,7 +130,6 @@ class KelvinNRM(BaseNRM[KelvinNRMPrimitive, KelvinNRMSupervisionPack]):
         supervision: list[DataAndRenderingBatch],
         cuboid_tracks: list[CuboidTracks] | None,
         supervision_packs: list[KelvinNRMSupervisionPack],
-        media_logger: BatchMediaLogger | None,
     ) -> tuple[list[DataAndRenderingBatch], list[KelvinNRMSupervisionPack]]:
         """
         Note we might have to make dynamic objects invalid here.
@@ -175,16 +172,6 @@ class KelvinNRM(BaseNRM[KelvinNRMPrimitive, KelvinNRMSupervisionPack]):
             )
             supervision_packs[bidx].reference_sky_cubemap = gt_cubemap
             supervision_packs[bidx].reference_sky_cubemap_mask = gt_cubemap_mask
-
-            if bidx == 0 and (media_logger is not None and media_logger.should_log_media):
-                pd_cubemap = supervision_packs[bidx].predicted_sky_cubemap
-                if pd_cubemap is not None:
-                    pd_cubemap_np = layout_sky_cubemap(pd_cubemap).detach().cpu().numpy()
-                    gt_cubemap_np = layout_sky_cubemap(gt_cubemap).detach().cpu().numpy()
-                    media_logger.log_image(
-                        "Predicted Sky Cubemap",
-                        np.concatenate([pd_cubemap_np, gt_cubemap_np], axis=0),  # 4x3 grid
-                    )
 
         # Motion supervision: reference displacement from cuboid warp on metric world points (Celsius-style padding).
         for bidx, batch in enumerate(context):
@@ -328,25 +315,13 @@ class KelvinNRM(BaseNRM[KelvinNRMPrimitive, KelvinNRMSupervisionPack]):
         self,
         context: list[DataAndRenderingBatch],
         cuboid_tracks: list[CuboidTracks] | None,
-        media_logger: BatchMediaLogger | None,
         compute_supervision_pack: bool = False,
     ) -> tuple[list[KelvinNRMPrimitive], list[KelvinNRMSupervisionPack] | None]:
         # Add assertions about input context -- num_images and num_views should match
         num_imgs, num_views, camera_idxs, time_remappings = self._grab_metainfo(context)
 
-        # Log input images (first batch only)
-        if media_logger is not None and media_logger.should_log_media:
-            first_rgb = unpack_optional(context[0].data.camera).labels.rgb
-            media_logger.log_image(
-                "Input RGB",
-                make_image_grid(
-                    [(rgb_i * 255).astype(np.uint8) for rgb_i in unpack_optional(first_rgb).cpu().numpy()],
-                    grid_width=num_imgs // num_views,
-                ),
-            )
-
         # Encode the inputs
-        encoded_latent = self.encoder.encode(context, time_remappings, self.scene_rescale, media_logger)
+        encoded_latent = self.encoder.encode(context, time_remappings, self.scene_rescale)
 
         # Forward the decoder (Compute supervision packs along the way)
         decoder_returns = self.decoder.decode(
@@ -355,7 +330,6 @@ class KelvinNRM(BaseNRM[KelvinNRMPrimitive, KelvinNRMSupervisionPack]):
             cuboid_tracks,
             time_remappings,
             self.scene_rescale,
-            media_logger,
         )
         static_layers = [return_value.static_layer for return_value in decoder_returns]
         dynamic_layers = [return_value.dynamic_layers for return_value in decoder_returns]

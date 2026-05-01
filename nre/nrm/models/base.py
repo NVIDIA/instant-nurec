@@ -21,7 +21,6 @@ from nre.datasets.tracks import CuboidTracks
 from nre.nrm.config.models import BaseModelConfig
 from nre.nrm.primitives.base import NRMPrimitiveType
 from nre.utils.batch import DataAndRenderingBatch
-from nre.utils.log import BatchMediaLogger
 
 
 @dataclass(kw_only=True)
@@ -67,7 +66,6 @@ class BaseNRM(nn.Module, Generic[NRMPrimitiveType, NRMSupervisionPackType]):
         self,
         context: list[DataAndRenderingBatch],
         cuboid_tracks: list[CuboidTracks] | None,
-        media_logger: BatchMediaLogger | None,
         compute_supervision_pack: bool = False,
     ) -> tuple[list[NRMPrimitiveType], list[NRMSupervisionPackType] | None]:
         """
@@ -82,7 +80,6 @@ class BaseNRM(nn.Module, Generic[NRMPrimitiveType, NRMSupervisionPackType]):
         supervision: list[DataAndRenderingBatch],
         cuboid_tracks: list[CuboidTracks] | None,
         supervision_packs: list[NRMSupervisionPackType],
-        media_logger: BatchMediaLogger | None,
     ) -> tuple[list[DataAndRenderingBatch], list[NRMSupervisionPackType]]:
         """
         Hook function to prepare supervision data for the model.

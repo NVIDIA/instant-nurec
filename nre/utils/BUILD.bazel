@@ -159,7 +159,6 @@ py_library(
     srcs = [
         "__init__.py",
         "lidar_model.py",
-        "log.py",
         "model_registry.py",
         "visualize.py",
     ],

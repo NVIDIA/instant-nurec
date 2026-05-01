@@ -50,10 +50,8 @@ from nre.nrm.primitives.kelvin_primitive import (
 )
 from nre.nrm.utils.motion import TimeRemapping, warp_points_with_cuboid_tracks
 from nre.utils.batch import DataAndRenderingBatch
-from nre.utils.log import BatchMediaLogger
 from nre.utils.misc import unpack_optional
 from nre.utils.profiling import ScopedTimer
-from nre.utils.visualize import make_image_grid, scalar2img
 
 
 logger = logging.getLogger(__name__)
@@ -82,7 +80,6 @@ class KelvinDecoderBase(nn.Module, ABC):
         cuboid_tracks: list[CuboidTracks] | None,
         time_remappings: list[TimeRemapping],
         scene_rescale: float = 1.0,
-        media_logger: BatchMediaLogger | None = None,
     ) -> list[KelvinDecoderReturn]:
         """
         Decode from the encoded latent into Gaussian parameters.
@@ -368,73 +365,6 @@ class KelvinDPTDecoder(KelvinDecoderBase):
         state_dict["cuboids_dims_padding"] = self.cuboids_dims_padding.data
         self.load_state_dict(state_dict, strict=True)
 
-    def _log_gaussian_statistics(
-        self,
-        media_logger: BatchMediaLogger,
-        gaussian_params: GaussianParams,
-        supervision_pack: KelvinNRMSupervisionPack,
-        context: DataAndRenderingBatch,
-        grid_width: int,
-    ) -> None:
-        """
-        Log statistics of the gaussian primitives.
-        """
-        if supervision_pack.context_rgb is not None:
-            media_logger.log_image(
-                "Context RGB",
-                make_image_grid(
-                    [t for t in (supervision_pack.context_rgb.detach().cpu().numpy() * 255).astype(np.uint8)],
-                    grid_width=grid_width,
-                ),
-            )
-        if (
-            supervision_pack.context_depth is not None
-            and supervision_pack.context_xyz is not None
-            and context.rendering is not None
-        ):
-            rays = unpack_optional(unpack_optional(context.rendering.camera).rays)
-            ref_xyz = rays[..., :3] + rays[..., 3:] * supervision_pack.context_depth
-            diff_norm = torch.linalg.norm(ref_xyz - supervision_pack.context_xyz, dim=-1).detach().cpu().numpy()
-            diff_norm_img = make_image_grid(
-                [scalar2img(t, vmin=0.0, vmax=1.0) for t in diff_norm],
-                grid_width=grid_width,
-            )
-            media_logger.log_image("Context XYZ Diff", diff_norm_img)
-        if supervision_pack.context_world_normal is not None:
-            pred_normal_img = ((supervision_pack.context_world_normal.detach().cpu().numpy() + 1.0) * 0.5 * 255).astype(
-                np.uint8
-            )
-            normal_imgs = [t for t in pred_normal_img]
-            if context.data.camera is not None and (gt_normal := context.data.camera.labels.normals) is not None:
-                normal_imgs += [t for t in ((gt_normal.detach().cpu().numpy() + 1.0) * 0.5 * 255).astype(np.uint8)]
-            media_logger.log_image(
-                "Context World Normal",
-                make_image_grid(normal_imgs, grid_width=grid_width),
-            )
-        if supervision_pack.context_semantic_logits is not None and context.data.camera is not None:
-            pred_sem_img = KelvinSemanticClass.semantics_to_rgb(
-                torch.argmax(supervision_pack.context_semantic_logits.detach(), dim=-1, keepdim=True).to(torch.uint8)
-            )
-            gt_sem_img = KelvinSemanticClass.semantics_to_rgb(
-                KelvinSemanticClass.get_target_from_frame_labels(context.data.camera.labels)
-            )
-            media_logger.log_image(
-                "Context Semantics",
-                make_image_grid(
-                    [p.cpu().numpy() for p in pred_sem_img] + [g.cpu().numpy() for g in gt_sem_img],
-                    grid_width=grid_width,
-                ),
-            )
-
-        opacity = gaussian_params.opacity.detach()[..., 0].cpu().numpy()
-        media_logger.log_image(
-            "Context Opacity",
-            make_image_grid(
-                [t for t in (opacity * 255).astype(np.uint8)],
-                grid_width=grid_width,
-            ),
-        )
-
     def get_potential_unused_parameters(self) -> Iterator[torch.nn.Parameter]:
         # Note -- if we shard model parameters need to reconsider this design.
         return self.gaussians_head.parameters()
@@ -448,7 +378,6 @@ class KelvinDPTDecoder(KelvinDecoderBase):
         cuboid_tracks: list[CuboidTracks] | None,
         time_remappings: list[TimeRemapping],
         scene_rescale: float = 1.0,
-        media_logger: BatchMediaLogger | None = None,
     ) -> list[KelvinDecoderReturn]:
         """
         The returned GaussianParams will have shape (B, V, H, W, C)
@@ -611,8 +540,6 @@ class KelvinDPTDecoder(KelvinDecoderBase):
         gs_depth = pred_depth
         if self.config.depth_offset:
             gs_depth_offset = gs_depth_offset / scene_rescale
-            if media_logger is not None:
-                media_logger.log("gs_stats/depth_offset", gs_depth_offset.detach().mean().item())
             # Linear activation on depth offset
             gs_depth = gs_depth + gs_depth_offset
         gs_distance = torch.stack([gs_depth[bidx] / renderings[bidx].distance_to_depth_scale for bidx in range(B)])
@@ -632,8 +559,6 @@ class KelvinDPTDecoder(KelvinDecoderBase):
             [renderings[bidx].rays[..., :3] + renderings[bidx].rays[..., 3:] * gs_distance[bidx] for bidx in range(B)]
         )
         if self.config.uv_offset:
-            if media_logger is not None:
-                media_logger.log("gs_stats/uv_offset", gs_uv_offset.detach().mean().item())
             gs_uv_offset = einsum(
                 torch.stack(
                     [renderings[bidx].uv_directions_frame_end for bidx in range(B)],
@@ -664,16 +589,6 @@ class KelvinDPTDecoder(KelvinDecoderBase):
             for bidx in range(B)
         ]
 
-        # Log Gaussian statistics and supervision packs information
-        if media_logger is not None and media_logger.should_log_media:
-            num_views = len(set([meta.unique_sensor_idx for meta in data[0].meta]))
-            self._log_gaussian_statistics(
-                media_logger,
-                gs_params[0],
-                supervision_packs[0],
-                batches[0],
-                grid_width=V // num_views,
-            )
         # Optionally dump meshing data
         # self._dump_meshing_data(gs_params[0], supervision_packs[0], batches[0])
 

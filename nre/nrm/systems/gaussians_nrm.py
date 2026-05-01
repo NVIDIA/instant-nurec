@@ -68,7 +68,6 @@ class GaussiansNRMSystem(BaseNRMSystem):
         primitives, supervision_packs = self.model.reconstruct(
             batch.context,
             cuboid_tracks,
-            media_logger=self.media_logger,
             compute_supervision_pack=False,
         )
         return primitives, [], []

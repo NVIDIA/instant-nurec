@@ -50,8 +50,6 @@ class BaseNRMSystem(LightningModule, ABC):
         # Slang could not properly dispatch disabled loss functions, giving empty tensors.
         self.loss = LossAggregator(config.loss, force_disable_cuda=True)
 
-        self.media_logger = None
-
 
 
     # ---- Test loop methods ----
