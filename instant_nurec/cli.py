@@ -92,7 +92,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     # Lazy import keeps the CLI surface unit-testable without NRE deps.
     from nre.nrm.run import main as nre_main
 
-    nre_main.callback(config_name=CONFIG_NAME, hydra_args=tuple(overrides))
+    nre_main(config_name=CONFIG_NAME, hydra_args=tuple(overrides))
     return 0
 
 

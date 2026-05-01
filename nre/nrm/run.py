@@ -9,8 +9,6 @@ import logging
 import os
 import random
 
-import click
-import click_default_group
 import numpy as np
 import torch
 
@@ -18,10 +16,8 @@ import nre.nrm.datasets  # noqa: F401  (populates dataset registry)
 import nre.nrm.systems
 
 from nre.config.parse import dump_config
-from nre.config.version import get_version
 from nre.nrm.config.nrm import NRMConfig, parse_typed_nrm_config
 from nre.nrm.systems.base import BaseNRMSystem
-from nre.utils.misc import unpack_optional
 
 
 logger = logging.getLogger(__name__)
@@ -80,15 +76,7 @@ def launch_predict_loop(config: NRMConfig, system: BaseNRMSystem) -> None:
             system.on_predict_batch_end(outputs, batch, batch_idx)
 
 
-@click.command("main")
-@click.option(
-    "--config-name",
-    type=str,
-    help="Hydra config to load - has to contain a dataset specification",
-    required=True,
-)
-@click.argument("hydra-args", nargs=-1)
-def main(config_name: str, hydra_args: list[str]) -> None:
+def main(config_name: str, hydra_args: list[str] | tuple[str, ...]) -> None:
     """Main entry point for the standalone Kelvin predict pipeline."""
 
     config = parse_typed_nrm_config(config_name=config_name, hydra_args=hydra_args)
@@ -102,15 +90,3 @@ def main(config_name: str, hydra_args: list[str]) -> None:
     checkpoint = None if (not config.resume_weights_only or not config.resume) else config.resume
     system = nre.nrm.systems.make(config.system.name, config, load_from_checkpoint=checkpoint)
     launch_predict_loop(config, system)
-
-
-@click.group(cls=click_default_group.DefaultGroup, default="main", default_if_no_args=True)
-@click.version_option(version=str(unpack_optional(get_version(), default="version-not-available")))
-def cli():
-    pass
-
-
-cli.add_command(main)
-
-if __name__ == "__main__":
-    cli(show_default=True)
