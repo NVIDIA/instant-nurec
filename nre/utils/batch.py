@@ -471,11 +471,6 @@ class CameraFrameLabels:
         assert self.flags is not None, "flags are required"
         return torch.bitwise_and(self.flags, flags.value).eq(flags.value)
 
-    def get_mask_flags_none(self, flags: RayFlags) -> torch.Tensor:
-        """Mask indicating the rays that have *none* of the flag bits of 'flags' set"""
-        assert self.flags is not None, "flags are required"
-        return torch.bitwise_and(self.flags, flags.value).eq(0)
-
     @classmethod
     def collate_fn(
         cls,
@@ -622,16 +617,6 @@ class LidarFrameLabels:
         else:
             assert all(w == widths[0] for w in widths), "All widths must be the same"
             return widths[0]
-
-    def get_mask_flags_all(self, flags: RayFlags) -> torch.Tensor:
-        """Mask indicating the rays that have *all* flag bits of 'flags' set"""
-        assert self.flags is not None, "flags are required"
-        return torch.bitwise_and(self.flags, flags.value).eq(flags.value)
-
-    def get_mask_flags_none(self, flags: RayFlags) -> torch.Tensor:
-        """Mask indicating the rays that have *none* of the flag bits of 'flags' set"""
-        assert self.flags is not None, "flags are required"
-        return torch.bitwise_and(self.flags, flags.value).eq(0)
 
     @classmethod
     def collate_fn(
