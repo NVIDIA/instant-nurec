@@ -173,30 +173,16 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
 
         self.cuboid_tracks_params = config.cuboid_tracks_params
 
-        # V3 sequence loader parameters
-
-        # V4 sequence loader parameters
-
-        # camera_ids and lidar_ids determine the unique sensor indices within this dataset.
-        # The standalone predict pipeline pins exactly one lidar (the one used
-        # for cuboid-track sourcing).
+        # Standalone predict pins exactly one lidar (used for cuboid-track sourcing).
         self.lidar_ids: list[str] = [self.cuboid_tracks_params.lidar_id]
 
         self.ncore_json_paths: list[UPath] = []
         with self.ncore_json_list_path.open("r") as f:
             for line in f.readlines():
                 self.ncore_json_paths.append(self.ncore_json_base_path / line.strip())
-        n_ncore_json_files = len(self.ncore_json_paths)
-
-        logger.info(
-            f"Loaded {len(self.ncore_json_paths)}/{n_ncore_json_files} samples from {self.ncore_json_list_path}"
-        )
+        logger.info(f"Loaded {len(self.ncore_json_paths)} samples from {self.ncore_json_list_path}")
 
         self.num_samples_per_sequence: int = config.frame_batch_sampler.n_samples_per_sequence
-
-        # Camera and lidar id mappings
-
-        # Current config might not be concrete (i.e. augmentations might not be applied yet)
         self.non_concrete_config = config
 
     def __len__(self) -> int:
