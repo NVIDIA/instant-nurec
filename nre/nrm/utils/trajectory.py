@@ -114,7 +114,6 @@ def merge_rig_trajectories(
         merged_rig_trajectories.append(
             RigTrajectories.RigTrajectory(
                 sequence_id=merged_sequence_id,
-                rig_bbox=rig_trajectory.rig_bbox,
                 cameras_frame_timestamps_us=merged_cameras_frame_timestamps_us,
                 lidars_frame_timestamps_us=merged_lidars_frame_timestamps_us,
                 T_rig_worlds=merged_T_rig_worlds,

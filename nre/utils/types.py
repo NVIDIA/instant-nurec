@@ -35,7 +35,6 @@ import numpy.typing as npt
 import torch
 
 from ncore.data import (
-    BBox3,
     ConcreteCameraModelParametersUnion,
     ConcreteLidarModelParametersUnion,
 )
@@ -201,10 +200,6 @@ class RigTrajectories:
         """Represents a single rig trajectory with associated sensor and frame timestamps"""
 
         sequence_id: str  # the source sequence id of the current trajectory (might be shared with other trajectories)
-
-        rig_bbox: Optional[
-            BBox3 | None
-        ]  # if available, the 3d bbox of the sensor rig (vehicle / robot) relative to the rig frame
 
         cameras_frame_timestamps_us: dict[str, torch.Tensor]
         lidars_frame_timestamps_us: dict[str, torch.Tensor]

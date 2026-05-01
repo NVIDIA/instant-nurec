@@ -729,7 +729,6 @@ class NCoreNRMDataset(BaseNRMIndexableDataset):
             rig_trajectores.append(
                 RigTrajectories.RigTrajectory(
                     sequence_id=sequence_id_prefix + loader_key,
-                    rig_bbox=None,
                     cameras_frame_timestamps_us=camera_frame_timestamps_us[loader_key],
                     lidars_frame_timestamps_us=lidar_frame_timestamps_us if loader_key == lidar_loader_key else {},
                     T_rig_worlds=to_torch(T_world_ref @ T_rig_worlds, device="cpu", dtype=torch.float64),
