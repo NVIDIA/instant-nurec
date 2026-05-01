@@ -34,8 +34,6 @@ import ncore
 import ncore.data
 import ncore.data.v4
 import ncore.impl.data.stores as ncore_data_stores
-import ncore_internal.data
-import ncore_internal.data.v3
 
 from nre.utils.types import HalfClosedInterval
 
@@ -342,16 +340,16 @@ def get_mask_image(
 
 
 def get_camera_sensor_mask(
-    camera_sensor: ncore_internal.data.v3.CameraSensor | ncore.data.CameraSensorProtocol,
+    camera_sensor: ncore.data.CameraSensorProtocol,
 ) -> np.ndarray | None:
     """
-    Returns a boolean mask for a camera sensor, scaled to the sensor's resolution if required.
+    Returns a boolean mask for a NCore V4 camera sensor, scaled to the sensor's resolution if required.
 
     The mask image is converted to grayscale and resized to match the camera sensor's resolution if their aspect ratios are sufficiently close.
     The resulting mask is returned as a NumPy boolean array, where `True` indicates masked-out regions.
 
-    Args:
-        camera_sensor (ncore_data.CameraSensor | ncore_data4_compat.CameraSensorProtocol): The camera sensor  / sensor protocol providing model parameters and default mask image.
+    Predict-only standalone reads ncorev4 only; the V3 native sensor branch
+    was dropped together with the V3 sequence loader (Phase 1 step 4.3).
 
     Returns:
         np.ndarray | None: A boolean NumPy array representing the mask, or None if no mask image is available.
@@ -360,17 +358,9 @@ def get_camera_sensor_mask(
         AssertionError: If the aspect ratio of the mask image does not match the camera sensor's resolution within a tolerance.
     """
 
-    camera_mask_image: PILImage.Image | None
-    match camera_sensor:
-        case ncore_internal.data.v3.CameraSensor():
-            camera_mask_image = camera_sensor.get_camera_mask_image()
-            resolution = camera_sensor.get_camera_model_parameters().resolution
-        case ncore.data.CameraSensorProtocol():
-            # V4 potentially provides more than a single mask, use 'ego' mask if available
-            camera_mask_image = camera_sensor.get_mask_images().get("ego")
-            resolution = camera_sensor.model_parameters.resolution
-        case _:
-            raise ValueError(f"{__name__} get_camera_sensor_mask: unsupported camera sensor type {type(camera_sensor)}")
+    # V4 potentially provides more than a single mask, use 'ego' mask if available
+    camera_mask_image: PILImage.Image | None = camera_sensor.get_mask_images().get("ego")
+    resolution = camera_sensor.model_parameters.resolution
 
     return get_mask_image(camera_mask_image, tuple(resolution))
 
