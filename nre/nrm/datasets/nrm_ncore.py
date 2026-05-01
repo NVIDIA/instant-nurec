@@ -724,15 +724,13 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
         # ShardDataLoader is logging using root. Let's suppress this information.
         (root_logger := logging.getLogger()).setLevel(logging.WARNING)
         for camera_id in all_camera_ids:
-            # Predict-only standalone never loads from external ncore archives,
-            # so the per-camera dataset path is always the main dataset path.
-            current_dataset_paths = dataset_paths
-
-            # Load the ncore files
+            # Load the ncore files. Predict-only standalone never loads from
+            # external ncore archives, so the dataset paths are the same for
+            # every camera id.
             if (sequence_loader := sequence_loaders.get(camera_id.loader_key)) is None:
                 try:
                     sequence_loader = sequence_loaders[camera_id.loader_key] = ncore_utils.create_sequence_loader(
-                        dataset_paths=current_dataset_paths,
+                        dataset_paths=dataset_paths,
                         open_consolidated=self.open_consolidated,
                         v4_poses_component_group="default",
                         v4_intrinsics_component_group="default",
@@ -740,9 +738,7 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
                         v4_cuboids_component_group="default",
                     )
                 except FileNotFoundError as e:
-                    raise NRMDataError(
-                        f"Ncore files not found for the given dataset_paths {current_dataset_paths}."
-                    ) from e
+                    raise NRMDataError(f"Ncore files not found for dataset_paths {dataset_paths}.") from e
 
                 # TODO: frame-pose only data might fail here as there are no rig poses and might require refined logic
                 rig_world_edge: ncore_transformations.PoseGraphInterpolator.Edge = unpack_optional(
@@ -759,7 +755,7 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
                 try:
                     aux_loaders[camera_id.loader_key] = ncore_utils.AuxShardDataLoader(
                         sequence_id=sequence_loader.sequence_id,
-                        dataset_paths=current_dataset_paths,
+                        dataset_paths=dataset_paths,
                         open_consolidated=self.open_consolidated,
                     )
                 except ValueError as e:
