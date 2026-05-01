@@ -20,15 +20,12 @@ if TYPE_CHECKING:
 
 
 def make(config: "NRMConfig", load_from_checkpoint: Optional[str] = None) -> GaussiansNRMSystem:
-    """Predict-only standalone: NRE handled both Lightning checkpoint loading
-    and weights-only loading; the pretrained config always sets
-    resume_weights_only=true so we keep just that branch."""
+    """Predict-only standalone: NRE supported both Lightning checkpoint loading
+    and weights-only loading; only the latter survives (the predict config
+    always set resume_weights_only=true)."""
     system = GaussiansNRMSystem(config)
     if load_from_checkpoint is None:
         return system
-
-    if not config.resume_weights_only:
-        raise NotImplementedError("resume_weights_only=False was a Lightning-only path; not supported.")
 
     checkpoint = torch.load(load_from_checkpoint, map_location="cpu", weights_only=False)
     state_dict = checkpoint["state_dict"] if "state_dict" in checkpoint else checkpoint

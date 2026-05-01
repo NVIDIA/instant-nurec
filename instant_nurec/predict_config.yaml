@@ -9,7 +9,6 @@
 # Sourced from the parsed.yaml that hydra produced for the kelvin_pa_front
 # pretrained predict run (Phase 1 step 4.4: drop hydra/yaml composition).
 seed: 38
-resume_weights_only: true
 system:
   predict_num_workers: 4
   predict_batch_size: 8

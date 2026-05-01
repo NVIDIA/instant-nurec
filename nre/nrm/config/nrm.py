@@ -35,7 +35,6 @@ class NRMConfig(BaseConfigSchema):
 
     seed: int = Field(default=38, description="Random seed.")
     resume: str | None
-    resume_weights_only: bool
 
     out_dir: str
 
