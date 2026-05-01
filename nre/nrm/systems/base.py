@@ -10,19 +10,12 @@
 
 from __future__ import annotations
 
-import logging
-import os
-
-from abc import ABC, abstractmethod
-from typing import Any, Generic, Mapping, TypeVar, cast
+from abc import ABC
 
 import torch
 
 from pytorch_lightning import LightningModule
-from pytorch_lightning.core.optimizer import do_nothing_closure
-from pytorch_lightning.utilities.types import OptimizerLRSchedulerConfig as PL_OptimizerLRSchedulerConfig
 
-from libs.losses.orchestration.config import LossAggregatorBatchReturn
 from libs.losses.orchestration.loss_aggregator import LossAggregator
 from nre.config.base_schema import config_to_primitive
 from nre.nrm.config.nrm import BaseNRMSystemConfig, NRMConfig
@@ -30,18 +23,12 @@ from nre.nrm.datasets.datamodule import NRMDataModule
 from nre.nrm.models.base import BaseNRM
 from nre.utils.batch import NRMDataBatch
 from nre.utils.log import BatchMediaLogger
-from nre.utils.misc import unpack_optional
-from nre.utils.profiling import ScopedTimer
 from nre.utils.types import Checkpoint
-
-
-logger = logging.getLogger(__name__)
 
 
 class BaseNRMSystem(LightningModule, ABC):
     config: BaseNRMSystemConfig
     model: BaseNRM
-    last_loss_return: LossAggregatorBatchReturn | None
     datamodule: NRMDataModule
 
     device: torch.device  # mypy type fix for obtaininig system's device
@@ -49,18 +36,12 @@ class BaseNRMSystem(LightningModule, ABC):
     def __init__(self, config: NRMConfig) -> None:
         super().__init__()
 
-        # handle the training loop iteration ourselves for the sake of flexibility
-        self.automatic_optimization = False
-
         self.save_hyperparameters(config_to_primitive(config.to_dictconfig()))
 
         # save what we need from the config
         self.cached_config = config
-        self.mode = config.mode
-        self.max_epochs = config.system.max_epochs
         self.out_dir = config.out_dir
         self.run_id = config.run_id
-        self.resume = config.resume
         self.config = config.system
         self.predict_config = config.predict
 
@@ -71,7 +52,6 @@ class BaseNRMSystem(LightningModule, ABC):
         self.loss = LossAggregator(config.loss, force_disable_cuda=True)
 
         self.media_logger = BatchMediaLogger(self, self.config)
-        self.last_loss_return = None
 
 
 
@@ -91,16 +71,6 @@ class BaseNRMSystem(LightningModule, ABC):
         if self._trainer is not None:
             # Manually load all the loops as otherwise global_step and current epoch are not set correctly in the validation mode
             # see: https://github.com/Lightning-AI/lightning/issues/17127
-            self.trainer.fit_loop.load_state_dict(checkpoint["loops"]["fit_loop"])
-            self.trainer.validate_loop.load_state_dict(checkpoint["loops"]["validate_loop"])
-            self.trainer.test_loop.load_state_dict(checkpoint["loops"]["test_loop"])
             self.trainer.predict_loop.load_state_dict(checkpoint["loops"]["predict_loop"])
 
-        # Load the remainder of the state_dict
         self.load_state_dict(checkpoint["state_dict"], assign=True)
-        if "train" in self.mode:
-            assert self.config.world_size == checkpoint["trainer.world_size"]
-
-    def on_save_checkpoint(self, checkpoint: Checkpoint) -> None:
-        # For sanity check that training environment matches.
-        checkpoint["trainer.world_size"] = self.config.world_size
