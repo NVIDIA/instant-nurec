@@ -41,7 +41,6 @@ class KelvinNRM(BaseNRM[KelvinNRMPrimitive]):
         self.encoder = make_encoder(config)
         self.decoder = make_decoder(config)
         self.sky = make_sky(config)
-        self.sky_cubemap_size = self.config.sky.cubemap_size
         self.post_processing: Optional[PerCameraAffinePostProcessing] = None
         if config.post_processing.enabled:
             self.post_processing = PerCameraAffinePostProcessing(
