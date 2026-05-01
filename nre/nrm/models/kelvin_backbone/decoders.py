@@ -252,7 +252,6 @@ class KelvinDPTDecoder(nn.Module):
             pos_embed_strength=0.1,
             checkpointing=config.checkpointing,
         )
-        self.context_head_init_values = [0.0] * 3 + [0.0, -1.0, 0.0] + [float("nan")] * self.n_semantic_classes
         # Time-conditioned motion-offset head (the kelvin_pa_front config sets
         # `motion_depth = 4`, so the NRE-side `motion_depth == 0` Identity
         # branch is unreachable; the inverse-flow `target_motion_head` was
@@ -276,7 +275,6 @@ class KelvinDPTDecoder(nn.Module):
             pos_embed_strength=0.1,
             checkpointing=config.checkpointing,
         )
-        self.gaussians_head_init_values = [float("nan")] * gs_output_dim
 
         self.cuboids_dims_padding = nn.Buffer(torch.tensor(model_config.track_padding_m, dtype=torch.float32))
         self.gaussian_activations = GaussianActivations(model_config.activations)

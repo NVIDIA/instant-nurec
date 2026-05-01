@@ -335,15 +335,12 @@ class ModelRegistry(ABC):
             if total_size == 0:
                 log_and_raise(ModelRegistryError, "Server did not provide Content-Length header")
 
-            downloaded_size = 0
-
             with open(cached_file, "wb") as f:
                 # Create a progress bar with unit='B' (bytes) and unit_scale=True to show sizes in MB/GB
                 with tqdm(total=total_size, unit="B", unit_scale=True, desc=f"Downloading {filename}") as pbar:
                     for chunk in response.iter_content(chunk_size=self.CHUNK_SIZE):
                         if chunk:  # filter out keep-alive chunks
                             f.write(chunk)
-                            downloaded_size += len(chunk)
                             pbar.update(len(chunk))
 
             # Verify the downloaded file matches expected size
