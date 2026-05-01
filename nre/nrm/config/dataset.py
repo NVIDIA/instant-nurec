@@ -82,53 +82,10 @@ class AdaptiveSequentialFrameBatchSamplerConfig(BaseFrameBatchSamplerConfig):
     )
 
 
-class VaryingIntervalFrameBatchSamplerConfig(BaseFrameBatchSamplerConfig):
-    name: Literal["varying_interval"] = "varying_interval"
-
-    sequence_gap_timestamp_us_min: int = Field(
-        description="Minimum gap between sequences in the batch, in microseconds."
-    )
-    sequence_gap_timestamp_us_max: int = Field(
-        description="Maximum gap between sequences in the batch, in microseconds."
-    )
-
-
-class UniformLengthFrameBatchSamplerConfig(BaseFrameBatchSamplerConfig):
-    name: Literal["uniform_length"] = "uniform_length"
-    length_gap_min: float = Field(description="Minimum length gap between adjacent frames in the batch, in meters.")
-    length_gap_max: float = Field(description="Maximum length gap between adjacent frames in the batch, in meters.")
-
-
-class LinearWithIndexFrameBatchSamplerConfig(BaseFrameBatchSamplerConfig):
-    name: Literal["linear_with_index"] = "linear_with_index"
-    first_frame_timestamp: int = Field(description="Timestamp of the first frame in the batch, in microseconds.")
-    total_time_gap: int = Field(
-        description="Total time gap between first and last frame in the batch, in microseconds."
-    )
-
-
-class SequentialFrameBatchSamplerConfig(BaseFrameBatchSamplerConfig):
-    name: Literal["sequential"] = "sequential"
-    first_frame_timestamp: int = Field(description="Timestamp of the first frame in the batch, in microseconds.")
-    frame_gap_timestamp_us: int = Field(description="Gap between consecutive frames in the batch, in microseconds.")
-    allow_out_of_bounds: bool = Field(description="Whether to allow out of bounds sampling.", default=False)
-
-
-class SequentialLengthFrameBatchSamplerConfig(BaseFrameBatchSamplerConfig):
-    name: Literal["sequential_length"] = "sequential_length"
-    length_gap: float = Field(description="Gap between consecutive frames in the batch, in meters.")
-    allow_out_of_bounds: bool = Field(description="Whether to allow out of bounds sampling.", default=False)
-
-
 BatchSamplerConfigType = Annotated[
     Union[
         UniformFrameBatchSamplerConfig,
         AdaptiveSequentialFrameBatchSamplerConfig,
-        VaryingIntervalFrameBatchSamplerConfig,
-        LinearWithIndexFrameBatchSamplerConfig,
-        SequentialFrameBatchSamplerConfig,
-        UniformLengthFrameBatchSamplerConfig,
-        SequentialLengthFrameBatchSamplerConfig,
     ],
     Field(discriminator="name"),
 ]
