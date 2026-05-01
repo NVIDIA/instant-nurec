@@ -23,17 +23,13 @@ from tqdm import tqdm
 
 from nre.datasets.tracks import CuboidTracks
 from nre.nrm.config.nrm import NRMConfig
-from nre.nrm.models.base import BaseNRMSupervisionPack
 from nre.nrm.models.kelvin_model import KelvinNRM
 from nre.nrm.predict.export_ply import export_ply
 from nre.nrm.predict.primitive_merge import make as make_primitive_merge
 from nre.nrm.primitives.base import BaseNRMPrimitive
 from nre.nrm.systems.base import BaseNRMSystem
 from nre.utils.batch import NRMDataBatch
-from nre.utils.types import (
-    GaussiansCompositeReturn,
-    RigTrajectories,
-)
+from nre.utils.types import RigTrajectories
 
 
 logger = logging.getLogger(__name__)
@@ -52,25 +48,13 @@ class GaussiansNRMSystem(BaseNRMSystem):
         # Predict-only standalone: no train/val metrics needed.
         del stage
 
-    def forward(
-        self, batch: NRMDataBatch
-    ) -> tuple[list[BaseNRMPrimitive], list[BaseNRMSupervisionPack], list[GaussiansCompositeReturn]]:
+    def forward(self, batch: NRMDataBatch) -> list[BaseNRMPrimitive]:
         cuboid_tracks = None
         if batch.cuboid_tracks is not None:
             cuboid_tracks = [CuboidTracks.Factory.from_pack(ct) for ct in batch.cuboid_tracks]
 
-        # Prepare context for model inference
         batch.context = self.model.prepare_context(batch.context, cuboid_tracks)
-
-        # Reconstruct the primitives. Predict mode never has supervision so the
-        # supervision/rendering branches that lived here under the original
-        # implementation were unreachable; they were deleted in Phase 1 step 4.3.
-        primitives, supervision_packs = self.model.reconstruct(
-            batch.context,
-            cuboid_tracks,
-            compute_supervision_pack=False,
-        )
-        return primitives, [], []
+        return self.model.reconstruct(batch.context, cuboid_tracks)
 
     def predict_step(
         self, batch: NRMDataBatch, batch_local_idx: int
@@ -87,7 +71,7 @@ class GaussiansNRMSystem(BaseNRMSystem):
         progress_bar = tqdm(total=len(batch), desc="Predicting in chunks")
         while inner_batch_idx < len(batch):
             batch_chunk = batch[inner_batch_idx : inner_batch_idx + self.predict_config.chunk_size]
-            primitives_chunk_list, _, _ = self.forward(batch_chunk)
+            primitives_chunk_list = self.forward(batch_chunk)
             export_preprocess = self.cached_config.model.export_preprocess
             if export_preprocess.enabled:
                 context_rig_list = batch_chunk.context_rig if batch_chunk.context_rig is not None else None

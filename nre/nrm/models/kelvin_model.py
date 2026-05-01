@@ -18,7 +18,6 @@ from nre.datasets.tracks import CuboidTracks
 from nre.models.gaussians.renderers import BaseGaussianRenderer
 from nre.nrm.config.models import KelvinModelConfig
 from nre.nrm.models.base import BaseNRM
-from nre.nrm.models.kelvin_backbone.base import KelvinNRMSupervisionPack
 from nre.nrm.models.kelvin_backbone.decoders import KelvinDPTDecoder, make_decoder
 from nre.nrm.models.kelvin_backbone.encoders import make_encoder
 from nre.nrm.models.kelvin_backbone.sky import make_sky
@@ -35,7 +34,7 @@ from nre.utils.types import RayFlags
 logger = logging.getLogger(__name__)
 
 
-class KelvinNRM(BaseNRM[KelvinNRMPrimitive, KelvinNRMSupervisionPack]):
+class KelvinNRM(BaseNRM[KelvinNRMPrimitive]):
     """
     Please refer to the [Kelvin Model](../docs/KELVIN_MODEL.md) for more details.
     """
@@ -223,15 +222,14 @@ class KelvinNRM(BaseNRM[KelvinNRMPrimitive, KelvinNRMSupervisionPack]):
         self,
         context: list[DataAndRenderingBatch],
         cuboid_tracks: list[CuboidTracks] | None,
-        compute_supervision_pack: bool = False,
-    ) -> tuple[list[KelvinNRMPrimitive], list[KelvinNRMSupervisionPack] | None]:
+    ) -> list[KelvinNRMPrimitive]:
         # Add assertions about input context -- num_images and num_views should match
         num_imgs, num_views, camera_idxs, time_remappings = self._grab_metainfo(context)
 
         # Encode the inputs
         encoded_latent = self.encoder.encode(context, time_remappings, self.scene_rescale)
 
-        # Forward the decoder (Compute supervision packs along the way)
+        # Forward the decoder
         decoder_returns = self.decoder.decode(
             encoded_latent,
             context,
@@ -241,7 +239,6 @@ class KelvinNRM(BaseNRM[KelvinNRMPrimitive, KelvinNRMSupervisionPack]):
         )
         static_layers = [return_value.static_layer for return_value in decoder_returns]
         dynamic_layers = [return_value.dynamic_layers for return_value in decoder_returns]
-        supervision_packs = [return_value.supervision_pack for return_value in decoder_returns]
 
         # Forward sky
         sky_cubemaps = self.sky.decode(encoded_latent, context).contiguous()
@@ -262,17 +259,14 @@ class KelvinNRM(BaseNRM[KelvinNRMPrimitive, KelvinNRMSupervisionPack]):
         # Build the primitives
         primitives: list[KelvinNRMPrimitive] = []
         for bidx in range(len(context)):
-            sky_cubemap_bidx = sky_cubemaps[bidx]
-            supervision_packs[bidx].predicted_sky_cubemap = sky_cubemap_bidx
-
             primitive = KelvinNRMPrimitive(
                 static_layer=unpack_optional(static_layers[bidx]),
                 dynamic_layers=dynamic_layers[bidx],
-                sky_cubemap=sky_cubemap_bidx,
+                sky_cubemap=sky_cubemaps[bidx],
                 affine_matrix=affine_matrix[bidx],
                 use_2dgs=self.use_2dgs,
                 gaussians_renderer=self.gaussians_renderer,
             )
             primitives.append(primitive)
 
-        return primitives, supervision_packs if compute_supervision_pack else None
+        return primitives

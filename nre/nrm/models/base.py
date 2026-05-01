@@ -11,8 +11,7 @@
 from __future__ import annotations
 
 from abc import abstractmethod
-from dataclasses import dataclass
-from typing import Any, Generic, Iterator, TypeVar
+from typing import Any, Generic, Iterator
 
 import torch
 import torch.nn as nn
@@ -23,17 +22,7 @@ from nre.nrm.primitives.base import NRMPrimitiveType
 from nre.utils.batch import DataAndRenderingBatch
 
 
-@dataclass(kw_only=True)
-class BaseNRMSupervisionPack:
-    """
-    Dataclass storing the supervision data required for NRM training.
-    """
-
-
-NRMSupervisionPackType = TypeVar("NRMSupervisionPackType", bound=BaseNRMSupervisionPack)
-
-
-class BaseNRM(nn.Module, Generic[NRMPrimitiveType, NRMSupervisionPackType]):
+class BaseNRM(nn.Module, Generic[NRMPrimitiveType]):
     def __init__(self, config: BaseModelConfig) -> None:
         super().__init__()
         self.config = config
@@ -66,12 +55,13 @@ class BaseNRM(nn.Module, Generic[NRMPrimitiveType, NRMSupervisionPackType]):
         self,
         context: list[DataAndRenderingBatch],
         cuboid_tracks: list[CuboidTracks] | None,
-        compute_supervision_pack: bool = False,
-    ) -> tuple[list[NRMPrimitiveType], list[NRMSupervisionPackType] | None]:
+    ) -> list[NRMPrimitiveType]:
         """
         Perform a "reconstruction" step on the provided images.
         """
         pass
+
+
 
     @abstractmethod
     def prepare_context(

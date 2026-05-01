@@ -38,9 +38,7 @@ from nre.nrm.models.blocks.dpt import DPTFullHead
 from nre.nrm.models.blocks.embeds import ContinuousTimeEmbed
 from nre.nrm.models.kelvin_backbone.base import (
     KelvinLatent,
-    KelvinMotionSupervision,
     KelvinMultiscaleFeaturesLatent,
-    KelvinNRMSupervisionPack,
     _tokengs_init_weights,
 )
 from nre.nrm.primitives.kelvin_primitive import (
@@ -62,7 +60,6 @@ class KelvinDecoderReturn:
     # Allowing all dynamic layers
     static_layer: KelvinStaticLayer | None
     dynamic_layers: list[KelvinDynamicLayer]
-    supervision_pack: KelvinNRMSupervisionPack
 
 
 class KelvinDecoderBase(nn.Module, ABC):
@@ -433,7 +430,6 @@ class KelvinDPTDecoder(KelvinDecoderBase):
 
         context_prev_flow: torch.Tensor | None = None
         context_next_flow: torch.Tensor | None = None
-        motion_supervisions: list[list[KelvinMotionSupervision]] = [[] for _ in range(B)]
         if isinstance(self.context_motion_head, self.TimeModulatedMotionHead):
             context_prev_flow, context_next_flow = self.context_motion_head.forward(
                 encoded_latent,
@@ -447,21 +443,6 @@ class KelvinDPTDecoder(KelvinDecoderBase):
             )
             context_prev_flow = context_prev_flow / scene_rescale
             context_next_flow = context_next_flow / scene_rescale
-            motion_supervisions = [
-                [
-                    KelvinMotionSupervision(
-                        source_timestamps_us=source_timestamps_us[bidx],
-                        target_timestamps_us=prev_target_timestamps_us[bidx],
-                        context_flow=context_prev_flow[bidx],
-                    ),
-                    KelvinMotionSupervision(
-                        source_timestamps_us=source_timestamps_us[bidx],
-                        target_timestamps_us=next_target_timestamps_us[bidx],
-                        context_flow=context_next_flow[bidx],
-                    ),
-                ]
-                for bidx in range(B)
-            ]
 
         # If cuboid tracks are provided, use them instead.
         if cuboid_tracks is not None:
@@ -577,21 +558,6 @@ class KelvinDPTDecoder(KelvinDecoderBase):
             activated=True,
         )
 
-        supervision_packs = [
-            KelvinNRMSupervisionPack(
-                context_rgb=context_rgb[bidx],
-                context_depth=pred_depth[bidx],
-                context_depth_conf=pred_depth_conf[bidx],
-                context_semantic_logits=context_semantic_logits[bidx],
-                context_world_normal=context_world_normal[bidx],
-                motion_supervisions=motion_supervisions[bidx],
-            )
-            for bidx in range(B)
-        ]
-
-        # Optionally dump meshing data
-        # self._dump_meshing_data(gs_params[0], supervision_packs[0], batches[0])
-
         # Build up the primitive
         return_values: list[KelvinDecoderReturn] = []
         for bidx in range(B):
@@ -647,7 +613,6 @@ class KelvinDPTDecoder(KelvinDecoderBase):
                 KelvinDecoderReturn(
                     static_layer=static_layer,
                     dynamic_layers=[dynamic_layer],
-                    supervision_pack=supervision_packs[bidx],
                 )
             )
 

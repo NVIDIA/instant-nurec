@@ -8,17 +8,12 @@
 # without an express license agreement from NVIDIA CORPORATION or
 # its affiliates is strictly prohibited.
 
-from nre.nrm.models.kelvin_backbone.base import KelvinNRMSupervisionPack
 from nre.nrm.models.kelvin_backbone.decoders import make_decoder
 from nre.nrm.models.kelvin_backbone.encoders import make_encoder
 from nre.nrm.models.kelvin_backbone.sky import make_sky
 
 
-# These imports in __all__ are only used for documentation and shouldn't
-# be used for relative imports. This is a temporary solution until
-# we can make the autodiscovery of the modules work with sphinx
 __all__ = [
-    "KelvinNRMSupervisionPack",
     "make_decoder",
     "make_encoder",
     "make_sky",
