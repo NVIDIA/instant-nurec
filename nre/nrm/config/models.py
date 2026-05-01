@@ -34,10 +34,6 @@ class PrimitiveExportPreprocessConfig(BaseConfigSchema):
     )
 
 
-class KelvinExportPreprocessConfig(PrimitiveExportPreprocessConfig):
-    """Kelvin export preprocess; only uses base density_prune_threshold."""
-
-
 class GaussiansActivationConfig(BaseConfigSchema):
     """
     Configuration for activation functions used in neural reconstruction models.
@@ -170,10 +166,7 @@ class KelvinModelConfig(BaseModelConfig):
         default_factory=GaussiansActivationConfig, description="Activation functions configuration."
     )
 
-    # Augmentations
-    voxel_size: float | None = Field(default=None, description="Voxel size for the voxelization")
-
-    export_preprocess: KelvinExportPreprocessConfig = Field(
-        default_factory=KelvinExportPreprocessConfig,
+    export_preprocess: PrimitiveExportPreprocessConfig = Field(
+        default_factory=PrimitiveExportPreprocessConfig,
         description="Per-chunk preprocess options for predict/export (filtering before merge or export).",
     )
