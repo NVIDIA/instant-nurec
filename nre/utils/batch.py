@@ -423,11 +423,8 @@ class CameraFrameLabels:
     - rgb: Optional. RGB value within [0, 1]. Default is None. [Tensor[float32]]. (B, height, width, 3).
     - distance: Optional. Metric ray-depth in NRE scale (not z-depth). Default is None. [Tensor[float32]]. (B, height, width, 1).
     - metric_distance: Optional. Non-metric ray depth from a depth estimation model. Default is None. [Tensor[float32]]. (B, height, width, 1).
-    - relative_distance: Optional. Non-metric ray depth from a depth estimation model. Default is None. [Tensor[float32]]. (B, height, width, 1).
-    - alpha: Optional. Transparency of the pixel valued in [0, 1]. Default is None. [Tensor[float32]]. (B, height, width, 1).
     - semantic: Optional. Semantic class of the pixel. Default is None. [Tensor[uint8]]. (B, height, width, 1).
     - normals: Optional. Per-pixel normal vectors relative to the world frame. Default is None. [Tensor[float32]]. (B, height, width, 3).
-    - velocity: Optional. Velocity vector of the pixel (unit is m/s). Default is None. [Tensor[float32]]. (B, height, width, 3/6).
     - _n_valid_rgb: Optional. Number of valid RGB channels as cache for n_valid_rgb property. Default is None. int32.
     - _n_valid: Optional. Number of valid pixels as cache for n_valid property. Default is None. int32.
     - _n_difixed: Optional. Number of Difixed as cache for n_difixed property. Default is None. int32.
@@ -437,11 +434,8 @@ class CameraFrameLabels:
     flags: torch.Tensor | None = None
     rgb: torch.Tensor | None = None
     metric_distance: torch.Tensor | None = None
-    relative_distance: torch.Tensor | None = None
-    alpha: torch.Tensor | None = None
     semantic: torch.Tensor | None = None
     normals: torch.Tensor | None = None
-    velocity: torch.Tensor | None = None
     _n_valid_rgb: int | None = None
     _n_valid: int | None = None
     _n_difixed: int | None = None
@@ -460,14 +454,6 @@ class CameraFrameLabels:
                 "Metric distance must be a 4D tensor (B, height, width, 1)"
             )
             assert self.metric_distance.dtype == torch.float32, "Metric distance must be a float32 tensor"
-        if self.relative_distance is not None:
-            assert self.relative_distance.ndim == 4 and self.relative_distance.shape[3] == 1, (
-                "Relative distance must be a 4D tensor (B, height, width, 1)"
-            )
-            assert self.relative_distance.dtype == torch.float32, "Relative distance must be a float32 tensor"
-        if self.alpha is not None:
-            assert self.alpha.ndim == 4 and self.alpha.shape[3] == 1, "Alpha must be a 4D tensor (B, height, width, 1)"
-            assert self.alpha.dtype == torch.float32, "Alpha must be a float32 tensor"
         if self.semantic is not None:
             assert self.semantic.ndim == 4 and self.semantic.shape[3] == 1, (
                 "Semantic must be a 4D tensor (B, height, width, 1)"
@@ -478,12 +464,6 @@ class CameraFrameLabels:
                 "Normals must be a 4D tensor (B, height, width, 3)"
             )
             assert self.normals.dtype == torch.float32, "Normals must be a float32 tensor"
-        if self.velocity is not None:
-            assert self.velocity.ndim == 4 and self.velocity.shape[3] in [
-                3,
-                6,
-            ], "Velocity must be a 4D tensor (B, height, width, 3/6)"
-            assert self.velocity.dtype == torch.float32, "Velocity must be a float32 tensor"
         if self._n_valid_rgb is not None:
             assert isinstance(self._n_valid_rgb, int), "N valid RGB must be an int"
         if self._n_valid is not None:
@@ -597,11 +577,8 @@ class CameraFrameLabels:
             flags=collate_fn([item.flags for item in seq], device),
             rgb=collate_fn([item.rgb for item in seq], device),
             metric_distance=collate_fn(metric_distance_seq, device),
-            relative_distance=collate_fn([item.relative_distance for item in seq], device),
-            alpha=collate_fn([item.alpha for item in seq], device),
             semantic=collate_fn([item.semantic for item in seq], device),
             normals=collate_fn([item.normals for item in seq], device),
-            velocity=collate_fn([item.velocity for item in seq], device),
             _n_valid_rgb=sum([item.n_valid_rgb for item in seq]),
             _n_valid=sum([item.n_valid for item in seq]),
             _n_difixed=sum([item.n_difixed for item in seq]),
@@ -613,13 +590,8 @@ class CameraFrameLabels:
             flags=self.flags.to(*args, **kwargs) if self.flags is not None else None,
             rgb=self.rgb.to(*args, **kwargs) if self.rgb is not None else None,
             metric_distance=self.metric_distance.to(*args, **kwargs) if self.metric_distance is not None else None,
-            relative_distance=self.relative_distance.to(*args, **kwargs)
-            if self.relative_distance is not None
-            else None,
-            alpha=self.alpha.to(*args, **kwargs) if self.alpha is not None else None,
             semantic=self.semantic.to(*args, **kwargs) if self.semantic is not None else None,
             normals=self.normals.to(*args, **kwargs) if self.normals is not None else None,
-            velocity=self.velocity.to(*args, **kwargs) if self.velocity is not None else None,
             _n_valid_rgb=self._n_valid_rgb,
             _n_valid=self._n_valid,
             _n_difixed=self._n_difixed,
@@ -635,11 +607,8 @@ class CameraFrameLabels:
             flags=self.flags[item] if self.flags is not None else None,
             rgb=self.rgb[item] if self.rgb is not None else None,
             metric_distance=self.metric_distance[item] if self.metric_distance is not None else None,
-            relative_distance=self.relative_distance[item] if self.relative_distance is not None else None,
-            alpha=self.alpha[item] if self.alpha is not None else None,
             semantic=self.semantic[item] if self.semantic is not None else None,
             normals=self.normals[item] if self.normals is not None else None,
-            velocity=self.velocity[item] if self.velocity is not None else None,
         )
 
 
