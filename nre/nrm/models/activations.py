@@ -65,9 +65,6 @@ class ScaleActivation(nn.Module):
 class RotationActivation(nn.Module):
     """Activation function for rotation quaternions using L2 normalization."""
 
-    def __init__(self, config: GaussiansActivationConfig):
-        super().__init__()
-
     def forward(self, x: Tensor) -> Tensor:
         """Normalize rotation quaternions to unit length."""
         return torch.nn.functional.normalize(x, dim=-1)
@@ -75,9 +72,6 @@ class RotationActivation(nn.Module):
 
 class RgbActivation(nn.Module):
     """Activation function for RGB color values using sigmoid."""
-
-    def __init__(self, config: GaussiansActivationConfig):
-        super().__init__()
 
     def forward(self, x: Tensor) -> Tensor:
         """Apply sigmoid activation to map RGB values to [0, 1] range."""
@@ -145,7 +139,7 @@ class GaussianActivations(nn.Module):
 
     def __init__(self, config: GaussiansActivationConfig):
         super().__init__()
-        self.rgb = RgbActivation(config)
+        self.rgb = RgbActivation()
         self.scale = ScaleActivation(config)
-        self.rotation = RotationActivation(config)
+        self.rotation = RotationActivation()
         self.opacity = OpacityActivation(config)
