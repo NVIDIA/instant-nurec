@@ -15,10 +15,6 @@ from typing import List, Literal, Tuple
 from nre.config.base_schema import BaseConfigSchema, Field
 
 
-class BaseModelConfig(BaseConfigSchema):
-    pass
-
-
 class PrimitiveExportPreprocessConfig(BaseConfigSchema):
     """
     Config for per-chunk primitive preprocessing before export (and before merge).
@@ -99,7 +95,7 @@ class KelvinPostProcessingConfig(BaseConfigSchema):
     )
 
 
-class KelvinModelConfig(BaseModelConfig):
+class KelvinModelConfig(BaseConfigSchema):
     """
     Configuration for the Kelvin model.
     """

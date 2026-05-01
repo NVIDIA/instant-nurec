@@ -17,13 +17,13 @@ import torch
 import torch.nn as nn
 
 from nre.datasets.tracks import CuboidTracks
-from nre.nrm.config.models import BaseModelConfig
+from nre.nrm.config.models import KelvinModelConfig
 from nre.nrm.primitives.base import NRMPrimitiveType
 from nre.utils.batch import DataAndRenderingBatch
 
 
 class BaseNRM(nn.Module, Generic[NRMPrimitiveType]):
-    def __init__(self, config: BaseModelConfig) -> None:
+    def __init__(self, config: KelvinModelConfig) -> None:
         super().__init__()
         self.config = config
 
