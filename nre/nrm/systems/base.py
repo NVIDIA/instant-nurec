@@ -34,11 +34,11 @@ class BaseNRMSystem(nn.Module, ABC):
     def __init__(self, config: NRMConfig) -> None:
         super().__init__()
 
-        self.cached_config = config
         self.out_dir = config.out_dir
         self.run_id = config.run_id
         self.config = config.system
         self.predict_config = config.predict
+        self.export_preprocess = config.model.export_preprocess
 
         self.datamodule = NRMDataModule(config)
 
