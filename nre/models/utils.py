@@ -8,19 +8,11 @@
 # without an express license agreement from NVIDIA CORPORATION or
 # its affiliates is strictly prohibited.
 
-import contextlib
-import dataclasses
-
-from typing import Any, Callable, Generator, Optional
-
 import torch
 
-from pytorch_lightning.plugins.precision.amp import MixedPrecision
 from torch import nn
-from torch.cuda.amp.grad_scaler import GradScaler
 
 from nre.models.base import BaseModel
-from nre.utils.misc import dataclass_items
 from nre.utils.profiling import ScopedTimer
 
 

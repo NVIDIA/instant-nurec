@@ -119,10 +119,11 @@ def build_world_camera_frustums(
     for b_idx, batch_data in enumerate(batch.context):
         rendering_data = unpack_optional(unpack_optional(batch_data.rendering).camera)
         camera_frustums: list[CameraFrustum] = []
+        rig_T = batch_rig_transforms[b_idx].to(
+            device=rendering_data.poses_tquat_startend.device, dtype=torch.float32
+        )
         for frame_idx in range(rendering_data.b):
-            global_T_sensor = batch_rig_transforms[b_idx].float() @ tquat_to_se3_matrix(
-                rendering_data.poses_tquat_startend[frame_idx]
-            )
+            global_T_sensor = rig_T @ tquat_to_se3_matrix(rendering_data.poses_tquat_startend[frame_idx])
             camera_model_parameters = cast(
                 ConcreteCameraModelParametersUnion, rendering_data.sensor_model_parameters[frame_idx]
             )
@@ -230,7 +231,9 @@ class PrimitiveMerge(ABC, Generic[NRMPrimitiveType]):
         T_world_ref: torch.Tensor = se3_matrix_inverse(batch_context_rig[0].T_world_base)
         batch_rig_transforms: list[torch.Tensor] = [T_world_ref @ cr.T_world_base for cr in batch_context_rig]
         for b_idx, primitive in enumerate(primitives_list):
-            primitives_list[b_idx] = primitive.rigid_transform(batch_rig_transforms[b_idx].float())
+            primitives_list[b_idx] = primitive.rigid_transform(
+                batch_rig_transforms[b_idx].to(device=primitive.device(), dtype=torch.float32)
+            )
 
         # Step 2: Merge the processed primitives into a single primitive
         merged_primitive = self.merge_processed_primitives(primitives_list, batch_rig_transforms, batch)
@@ -375,12 +378,12 @@ class KelvinPrimitiveMerge(PrimitiveMerge[KelvinNRMPrimitive]):
 
             sky_mask = camera_data.labels.get_mask_flags_all(RayFlags.SKY_SEMANTIC).float()
             rendering_data = unpack_optional(unpack_optional(batch.context[b_idx].rendering).camera)
+            rig_T = batch_rig_transform.to(
+                device=rendering_data.poses_tquat_startend.device, dtype=torch.float32
+            )
             global_R_sensors = torch.stack(
                 [
-                    (
-                        batch_rig_transform.float()
-                        @ tquat_to_se3_matrix(rendering_data.poses_tquat_startend[f, 1, :].unsqueeze(0))
-                    )[:3, :3]
+                    (rig_T @ tquat_to_se3_matrix(rendering_data.poses_tquat_startend[f, 1, :].unsqueeze(0)))[:3, :3]
                     for f in range(rendering_data.b)
                 ],
                 dim=0,

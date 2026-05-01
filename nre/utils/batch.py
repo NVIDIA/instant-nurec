@@ -1680,6 +1680,33 @@ class NRMDataBatch:
     def __len__(self) -> int:
         return len(self.context)
 
+    def to(self, device: torch.device, **kwargs) -> Self:
+        """Move all dataclass-aware fields to ``device``. Self-invented: NRE
+        relies on Lightning's auto batch transfer; the standalone predict loop
+        must move tensors explicitly."""
+
+        def _move_list(items, attr: str | None = None):
+            if items is None:
+                return None
+            out = []
+            for item in items:
+                if hasattr(item, "to_device"):
+                    out.append(item.to_device(device))
+                elif hasattr(item, "to"):
+                    out.append(item.to(device, **kwargs))
+                else:
+                    out.append(item)
+            return out
+
+        return self.__class__(
+            context=_move_list(self.context),
+            supervision=_move_list(self.supervision),
+            cuboid_tracks=_move_list(self.cuboid_tracks),
+            context_rig=_move_list(self.context_rig),
+            supervision_rig=_move_list(self.supervision_rig),
+            meta=self.meta,
+        )
+
     @torch.autocast(device_type="cuda", enabled=False)
     def maybe_compute_rendering_data(self, device: torch.device):
         """Populates self.{context,supervision}[...].data.rendering unless already present"""

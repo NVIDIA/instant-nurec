@@ -12,7 +12,6 @@ import logging
 
 from typing import cast
 
-from pytorch_lightning import LightningDataModule
 from torch.utils.data import DataLoader
 
 from nre.nrm.config.dataset import NRMSplitsConfig
@@ -26,14 +25,13 @@ from nre.utils.misc import unpack_optional
 log = logging.getLogger(__name__)
 
 
-class NRMDataModule(LightningDataModule):
+class NRMDataModule:
     nrm_config: NRMConfig
     dataset_config: NRMSplitsConfig
 
     predict_dataset: BaseNRMDataset | None = None
 
     def __init__(self, nrm_config: NRMConfig) -> None:
-        super().__init__()
         self.nrm_config = nrm_config
         assert isinstance(nrm_config.dataset, NRMSplitsConfig)
         self.dataset_config = nrm_config.dataset
@@ -44,9 +42,8 @@ class NRMDataModule(LightningDataModule):
         assert dataset_config is not None, "dataset.predict has to be specified in the config to use the predict mode"
 
         self.predict_dataset = cast(BaseNRMDataset, make_dataset(dataset_config.name, dataset_config, "predict"))
-
-        if self.trainer is not None and self.predict_dataset is not None:
-            self.predict_dataset.set_epoch(self.trainer.current_epoch)
+        if self.predict_dataset is not None:
+            self.predict_dataset.set_epoch(0)
 
         return DataLoader(
             unpack_optional(self.predict_dataset),

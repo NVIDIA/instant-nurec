@@ -37,7 +37,6 @@ py_library(
         pip_requirement("nvidia-ncore"),
         pip_requirement("nvidia-ncore-internal"),
         pip_requirement("pandas"),
-        pip_requirement("pytorch_lightning"),
         pip_requirement("universal-pathlib"),
         pip_requirement("s3fs"),
         pip_requirement("torch"),

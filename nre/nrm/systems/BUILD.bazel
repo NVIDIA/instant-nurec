@@ -44,7 +44,6 @@ py_library(
         "//nre/utils:pylib_misc",
         "//nre/utils:pylib_types",
         pip_requirement("torch"),
-        pip_requirement("pytorch-lightning"),
         pip_requirement("numpy"),
         pip_requirement("einops"),
         pip_requirement("nvidia-ncore"),

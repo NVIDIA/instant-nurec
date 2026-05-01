@@ -1,21 +1,18 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: LicenseRef-NvidiaProprietary
 #
-# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
-# property and proprietary rights in and to this material, related
-# documentation and any modifications thereto. Any use, reproduction,
-# disclosure or distribution of this material and related documentation
-# without an express license agreement from NVIDIA CORPORATION or
-# its affiliates is strictly prohibited.
+# Predict-only entrypoint. Self-invented: NRE drives the predict loop with
+# pl.Trainer.predict; we strip pytorch_lightning and call the system hooks
+# directly so the standalone has no Lightning/Trainer dependency.
 
 import logging
 import os
+import random
 
 import click
 import click_default_group
-import pytorch_lightning as pl
-
-from lightning_utilities.core.rank_zero import rank_zero_info
+import numpy as np
+import torch
 
 import nre.nrm.datasets  # noqa: F401  (populates dataset registry)
 import nre.nrm.systems
@@ -24,33 +21,44 @@ from nre.config.parse import dump_config
 from nre.config.version import get_version
 from nre.nrm.config.nrm import NRMConfig, parse_typed_nrm_config
 from nre.nrm.systems.base import BaseNRMSystem
-from nre.utils.callbacks import TQDMProgressBar, make_logger
-from nre.utils.misc import rank_zero_only, unpack_optional
+from nre.utils.misc import unpack_optional
+
+
+logger = logging.getLogger(__name__)
+
+
+def _seed_everything(seed: int) -> None:
+    os.environ["PL_GLOBAL_SEED"] = str(seed)
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
+
+def _select_device() -> torch.device:
+    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 def setup_environment_and_logger(config: NRMConfig) -> logging.Logger:
-    logger = logging.getLogger(__name__)
+    log = logging.getLogger(__name__)
     if config.verbose:
-        logger.setLevel(logging.DEBUG)
-    pl.seed_everything(config.seed, workers=True)
-    return logger
+        log.setLevel(logging.DEBUG)
+    _seed_everything(config.seed)
+    return log
 
 
-def launch_trainer_loop(config: NRMConfig, system: BaseNRMSystem) -> None:
-    trainer = pl.Trainer(
-        devices=unpack_optional(config.system.device_count),
-        callbacks=[TQDMProgressBar(refresh_rate=1)],
-        logger=make_logger(config.logger),
-        precision=config.system.precision,
-        enable_progress_bar=True,
-        num_nodes=config.system.num_nodes,
-    )
+def launch_predict_loop(config: NRMConfig, system: BaseNRMSystem) -> None:
+    device = _select_device()
+    system.to(device)
+    system.eval()
 
     ckpt_path = config.resume if (config.resume and not config.resume_weights_only) else None
+    if ckpt_path:
+        ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
+        system.on_load_checkpoint(ckpt)
+        system.to(device)
 
-    # For predict without a checkpoint but with init weights, run the
-    # train-from-scratch hook (kelvin's path requires it for proper weight
-    # loading from the pretrained ngc artifact).
     has_full_init = bool(getattr(config.model, "init_weights_path", None))
     init_weights_paths = getattr(config.model, "init_weights_paths", None)
     if not has_full_init and init_weights_paths is not None:
@@ -58,10 +66,18 @@ def launch_trainer_loop(config: NRMConfig, system: BaseNRMSystem) -> None:
             has_full_init = True
     if config.call_train_from_scratch_hook_for_validation and ckpt_path is None and has_full_init:
         system.model.on_train_from_scratch_start(system)
+        system.to(device)
 
     if "predict" not in config.mode:
         raise ValueError(f"Only predict mode is supported in this standalone; got mode={config.mode}.")
-    trainer.predict(system, datamodule=system.datamodule, ckpt_path=ckpt_path, return_predictions=False)
+
+    dataloader = system.datamodule.predict_dataloader()
+    with torch.inference_mode():
+        for batch_idx, batch in enumerate(dataloader):
+            batch = batch.to(device)
+            system.on_predict_batch_start(batch, batch_idx)
+            outputs = system.predict_step(batch, batch_idx)
+            system.on_predict_batch_end(outputs, batch, batch_idx)
 
 
 @click.command("main")
@@ -77,15 +93,15 @@ def main(config_name: str, hydra_args: list[str]) -> None:
 
     config = parse_typed_nrm_config(config_name=config_name, hydra_args=hydra_args)
 
-    rank_zero_only(os.makedirs)(config.config_dir, exist_ok=True)
+    os.makedirs(config.config_dir, exist_ok=True)
     dump_config(os.path.join(config.config_dir, "parsed.yaml"), config)
 
     setup_environment_and_logger(config)
-    rank_zero_info("NRM RUN 🆔: %s", config.run_id)
+    logger.info("NRM RUN 🆔: %s", config.run_id)
 
     checkpoint = None if (not config.resume_weights_only or not config.resume) else config.resume
     system = nre.nrm.systems.make(config.system.name, config, load_from_checkpoint=checkpoint)
-    launch_trainer_loop(config, system)
+    launch_predict_loop(config, system)
 
 
 @click.group(cls=click_default_group.DefaultGroup, default="main", default_if_no_args=True)

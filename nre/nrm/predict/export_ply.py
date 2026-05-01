@@ -141,8 +141,13 @@ def export_ply(
     """Export the NRM Primitives as a ply file after transforming to world space and applying some filtering.
     This ply export is intended to be used as an initialization for NuRec SO.
     """
-    # First transform the primitives to the world frame
-    primitives = primitives.rigid_transform(rig_trajectories.T_world_base.to(dtype=torch.float32))
+    # First transform the primitives to the world frame.
+    # Self-invented: NRE relied on Lightning's batch transfer to move
+    # rig_trajectories.T_world_base onto the primitive's device; the standalone
+    # predict loop moves it explicitly here.
+    primitives = primitives.rigid_transform(
+        rig_trajectories.T_world_base.to(device=primitives.device(), dtype=torch.float32)
+    )
 
     # Then compute the gaussians to be exported
     if isinstance(primitives, KelvinNRMPrimitive):

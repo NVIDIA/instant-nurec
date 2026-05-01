@@ -14,9 +14,8 @@ from abc import ABC
 
 import torch
 
-from pytorch_lightning import LightningModule
+from torch import nn
 
-from nre.config.base_schema import config_to_primitive
 from nre.nrm.config.nrm import BaseNRMSystemConfig, NRMConfig
 from nre.nrm.datasets.datamodule import NRMDataModule
 from nre.nrm.models.base import BaseNRM
@@ -24,19 +23,18 @@ from nre.utils.batch import NRMDataBatch
 from nre.utils.types import Checkpoint
 
 
-class BaseNRMSystem(LightningModule, ABC):
+class BaseNRMSystem(nn.Module, ABC):
+    """Predict-only system. Self-invented: NRE inherits LightningModule for the
+    Trainer.fit/validate/test surfaces; we keep just nn.Module since the
+    predict driver invokes hooks directly."""
+
     config: BaseNRMSystemConfig
     model: BaseNRM
     datamodule: NRMDataModule
 
-    device: torch.device  # mypy type fix for obtaininig system's device
-
     def __init__(self, config: NRMConfig) -> None:
         super().__init__()
 
-        self.save_hyperparameters(config_to_primitive(config.to_dictconfig()))
-
-        # save what we need from the config
         self.cached_config = config
         self.out_dir = config.out_dir
         self.run_id = config.run_id
@@ -45,22 +43,12 @@ class BaseNRMSystem(LightningModule, ABC):
 
         self.datamodule = NRMDataModule(config)
 
-    # ---- Test loop methods ----
-
+    @property
+    def device(self) -> torch.device:
+        return next(self.parameters()).device
 
     def on_predict_batch_start(self, batch: NRMDataBatch, batch_local_idx: int, dataloader_idx: int = 0) -> None:
-        self.model.update_step_train_batch_start(self.current_epoch, self.global_step, self)
-
-
-    # ---- Checkpoint-related methods ----
+        self.model.update_step_train_batch_start(0, 0, self)
 
     def on_load_checkpoint(self, checkpoint: Checkpoint) -> None:
-        """
-        The issue here is that the buffers can change in size so we cannot initialize them in advance and load them directly from the checkpoint
-        """
-        if self._trainer is not None:
-            # Manually load all the loops as otherwise global_step and current epoch are not set correctly in the validation mode
-            # see: https://github.com/Lightning-AI/lightning/issues/17127
-            self.trainer.predict_loop.load_state_dict(checkpoint["loops"]["predict_loop"])
-
         self.load_state_dict(checkpoint["state_dict"], assign=True)

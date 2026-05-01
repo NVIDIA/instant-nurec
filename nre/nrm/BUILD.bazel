@@ -31,12 +31,13 @@ py_library(
     deps = [
         pip_requirement("click"),
         pip_requirement("click-default-group"),
-        pip_requirement("pytorch_lightning"),
+        pip_requirement("numpy"),
+        pip_requirement("torch"),
         "//nre/config:pylib",
         "//nre/nrm/config:pylib",
         "//nre/nrm/models:pylib",
         "//nre/nrm/systems:pylib",
-        "//nre/utils:pylib_callbacks",
+        "//nre/utils:pylib",
     ],
 )
 

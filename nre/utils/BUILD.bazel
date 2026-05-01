@@ -97,7 +97,6 @@ py_library(
     deps = [
         pip_requirement("numpy"),
         pip_requirement("torch"),
-        pip_requirement("pytorch_lightning"),
     ],
 )
 
@@ -193,26 +192,12 @@ py_library(
         pip_requirement("pillow"),
         pip_requirement("point-cloud-utils"),
         pip_requirement("wandb"),
-        pip_requirement("pytorch-lightning"),
         pip_requirement("pyyaml"),
         pip_requirement("requests"),
         pip_requirement("tqdm"),
         pip_requirement("tinycudann"),
         "//libs/vren:pylib",
         "//libs/vren:pylib_cc",
-    ],
-)
-
-py_library(
-    name = "pylib_callbacks",
-    srcs = ["callbacks.py"],
-    deps = [
-        ":pylib",
-        ":pylib_types",
-        "//nre/config:pylib",
-        pip_requirement("torch"),
-        pip_requirement("omegaconf"),
-        pip_requirement("pytorch_lightning"),
     ],
 )
 

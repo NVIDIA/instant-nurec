@@ -8,6 +8,7 @@
 # without an express license agreement from NVIDIA CORPORATION or
 # its affiliates is strictly prohibited.
 
+import functools
 import os
 import random
 import traceback
@@ -37,7 +38,6 @@ import numpy.typing as npt
 import torch
 import torch.nn.functional as F
 
-from pytorch_lightning.utilities.rank_zero import rank_zero_only
 from torch.utils import data as torchdata
 
 
@@ -52,47 +52,15 @@ def is_env_true(name: str, default: bool) -> bool:
     return os.environ.get(name, "1" if default else "0").lower() in ["1", "true"]
 
 
-def _get_rank() -> int:
-    """Helper function to get the rank of the current process
+def rank_zero_only(fn):
+    """Predict-only standalone is single-process; rank_zero_only is a no-op
+    decorator. Self-invented: NRE used pytorch_lightning's rank_zero_only."""
 
-    Based https://github.com/Lightning-AI/pytorch-lightning/blob/2.4.0/src/lightning/fabric/utilities/rank_zero.py#L39-L48
+    @functools.wraps(fn)
+    def wrapped(*args, **kwargs):
+        return fn(*args, **kwargs)
 
-    Behaviour:
-        - If distributed training is initialized, returns the rank of the current process.
-        - If distributed training is not initialized, it checks the following environment variables in order:
-            - LOCAL_RANK
-            - RANK
-            - SLURM_PROCID
-            - JSM_NAMESPACE_RANK
-        - If none of the environment variables are set, it will return 0.
-    Returns:
-        The rank of the current process
-    """
-    if torch.distributed.is_initialized():
-        return torch.distributed.get_rank()
-    else:
-        # In the case of single-node multi-GPU training, LOCAL_RANK is set to the rank of the current GPU. However, if
-        # the job is launched inside a SLURM task, `SLURM_PROCID` will also be set to 0. This creates a conflict. So we
-        # compare the two values. Note that if SLURM_PROCID is set correctly, it should not be smaller than LOCAL_RANK,
-        # so the larger value is the correct rank ID.
-        local_rank = int(os.environ.get("LOCAL_RANK", "0"))
-
-        # Assume multi-node distributed training
-        rank_keys = ("RANK", "SLURM_PROCID", "JSM_NAMESPACE_RANK")
-        for key in rank_keys:
-            rank = os.environ.get(key)
-            if rank is not None:
-                return max(int(rank), local_rank)
-
-        # Assume single-node multi-GPU training
-        node_rank = os.environ.get("NODE_RANK")
-        assert node_rank is None or node_rank == "0"
-
-        return local_rank
-
-
-# Reset global rank correctly
-rank_zero_only.rank = _get_rank()
+    return wrapped
 
 
 def get_pack_info_from_n(n_per_pack: torch.Tensor) -> torch.Tensor:

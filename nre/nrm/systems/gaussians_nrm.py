@@ -16,7 +16,6 @@ import os
 
 from pathlib import Path
 
-import numpy as np
 import torch
 
 from tqdm import tqdm
@@ -43,10 +42,6 @@ class GaussiansNRMSystem(BaseNRMSystem):
             self.model = KelvinNRM(config.model)
         else:
             raise ValueError(f"Unknown config name {config.model.name}.")
-
-    def setup(self, stage: str) -> None:
-        # Predict-only standalone: no train/val metrics needed.
-        del stage
 
     def forward(self, batch: NRMDataBatch) -> list[BaseNRMPrimitive]:
         cuboid_tracks = None
@@ -102,8 +97,6 @@ class GaussiansNRMSystem(BaseNRMSystem):
         return {"primitives": primitives_list, "batch": batch}
 
     def on_predict_batch_end(self, outputs, batch, batch_idx, dataloader_idx=0) -> None:
-        super().on_predict_batch_end(outputs, batch, batch_idx, dataloader_idx)
-
         # Ensure outputs are not None and contain the required keys
         assert outputs is not None and "primitives" in outputs and "batch" in outputs
 
