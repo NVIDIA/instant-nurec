@@ -8,34 +8,12 @@
 # without an express license agreement from NVIDIA CORPORATION or
 # its affiliates is strictly prohibited.
 
-from omegaconf import DictConfig, OmegaConf
-from pydantic import (
-    BaseModel as PydanticBaseModel,
-)
-from pydantic import (
-    Field,  # reexport
-)
+from omegaconf import DictConfig
+from pydantic import BaseModel as PydanticBaseModel
+from pydantic import Field  # reexport
 
 
-__all__ = ["BaseConfigSchema", "Field", "config_to_primitive"]
-
-
-def config_to_primitive(config, resolve=True):
-    """Convert OmegaConf/DictConfig or Pydantic model to plain Python dict/list.
-
-    Safe to import from nre.models etc. (no nre.config.nre).
-    """
-    if config is None:
-        return None
-    if isinstance(config, BaseConfigSchema):
-        return config.model_dump(exclude_none=True)
-    if isinstance(config, PydanticBaseModel):
-        return config.model_dump()
-    if isinstance(config, dict):
-        return dict(config)
-    if isinstance(config, list):
-        return list(config)
-    return OmegaConf.to_container(config, resolve=resolve)
+__all__ = ["BaseConfigSchema", "Field"]
 
 
 class BaseConfigSchema(PydanticBaseModel):
