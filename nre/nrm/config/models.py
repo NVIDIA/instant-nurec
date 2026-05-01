@@ -58,7 +58,6 @@ class GaussiansActivationConfig(BaseConfigSchema):
 
 
 class KelvinDAv3EncoderConfig(BaseConfigSchema):
-    name: Literal["dav3-encoder"]
     depth: int
     n_heads: int
     embed_dim: int
@@ -70,7 +69,6 @@ class KelvinDAv3EncoderConfig(BaseConfigSchema):
 
 
 class KelvinDPTDecoderConfig(BaseConfigSchema):
-    name: Literal["dpt-decoder"]
     dpt_dim: int
     dpt_reassemble_hidden_dims: List[int]
 
@@ -88,7 +86,6 @@ class KelvinDPTDecoderConfig(BaseConfigSchema):
 
 
 class KelvinSkyCubemapDecoderConfig(BaseConfigSchema):
-    name: Literal["cubemap-decoder"]
     cubemap_size: int
     embed_dim: int
     depth: int

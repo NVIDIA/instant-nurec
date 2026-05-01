@@ -38,7 +38,6 @@ dataset:
     frame_batch_sampler:
       n_frames_per_sample: 18
       n_samples_per_sequence: 8
-      name: adaptive_sequential
       max_frame_gap_timestamp_us: 750000
     supervision_camera_ids:
       - camera_front_wide_120fov
@@ -58,7 +57,6 @@ model:
     - 1.0
   scene_rescale: 0.15
   sky:
-    name: cubemap-decoder
     cubemap_size: 448
     embed_dim: 384
     depth: 1
@@ -67,7 +65,6 @@ model:
     - 14
     - 14
   encoder:
-    name: dav3-encoder
     depth: 12
     n_heads: 12
     embed_dim: 1536
@@ -79,7 +76,6 @@ model:
     aa_start_block_idx: 4
     checkpointing: all
   decoder:
-    name: dpt-decoder
     dpt_dim: 128
     dpt_reassemble_hidden_dims:
       - 96

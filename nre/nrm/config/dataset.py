@@ -46,7 +46,6 @@ class NCoreNRMCuboidTracksParamsConfig(BaseConfigSchema):
 
 
 class AdaptiveSequentialFrameBatchSamplerConfig(BaseConfigSchema):
-    name: Literal["adaptive_sequential"] = "adaptive_sequential"
     n_frames_per_sample: int = Field(
         description="Number of frames in each dataset sample (i.e. one return from get_item of the dataset)"
     )
