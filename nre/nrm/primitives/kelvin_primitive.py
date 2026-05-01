@@ -118,14 +118,6 @@ class KelvinLayer:
     def __len__(self) -> int:
         return self.rotations.shape[0]
 
-    @staticmethod
-    def _detach_base(layer: KelvinLayer) -> KelvinLayer:
-        return KelvinLayer(
-            rotations=layer.rotations.detach(),
-            scales=layer.scales.detach(),
-            rgb=layer.rgb.detach(),
-        )
-
     def get_checkpoint(self) -> Checkpoint:
         return {
             "rotations": self.rotations,
@@ -192,15 +184,6 @@ class KelvinStaticLayer(KelvinLayer):
             assert self.semantic_class.dtype == torch.uint8, "semantic_class must be uint8"
         if self.normals is not None:
             assert self.normals.shape == (len(self), 3), "normals must have shape (n_gaussians, 3)"
-
-    def detach(self) -> Self:
-        return self.__class__(
-            positions=self.positions.detach(),
-            densities=self.densities.detach(),
-            semantic_class=self.semantic_class,  # uint8, no grad
-            normals=self.normals.detach() if self.normals is not None else None,
-            **asdict(KelvinLayer._detach_base(self)),
-        )
 
     def get_checkpoint(self) -> Checkpoint:
         ckpt: Checkpoint = {
@@ -316,15 +299,6 @@ class KelvinDynamicLayer(KelvinLayer):
     def n_keyframes(self) -> int:
         return self.keyframe_positions.shape[1]
 
-
-    def detach(self) -> Self:
-        return self.__class__(
-            max_densities=self.max_densities.detach(),
-            keyframe_positions=self.keyframe_positions.detach(),
-            keyframe_timestamps_us=self.keyframe_timestamps_us,
-            falloff=self.falloff,
-            **asdict(KelvinLayer._detach_base(self)),
-        )
 
     def __repr__(self) -> str:
         return f"DynamicLayer(#GS={len(self) / 1e6:.2f}M, #KF={self.n_keyframes})"
@@ -560,12 +534,3 @@ class KelvinNRMPrimitive(BaseGaussiansNRMPrimitive):
             layer.rgb = layer.rgb @ y[:3, :3].T + y[:3, 3]
         self.sky_cubemap = self.sky_cubemap @ y[:3, :3].T + y[:3, 3]
 
-    def detach(self) -> Self:
-        return self.__class__(
-            static_layer=self.static_layer.detach(),
-            dynamic_layers=[layer.detach() for layer in self.dynamic_layers],
-            sky_cubemap=self.sky_cubemap.detach(),
-            affine_matrix=self.affine_matrix.detach(),
-            use_2dgs=self.use_2dgs,
-            gaussians_renderer=self.gaussians_renderer,
-        )

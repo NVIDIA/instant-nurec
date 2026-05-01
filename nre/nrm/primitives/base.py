@@ -86,9 +86,6 @@ class BaseNRMPrimitive(NRenderableModel):
     def device(self) -> torch.device: ...
 
     @abstractmethod
-    def detach(self) -> BaseNRMPrimitive: ...
-
-    @abstractmethod
     def rigid_transform(self, T_new: torch.Tensor) -> Self: ...
 
     @abstractmethod
