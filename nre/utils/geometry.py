@@ -15,7 +15,6 @@ import math
 
 from typing import List
 
-import lietorch as lt
 import numpy as np
 import torch
 
@@ -253,39 +252,6 @@ def tquat_to_se3_matrix(tquat: torch.Tensor | np.ndarray, unbatch: bool = True) 
     return ret  # (N,4,4) or (4,4)
 
 
-def se3_matrix_to_se3(T: torch.Tensor | np.ndarray, unbatch=True, reduced=False) -> lt.SE3:
-    """Converts a single / batch of rigid transformations represented as 4x4 / 3x4 (reduced) matrices
-
-    ⎡ R  t ⎤
-    ⎣ 0  1 ⎦
-
-    to SE3 Lie group elements (unbatches conditionally)
-
-    Args:
-        T: single / batch of SE3 transformation matrices [BS0, BS1, ..., BSN, D, 4]
-        unbatch: if the single example should be unbatched (first dimension removed) or not
-        reduced: D = 3 if True ("reduced"), D = 4 if False ("not reduced")
-
-    Returns:
-        single / batch of SE3 Lie group elements [] / [BS0, BS1, ..., BSN]
-    """
-
-    # Convert numpy array to torch tensor
-    if isinstance(T, np.ndarray):
-        T = torch.from_numpy(T)
-
-    # batch dimensions unconditionally
-    batch_dims = T.shape[:-2]  # batch dimensions BS0, BS1, ..., BSN (potentially empty)
-    T = T.reshape((-1, 4, 4)) if not reduced else T.reshape((-1, 3, 4))
-
-    vec = torch.hstack((T[:, :3, 3], so3_matrix_to_quat(T[:, :3, :3], unbatch=False))).reshape(batch_dims + (7,))
-
-    if unbatch:  # unbatch dimensions conditionally
-        vec = vec.squeeze()
-
-    return lt.SE3.InitFromVec(vec)
-
-
 def rotation_6d_to_matrix(d6_id: torch.Tensor) -> torch.Tensor:
     """
     Converts 6D rotation representation by Zhou et al. [1] to rotation matrix
@@ -312,35 +278,6 @@ def rotation_6d_to_matrix(d6_id: torch.Tensor) -> torch.Tensor:
     b3 = torch.cross(b1, b2, dim=-1)
 
     return torch.stack((b1, b2, b3), dim=-2)
-
-
-def matrix_to_rotation_6d(matrix: torch.Tensor) -> torch.Tensor:
-    """
-    Converts rotation matrices to 6D rotation representation by Zhou et al. [1]
-    by dropping the last row. Note that 6D representation is not unique.
-    Args:
-        matrix: batch of rotation matrices of size (*, 3, 3)
-
-    Returns:
-        6D rotation representation, of size (*, 6), around identity element
-
-    [1] Zhou, Y., Barnes, C., Lu, J., Yang, J., & Li, H.
-    On the Continuity of Rotation Representations in Neural Networks.
-    IEEE Conference on Computer Vision and Pattern Recognition, 2019.
-    Retrieved from http://arxiv.org/abs/1812.07035
-    """
-
-    assert matrix.shape[-2:] == (3, 3), "6d rotation representations can only be computed for 3x3 rotation matrices"
-
-    batch_dim = matrix.shape[:-2]
-
-    d6 = matrix[..., :2, :].reshape(batch_dim + (6,))
-
-    d6_id = d6 - torch.tensor([1.0, 0.0, 0.0, 0.0, 1.0, 0.0], device=matrix.device, dtype=matrix.dtype).expand(
-        batch_dim + (6,)
-    )
-
-    return d6_id
 
 
 def quat_mult_xyzw(q1: torch.Tensor, q2: torch.Tensor) -> torch.Tensor:
