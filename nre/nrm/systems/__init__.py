@@ -45,6 +45,17 @@ def make(config: "NRMConfig", load_from_checkpoint: Optional[str] = None) -> Gau
         assert isinstance(loaded, GaussiansNRMSystem), (
             f"Expected GaussiansNRMSystem from {full_pt_path}, got {type(loaded).__name__}"
         )
+        # Override the saved config-derived attributes with the new config: the
+        # weight tensors are the only thing that needs to roundtrip via the .pt;
+        # out_dir / run_id / merge flag / ncore path all change per invocation.
+        from nre.nrm.datasets.datamodule import NRMDataModule  # local to avoid bootstrap loops
+
+        loaded.out_dir = config.out_dir
+        loaded.run_id = config.run_id
+        loaded.config = config.system
+        loaded.predict_config = config.predict
+        loaded.export_preprocess = config.model.export_preprocess
+        loaded.datamodule = NRMDataModule(config)
         return loaded
 
     system = GaussiansNRMSystem(config)
