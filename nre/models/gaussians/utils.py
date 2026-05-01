@@ -33,11 +33,6 @@ def RGB2SH(rgb: T) -> T:
     return (rgb - 0.5) / C0
 
 
-def sh_degree_to_specular_dim(degree: int) -> int:
-    """Number of dimensions used by SH of deg [1..degree], inclusive"""
-    return 3 * ((degree + 1) ** 2 - 1)
-
-
 def write_ply_3dgs(
     path: Path,
     positions: torch.Tensor,

@@ -21,7 +21,6 @@ from einops import rearrange
 from torch import nn
 
 from nre.datasets.tracks import CuboidTracks, TrackFlags
-from nre.models.gaussians.utils import sh_degree_to_specular_dim
 from nre.models.nn_extensions import TypedModuleList
 from nre.nrm.config.models import (
     KelvinDAv3EncoderConfig,
@@ -290,9 +289,11 @@ class KelvinDPTDecoder(KelvinDecoderBase):
         if config.motion_depth > 0:
             self.context_motion_head = self.TimeModulatedMotionHead(config, model_config)
 
-        # GS-training heads (scale, world-quaternion, opacity, higher-order SHs)
-        self.sh_degree = 0
-        gs_output_dim = 3 + 4 + 1 + sh_degree_to_specular_dim(self.sh_degree)
+        # GS-training heads: predict (scale[3], world-quaternion[4], opacity[1]).
+        # NRE additionally predicted higher-order SH bands; the kelvin_pa_front
+        # checkpoint freezes `sh_degree=0`, so the SH band-0 output is captured
+        # via the context head's RGB channels and the specular slice was empty.
+        gs_output_dim = 3 + 4 + 1
         self.gaussians_head = DPTFullHead(
             input_dim=embed_dim,
             reassemble_hidden_dims=tuple(config.dpt_reassemble_hidden_dims),
@@ -305,11 +306,7 @@ class KelvinDPTDecoder(KelvinDecoderBase):
             pos_embed_strength=0.1,
             checkpointing=config.checkpointing,
         )
-        self.gaussians_head_init_values = (
-            [float("nan")] * 3
-            + [float("nan")] * 4
-            + [float("nan")] * (1 + sh_degree_to_specular_dim(self.sh_degree))
-        )
+        self.gaussians_head_init_values = [float("nan")] * gs_output_dim
 
         self.cuboids_dims_padding = nn.Buffer(torch.tensor(model_config.track_padding_m, dtype=torch.float32))
         self.gaussian_activations = GaussianActivations(model_config.activations)
@@ -455,15 +452,7 @@ class KelvinDPTDecoder(KelvinDecoderBase):
             chunk_size=self.config.dpt_chunk_size,
         )
         gs_params_tensor = rearrange(gs_params_tensor, "(B V) C H W -> B V H W C", B=B, V=V)
-        (
-            gs_scale,
-            gs_world_quaternion,
-            gs_opacity,
-            gs_specular,  # TODO: wire gs_specular through to GaussianParams when sh_degree > 0
-        ) = gs_params_tensor.split(
-            [3, 4, 1, sh_degree_to_specular_dim(self.sh_degree)],
-            dim=-1,
-        )
+        gs_scale, gs_world_quaternion, gs_opacity = gs_params_tensor.split([3, 4, 1], dim=-1)
         gs_distance = torch.stack([pred_depth[bidx] / renderings[bidx].distance_to_depth_scale for bidx in range(B)])
 
         # Scales are predicted in pixel units (resolution-agnostic); rescale by the pixel scale,
