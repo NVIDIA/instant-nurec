@@ -21,9 +21,6 @@ import torch.utils.checkpoint
 from omegaconf import DictConfig, OmegaConf
 
 from nre.config.version import get_version
-class DifixModel:
-    """Stub for predict-only standalone (real Difix lives in NRE training)."""
-    pass
 from nre.models.gaussians.renderers import BaseGaussianRenderer, Gaussian3DNRenderer
 from nre.models.nrenderable import NRenderableModel
 from nre.nrm.config.models import PrimitiveExportPreprocessConfig
@@ -143,15 +140,11 @@ class BaseGaussiansNRMPrimitive(BaseNRMPrimitive):
     # The main use case is when we want to pass in this model for nrend initialization (to break circular dependency).
     gaussians_renderer: BaseGaussianRenderer | None
 
-    # Difix model that is applied after the final rendering is completed.
-    difix_model: DifixModel | None
-
     def __init__(
         self,
         gaussians_renderer: BaseGaussianRenderer | None,
         checkpointing: Literal["render", "all", "none"] = "render",
         shared_gaussian_parameters: bool = False,
-        difix_model: DifixModel | None = None,
     ):
         self.gaussians_renderer = gaussians_renderer
         self.checkpointing = checkpointing
@@ -162,7 +155,6 @@ class BaseGaussiansNRMPrimitive(BaseNRMPrimitive):
         self.shared_gaussian_parameters = shared_gaussian_parameters
         # TODO[JW]: This is a hack to allow the model to be used in the viewer.
         self._nrend_renderer = None
-        self.difix_model = difix_model
 
     @abstractmethod
     def get_gaussian_parameters(self, timestamps_us: torch.Tensor | None) -> dict[str, torch.Tensor]: ...
@@ -290,10 +282,6 @@ class BaseGaussiansNRMPrimitive(BaseNRMPrimitive):
             frame_meta=[frame_meta],
         )
         out = self.postprocess_rendering(out, rendering_data, frame_meta.unique_sensor_idx)
-
-        # Apply Difix model (only for camera frames)
-        if self.difix_model is not None:
-            out.rgb = self.difix_model(out.rgb, torch.Size([rendering_data.h, rendering_data.w]), True)
 
         return out
 
