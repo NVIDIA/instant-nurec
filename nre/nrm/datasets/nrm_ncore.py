@@ -45,7 +45,7 @@ from nre.utils.batch import (
 )
 from nre.utils.files import parse_universal_path
 from nre.utils.geometry import se3_matrix_inverse
-from nre.utils.lidar_model import get_lidar_model_parameters_with_fallbacks
+from nre.utils.lidar_model import get_lidar_model_parameters
 from nre.utils.misc import to_torch, unpack_optional
 from nre.utils.types import FrameConversion, HalfClosedInterval, RayFlags, RigTrajectories
 
@@ -504,7 +504,7 @@ class NCoreNRMDataset(BaseNRMIndexableDataset):
 
             lidar_sensor = lidar_sensors[lidar_id]
 
-            lidar_model_parameters = get_lidar_model_parameters_with_fallbacks(lidar_sensor, True)
+            lidar_model_parameters = get_lidar_model_parameters(lidar_sensor)
             if lidar_model_parameters is None:
                 continue
 
@@ -649,7 +649,7 @@ class NCoreNRMDataset(BaseNRMIndexableDataset):
         current_unique_frame_idx = 0
         for lidar_id in frame_batch_lidar_ids:
             lidar_sensor = lidar_sensors[lidar_id]
-            all_lidar_model_parameters[lidar_id] = get_lidar_model_parameters_with_fallbacks(lidar_sensor, True)
+            all_lidar_model_parameters[lidar_id] = get_lidar_model_parameters(lidar_sensor)
             frame_timestamps_us_list = []
             for frame_idx in frame_batch.sampled_sensor_frame_idxs[lidar_id]:
                 frame_start_timestamp_us = int(
