@@ -59,7 +59,6 @@ dataset:
       track_label_source: AUTOLABEL
     lidar_frame_batch:
       gap_from_image_us: 0
-    compute_rendering_data: false
     camera_id_mapping: {}
     lidar_id_mapping: {}
     name: nrm-ncore

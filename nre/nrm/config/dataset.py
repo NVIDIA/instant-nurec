@@ -153,11 +153,6 @@ class BaseNCoreNRMDatasetConfig(BaseConfigSchema):
         description="Parameters for the lidar frame batch", default_factory=LidarFrameBatchParamsConfig
     )
 
-    compute_rendering_data: bool = Field(
-        default=True,
-        description="Whether to pre-compute the rendering data (e.g. rays) in the dataloader (CPU). Turning this off will significantly reduce data loader memory consumption.",
-    )
-
     camera_id_mapping: dict[str, str] = Field(
         default_factory=dict,
         description="Map logical camera ids to ids used inside ncore archives if they are different.",

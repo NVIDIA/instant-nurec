@@ -257,9 +257,6 @@ class NCoreNRMDataset(BaseNRMIndexableDataset):
 
         self.num_samples_per_sequence: int = config.frame_batch_sampler.n_samples_per_sequence
 
-        # Whether to (or not) consolidate rendering batch to save memory
-        self.compute_rendering_data = config.compute_rendering_data
-
         # Camera and lidar id mappings
         self.camera_id_mapping = config.camera_id_mapping
         self.lidar_id_mapping = config.lidar_id_mapping
@@ -1024,8 +1021,5 @@ class NCoreNRMDataset(BaseNRMIndexableDataset):
             cuboid_tracks=[cuboid_tracks],
             meta=[meta],
         )
-
-        if self.compute_rendering_data:
-            nrm_data_batch.maybe_compute_rendering_data(device=torch.device("cpu"))
 
         return nrm_data_batch
