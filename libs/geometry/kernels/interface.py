@@ -16,5 +16,4 @@ from typing import Any
 import torch
 
 
-libquaternion_slang_cc: Any = importlib.import_module("libs.geometry.kernels.libquaternion_slang_cc")
 libpose_kernels_slang_cc: Any = importlib.import_module("libs.geometry.kernels.libpose_kernels_slang_cc")

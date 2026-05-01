@@ -24,7 +24,6 @@ import torch
 from omegaconf import OmegaConf
 
 from libs.geometry.kernels.pose import se3pose_to_inverse_matrix
-from libs.geometry.kernels.quaternion import quat_slerp
 
 # C++ / CUDA libs
 from libs.nrend.renderer import DifferentiableRenderer, Renderer  # type: ignore
