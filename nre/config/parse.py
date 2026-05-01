@@ -12,15 +12,9 @@ import json
 import math
 import os
 
-from pathlib import Path
-from typing import Optional
+from omegaconf import OmegaConf, open_dict
 
-import hydra
-
-from omegaconf import DictConfig, OmegaConf, open_dict
-
-from nre.config.base_schema import BaseConfigSchema, config_to_primitive
-from nre.repo_root import __reporoot__
+from nre.config.base_schema import BaseConfigSchema
 from nre.utils.misc import rank_zero_only
 
 
@@ -62,54 +56,4 @@ def dump_config(path: str, config: BaseConfigSchema) -> None:
         fp.write("# @package _global_ \n\n")
         OmegaConf.save(config=save_config, f=fp)
 
-
-def parse_untyped_config(
-    config_name: str, hydra_args: list[str] | tuple[str], config_dir: str = "./configs"
-) -> DictConfig:
-    """
-    Main config loading functionality.
-
-    Hydra initialization expects a relative config path wrt to the config directory.
-    We manually handle the cases where an absolute path or a relative path to the repo root are given for convenience
-    """
-    hydra_args_list: list[str] = list(hydra_args)  # convert to list in case we have a tuple
-
-    config_dir_path = Path(config_dir)
-    config_name_path = Path(str(config_name))
-
-    # Convert config_dir into an absolute path
-    if config_dir_path.is_absolute():
-        # Nothing to do,
-        config_registry_dir = str(config_dir_path)
-    else:
-        # This enables defining relative configs from repo root (to enable autocomplete)
-        if config_name_path.is_relative_to(config_dir_path):
-            config_name_path = config_name_path.relative_to(config_dir_path)
-
-        # Relative config_dirs are relative to repository's root
-        config_registry_dir = str(__reporoot__ / config_dir_path)
-
-    del config_dir  # we'll use config_registry_dir from now on
-
-    if config_name_path.is_absolute():
-        # Use config_name's directory as config_dir
-        config_dir = str(config_name_path.parent)
-        # Now config name is simply the file name
-        config_name = config_name_path.parts[-1]
-
-        # We still want to add NuRec's config registry to the search path
-        hydra_args_list.append(f"hydra.searchpath=[{config_registry_dir}]")
-    else:
-        # Config name must be relative to config_registry_dir
-        config_dir = config_registry_dir
-        config_name = str(config_name_path)
-
-    # Using Hydra context below for proper Hydra cleanup, so that subsequent calls to main()
-    # e.g. from multiple tests or other scripts work properly.
-    with hydra.initialize_config_dir(config_dir=str(config_dir), version_base=None):
-        config = hydra.compose(config_name=str(config_name), overrides=hydra_args_list)
-
-    OmegaConf.resolve(config)
-
-    return config
 
