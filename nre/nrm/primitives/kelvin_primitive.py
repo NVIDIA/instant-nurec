@@ -14,7 +14,7 @@ import torch
 from nre.nrm.config.models import PrimitiveExportPreprocessConfig
 from nre.nrm.primitives.base import BaseGaussiansNRMPrimitive
 from nre.nrm.utils.cubemap import rotate_sky_cubemap
-from nre.utils.batch import DataAndRenderingBatch, RenderingData
+from nre.utils.batch import DataAndRenderingBatch
 from nre.utils.geometry import quat_mult_xyzw, so3_matrix_to_quat
 from nre.utils.types import RigTrajectories
 

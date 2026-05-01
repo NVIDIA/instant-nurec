@@ -21,7 +21,6 @@ from einops import rearrange
 from torch import nn
 
 from nre.datasets.tracks import CuboidTracks, TrackFlags
-from nre.models.nn_extensions import TypedModuleList
 from nre.nrm.config.models import (
     KelvinDAv3EncoderConfig,
     KelvinDPTDecoderConfig,
@@ -29,13 +28,11 @@ from nre.nrm.config.models import (
 )
 from nre.nrm.models.activations import GaussianActivations, GaussianParams
 from nre.nrm.models.blocks.aa_vit import AlternateAttentionVisionTransformer
-from nre.nrm.models.blocks.attention import CrossAttentionBlock, KVProjector
 from nre.nrm.models.blocks.dpt import DPTFullHead
 from nre.nrm.models.blocks.embeds import ContinuousTimeEmbed
 from nre.nrm.models.kelvin_backbone.base import (
     KelvinLatent,
     KelvinMultiscaleFeaturesLatent,
-    _tokengs_init_weights,
 )
 from nre.nrm.primitives.kelvin_primitive import (
     KelvinDynamicLayer,

@@ -8,12 +8,8 @@
 # without an express license agreement from NVIDIA CORPORATION or
 # its affiliates is strictly prohibited.
 
-import math
-
 import torch
 import torch.nn as nn
-
-from einops import rearrange
 
 
 class LayerScale(nn.Module):

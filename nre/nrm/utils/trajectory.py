@@ -10,7 +10,7 @@
 
 from __future__ import annotations
 
-from collections import OrderedDict, defaultdict
+from collections import defaultdict
 from dataclasses import dataclass, replace
 
 import torch

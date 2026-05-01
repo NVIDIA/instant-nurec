@@ -15,7 +15,6 @@ from dataclasses import dataclass
 import numpy as np
 
 from nre.nrm.config.dataset import AdaptiveSequentialFrameBatchSamplerConfig
-from nre.nrm.datasets.nrm_base import NRMDataError
 from nre.utils.types import HalfClosedInterval
 
 

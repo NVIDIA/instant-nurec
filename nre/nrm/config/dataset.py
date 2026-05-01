@@ -14,10 +14,7 @@ import logging
 
 from typing import Literal, Optional
 
-from pydantic import model_validator
-
 from nre.config.base_schema import BaseConfigSchema, Field
-from nre.utils.misc import unpack_optional
 
 
 logger = logging.getLogger(__name__)

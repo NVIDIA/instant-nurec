@@ -11,9 +11,6 @@
 """Utility functions dealing e.g. with generic geometric sampling or transformations."""
 
 import logging
-import math
-
-from typing import List
 
 import numpy as np
 import torch

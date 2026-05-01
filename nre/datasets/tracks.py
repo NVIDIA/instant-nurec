@@ -10,18 +10,16 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Callable, Iterable, Literal, Optional, Self, Tuple, Union, cast
+from dataclasses import dataclass
+from typing import Iterable, Literal, Optional, Self, Tuple, cast
 
 import lietorch as lt
 import numpy as np
 import torch
 
-from torch.autograd.function import once_differentiable
-
 from libs.packed_ops.interface import packed_ops  # type: ignore
 from libs.vren.interface import vren  # type: ignore
-from nre.utils.geometry import se3_matrix_to_tquat, tquat_to_se3_matrix
+from nre.utils.geometry import se3_matrix_to_tquat
 from nre.utils.misc import get_pack_info_from_n
 from nre.utils.packed_ops import linstep_interleave
 from nre.utils.types import CuboidTracksData, CuboidTracksDataPack, TrackFlags, TracksData

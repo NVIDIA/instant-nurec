@@ -14,7 +14,7 @@ import logging
 from collections import OrderedDict, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, cast
+from typing import cast
 
 import numpy as np
 import numpy.typing as npt
