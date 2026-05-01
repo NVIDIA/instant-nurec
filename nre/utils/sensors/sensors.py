@@ -119,17 +119,11 @@ class SensorModelComputations:
         timestamps_startend_us_allviews_cpu: torch.Tensor,
         shutter_type: ShutterType,
         unique_frame_idx: int,
-        unique_frame_idx_tensor: Optional[torch.Tensor],
+        unique_frame_idx_tensor: torch.Tensor,
     ) -> SensorModelComputations.PosesAndTimestampsStartendReturn:
         """
         GPU implementation using Slang kernel for rolling shutter interpolation.
         """
-        device = T_sensor_world_startend_allviews.device
-
-        # Prepare frame_idx tensor
-        if unique_frame_idx_tensor is None:
-            unique_frame_idx_tensor = torch.tensor([unique_frame_idx], dtype=torch.int64, device=device)
-
         # Call Slang kernel
         T_sensor_world_startend_batch, timestamps_startend_us_batch = compute_poses_and_timestamps(
             T_sensor_world_startend_allviews,
@@ -167,7 +161,7 @@ class SensorModelComputations:
         timestamps_startend_us_allviews_cpu: torch.Tensor,
         sensor_models: torch.nn.ModuleDict,
         unique_frame_idx: int,
-        unique_frame_idx_tensor: Optional[torch.Tensor],
+        unique_frame_idx_tensor: torch.Tensor,
         unique_sensor_idx_str: str,
     ):
         # Standalone predict requires CUDA tensors; the compiled CPU fallback

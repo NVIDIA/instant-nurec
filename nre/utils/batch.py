@@ -1048,7 +1048,7 @@ class CameraFreePoseViewGeometry(torch.nn.Module):
             timestamps_startend_us_allviews_cpu=self.timestamps_startend_us_allviews_cpu,
             sensor_models=self.sensor_models,
             unique_frame_idx=meta.unique_frame_idx,
-            unique_frame_idx_tensor=meta.unique_frame_idx_tensor,
+            unique_frame_idx_tensor=unpack_optional(meta.unique_frame_idx_tensor),
             unique_sensor_idx_str=unpack_optional(meta.unique_sensor_idx_str),
         )
 
