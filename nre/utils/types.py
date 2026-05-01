@@ -321,7 +321,6 @@ class TracksData:
     Args:
         tracks_id: list[str]  - (N_tracks) string identifiers of each track
         max_track_n_poses: int  - maximum number of poses for an individual track among all tracks (used within kernels for shared memory allocations)
-        tracks_label_class: list[str]  - (N_tracks) semantic class of each track
         tracks_packinfo: torch.Tensor  - (N_tracks x 2 containing) with [track_start_idx, N_track_poses] each
         tracks_poses: lt.SE3  - (N_total_poses, ) containing SE3 poses
         tracks_timestamps_us: torch.Tensor  - (N_total_poses, ) containing per-pose timestamps
@@ -330,7 +329,6 @@ class TracksData:
 
     tracks_id: list[str]
     max_track_n_poses: int
-    tracks_label_class: list[str]
     tracks_packinfo: torch.Tensor
     tracks_poses: lt.SE3
     tracks_timestamps_us: torch.Tensor
@@ -339,10 +337,6 @@ class TracksData:
     def __post_init__(self):
         """Post-init validation of the tracks data"""
 
-        if len(self.tracks_label_class) != self.n_tracks:
-            raise ValueError(
-                f"Number of tracks ({self.n_tracks}) does not match number of track label classes ({len(self.tracks_label_class)})"
-            )
         if self.tracks_packinfo.ndim != 2:
             raise ValueError(
                 f"Track packinfo must have shape (N_tracks, 2), but has shape {self.tracks_packinfo.shape}"
@@ -376,7 +370,6 @@ class TracksData:
         return self.__class__(
             tracks_id=self.tracks_id,
             max_track_n_poses=self.max_track_n_poses,
-            tracks_label_class=self.tracks_label_class,
             tracks_packinfo=self.tracks_packinfo.to(device),
             tracks_poses=self.tracks_poses.to(device),
             tracks_timestamps_us=self.tracks_timestamps_us.to(device),
@@ -389,7 +382,6 @@ class TracksData:
         return cls(
             tracks_id=[],
             max_track_n_poses=0,
-            tracks_label_class=[],
             tracks_packinfo=torch.tensor([], dtype=torch.int32, device=device).reshape(0, 2),
             tracks_poses=lt.SE3.Identity(0, dtype=torch.float32, device=device),
             tracks_timestamps_us=torch.tensor([], dtype=torch.int64, device=device),

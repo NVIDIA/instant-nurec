@@ -45,10 +45,6 @@ class Tracks:
         return self.tracks_data.max_track_n_poses
 
     @property
-    def tracks_label_class(self) -> list[str]:
-        return self.tracks_data.tracks_label_class
-
-    @property
     def tracks_packinfo(self) -> torch.Tensor:
         return self.tracks_data.tracks_packinfo
 
@@ -80,7 +76,6 @@ class Tracks:
             tracks_id: list[str],
             tracks_poses: list[np.ndarray],
             tracks_timestamps_us: list[np.ndarray],
-            tracks_label_class: list[str],
             tracks_flags: list[TrackFlags],
             pose_format: Literal["matrix", "tquat"] = "matrix",
             device: torch.device = torch.device("cuda"),
@@ -90,7 +85,6 @@ class Tracks:
             - track_ids: string identifiers of each track, N_tracks [str]
             - tracks_poses: 4x4 matrix or 7-dim tquat vector track to world pose transformations, depending on 'pose_format', N_tracks x (N_poses_i x [4 x 4 | 7]) [float]
             - tracks_timestamps_us: pose timestamps, N_tracks x (N_poses_i, ) [int64]
-            - tracks_label_class: semantic class of each track, N_tracks [str]
             - tracks_flags: per-track flags, N_tracks [TrackFlags]
             - pose_format: the format of the poses (either 4x4 'matrix'es or 7-dim 'tquat' vectors)
             - device: the device to store the data on [torch.device]
@@ -121,7 +115,6 @@ class Tracks:
                     for track_timestamps_us in tracks_timestamps_us
                 ]
             ), "Tracks: invalid tracks_timestamps_us inputs"
-            assert len(tracks_id) == len(tracks_label_class), "Tracks: inconsistent track_ids / label_class"
 
             # create packed pose / timestamp representation and upload to GPU
             # (also handle special case of empty / non-existing tracks)
@@ -160,7 +153,6 @@ class Tracks:
                         [track_flags.value for track_flags in tracks_flags], dtype=torch.int32, device=device
                     ),
                     max_track_n_poses=max_track_n_poses,
-                    tracks_label_class=tracks_label_class,
                 )
             )
 
@@ -208,7 +200,6 @@ class CuboidTracks(Tracks):
                 tracks_id=[],
                 tracks_poses=[],
                 tracks_timestamps_us=[],
-                tracks_label_class=[],
                 tracks_flags=[],
                 cuboids_dims=[],
                 device=device,
@@ -219,7 +210,6 @@ class CuboidTracks(Tracks):
             tracks_id: list[str],
             tracks_poses: list[np.ndarray],
             tracks_timestamps_us: list[np.ndarray],
-            tracks_label_class: list[str],
             tracks_flags: list[TrackFlags],
             cuboids_dims: list[np.ndarray],
             device: torch.device = torch.device("cuda"),
@@ -229,7 +219,6 @@ class CuboidTracks(Tracks):
             - track_ids: string identifiers of each track, N_tracks [str]
             - tracks_poses: 4x4 track to world pose transformations, N_tracks x (N_poses_i x 4 x 4) [float]
             - tracks_timestamps_us: pose timestamps, N_tracks x (N_poses_i, ) [int64]
-            - tracks_label_class: semantic class of each track, N_tracks [str]
             - tracks_flags: per-track flags, N_tracks [TrackFlags]
             - cuboids_dims: cuboid x/y/z extents (in local track frame), N_tracks x 3 [float]
             - device: the device to store the data on [torch.device]
@@ -237,7 +226,7 @@ class CuboidTracks(Tracks):
 
             # construct base tracks part
             tracks = Tracks.Factory.from_numpy(
-                tracks_id, tracks_poses, tracks_timestamps_us, tracks_label_class, tracks_flags, device=device
+                tracks_id, tracks_poses, tracks_timestamps_us, tracks_flags, device=device
             )
 
             # construct cuboid-tracks-specific part
@@ -253,7 +242,6 @@ class CuboidTracks(Tracks):
                     tracks_timestamps_us=tracks.tracks_timestamps_us,
                     tracks_flags=tracks.tracks_flags,
                     max_track_n_poses=tracks.max_track_n_poses,
-                    tracks_label_class=tracks.tracks_label_class,
                 ),
                 # cuboid-tracks-specific part
                 cuboidtracks_data=CuboidTracksData(
@@ -288,7 +276,6 @@ class CuboidTracks(Tracks):
                     tracks_timestamps_us=cuboid_tracks.tracks_timestamps_us.clone(),
                     tracks_flags=cuboid_tracks.tracks_flags.clone(),
                     max_track_n_poses=cuboid_tracks.max_track_n_poses,
-                    tracks_label_class=cuboid_tracks.tracks_label_class[:],
                 ),
                 # cuboid-tracks-specific part
                 cuboidtracks_data=CuboidTracksData(
@@ -309,7 +296,6 @@ class CuboidTracks(Tracks):
             tracks_flags_list = [cuboid_tracks.tracks_flags for cuboid_tracks in cuboid_tracks_list]
             cuboids_dims_list = [cuboid_tracks.cuboids_dims for cuboid_tracks in cuboid_tracks_list]
             max_track_n_poses = max([cuboid_tracks.max_track_n_poses for cuboid_tracks in cuboid_tracks_list])
-            tracks_label_class_list = [cuboid_tracks.tracks_label_class for cuboid_tracks in cuboid_tracks_list]
 
             tracks_packinfo = get_pack_info_from_n(torch.cat(tracks_length_list, dim=0)).int()
             tracks_id: list[str] = sum(tracks_id_list, [])
@@ -323,7 +309,6 @@ class CuboidTracks(Tracks):
                     tracks_timestamps_us=torch.cat(tracks_timestamps_us_list, dim=0),
                     tracks_flags=torch.cat(tracks_flags_list, dim=0),
                     max_track_n_poses=max_track_n_poses,
-                    tracks_label_class=sum(tracks_label_class_list, []),
                 ),
                 # cuboid-tracks-specific part
                 cuboidtracks_data=CuboidTracksData(
@@ -363,7 +348,6 @@ class CuboidTracks(Tracks):
                     tracks_timestamps_us=cuboid_tracks.tracks_timestamps_us[packed_attr_ind],
                     tracks_flags=cuboid_tracks.tracks_flags[indices_tensor],
                     max_track_n_poses=cast(int, track_counts.max().item()) if len(track_counts) else 0,
-                    tracks_label_class=[cuboid_tracks.tracks_label_class[i] for i in indices],
                 ),
                 # cuboid-tracks-specific part
                 cuboidtracks_data=CuboidTracksData(

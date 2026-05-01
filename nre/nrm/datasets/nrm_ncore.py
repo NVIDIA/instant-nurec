@@ -315,7 +315,6 @@ class NCoreNRMDataset(BaseNRMIndexableDataset):
         all_track_ids = []
         all_tracks_poses = []
         all_tracks_timestamps_us = []
-        all_tracks_label_class = []
         all_tracks_flags = []
         all_cuboid_dims = []
 
@@ -368,7 +367,6 @@ class NCoreNRMDataset(BaseNRMIndexableDataset):
             all_track_ids.append(track_id)
             all_tracks_poses.append(poses)
             all_tracks_timestamps_us.append(timestamps_us)
-            all_tracks_label_class.append(track["label_class"])
             all_tracks_flags.append(track_flags)
             all_cuboid_dims.append(track["dimension"])
 
@@ -377,7 +375,6 @@ class NCoreNRMDataset(BaseNRMIndexableDataset):
             all_track_ids,
             all_tracks_poses,
             all_tracks_timestamps_us,
-            all_tracks_label_class,
             all_tracks_flags,
             cuboids_dims=all_cuboid_dims,
             device=torch.device("cpu"),
