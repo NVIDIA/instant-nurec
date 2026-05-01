@@ -11,8 +11,7 @@
 import math
 import re
 
-from dataclasses import dataclass
-from typing import Callable, Literal
+from typing import Callable
 
 import torch
 import torch.nn as nn
@@ -21,61 +20,6 @@ from nre.nrm.models.blocks.attention import AttentionBlock
 from nre.nrm.models.blocks.layers import FeedForwardMLP
 from nre.utils.geometry import so3_matrix_to_quat
 
-
-@dataclass(kw_only=True)
-class DAv3Config:
-    depth: int
-    n_heads: int
-    take_block_indices: list[int]
-    aa_start_block_idx: int
-    dpt_reassemble_hidden_dims: list[int]
-    embed_dim: int
-    dpt_dim: int
-    ffn_type: Literal["mlp", "swiglu"]
-
-
-DAV3_CONFIGS: dict[str, DAv3Config] = {
-    "small": DAv3Config(
-        depth=12,
-        n_heads=6,
-        take_block_indices=[5, 7, 9, 11],
-        aa_start_block_idx=4,
-        dpt_reassemble_hidden_dims=[48, 96, 192, 384],
-        embed_dim=384,
-        dpt_dim=64,
-        ffn_type="mlp",
-    ),
-    "base": DAv3Config(
-        depth=12,
-        n_heads=12,
-        take_block_indices=[5, 7, 9, 11],
-        aa_start_block_idx=4,
-        dpt_reassemble_hidden_dims=[96, 192, 384, 768],
-        embed_dim=768,
-        dpt_dim=128,
-        ffn_type="mlp",
-    ),
-    "large": DAv3Config(
-        depth=24,
-        n_heads=16,
-        take_block_indices=[11, 15, 19, 23],
-        aa_start_block_idx=8,
-        dpt_reassemble_hidden_dims=[256, 512, 1024, 1024],
-        embed_dim=1024,
-        dpt_dim=256,
-        ffn_type="mlp",
-    ),
-    "giant": DAv3Config(
-        depth=40,
-        n_heads=24,
-        take_block_indices=[19, 27, 33, 39],
-        aa_start_block_idx=13,
-        dpt_reassemble_hidden_dims=[256, 512, 1024, 1024],
-        embed_dim=1536,
-        dpt_dim=256,
-        ffn_type="swiglu",
-    ),
-}
 
 _DAV3_WEIGHT_MAPPING_RULES: list[tuple[str, str | Callable | None]] = [
     (r"model\.backbone\.pretrained\.patch_embed\.(.*)", r"PATCH_EMBED.\1"),
