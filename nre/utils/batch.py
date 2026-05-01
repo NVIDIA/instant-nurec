@@ -97,13 +97,10 @@ class RectSubsampled(RectSubsampledSensor):
 
 
 @torch.autocast(device_type="cuda", enabled=False)
-def compute_pixel_footprint(camera_rays: torch.Tensor | np.ndarray, pixel_offset: int = 10, mode: str = "cone"):
-    """Computes the footprint of a pixel at unit length - footprint is defined as the diameter of the circle at unit length
-    Since the computation is usually precision sensitive, we disable autocast to avoid mis-using 16-bit precision.
-    Input:
-        camera_rays - normalized rays in the camera coordinate system [h,w,3] (torch.Tensor | np.ndarray)
-        pixel_offset - offset used to compute the solid angle. When the fov is small and the image resolution is high, small pixel offset can lead to problems with numerical precision
-        mode - pixel footprint definition (cone - diameter of a cone carved by the pixel, plane_intersect - diameter of the intersection of the pixel cone with the plane parallel to the image )
+def compute_pixel_footprint(camera_rays: torch.Tensor | np.ndarray, pixel_offset: int = 10):
+    """Computes the cone footprint of a pixel at unit length (diameter of a cone
+    carved by the pixel). Predict-only standalone keeps just the "cone" mode;
+    "plane_intersect" had no callers.
     """
 
     assert pixel_offset != 0, "pixel_offset must not be zero to avoid division by zero in footprint calculation"
@@ -120,87 +117,38 @@ def compute_pixel_footprint(camera_rays: torch.Tensor | np.ndarray, pixel_offset
     # Normalize camera rays to unit length
     camera_rays = F.normalize(camera_rays, dim=-1)
 
-    if mode == "cone":
-        # Bottom right corner
-        dot_product = torch.einsum(
-            "ijk, ijk -> ij", camera_rays[pixel_offset:, pixel_offset:], camera_rays[:-pixel_offset, :-pixel_offset]
-        )
-        # Clamp between [-1, 1] to avoid NaN in arccos.
-        # These are due to numerical precision issues in F.normalize and torch.einsum
-        dot_product = torch.clamp(dot_product, -1.0, 1.0)
-        solid_angle_bottom_right = torch.arccos(
-            F.pad(
-                dot_product.unsqueeze(0),
-                (0, pixel_offset, 0, pixel_offset),
-                mode="replicate",
-            ).squeeze(0)
-        )
+    # Bottom right corner
+    dot_product = torch.einsum(
+        "ijk, ijk -> ij", camera_rays[pixel_offset:, pixel_offset:], camera_rays[:-pixel_offset, :-pixel_offset]
+    )
+    # Clamp between [-1, 1] to avoid NaN in arccos.
+    dot_product = torch.clamp(dot_product, -1.0, 1.0)
+    solid_angle_bottom_right = torch.arccos(
+        F.pad(dot_product.unsqueeze(0), (0, pixel_offset, 0, pixel_offset), mode="replicate").squeeze(0)
+    )
 
-        # Top right corner
-        dot_product = torch.einsum(
-            "ijk, ijk -> ij",
-            camera_rays[pixel_offset:, :-pixel_offset],
-            camera_rays[:-pixel_offset, pixel_offset:],
-        )
-        dot_product = torch.clamp(dot_product, -1.0, 1.0)
-        solid_angle_top_right = torch.arccos(
-            F.pad(
-                dot_product.unsqueeze(0),
-                (0, pixel_offset, pixel_offset, 0),
-                mode="replicate",
-            ).squeeze(0)
-        )
+    # Top right corner
+    dot_product = torch.einsum(
+        "ijk, ijk -> ij",
+        camera_rays[pixel_offset:, :-pixel_offset],
+        camera_rays[:-pixel_offset, pixel_offset:],
+    )
+    dot_product = torch.clamp(dot_product, -1.0, 1.0)
+    solid_angle_top_right = torch.arccos(
+        F.pad(dot_product.unsqueeze(0), (0, pixel_offset, pixel_offset, 0), mode="replicate").squeeze(0)
+    )
 
-        solid_angle = torch.mean(
-            torch.cat([solid_angle_bottom_right[:, :, None], solid_angle_top_right[:, :, None]], dim=-1), dim=-1
-        )
+    solid_angle = torch.mean(
+        torch.cat([solid_angle_bottom_right[:, :, None], solid_angle_top_right[:, :, None]], dim=-1), dim=-1
+    )
 
-        # Due to numerical precision issues, some angles might be zero.
-        # Let's replace them with a small value to avoid zero footprint.
-        # The footprint will end up influencing the gaussian scale parameter,
-        # which uses the exp/log activation functions, which aren't defined at zero.
-        # This avoids NaNs propagating in many places.
-        solid_angle.masked_fill_(solid_angle == 0, 1e-12)
+    # Some angles can be zero due to precision. Replace with a small value to
+    # avoid NaNs through the exp/log activation chain.
+    solid_angle.masked_fill_(solid_angle == 0, 1e-12)
 
-        # Divide the solid angle by the pixel offset and multiply by 2 to get the diameter
-        footprint = 2 * torch.tan(0.5 * solid_angle) / pixel_offset
+    footprint = 2 * torch.tan(0.5 * solid_angle) / pixel_offset
 
-    elif mode == "plane_intersect":
-        # Point where the rays intersect the plane at depth 1
-        plane_intersection_points = camera_rays * (1 / camera_rays[:, :, 2:3])
-        dist_on_plane_bottom_right = F.pad(
-            torch.norm(
-                plane_intersection_points[pixel_offset:, pixel_offset:]
-                - plane_intersection_points[:-pixel_offset, :-pixel_offset],
-                dim=-1,
-            ).unsqueeze(0)
-            / pixel_offset,
-            (0, pixel_offset, 0, pixel_offset),
-            mode="replicate",
-        ).squeeze(0)
-        dist_on_plane_top_right = F.pad(
-            torch.norm(
-                plane_intersection_points[pixel_offset:, :-pixel_offset]
-                - plane_intersection_points[:-pixel_offset, pixel_offset:],
-                dim=-1,
-            ).unsqueeze(0)
-            / pixel_offset,
-            (0, pixel_offset, pixel_offset, 0),
-            mode="replicate",
-        ).squeeze(0)
-
-        footprint = torch.mean(
-            torch.cat([dist_on_plane_bottom_right[:, :, None], dist_on_plane_top_right[:, :, None]], dim=-1),
-            dim=-1,
-        )
-
-    else:
-        raise ValueError("Pixel footprint computation mode must be one of [cone, plane_intersect]")
-
-    if is_input_numpy:
-        return footprint.numpy()
-    else:
-        return footprint
+    return footprint.numpy() if is_input_numpy else footprint
 
 
 def generate_grid_2d_indices(
