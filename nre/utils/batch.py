@@ -811,11 +811,7 @@ class CameraFreePoseViewGeometry(torch.nn.Module):
             unique_sensor_idx_str=unpack_optional(meta.unique_sensor_idx_str),
         )
 
-    def to_rendering_data(
-        self,
-        data_batch: DataBatch.Camera,
-        cache_sensor_params: bool = False,
-    ) -> RenderingData:
+    def to_rendering_data(self, data_batch: DataBatch.Camera) -> RenderingData:
         """
         Convert a `DataBatch.Camera` to a `RenderingData`.
 
@@ -825,19 +821,13 @@ class CameraFreePoseViewGeometry(torch.nn.Module):
         * sensor model in the subsampled domain.
         """
         if data_batch.b == 1:
-            return self._to_rendering_data_single_batch(data_batch, cache_sensor_params=cache_sensor_params)
+            return self._to_rendering_data_single_batch(data_batch)
         rendering_data_list: list[RenderingData] = []
         for bidx in range(data_batch.b):
-            rendering_data_list.append(
-                self._to_rendering_data_single_batch(data_batch[bidx], cache_sensor_params=cache_sensor_params)
-            )
+            rendering_data_list.append(self._to_rendering_data_single_batch(data_batch[bidx]))
         return RenderingData.collate_fn(rendering_data_list, device=rendering_data_list[0].rays.device)
 
-    def _to_rendering_data_single_batch(
-        self,
-        data_batch: DataBatch.Camera,
-        cache_sensor_params: bool = False,
-    ) -> RenderingData:
+    def _to_rendering_data_single_batch(self, data_batch: DataBatch.Camera) -> RenderingData:
         """
         Internal single batch version of `to_rendering_data`.
         """
@@ -858,30 +848,22 @@ class CameraFreePoseViewGeometry(torch.nn.Module):
             sensor_model = cast(ConcreteCameraModelsUnion, self.get_sensor_model(meta))
             self.cached_sensor_subsample[subsample_unique_sensor_idx] = sensor_model
 
-        if not cache_sensor_params:
+        subsample = meta.subsample
+        unique_sensor_idx = meta.unique_sensor_idx if meta.unique_sensor_idx >= 0 else 0
+        cached_sensor_params = self.cached_sensor_params[str(unique_sensor_idx)]
+        if (cached_sensor_params["rect_subsampled"] == subsample) and (
+            cached_sensor_params["sensorlib_parameters"] is not None
+        ):
+            sensor_model_parameters = cached_sensor_params["parameters"]
+            sensorlib_parameters = cached_sensor_params["sensorlib_parameters"]
+        else:
             sensor_model_parameters = sensor_model.get_parameters()
             sensorlib_parameters = CameraModelConverter.convert(sensor_model, device=T_sensor_world_startend.device)
-        else:
-            subsample = meta.subsample
-            unique_sensor_idx = meta.unique_sensor_idx if meta.unique_sensor_idx >= 0 else 0
-            cached_sensor_params = self.cached_sensor_params[str(unique_sensor_idx)]
-            if (cached_sensor_params["rect_subsampled"] == subsample) and (
-                cached_sensor_params["sensorlib_parameters"] is not None
-            ):
-                # Cache hit: ncore parameters and sensorlib parameters.
-                sensor_model_parameters = cached_sensor_params["parameters"]
-                sensorlib_parameters = cached_sensor_params["sensorlib_parameters"]
-            else:
-                # Subsample changed or cache empty: recompute sensorlib parameters.
-                sensor_model_parameters = sensor_model.get_parameters()
-                sensorlib_parameters = CameraModelConverter.convert(
-                    sensor_model, device=T_sensor_world_startend.device
-                )
-                self.cached_sensor_params[str(unique_sensor_idx)] = {
-                    "rect_subsampled": subsample,
-                    "parameters": sensor_model_parameters,
-                    "sensorlib_parameters": sensorlib_parameters,
-                }
+            self.cached_sensor_params[str(unique_sensor_idx)] = {
+                "rect_subsampled": subsample,
+                "parameters": sensor_model_parameters,
+                "sensorlib_parameters": sensorlib_parameters,
+            }
 
         translations, rotations = se3pose_from_matrix(T_sensor_world_startend)
         poses_tquat_startend = torch.cat([translations, rotations], dim=1)
@@ -1005,7 +987,7 @@ class NRMDataBatch:
             camera_rendering_data = (
                 CameraFreePoseViewGeometry.from_rig_trajectories(rig)
                 .to(device=device)
-                .to_rendering_data(data.data.camera.to(device), cache_sensor_params=True)
+                .to_rendering_data(data.data.camera.to(device))
                 if data.data.camera is not None
                 else None
             )

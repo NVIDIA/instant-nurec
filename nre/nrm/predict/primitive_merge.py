@@ -212,7 +212,7 @@ class KelvinPrimitiveMerge:
             merged_context_rendering = (
                 CameraFreePoseViewGeometry.from_rig_trajectories(merged_context_rig)
                 .to(device=device)
-                .to_rendering_data(unpack_optional(merged_context_data.camera).to(device), cache_sensor_params=True)
+                .to_rendering_data(unpack_optional(merged_context_data.camera).to(device))
             )
             merged_context_batch = DataAndRenderingBatch(
                 data=merged_context_data, rendering=RenderingBatch(camera=merged_context_rendering)
