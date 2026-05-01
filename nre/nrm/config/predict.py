@@ -88,21 +88,6 @@ class PrimitiveMergeConfig(BaseConfigSchema):
         description="Whether to enable sky mask (to render sky based on sky token) for the merged primitive. When False, Celsius typically uses model.export_preprocess.keep_sky_gaussians.",
     )
 
-    # Stage 3 options:
-    enable_voxelization: bool = Field(
-        default=False, description="Whether to apply voxelization to merge nearby Gaussians"
-    )
-    voxel_size: float = Field(default=0.1, description="Size of voxels for voxelization (in meters)")
-    voxel_fusion_mode: Literal["average", "kl_optimal"] = Field(
-        default="average",
-        description=(
-            "How to fuse Gaussians within a voxel. "
-            "'average' uses weighted averaging of all attributes (existing behavior). "
-            "'kl_optimal' uses moment-matching for position/rotation/scale (correct covariance merge) "
-            "while averaging other attributes."
-        ),
-    )
-
     def __post_init__(self):
         # When merge is enabled, ensure merged output has sky: either enable_sky_mask (render via token) or
         # model.export_preprocess.keep_sky_gaussians (Celsius) must be True; validated at runtime if needed.

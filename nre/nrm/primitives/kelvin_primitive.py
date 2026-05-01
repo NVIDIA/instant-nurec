@@ -9,14 +9,12 @@ from enum import IntEnum
 from typing import Any, Self, Sequence
 
 import torch
-import torch_scatter
 
 from omegaconf import DictConfig
 
 from nre.models.gaussians.renderers import BaseGaussianRenderer
 from nre.nrm.config.models import PrimitiveExportPreprocessConfig
 from nre.nrm.primitives.base import BaseGaussiansNRMPrimitive
-from nre.nrm.utils.covariance import merge_covariances_kl_optimal
 from nre.nrm.utils.cubemap import rotate_sky_cubemap
 from nre.utils.batch import CameraFrameLabels, DataAndRenderingBatch, LidarFrameLabels, RenderingData
 from nre.utils.geometry import quat_mult_xyzw, so3_matrix_to_quat
@@ -297,70 +295,6 @@ class KelvinStaticLayer(KelvinLayer):
             normals=normals,
             **asdict(KelvinLayer._concatenate_base(layers)),
         )
-
-    @torch.autocast(device_type="cuda", enabled=False)
-    def voxelize(self, voxel_size: float, confidence: torch.Tensor | None = None, fusion_mode: str = "average") -> Self:
-        """
-        Perform voxelization of the static layer with an optional confidence score.
-
-        Args:
-            voxel_size: Size of voxels for voxelization (in meters).
-            confidence: Optional per-Gaussian confidence scores [N].
-            fusion_mode: 'average' for weighted averaging of all attributes,
-                'kl_optimal' for moment-matching of position/rotation/scale.
-        """
-        if confidence is None:
-            confidence = torch.ones(len(self), device=self.device())
-
-        # Compute voxel indices
-        voxel_indices = (self.positions / voxel_size).round().int()  # [n_gaussians, 3]
-        _, inverse_indices = torch.unique(voxel_indices, dim=0, return_inverse=True)
-
-        # Compute softmax scores
-        confidence_voxel_max, _ = torch_scatter.scatter_max(confidence, inverse_indices, dim=0)
-        confidence_exp = torch.exp(confidence - confidence_voxel_max[inverse_indices])
-        voxel_weights = torch_scatter.scatter_add(confidence_exp, inverse_indices, dim=0)  # [num_unique_voxels]
-        weights = (confidence_exp / (voxel_weights[inverse_indices] + 1e-6)).unsqueeze(-1)  # [n_gaussians, 1]
-
-        # Compute weighted average of positions (shared by both modes)
-        positions = torch_scatter.scatter_add(self.positions * weights, inverse_indices, dim=0)
-        densities = torch_scatter.scatter_add(self.densities * weights, inverse_indices, dim=0)
-        rgb = torch_scatter.scatter_add(self.rgb * weights, inverse_indices, dim=0)
-
-        if fusion_mode == "kl_optimal":
-            rotations, scales = merge_covariances_kl_optimal(
-                self.positions, self.rotations, self.scales, weights, inverse_indices, positions
-            )
-        else:
-            rotations = torch_scatter.scatter_add(self.rotations * weights, inverse_indices, dim=0)
-            rotations = torch.nn.functional.normalize(rotations, dim=1)
-            scales = torch_scatter.scatter_add(self.scales * weights, inverse_indices, dim=0)
-
-        # For semantic_class, pick the class of the highest-confidence Gaussian in each voxel
-        semantic_class: torch.Tensor | None = None
-        if self.semantic_class is not None:
-            _, argmax_indices = torch_scatter.scatter_max(confidence, inverse_indices, dim=0)
-            semantic_class = self.semantic_class[argmax_indices]
-
-        # For normals, weighted-average and renormalize (collapses if cancel out, fall back to zero vector).
-        normals: torch.Tensor | None = None
-        if self.normals is not None:
-            normals = torch.nn.functional.normalize(
-                torch_scatter.scatter_add(self.normals * weights, inverse_indices, dim=0),
-                dim=1,
-            )
-
-        # Return new layer
-        return self.__class__(
-            positions=positions,
-            densities=densities,
-            rotations=rotations,
-            scales=scales,
-            rgb=rgb,
-            semantic_class=semantic_class,
-            normals=normals,
-        )
-
 
 @dataclass(kw_only=True)
 class KelvinDynamicLayer(KelvinLayer):

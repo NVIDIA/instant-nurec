@@ -32,7 +32,6 @@ py_library(
     deps = [
         "//nre/nrm/config:pylib",
         "//nre/nrm/primitives:pylib",
-        "//nre/nrm/utils:pylib_covariance",
         "//nre/nrm/utils:pylib_cubemap",
         "//nre/nrm/utils:pylib_trajectory",
         "//nre/utils:pylib",

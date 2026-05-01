@@ -63,17 +63,6 @@ py_library(
 )
 
 py_library(
-    name = "pylib_covariance",
-    srcs = ["covariance.py"],
-    visibility = DEFAULT_VISIBILITY,
-    deps = [
-        "//nre/utils:pylib_geometry",
-        pip_requirement("torch"),
-        pip_requirement("torch_scatter"),
-    ],
-)
-
-py_library(
     name = "pylib",
     srcs = [
         "__init__.py",

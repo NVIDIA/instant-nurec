@@ -38,7 +38,6 @@ py_library(
         "//nre/models:pylib",
         "//nre/models/gaussians:pylib",
         "//nre/nrm/config:pylib",
-        "//nre/nrm/utils:pylib_covariance",
         "//nre/nrm/utils:pylib_cubemap",
         "//nre/utils:pylib_geometry",
         "//nre/utils:pylib_misc",

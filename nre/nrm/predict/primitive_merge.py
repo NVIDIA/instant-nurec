@@ -486,8 +486,7 @@ class KelvinPrimitiveMerge(PrimitiveMerge[KelvinNRMPrimitive]):
         return merged_primitive
 
     def postprocess_merged_primitive(self, merged_primitive: KelvinNRMPrimitive) -> None:
-        # Voxelization is applied on static layer only, with equal confidence for now.
-        if self.config.enable_voxelization:
-            merged_primitive.static_layer = merged_primitive.static_layer.voxelize(
-                self.config.voxel_size, None, fusion_mode=self.config.voxel_fusion_mode
-            )
+        # Voxelization (config.enable_voxelization=true in NRE) was the only
+        # consumer of KelvinStaticLayer.voxelize; predict pretrained config
+        # pins it to false, so the path was dropped in Phase 1 step 4.3.
+        del merged_primitive
