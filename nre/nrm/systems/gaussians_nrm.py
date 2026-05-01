@@ -47,7 +47,6 @@ from nre.utils.types import (
     RayFlags,
     RigTrajectories,
 )
-from nre.utils.visualize import flow2img, make_image_grid, scalar2img
 
 
 logger = logging.getLogger(__name__)

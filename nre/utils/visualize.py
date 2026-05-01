@@ -16,9 +16,5 @@ def scalar2img(*_args: Any, **_kwargs: Any) -> np.ndarray:
     return np.zeros((1, 1, 3), dtype=np.uint8)
 
 
-def flow2img(*_args: Any, **_kwargs: Any) -> np.ndarray:
-    return np.zeros((1, 1, 3), dtype=np.uint8)
-
-
 def make_image_grid(*_args: Any, **_kwargs: Any) -> np.ndarray:
     return np.zeros((1, 1, 3), dtype=np.uint8)
