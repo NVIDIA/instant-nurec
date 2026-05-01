@@ -11,13 +11,8 @@
 from __future__ import annotations
 
 from typing import (
-    Any,
-    Callable,
-    List,
     Optional,
     OrderedDict,
-    TypeAlias,
-    TypeVar,
 )
 
 
@@ -26,7 +21,7 @@ try:
 except ImportError:
     from typing_extensions import Self
 
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass
 from enum import IntEnum, IntFlag, auto
 
 import lietorch as lt
@@ -40,13 +35,6 @@ from ncore.data import (
 )
 from nre.utils.misc import unpack_optional
 
-M = TypeVar("M", bound=torch.nn.Module)
-# ModuleRef is an annotation for a getter of torch Modules. It is used when we want to pass a module
-# to another module as a reference, *without adding it to its state dict* and while *reflecting the changes
-# to the original module*.
-ModuleRef = Callable[[], M]
-
-Checkpoint: TypeAlias = dict[str, Any]
 
 
 @dataclass(slots=True)

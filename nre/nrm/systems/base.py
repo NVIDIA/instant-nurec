@@ -20,7 +20,6 @@ from nre.nrm.config.nrm import BaseNRMSystemConfig, NRMConfig
 from nre.nrm.datasets.datamodule import NRMDataModule
 from nre.nrm.models.base import BaseNRM
 from nre.utils.batch import NRMDataBatch
-from nre.utils.types import Checkpoint
 
 
 class BaseNRMSystem(nn.Module, ABC):
@@ -49,6 +48,3 @@ class BaseNRMSystem(nn.Module, ABC):
 
     def on_predict_batch_start(self, batch: NRMDataBatch, batch_local_idx: int, dataloader_idx: int = 0) -> None:
         self.model.freeze_post_processing_for_predict()
-
-    def on_load_checkpoint(self, checkpoint: Checkpoint) -> None:
-        self.load_state_dict(checkpoint["state_dict"], assign=True)
