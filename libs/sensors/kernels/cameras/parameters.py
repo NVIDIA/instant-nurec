@@ -639,16 +639,6 @@ class FThetaProjection(CameraProjection):
         return self.intrinsics[_FTHETA_BW_OFFSET:_FTHETA_A_OFFSET]
 
     @property
-    def A(self) -> Tensor:
-        """(2, 2) forward transformation matrix (linear term)."""
-        return self.intrinsics[_FTHETA_A_OFFSET:_FTHETA_AINV_OFFSET].reshape(2, 2)
-
-    @property
-    def Ainv(self) -> Tensor:
-        """(2, 2) inverse transformation matrix (linear term)."""
-        return self.intrinsics[_FTHETA_AINV_OFFSET:_FTHETA_DFW_OFFSET].reshape(2, 2)
-
-    @property
     def dfw_poly(self) -> Tensor:
         """(N,) derivative of forward polynomial (padded to MAX_POLYNOMIAL_TERMS)."""
         return self.intrinsics[_FTHETA_DFW_OFFSET:_FTHETA_DBW_OFFSET]
