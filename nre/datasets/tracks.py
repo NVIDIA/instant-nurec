@@ -11,7 +11,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable, Literal, Self, cast
+from typing import Literal, Self, cast
 
 import lietorch as lt
 import numpy as np
@@ -238,59 +238,6 @@ class CuboidTracks(Tracks):
         Operations on CuboidTracks returning new CuboidTracks instances.
         Compared to classmethods, this forces the semantics to be NOT inplace.
         """
-
-        @staticmethod
-        def clone(cuboid_tracks: CuboidTracks):
-            """Clones the cuboid tracks instance"""
-
-            return CuboidTracks(
-                # base tracks part
-                tracks_data=TracksData(
-                    tracks_id=cuboid_tracks.tracks_id[:],
-                    tracks_packinfo=cuboid_tracks.tracks_packinfo.clone(),
-                    tracks_poses=lt.SE3(cuboid_tracks.tracks_poses.data.clone()),
-                    tracks_timestamps_us=cuboid_tracks.tracks_timestamps_us.clone(),
-                    tracks_flags=cuboid_tracks.tracks_flags.clone(),
-                    max_track_n_poses=cuboid_tracks.max_track_n_poses,
-                ),
-                # cuboid-tracks-specific part
-                cuboidtracks_data=CuboidTracksData(
-                    cuboids_dims=cuboid_tracks.cuboids_dims.clone(),
-                ),
-            )
-
-        @staticmethod
-        def concatenate(cuboid_tracks_list: Iterable[CuboidTracks]) -> CuboidTracks:
-            """
-            Concatenates a list of CuboidTracks instances into a new one
-            """
-
-            tracks_id_list = [cuboid_tracks.tracks_id for cuboid_tracks in cuboid_tracks_list]
-            tracks_length_list = [cuboid_tracks.tracks_packinfo[:, 1] for cuboid_tracks in cuboid_tracks_list]
-            tracks_poses_list = [cuboid_tracks.tracks_poses for cuboid_tracks in cuboid_tracks_list]
-            tracks_timestamps_us_list = [cuboid_tracks.tracks_timestamps_us for cuboid_tracks in cuboid_tracks_list]
-            tracks_flags_list = [cuboid_tracks.tracks_flags for cuboid_tracks in cuboid_tracks_list]
-            cuboids_dims_list = [cuboid_tracks.cuboids_dims for cuboid_tracks in cuboid_tracks_list]
-            max_track_n_poses = max([cuboid_tracks.max_track_n_poses for cuboid_tracks in cuboid_tracks_list])
-
-            tracks_packinfo = get_pack_info_from_n(torch.cat(tracks_length_list, dim=0)).int()
-            tracks_id: list[str] = sum(tracks_id_list, [])
-
-            return CuboidTracks(
-                # base tracks part
-                tracks_data=TracksData(
-                    tracks_id=tracks_id,
-                    tracks_packinfo=tracks_packinfo,
-                    tracks_poses=lt.cat(tracks_poses_list, dim=0),
-                    tracks_timestamps_us=torch.cat(tracks_timestamps_us_list, dim=0),
-                    tracks_flags=torch.cat(tracks_flags_list, dim=0),
-                    max_track_n_poses=max_track_n_poses,
-                ),
-                # cuboid-tracks-specific part
-                cuboidtracks_data=CuboidTracksData(
-                    cuboids_dims=torch.cat(cuboids_dims_list, dim=0),
-                ),
-            )
 
         @staticmethod
         def subset_from_indices(cuboid_tracks: CuboidTracks, indices: list[int] | torch.Tensor) -> CuboidTracks:
