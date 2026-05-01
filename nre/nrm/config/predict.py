@@ -111,39 +111,6 @@ class PrimitiveMergeConfig(BaseConfigSchema):
         )
 
 
-class SensorOverrideConfig(BaseConfigSchema):
-    """
-    Configuration for overriding sensor parameters for rendered video export.
-    """
-
-    sensor_id: str
-    height: int | None = Field(
-        default=None, description="Height of the rendered frame in pixels. None means stays unchanged."
-    )
-    translation_offset: tuple[float, float, float] | None = Field(
-        default=None, description="Translation offset in meters. None means stays unchanged."
-    )
-    rotation_offset: tuple[float, float, float, bool] | None = Field(
-        default=None,
-        description="Rotation offset in degrees, last element is rotation first. None means stays unchanged.",
-    )
-    force_pinhole: bool = Field(default=False, description="Whether to force pinhole camera model.")
-
-
-class RenderVideoConfig(BaseConfigSchema):
-    """
-    Configuration for rendered video export.
-    """
-
-    enabled: bool = Field(default=False, description="Whether to enable rendered video export.")
-    fps: int = Field(default=30, description="Frames per second for the rendered video.")
-
-    depth: bool = Field(default=True, description="Whether to render the depth map.")
-    override_sensors: list[SensorOverrideConfig] | None = Field(
-        default=None, description="List of sensors to override. None means use original sensors."
-    )
-
-
 class PredictConfig(BaseConfigSchema):
     """
     Configuration for inference functionality typically used only in "predict" mode.
@@ -157,7 +124,4 @@ class PredictConfig(BaseConfigSchema):
     )
     export_ply: PrimitivePLYExportConfig = Field(
         default_factory=PrimitivePLYExportConfig, description="Configuration for primitive ply export"
-    )
-    render_video: RenderVideoConfig = Field(
-        default_factory=RenderVideoConfig, description="Configuration for rendered video export"
     )
