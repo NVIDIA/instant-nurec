@@ -17,7 +17,6 @@ from typing import Optional
 
 import numpy as np
 import pandas as pd
-import tqdm
 
 import ncore.data
 import ncore.impl.common.transformations as ncore_transformations
@@ -73,7 +72,6 @@ def consolidate_cuboid_tracks(
     track_label_sources: list[str],
     track_min_centroid_rig_dist_m: float,
     T_world_world_base: np.ndarray | None,
-    tqdm_disabled: bool,
 ) -> dict[str, dict]:
     """
     Gather the cuboid track observations into a set of named tracks with timestamped poses relative to the world frame.
@@ -84,7 +82,6 @@ def consolidate_cuboid_tracks(
         track_label_sources (list[str]): List of label sources to consider for track consolidation
         track_min_centroid_rig_dist_m (float): Minimum distance of the track centroid to the rig frame to consider the observation
         T_world_world_base (np.ndarray | None): Optional base transformation to apply to all world poses
-        tqdm_disabled (bool): When true, no progress bars are showed
 
     Returns:
         dict[str, dict]: Consolidated cuboid tracks (indexed by track-id) with elements:
@@ -128,7 +125,7 @@ def consolidate_cuboid_tracks(
 
     # Extract all tracks for the given data range
     all_tracks: dict[str, dict] = {}
-    for _, row in tqdm.tqdm(cuboids_df.iterrows(), desc="Associate Cuboid Labels -> Tracks", disable=tqdm_disabled):
+    for _, row in cuboids_df.iterrows():
         observation = (
             ncore.data.CuboidTrackObservation.from_dict(row.to_dict())
             if isinstance(

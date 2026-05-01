@@ -275,7 +275,6 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
             track_label_sources=[self.cuboid_tracks_params.track_label_source],
             track_min_centroid_rig_dist_m=self.cuboid_tracks_params.track_min_centroid_rig_dist_m,
             T_world_world_base=T_world_ref,
-            tqdm_disabled=True,
         )
 
         all_track_ids = []
