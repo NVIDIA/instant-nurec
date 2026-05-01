@@ -76,15 +76,8 @@ class PrimitiveMergeConfig(BaseConfigSchema):
     enabled: bool = Field(default=False, description="Whether to enable primitive merging")
 
     # Stage 2 options:
-    overlap_strategy: Literal["none", "depth_truncation", "two_sigma", "frustum_ownership"] = Field(
-        default="two_sigma", description="Strategy for conflicts of gaussians from different chunks"
-    )
-    dynamic_sigma_threshold: float = Field(
-        default=1.0,
-        description="For Celsius model, we need to extend the existing length for static scenes (except for two-sigma strategy).",
-    )
-    depth_truncation_threshold: float = Field(
-        default=50.0, description="Z-depth threshold (in meters) for truncating Gaussians to avoid overlap"
+    overlap_strategy: Literal["none", "frustum_ownership"] = Field(
+        default="frustum_ownership", description="Strategy for conflicts of gaussians from different chunks"
     )
     frustum_ownership_max_diff_m: float = Field(
         default=0.0,
