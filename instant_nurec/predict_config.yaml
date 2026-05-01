@@ -1,0 +1,170 @@
+# Static portion of the NRMConfig consumed by the standalone Kelvin predict
+# pipeline. CLI-driven fields are injected at load time:
+#   - resume                                  (cached pretrained checkpoint path)
+#   - out_dir                                 (--output-dir)
+#   - dataset.predict.ncore_json_list_path    (--ncore-path/debug.lst)
+#   - dataset.predict.ncore_json_base_path    (--ncore-path)
+#   - predict.primitive_merge.enabled         (--merge)
+#
+# Sourced from the parsed.yaml that hydra produced for the kelvin_pa_front
+# pretrained predict run (Phase 1 step 4.4: drop hydra/yaml composition).
+seed: 38
+mode: predict
+resume_weights_only: true
+call_train_from_scratch_hook_for_validation: false
+verbose: false
+logger:
+  enabled: false
+  run_id: "<generate>"
+  save_dir: /results/render-rc4-nos_04-26_230005
+  name: dummy
+system:
+  predict_num_workers: 4
+  predict_batch_size: 8
+  name: base-nrm-system
+dataset:
+  name: nrm
+  predict:
+    cuboid_loading_max_workers: 0
+    poses_component_group: default
+    intrinsics_component_group: default
+    masks_component_group: default
+    cuboids_component_group: default
+    ncore_json_paths: null
+    s3_block_size_mb: 50
+    s3_cache_type: readahead
+    subrange_json_path: null
+    open_consolidated: true
+    camera_max_fov_deg: 190.0
+    n_camera_mask_dilation_iterations: 10
+    aux_data:
+      enabled: true
+      enabled_context: true
+      semantic_segmentation: true
+      depth: true
+      egomask: true
+    camera_subsampler:
+      frame_width: 784
+      frame_height: 448
+    context_camera_ids:
+      - camera_front_wide_120fov
+    frame_batch_samplers:
+      uniform:
+        enabled: false
+        n_frames_per_sample: 4
+        n_samples_per_sequence: 10
+        name: uniform
+        frame_gap_timestamp_us: 500000
+      adaptive_sequential:
+        enabled: true
+        n_frames_per_sample: 18
+        n_samples_per_sequence: 8
+        name: adaptive_sequential
+        max_frame_gap_timestamp_us: 750000
+    supervision_camera_ids:
+      - camera_front_wide_120fov
+    supervision_frame_batch:
+      n_frames_per_sample: 0
+      prepend_timestamps_us: 0
+      append_timestamps_us: 0
+      sample_strategy: random
+      include_context_frames: false
+      camera_subsampler:
+        frame_width: 784
+        frame_height: 448
+    cuboid_tracks_params:
+      lidar_id: lidar_top_360fov
+      track_min_travel_distance_m: 1.5
+      track_min_centroid_rig_dist_m: 3.0
+      track_extrapolate_timestamps_us: 1000000
+      track_label_source: AUTOLABEL
+    lidar_frame_batch:
+      gap_from_image_us: 0
+    compute_rendering_data: false
+    cache_loaders_and_sensors: false
+    camera_id_mapping: {}
+    lidar_id_mapping: {}
+    name: nrm-ncore
+model:
+  name: kelvin
+  track_padding_m:
+    - 1.0
+    - 1.0
+    - 1.0
+  scene_rescale: 0.15
+  prepare_normal_supervision: false
+  use_2dgs: false
+  freeze_encoder: true
+  sky:
+    name: cubemap-decoder
+    cubemap_size: 448
+    embed_dim: 384
+    depth: 1
+    fusion_dim: null
+    checkpointing: true
+  patch_shape:
+    - 14
+    - 14
+  encoder:
+    name: dav3-encoder
+    depth: 12
+    n_heads: 12
+    embed_dim: 1536
+    take_block_indices:
+      - 5
+      - 7
+      - 9
+      - 11
+    aa_start_block_idx: 4
+    ffn_type: mlp
+    checkpointing: all
+  decoder:
+    name: dpt-decoder
+    dpt_dim: 128
+    dpt_reassemble_hidden_dims:
+      - 96
+      - 192
+      - 384
+      - 768
+    depth_offset: false
+    uv_offset: false
+    checkpointing: true
+    dpt_chunk_size: 4
+    fusion_for_gs_motion: false
+    time_encoding_dim: 256
+    motion_depth: 4
+  post_processing:
+    enabled: true
+    optimization_start_global_step: 1000
+  init_weights_paths:
+    dav3: s3@pdx-team-ncore://nrm-training-data/init-ckpt/dav3/base.safetensors
+    full: /lustre/fsw/portfolios/av/projects/av_alpamayo_cosmos/users/jiahuih/nre_experiments/checkpoints/rc4-front-nos.ckpt
+  activations:
+    opacity_shift: -2.0
+    scale_type: world
+    scale_shift_log_ratio: -2.9
+    scale_max: 0.045
+    scale_min: 0.0
+    distance_type: none
+    distance_min: 0.1
+    distance_max: 500.0
+    distance_shift: -1.65
+    xyz_type: none
+    z_offset: 1.0
+  export_preprocess:
+    enabled: true
+    density_prune_threshold: 0.01
+predict:
+  chunk_size: 1
+  primitive_merge:
+    overlap_strategy: frustum_ownership
+    frustum_ownership_max_diff_m: 5.0
+    enable_sky_mask: true
+  export_ply:
+    enabled: true
+    density_activation: sigmoid
+    scale_activation: exp
+    color_mode: sh
+    minimum_density: 0.0
+    minimum_scale: 0.0
+    minimum_surface_area: 0.0

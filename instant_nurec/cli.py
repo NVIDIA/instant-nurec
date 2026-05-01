@@ -1,16 +1,14 @@
 """Standalone argparse CLI for the NRM Kelvin predict pipeline.
 
-Phase 1 step 3: introduces the user-facing flag surface (`--ncore-path`,
-`--output-dir`, `--merge {none,frustum-ownership}`, `--log-level`) on top of
-the verbatim NRE copy. Until Phase 3 swaps the build system, this module is
-launched via `bazel run //instant_nurec:run -- ...` so that bazel-compiled
-slang/CUDA artifacts stay deterministic across the strip iterations.
+Phase 1 step 3 introduced the user-facing flag surface; step 4.4 swaps the
+Hydra/OmegaConf composition path for a yaml.safe_load + pydantic validation
+loop (``instant_nurec.config.load_predict_config``). The CLI now constructs
+the typed :class:`NRMConfig` directly and hands it to the predict driver,
+which keeps `nre/` purely as a runtime library (no hydra imports needed).
 
-The CLI translates its flags into the Hydra overrides that NRE's
-`nre.nrm.run.main` click command expects, then invokes that command's underlying
-callback directly. Subsequent Phase 1 strips (config inlining, lightning
-removal, NRE rename) progressively replace the delegation target without
-disturbing the user-facing flag surface.
+Until Phase 3 swaps the build system, this module is launched via
+``bazel run //instant_nurec:run -- ...`` so that bazel-compiled slang/CUDA
+artifacts stay deterministic across the strip iterations.
 """
 
 from __future__ import annotations
@@ -20,18 +18,6 @@ import logging
 import sys
 from pathlib import Path
 from typing import Sequence
-
-
-CONFIG_NAME: str = "configs/nrm/apps/pretrained/ngc_kelvin_pa_front.yaml"
-
-# Overrides that are constant across both --merge modes. They mirror the
-# defaults baked into nre_example_call.sh so that this CLI produces parity-
-# matching output against baselines/original_baseline.
-PRESET_OVERRIDES: tuple[str, ...] = (
-    "+nrm/apps/options=_kelvin_predict",
-    "dataset.predict.cuboid_tracks_params.lidar_id=lidar_top_360fov",
-    "predict.render_video.enabled=false",
-)
 
 
 def make_parser() -> argparse.ArgumentParser:
@@ -69,30 +55,20 @@ def make_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def hydra_overrides(args: argparse.Namespace) -> list[str]:
-    """Translate parsed CLI args into Hydra-style override strings."""
-    overrides: list[str] = list(PRESET_OVERRIDES)
-    overrides.append(f"dataset.predict.ncore_json_base_path={args.ncore_path}")
-    overrides.append(f"dataset.predict.ncore_json_list_path={args.ncore_path}/debug.lst")
-    overrides.append(f"out_dir={args.output_dir}")
-    if args.merge == "none":
-        overrides.append("predict.primitive_merge.enabled=false")
-    else:  # frustum-ownership
-        overrides.append("predict.primitive_merge.enabled=true")
-        overrides.append("predict.primitive_merge.overlap_strategy=frustum_ownership")
-    return overrides
-
-
 def main(argv: Sequence[str] | None = None) -> int:
     args = make_parser().parse_args(argv)
     logging.basicConfig(level=getattr(logging, args.log_level.upper()))
 
-    overrides = hydra_overrides(args)
+    # Lazy imports keep argparse-only invocations (e.g. --help) cheap.
+    from instant_nurec.config import load_predict_config
+    from nre.nrm.run import run_predict
 
-    # Lazy import keeps the CLI surface unit-testable without NRE deps.
-    from nre.nrm.run import main as nre_main
-
-    nre_main(config_name=CONFIG_NAME, hydra_args=tuple(overrides))
+    config = load_predict_config(
+        ncore_path=args.ncore_path,
+        output_dir=args.output_dir,
+        merge_enabled=(args.merge == "frustum-ownership"),
+    )
+    run_predict(config)
     return 0
 
 

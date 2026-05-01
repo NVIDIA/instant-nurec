@@ -11,12 +11,12 @@ import random
 
 import numpy as np
 import torch
+import yaml
 
 import nre.nrm.datasets  # noqa: F401  (populates dataset registry)
 import nre.nrm.systems
 
-from nre.config.parse import dump_config
-from nre.nrm.config.nrm import NRMConfig, parse_typed_nrm_config
+from nre.nrm.config.nrm import NRMConfig
 from nre.nrm.systems.base import BaseNRMSystem
 
 
@@ -42,6 +42,12 @@ def setup_environment_and_logger(config: NRMConfig) -> logging.Logger:
         log.setLevel(logging.DEBUG)
     _seed_everything(config.seed)
     return log
+
+
+def dump_parsed_config(path: str, config: NRMConfig) -> None:
+    """Dump the typed config to ``path`` as plain YAML (no hydra/omegaconf)."""
+    with open(path, "w") as fp:
+        yaml.safe_dump(config.model_dump(mode="json"), fp, sort_keys=False)
 
 
 def launch_predict_loop(config: NRMConfig, system: BaseNRMSystem) -> None:
@@ -76,13 +82,10 @@ def launch_predict_loop(config: NRMConfig, system: BaseNRMSystem) -> None:
             system.on_predict_batch_end(outputs, batch, batch_idx)
 
 
-def main(config_name: str, hydra_args: list[str] | tuple[str, ...]) -> None:
-    """Main entry point for the standalone Kelvin predict pipeline."""
-
-    config = parse_typed_nrm_config(config_name=config_name, hydra_args=hydra_args)
-
+def run_predict(config: NRMConfig) -> None:
+    """Run the standalone Kelvin predict pipeline against an already-typed config."""
     os.makedirs(config.config_dir, exist_ok=True)
-    dump_config(os.path.join(config.config_dir, "parsed.yaml"), config)
+    dump_parsed_config(os.path.join(config.config_dir, "parsed.yaml"), config)
 
     setup_environment_and_logger(config)
     logger.info("NRM RUN 🆔: %s", config.run_id)

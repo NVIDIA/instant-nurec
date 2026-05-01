@@ -1,13 +1,12 @@
 """Tests for instant_nurec.cli.
 
-The CLI is the new flag surface that replaces NRE's `bazel run //nre/nrm:run --
---config-name=... +<hydra-overrides>` invocation. Phase 1 Step 3 only introduces
-the argparse layer; under the hood we still delegate to NRE's `nre.nrm.run.main`
-click command, so subsequent strips (Phase 1.4 onwards) can excise NRE
-dependencies without rewriting the user-facing surface.
+The CLI is the user-facing flag surface for the standalone Kelvin predict
+pipeline. After the Phase 1 step 4.4 hydra strip, ``main`` constructs an
+:class:`NRMConfig` directly via ``instant_nurec.config.load_predict_config``
+and hands it to ``nre.nrm.run.run_predict`` -- no Hydra overrides involved.
 
-NRE imports are stubbed via sys.modules so this suite does not require NRE's
-runtime deps to be installed in the test venv.
+The lazy imports inside ``main`` are stubbed via ``sys.modules`` so this
+suite does not require NRE's runtime deps to be installed in the test venv.
 """
 
 from __future__ import annotations
@@ -25,19 +24,25 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 
-def _install_nre_stub(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
-    """Inject a fake ``nre.nrm.run`` so cli.main()'s lazy import resolves."""
+def _install_runtime_stubs(monkeypatch: pytest.MonkeyPatch) -> tuple[MagicMock, MagicMock]:
+    """Inject fake ``instant_nurec.config`` + ``nre.nrm.run`` modules so
+    cli.main()'s lazy imports resolve without pulling in NRE/torch."""
+    config_mod = types.ModuleType("instant_nurec.config")
+    fake_config = MagicMock(name="NRMConfig")
+    fake_load = MagicMock(return_value=fake_config)
+    config_mod.load_predict_config = fake_load
+
     nre_mod = types.ModuleType("nre")
     nrm_mod = types.ModuleType("nre.nrm")
     run_mod = types.ModuleType("nre.nrm.run")
-    fake_callback = MagicMock(return_value=None)
-    fake_main = MagicMock()
-    fake_main.callback = fake_callback
-    run_mod.main = fake_main
+    fake_run_predict = MagicMock(return_value=None)
+    run_mod.run_predict = fake_run_predict
+
+    monkeypatch.setitem(sys.modules, "instant_nurec.config", config_mod)
     monkeypatch.setitem(sys.modules, "nre", nre_mod)
     monkeypatch.setitem(sys.modules, "nre.nrm", nrm_mod)
     monkeypatch.setitem(sys.modules, "nre.nrm.run", run_mod)
-    return fake_callback
+    return fake_load, fake_run_predict
 
 
 # ---------- argparse surface ----------
@@ -107,75 +112,34 @@ def test_parser_requires_output_dir() -> None:
         make_parser().parse_args(["--ncore-path", "/x"])
 
 
-# ---------- Hydra-override mapping ----------
+# ---------- end-to-end main() with runtime stubbed ----------
 
 
-def test_overrides_no_merge_disables_primitive_merge() -> None:
-    from instant_nurec.cli import hydra_overrides, make_parser
-    args = make_parser().parse_args(
-        ["--ncore-path", "/data", "--output-dir", "/out", "--merge", "none"]
-    )
-    overrides = hydra_overrides(args)
-    assert "predict.primitive_merge.enabled=false" in overrides
-    assert not any(
-        "predict.primitive_merge.enabled=true" in o for o in overrides
-    )
-    assert not any(
-        "predict.primitive_merge.overlap_strategy=" in o for o in overrides
-    )
-
-
-def test_overrides_frustum_ownership_enables_merge_with_strategy() -> None:
-    from instant_nurec.cli import hydra_overrides, make_parser
-    args = make_parser().parse_args(
-        ["--ncore-path", "/d", "--output-dir", "/o", "--merge", "frustum-ownership"]
-    )
-    overrides = hydra_overrides(args)
-    assert "predict.primitive_merge.enabled=true" in overrides
-    assert "predict.primitive_merge.overlap_strategy=frustum_ownership" in overrides
-
-
-def test_overrides_paths_and_constants() -> None:
-    from instant_nurec.cli import hydra_overrides, make_parser
-    args = make_parser().parse_args(
-        ["--ncore-path", "/data", "--output-dir", "/out"]
-    )
-    overrides = hydra_overrides(args)
-    assert "dataset.predict.ncore_json_base_path=/data" in overrides
-    assert "dataset.predict.ncore_json_list_path=/data/debug.lst" in overrides
-    assert "out_dir=/out" in overrides
-    assert "predict.render_video.enabled=false" in overrides
-    assert "+nrm/apps/options=_kelvin_predict" in overrides
-    assert "dataset.predict.cuboid_tracks_params.lidar_id=lidar_top_360fov" in overrides
-
-
-# ---------- end-to-end main() with NRE stubbed ----------
-
-
-def test_main_calls_nre_main_callback(monkeypatch: pytest.MonkeyPatch) -> None:
-    callback = _install_nre_stub(monkeypatch)
-    from instant_nurec.cli import CONFIG_NAME, main
+def test_main_no_merge_passes_disabled_to_loader(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_load, fake_run_predict = _install_runtime_stubs(monkeypatch)
+    from instant_nurec.cli import main
     rc = main(["--ncore-path", "/d", "--output-dir", "/o"])
     assert rc == 0
-    callback.assert_called_once()
-    kwargs = callback.call_args.kwargs
-    assert kwargs["config_name"] == CONFIG_NAME
-    assert "predict.primitive_merge.enabled=false" in kwargs["hydra_args"]
+    fake_load.assert_called_once()
+    kwargs = fake_load.call_args.kwargs
+    assert kwargs["ncore_path"] == Path("/d")
+    assert kwargs["output_dir"] == Path("/o")
+    assert kwargs["merge_enabled"] is False
+    fake_run_predict.assert_called_once_with(fake_load.return_value)
 
 
-def test_main_passes_frustum_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
-    callback = _install_nre_stub(monkeypatch)
+def test_main_frustum_ownership_passes_enabled_to_loader(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_load, fake_run_predict = _install_runtime_stubs(monkeypatch)
     from instant_nurec.cli import main
     rc = main(["--ncore-path", "/d", "--output-dir", "/o", "--merge", "frustum-ownership"])
     assert rc == 0
-    args = callback.call_args.kwargs["hydra_args"]
-    assert "predict.primitive_merge.enabled=true" in args
-    assert "predict.primitive_merge.overlap_strategy=frustum_ownership" in args
+    assert fake_load.call_args.kwargs["merge_enabled"] is True
+    fake_run_predict.assert_called_once_with(fake_load.return_value)
 
 
 def test_main_configures_log_level(monkeypatch: pytest.MonkeyPatch) -> None:
-    _install_nre_stub(monkeypatch)
-    captured = {}
+    _install_runtime_stubs(monkeypatch)
+    captured: dict[str, object] = {}
     real_basic_config = logging.basicConfig
 
     def fake_basic_config(**kwargs: object) -> None:
@@ -189,7 +153,7 @@ def test_main_configures_log_level(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_main_returns_zero_on_clean_exit(monkeypatch: pytest.MonkeyPatch) -> None:
-    _install_nre_stub(monkeypatch)
+    _install_runtime_stubs(monkeypatch)
     from instant_nurec.cli import main
     rc = main(["--ncore-path", "/d", "--output-dir", "/o"])
     assert rc == 0
