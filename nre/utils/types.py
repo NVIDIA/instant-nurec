@@ -39,12 +39,6 @@ from ncore.data import (
     ConcreteCameraModelParametersUnion,
     ConcreteLidarModelParametersUnion,
 )
-from nre.utils.fields import (
-    field_camera_model_parameters,
-    field_lidar_model_parameters,
-    field_numpy_array,
-    field_torch_tensor,
-)
 from nre.utils.misc import unpack_optional
 
 M = TypeVar("M", bound=torch.nn.Module)
@@ -118,11 +112,7 @@ class FrameConversion:
     #: - R: source -> target frame orientation with det(R)=1 (3,3)
     #: - o: origin of the target frame in the source frame (in source-frame units) (3,1)
     #: - s: the source -> target scale
-    #:
-    #: Any floating dtype is accepted (default: float32). Construct with a float64 matrix to enable
-    #: double-precision transforms end-to-end (e.g. ECEF coordinate poses). JSON round-trip goes through
-    #: field_numpy_array(np.float32, ...) and always decodes as float32; for f64 use-cases construct in-memory.
-    matrix: npt.NDArray[np.floating] = field_numpy_array(np.float32, (4, 4))
+    matrix: npt.NDArray[np.floating]
 
     def __post_init__(self):
         assert self.matrix.shape == (4, 4)
@@ -201,7 +191,7 @@ class RigTrajectories:
     """Represents a list of rig trajectories (using NCore frame conventions)"""
 
     # NCore world frame -> base frame rigid transformation (potentially geo-located)
-    T_world_base: torch.Tensor = field_torch_tensor(torch.float64, (4, 4), device="cpu", kw_only=True)
+    T_world_base: torch.Tensor
 
     # NCore world -> NRE frame conversion
     world_to_nre: FrameConversion
@@ -221,23 +211,15 @@ class RigTrajectories:
         cameras_linear_start_frame_indices: Optional[dict[str, int]] = None
         lidars_linear_start_frame_indices: Optional[dict[str, int]] = None
 
-        cameras_frame_timestamps_us: dict[str, torch.Tensor] = field_torch_tensor(
-            torch.int64, (-1, 2), device="cpu", kw_only=True
-        )  # map of *unique* camera sensor ids to start-/end-of-frame timestamps Nx2
-        lidars_frame_timestamps_us: dict[str, torch.Tensor] = field_torch_tensor(
-            torch.int64, (-1, 2), device="cpu", kw_only=True
-        )  # map of *unique* lidar sensor indices to start-/end-of-frame timestamps Nx2
+        cameras_frame_timestamps_us: dict[str, torch.Tensor]
+        lidars_frame_timestamps_us: dict[str, torch.Tensor]
 
         # Timestamped trajectory of the rig frame in NCore world coordinates
-        T_rig_worlds: torch.Tensor = field_torch_tensor(torch.float64, (-1, 4, 4), device="cpu", kw_only=True)  # Nx4x4
-        T_rig_world_timestamps_us: torch.Tensor = field_torch_tensor(
-            torch.int64, (-1,), device="cpu", kw_only=True
-        )  # N, guaranteed to cover the *end-of-frame* timestamps for all sensors (start-of-frame may be out-of-time-bounds)
+        T_rig_worlds: torch.Tensor
+        T_rig_world_timestamps_us: torch.Tensor
 
         # Timestamped trajectory of the per-camera rig frame in NCore world coordinates (free poses)
-        cameras_frame_T_rig_worlds: Optional[dict[str, torch.Tensor]] = field_torch_tensor(
-            torch.float64, (-1, 2, 4, 4), device="cpu", kw_only=True, default=None
-        )  # map of *unique* camera sensor ids to start-/end-of-frame poses Nx2x4x4
+        cameras_frame_T_rig_worlds: Optional[dict[str, torch.Tensor]] = None
 
         def __post_init__(self):
             assert self.T_rig_world_timestamps_us.ndim == 1, "T_rig_world_timestamps_us must be 1D"
@@ -265,17 +247,13 @@ class RigTrajectories:
         logical_sensor_name: str  # logical sensor name (potentially non-unique for multi-rig-trajectories)
         unique_sensor_idx: int  # unique sensor index (of this associated sensor type!)
 
-        T_sensor_rig: torch.Tensor = field_torch_tensor(
-            torch.float32, (4, 4), device="cpu", kw_only=True
-        )  # extrinsics 4x4
+        T_sensor_rig: torch.Tensor  # extrinsics 4x4
 
     @dataclass(slots=True, kw_only=True)
     class CameraCalibration(SensorCalibration):
         """Represents a camera-associated calibration"""
 
-        camera_model_parameters: ConcreteCameraModelParametersUnion = field_camera_model_parameters(
-            kw_only=True
-        )  # intrinsics [available unconditionally]
+        camera_model_parameters: ConcreteCameraModelParametersUnion  # intrinsics [available unconditionally]
 
     camera_calibrations: OrderedDict[str, CameraCalibration]  # indexed by *unique* camera sensor ids
 
@@ -283,9 +261,7 @@ class RigTrajectories:
     class LidarCalibration(SensorCalibration):
         """Represents a lidar-associated calibration"""
 
-        lidar_model_parameters: Optional[ConcreteLidarModelParametersUnion] = field_lidar_model_parameters(
-            default=None, kw_only=True
-        )  # intrinsics [available conditionally only]
+        lidar_model_parameters: Optional[ConcreteLidarModelParametersUnion] = None  # intrinsics [conditional]
 
     lidar_calibrations: OrderedDict[str, LidarCalibration]  # indexed by *unique* lidar sensor ids
 

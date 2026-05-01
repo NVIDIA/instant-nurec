@@ -71,10 +71,8 @@ py_library(
     deps = [
         pip_requirement("torch"),
         pip_requirement("numpy"),
-        pip_requirement("dataclasses-json"),
         "//libs/vren:pylib_cc",
         "//nre/utils:pylib",
-        "//nre/utils:pylib_fields",
     ],
 )
 

@@ -44,7 +44,6 @@ py_library(
         # Add visibility for aux_gen ncore_aux_data
     ],
     deps = [
-        ":pylib_fields",
         ":pylib_geometry",
         ":pylib_misc",
         ":pylib_profiling",
@@ -58,17 +57,6 @@ py_library(
         pip_requirement("torch"),
         pip_requirement("usd-core"),
         pip_requirement("lietorch"),
-    ],
-)
-
-py_library(
-    name = "pylib_fields",
-    srcs = ["fields.py"],
-    deps = [
-        pip_requirement("dataclasses-json"),
-        pip_requirement("numpy"),
-        pip_requirement("nvidia-ncore"),
-        pip_requirement("torch"),
     ],
 )
 
