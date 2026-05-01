@@ -394,7 +394,7 @@ class CuboidTracks(Tracks):
         self,
         points: torch.Tensor,
         points_timestamps_us: torch.Tensor,
-        cuboids_dims_padding: torch.Tensor | None = None,
+        cuboids_dims_padding: torch.Tensor,
     ) -> tuple[lt.SE3, torch.Tensor]:
         """
         For each point, returns the interpolated pose of the tracks that it is inside, as well as the track idx.
@@ -402,7 +402,7 @@ class CuboidTracks(Tracks):
         Inputs:
         - points: 3D points to check for inside check, [..., 3] [float]
         - points_timestamps_us: per point timestamp, [...] [int64]
-        - cuboids_dims_padding: if non-None, 3d padding to add to cuboids, broadcastable to N_tracks x 3 [float]
+        - cuboids_dims_padding: 3d padding to add to cuboids, broadcastable to N_tracks x 3 [float]
 
         Returns:
         - interpolated_poses: for each point, the pose of the cuboid it is inside, [...] [SE3]
@@ -413,18 +413,13 @@ class CuboidTracks(Tracks):
         points = points.reshape(-1, 3).contiguous()
         points_timestamps_us = points_timestamps_us.reshape(-1).contiguous()
 
-        cuboids_dims = self.cuboids_dims
-
-        if cuboids_dims_padding is not None:
-            cuboids_dims = cuboids_dims + cuboids_dims_padding
-
         interpolated_tracks_pose_data, interpolated_tracks_idx = vren.point_cuboidtracks_intersection_interpolate_pose(
             points,
             points_timestamps_us,
             self.tracks_packinfo,
             self.tracks_poses.data,
             self.tracks_timestamps_us,
-            cuboids_dims,
+            self.cuboids_dims + cuboids_dims_padding,
             self.max_track_n_poses,
         )
         interpolated_poses = lt.SE3(
