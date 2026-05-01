@@ -128,12 +128,6 @@ class KelvinModelConfig(BaseModelConfig):
     )
 
     scene_rescale: float = Field(default=1.0, description="Rescale scenes for model input and output")
-    prepare_normal_supervision: bool = Field(default=True, description="Whether to prepare normal supervision")
-    freeze_encoder: bool = Field(
-        default=False,
-        description="If True, freeze encoder parameters (requires_grad=False); train decoder/sky/post-processing only.",
-    )
-
     sky: KelvinSkyCubemapDecoderConfig
 
     patch_shape: Tuple[int, int] = Field(default=(8, 8))

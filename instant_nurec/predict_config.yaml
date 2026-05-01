@@ -70,8 +70,6 @@ model:
     - 1.0
     - 1.0
   scene_rescale: 0.15
-  prepare_normal_supervision: false
-  freeze_encoder: true
   sky:
     name: cubemap-decoder
     cubemap_size: 448

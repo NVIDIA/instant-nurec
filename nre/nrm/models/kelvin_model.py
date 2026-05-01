@@ -50,13 +50,10 @@ class KelvinNRM(BaseNRM[KelvinNRMPrimitive]):
         self.scene_rescale = self.config.scene_rescale
         self.cuboids_dims_padding = torch.nn.Buffer(torch.tensor(self.config.track_padding_m, dtype=torch.float32))
 
-        if self.config.freeze_encoder:
-            for param in self.encoder.parameters():
-                param.requires_grad = False
-
         # Predict mode never invokes primitive.forward()/render(), so the
         # gaussians_renderer is set to None and the factory + nrend deps are
-        # not exercised.
+        # not exercised. Predict runs under torch.inference_mode() so
+        # the dropped freeze_encoder/requires_grad bookkeeping is irrelevant.
         self.gaussians_renderer = None
 
     @staticmethod
