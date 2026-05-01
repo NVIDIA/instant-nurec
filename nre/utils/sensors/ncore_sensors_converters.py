@@ -32,19 +32,14 @@ from libs.sensors.kernels.cameras.parameters import (
     ShutterType,
 )
 from libs.sensors.kernels.common import DynamicPose, Pose
-from libs.sensors.kernels.lidars.parameters import (
-    RowOffsetStructuredSpinningLidarProjection,
-)
 from ncore.data import FThetaCameraModelParameters
 from ncore.data import ReferencePolynomial as NcoreReferencePolynomial
 from ncore.sensors import (
     BivariateWindshieldModel,
     CameraModel,
     FThetaCameraModel,
-    LidarModel,
     OpenCVFisheyeCameraModel,
     OpenCVPinholeCameraModel,
-    RowOffsetStructuredSpinningLidarModel,
 )
 
 
@@ -54,11 +49,6 @@ class CameraModelConverterResult:
     external_distortion: ExternalDistortion
     resolution: tuple[int, int]
     shutter_type: ShutterType
-
-
-@dataclass
-class LidarModelConverterResult:
-    projection: RowOffsetStructuredSpinningLidarProjection
 
 
 class CameraModelConverter:
@@ -199,54 +189,9 @@ class CameraModelConverter:
         return NoExternalDistortion()
 
 
-class LidarModelConverter:
-    """Converts ncore LidarModel to kernel-compatible RowOffsetStructuredSpinningLidarProjection."""
-
-    @staticmethod
-    def convert(
-        lidar_model: LidarModel,
-        device: Optional[torch.device] = None,
-    ) -> LidarModelConverterResult:
-        """Convert ncore LidarModel to kernel-compatible parameter types.
-
-        Args:
-            lidar_model: ncore lidar model to convert
-            device: Target device for tensor parameters (defaults to CPU)
-
-        Returns:
-            RowOffsetStructuredSpinningLidarProjection containing projection parameters
-
-        Raises:
-            TypeError: If lidar model type is not supported
-        """
-
-        if not isinstance(lidar_model, RowOffsetStructuredSpinningLidarModel):
-            raise TypeError(f"Unsupported lidar model type: {type(lidar_model).__name__}")
-
-        return LidarModelConverterResult(
-            projection=RowOffsetStructuredSpinningLidarProjection(
-                n_rows=lidar_model.n_rows,
-                n_columns=lidar_model.n_columns,
-                row_elevations_rad=lidar_model.row_elevations_rad.to(device=device, dtype=torch.float32),
-                column_azimuths_rad=lidar_model.column_azimuths_rad.to(device=device, dtype=torch.float32),
-                fov_horiz_start_rad=lidar_model.fov_horiz.start_rad,
-                fov_horiz_span_rad=lidar_model.fov_horiz.span_rad,
-                fov_vert_start_rad=lidar_model.fov_vert.start_rad,
-                fov_vert_span_rad=lidar_model.fov_vert.span_rad,
-                row_azimuth_offsets_rad=lidar_model.row_azimuth_offsets_rad.to(device=device, dtype=torch.float32)
-                if lidar_model.row_azimuth_offsets_rad is not None
-                else None,
-                spinning_frequency_hz=lidar_model.spinning_frequency_hz,
-                spinning_direction=lidar_model.spinning_direction,
-            )
-        )
-
-
 __all__ = [
     "CameraModelConverter",
     "CameraModelConverterResult",
-    "LidarModelConverter",
-    "LidarModelConverterResult",
     "Pose",
     "DynamicPose",
 ]

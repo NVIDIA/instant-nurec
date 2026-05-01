@@ -51,7 +51,6 @@ from nre.utils.sensors import (
 from nre.utils.sensors.ncore_sensors_converters import (
     CameraModelConverter,
     DynamicPose,
-    LidarModelConverter,
     Pose,
 )
 from nre.utils.types import (
