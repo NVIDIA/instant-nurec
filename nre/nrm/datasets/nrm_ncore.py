@@ -36,7 +36,6 @@ from nre.nrm.datasets.registry import register as register_dataset
 from nre.nrm.datasets.samplers import (
     AdaptiveSequentialFrameBatchSampler,
     FrameBatchSamplerReturn,
-    RigPoses,
     sample_lidar_frame_batch,
 )
 from nre.utils.batch import (
@@ -1008,16 +1007,10 @@ class NCoreNRMDataset(BaseNRMIndexableDataset):
             for lidar_id in self.lidar_ids
         }
 
-        # Sample context frames
         context_frame_batch = frame_batch_sampler.sample_frame_batch(
-            rng,
             sample_idx,
             context_camera_frame_timestamps_us,
             select_intervals,
-            RigPoses(
-                T_rig_worlds=T_rig_worlds_with_timestamps_us[main_loader_key][0],
-                T_rig_world_timestamps_us=T_rig_worlds_with_timestamps_us[main_loader_key][1],
-            ),
         )
         if len(context_frame_batch.sampled_sensor_frame_idxs) == 0:
             # If nothing is sampled (e.g. out of bounds), return 0-sized batch to be concatenated with other batches.

@@ -10,8 +10,6 @@
 
 from __future__ import annotations
 
-import logging
-
 from dataclasses import dataclass
 
 import numpy as np
@@ -22,20 +20,6 @@ from nre.nrm.config.dataset import (
 )
 from nre.nrm.datasets.nrm_base import NRMDataError
 from nre.utils.types import HalfClosedInterval
-
-
-logger = logging.getLogger(__name__)
-
-
-@dataclass(slots=True, kw_only=True)
-class RigPoses:
-    T_rig_worlds: np.ndarray
-    T_rig_world_timestamps_us: np.ndarray
-
-    def __post_init__(self):
-        n_poses = len(self.T_rig_worlds)
-        assert self.T_rig_worlds.shape == (n_poses, 4, 4) and self.T_rig_worlds.dtype in [np.float32, np.float64]
-        assert self.T_rig_world_timestamps_us.shape == (n_poses,) and self.T_rig_world_timestamps_us.dtype == np.uint64
 
 
 def get_closest_frame_index(frame_timestamps_us: np.ndarray, target_timestamp_us: int) -> int:
@@ -103,17 +87,11 @@ class AdaptiveSequentialFrameBatchSampler:
         assert self.n_samples_per_sequence > 0, "n_samples_per_sequence must be positive"
         assert self.max_frame_gap_timestamp_us > 0, "max_frame_gap_timestamp_us must be positive"
 
-    @property
-    def num_samples_per_sequence(self) -> int:
-        return self.n_samples_per_sequence
-
     def sample_frame_batch(
         self,
-        rng: np.random.Generator,
         sample_idx: int,
         camera_frame_timestamps_us: dict[str, np.ndarray],
         time_intervals: list[HalfClosedInterval],
-        rig_poses: RigPoses | None,
     ) -> FrameBatchSamplerReturn:
         assert len(camera_frame_timestamps_us) > 0, "No camera timestamps is provided to the frame batch sampler"
         assert 0 <= sample_idx < self.n_samples_per_sequence, "Sample index out of bounds"
