@@ -9,7 +9,6 @@
 # its affiliates is strictly prohibited.
 
 import functools
-import os
 import random
 import traceback
 
@@ -43,11 +42,6 @@ T = TypeVar("T")
 U = TypeVar("U")
 KT = TypeVar("KT", bound=Hashable)
 VT = TypeVar("VT")
-
-
-def is_env_true(name: str, default: bool) -> bool:
-    """Check if an environment variable is set to a truthy ("True", "true", "TrUE", "1", ...) value."""
-    return os.environ.get(name, "1" if default else "0").lower() in ["1", "true"]
 
 
 def rank_zero_only(fn):

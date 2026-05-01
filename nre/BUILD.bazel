@@ -34,9 +34,6 @@ py_library(
         "//:__pkg__",
         # Add visibility for //apps
     ],
-    deps = [
-        "//nre/utils:pylib_colored_exceptions",
-        "//nre/utils:pylib_misc",
-    ],
+    deps = [],
 )
 

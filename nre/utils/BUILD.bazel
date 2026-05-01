@@ -92,15 +92,6 @@ py_library(
 )
 
 py_library(
-    name = "pylib_colored_exceptions",
-    srcs = [
-        "colored_exceptions.py",
-    ],
-    deps = [
-    ],
-)
-
-py_library(
     name = "pylib_geometry",
     srcs = [
         "geometry.py",
@@ -141,7 +132,6 @@ py_library(
         # Add visibility for //apps/asset_harvester
     ],
     deps = [
-        ":pylib_colored_exceptions",
         ":pylib_geometry",
         ":pylib_misc",
         ":pylib_packed_ops",

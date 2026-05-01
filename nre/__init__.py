@@ -17,13 +17,7 @@
 import logging
 import os
 
-from nre.utils.colored_exceptions import enable_colored_exceptions
-from nre.utils.misc import is_env_true
-
 
 log_level = os.environ.get("LOGLEVEL", "INFO")
 level = getattr(logging, log_level)
 logging.basicConfig(format="[%(asctime)s][%(name)s][%(levelname)s] %(message)s", level=level)
-
-if is_env_true("NRE_ENABLE_COLORED_EXCEPTIONS", True):
-    enable_colored_exceptions()
