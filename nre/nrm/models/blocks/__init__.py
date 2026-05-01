@@ -18,11 +18,9 @@ from nre.nrm.models.blocks.layers import (
     LayerNorm2d,
     LayerScale,
 )
-from nre.nrm.models.blocks.mamba_scan import Mamba2Block
 
 
 __all__ = [
-    "Mamba2Block",
     "SelfAttention",
     "CrossAttention",
     "AttentionBlock",
