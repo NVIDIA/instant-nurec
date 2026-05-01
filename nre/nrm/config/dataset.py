@@ -88,10 +88,6 @@ class BaseNCoreNRMDatasetConfig(BaseConfigSchema):
         default=None,
         description="If specified, will be used as a base path to resolve relative paths in the ncore_json_list_path",
     )
-    ncore_json_paths: Optional[list[str]] = Field(
-        default=None,
-        description="If specified, will be the list of data files to load. Used to quickly run test on smaller number of datapoints.",
-    )
     open_consolidated: bool = Field(default=True)
     camera_max_fov_deg: float = Field(
         default=190.0,
@@ -125,14 +121,6 @@ class BaseNCoreNRMDatasetConfig(BaseConfigSchema):
         description="Map logical lidar ids to ids used inside ncore archives if they are different.",
     )
 
-    def model_post_init(self, __context) -> None:
-        assert self.ncore_json_list_path is not None or self.ncore_json_paths is not None, (
-            "Either ncore_json_list_path or ncore_json_paths must be provided"
-        )
-
-
-class NCoreNRMDatasetConfig(BaseNCoreNRMDatasetConfig):
-    """Standard NCore dataset config (only variant the standalone supports)."""
 
 
 class NRMSplitsConfig(BaseConfigSchema):
@@ -140,4 +128,4 @@ class NRMSplitsConfig(BaseConfigSchema):
     split; pydantic extras="ignore" drops the train/val/test entries that the
     pretrained parsed.yaml still carries."""
 
-    predict: NCoreNRMDatasetConfig | None = Field(default=None, description="Dataset to use in prediction mode")
+    predict: BaseNCoreNRMDatasetConfig | None = Field(default=None, description="Dataset to use in prediction mode")
