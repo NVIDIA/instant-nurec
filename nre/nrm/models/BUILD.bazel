@@ -33,7 +33,6 @@ py_library(
         "base.py",
         "kelvin_model.py",
         "post_processing.py",
-        "tokenizer.py",
     ],
     visibility = DEFAULT_VISIBILITY,
     deps = [
@@ -56,22 +55,5 @@ py_library(
         "//nre/utils:pylib_misc",
         "//nre/utils:pylib_profiling",
         "//nre/utils:pylib_types",
-        "@cosmos_predict1",
-    ],
-)
-
-pytest_test(
-    name = "base_model_test",
-    srcs = ["base_model_test.py"],
-    deps = [
-        ":pylib",
-    ],
-)
-
-pytest_test(
-    name = "tokenizer_test",
-    srcs = ["tokenizer_test.py"],
-    deps = [
-        ":pylib",
     ],
 )
