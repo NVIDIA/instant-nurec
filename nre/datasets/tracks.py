@@ -373,61 +373,6 @@ class CuboidTracks(Tracks):
             )
 
         @staticmethod
-        def freeze(
-            cuboid_tracks: CuboidTracks,
-            min_timestamps_us: torch.Tensor,
-            max_timestamps_us: torch.Tensor,
-            tracks_poses_start: lt.SE3,
-            tracks_poses_end: lt.SE3 | None = None,
-        ) -> CuboidTracks:
-            """
-            Freeze each of the tracks to one pose (optionally two if `tracks_poses_end` is set).
-
-            Inputs:
-            - cuboid_tracks: the input cuboid tracks
-            - min_timestamps_us: Tensor (N_tracks, ) [int64] containing the first timestamp for each track
-            - max_timestamps_us: Tensor (N_tracks, ) [int64] containing the second (and last) timestamp for each track
-            - tracks_poses_start: Start SE3 poses to freeze the tracks to
-            - tracks_poses_end: Optional end SE3 poses to freeze the tracks to
-
-            Returns:
-            - the frozen cuboid tracks
-            """
-
-            assert min_timestamps_us.size(0) == cuboid_tracks.n_tracks, "CuboidTracks: invalid min_timestamps_us size"
-            assert max_timestamps_us.size(0) == cuboid_tracks.n_tracks, "CuboidTracks: invalid max_timestamps_us size"
-            assert tracks_poses_start.shape[0] == cuboid_tracks.n_tracks, (
-                "CuboidTracks: invalid tracks_poses_start size"
-            )
-            if tracks_poses_end is not None:
-                assert tracks_poses_end.shape[0] == cuboid_tracks.n_tracks, (
-                    "CuboidTracks: invalid tracks_poses_end size"
-                )
-            else:
-                tracks_poses_end = tracks_poses_start
-
-            n_poses = torch.full((cuboid_tracks.n_tracks,), 2, dtype=torch.int32, device=cuboid_tracks.device)
-            tracks_timestamps_us = torch.stack((min_timestamps_us, max_timestamps_us), dim=1).view(-1)
-            tracks_poses = lt.stack([tracks_poses_start, tracks_poses_end], dim=1).view((-1,))
-
-            return CuboidTracks(
-                # base tracks part
-                tracks_data=TracksData(
-                    tracks_id=cuboid_tracks.tracks_id,
-                    tracks_packinfo=get_pack_info_from_n(n_poses),
-                    tracks_poses=tracks_poses,
-                    tracks_timestamps_us=tracks_timestamps_us,
-                    tracks_flags=cuboid_tracks.tracks_flags,
-                    max_track_n_poses=2,
-                    tracks_label_class=cuboid_tracks.tracks_label_class,
-                ),
-                # cuboid-tracks-specific part
-                cuboidtracks_data=CuboidTracksData(
-                    cuboids_dims=cuboid_tracks.cuboids_dims,
-                ),
-            )
-
-        @staticmethod
         def concatenate(cuboid_tracks_list: Iterable[CuboidTracks]) -> CuboidTracks:
             """
             Concatenates a list of CuboidTracks instances into a new one
