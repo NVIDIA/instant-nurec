@@ -20,8 +20,6 @@ import pandas as pd
 
 import ncore.data
 import ncore.impl.common.transformations as ncore_transformations
-import ncore.sensors
-import nre.utils.ncore_utils as ncore_utils
 
 from nre.utils.misc import unpack_optional
 from nre.utils.types import HalfClosedInterval
