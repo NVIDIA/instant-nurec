@@ -29,7 +29,6 @@ import torchvision.transforms.functional
 import zarr
 import zarr.storage
 
-from numcodecs import Blosc
 from upath import UPath
 
 import ncore
