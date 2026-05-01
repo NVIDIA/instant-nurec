@@ -24,7 +24,7 @@ from nre.datasets.tracks import CuboidTracks
 from nre.nrm.config.nrm import NRMConfig
 from nre.nrm.models.kelvin_model import KelvinNRM
 from nre.nrm.predict.export_ply import export_ply
-from nre.nrm.predict.primitive_merge import make as make_primitive_merge
+from nre.nrm.predict.primitive_merge import KelvinPrimitiveMerge
 from nre.nrm.primitives.base import BaseNRMPrimitive
 from nre.nrm.systems.base import BaseNRMSystem
 from nre.utils.batch import NRMDataBatch
@@ -82,8 +82,7 @@ class GaussiansNRMSystem(BaseNRMSystem):
 
         # Merge the primitives if enabled
         if self.predict_config.primitive_merge.enabled:
-            primitive_merge = make_primitive_merge(
-                type(primitives_list[0]),
+            primitive_merge = KelvinPrimitiveMerge(
                 self.predict_config.primitive_merge,
                 self.cached_config.model.export_preprocess,
             )

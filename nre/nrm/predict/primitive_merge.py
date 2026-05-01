@@ -12,9 +12,8 @@ from __future__ import annotations
 
 import logging
 
-from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from typing import Generic, Type, cast
+from dataclasses import dataclass
+from typing import cast
 
 import torch  # type: ignore
 
@@ -22,7 +21,6 @@ from ncore.data import ConcreteCameraModelParametersUnion  # type: ignore
 from ncore.sensors import CameraModel  # type: ignore
 from nre.nrm.config.models import PrimitiveExportPreprocessConfig
 from nre.nrm.config.predict import PrimitiveMergeConfig
-from nre.nrm.primitives.base import BaseNRMPrimitive, NRMPrimitiveType
 from nre.nrm.primitives.kelvin_primitive import KelvinDynamicLayer, KelvinNRMPrimitive, KelvinStaticLayer
 from nre.nrm.utils.cubemap import unproject_to_sky_cubemap
 from nre.nrm.utils.trajectory import merge_rig_trajectories, transform_rig_trajectories
@@ -43,13 +41,6 @@ class CameraFrustum:
 
     camera_model: CameraModel
     poses_T_startend: torch.Tensor
-    timestamps_startend_us: torch.Tensor
-    # CPU copy to avoid GPU->CPU sync when calling .item()
-    timestamps_startend_us_cpu: torch.Tensor = field(init=False)
-
-    def __post_init__(self):
-        # Store CPU copy after initialization
-        object.__setattr__(self, "timestamps_startend_us_cpu", self.timestamps_startend_us.cpu())
 
     def in_frustum(self, positions: torch.Tensor) -> torch.Tensor:
         """
@@ -77,11 +68,6 @@ class CameraFrustum:
         """
         camera_center = self.poses_T_startend[1][:3, 3]
         return torch.norm(positions - camera_center, dim=1)
-
-    @property
-    def end_timestamp_us(self) -> int:
-        # Use stored CPU copy to avoid GPU->CPU sync
-        return int(self.timestamps_startend_us_cpu[1].item())
 
 
 
@@ -131,7 +117,6 @@ def build_world_camera_frustums(
                 CameraFrustum(
                     camera_model=CameraModel.from_parameters(camera_model_parameters),
                     poses_T_startend=global_T_sensor,
-                    timestamps_startend_us=rendering_data.timestamps_startend_us[frame_idx],
                 )
             )
         batch_camera_frustums.append(camera_frustums)
@@ -178,9 +163,9 @@ def compute_frustum_ownership_mask(
     return keep_mask
 
 
-class PrimitiveMerge(ABC, Generic[NRMPrimitiveType]):
+class KelvinPrimitiveMerge:
     """
-    Merge primitives from non-overlapping chunks into a single primitive.
+    Merge Kelvin primitives from non-overlapping chunks into a single primitive.
     """
 
     def __init__(
@@ -191,42 +176,22 @@ class PrimitiveMerge(ABC, Generic[NRMPrimitiveType]):
         self.config = config
         self.export_preprocess_config = export_preprocess_config
 
-    @abstractmethod
-    def merge_processed_primitives(
-        self, all_primitives: list[NRMPrimitiveType], batch_rig_transforms: list[torch.Tensor], batch: NRMDataBatch
-    ) -> NRMPrimitiveType:
-        """
-        Merge the processed primitives into a single primitive. Allows to modify all_primitives in place.
-        all_primitives are already transformed by batch_rig_transforms, but batch is not.
-        """
-
-    @abstractmethod
-    def postprocess_merged_primitive(self, merged_primitive: NRMPrimitiveType) -> None:
-        """
-        Postprocess the merged primitive such as voxelization.
-        """
-
     @torch.autocast(device_type="cuda", enabled=False)
     def merge_primitives_and_batch(
         self,
-        primitives_list: list[NRMPrimitiveType],
+        primitives_list: list[KelvinNRMPrimitive],
         batch: NRMDataBatch,
-    ) -> tuple[NRMPrimitiveType, NRMDataBatch]:
+    ) -> tuple[KelvinNRMPrimitive, NRMDataBatch]:
         """
         Merge primitives from non-overlapping chunks into a single primitive.
 
-        Args:
-            chunked_primitives: List of primitive lists from each chunk
-            batch: NRM data batch containing context information
-
-        Returns:
-            A single merged primitive and batch
+        Stage 1 transforms each primitive into the reference frame (first chunk) so they can be
+        concatenated; stage 2 dispatches to ``merge_processed_primitives``; stage 3 stitches the
+        per-chunk batches into a single merged batch.
         """
         assert len(primitives_list) > 0, "No primitives to merge"
         logger.info(f"Merging {len(primitives_list)} chunks ({sum(len(p) for p in primitives_list)} Gaussians)")
 
-        # Stage 1: Transform each primitive into the reference frame (first chunk) so they can be concatenated.
-        # Rigid transform is only needed when merging: per-chunk preprocess does not change frame; merging requires a common frame.
         batch_context_rig: list[RigTrajectories] = unpack_optional(batch.context_rig)
         T_world_ref: torch.Tensor = se3_matrix_inverse(batch_context_rig[0].T_world_base)
         batch_rig_transforms: list[torch.Tensor] = [T_world_ref @ cr.T_world_base for cr in batch_context_rig]
@@ -235,18 +200,12 @@ class PrimitiveMerge(ABC, Generic[NRMPrimitiveType]):
                 batch_rig_transforms[b_idx].to(device=primitive.device(), dtype=torch.float32)
             )
 
-        # Step 2: Merge the processed primitives into a single primitive
         merged_primitive = self.merge_processed_primitives(primitives_list, batch_rig_transforms, batch)
-
-        # Step 3: Postprocess the merged primitive
-        self.postprocess_merged_primitive(merged_primitive)
 
         logger.info(f"Merged {len(primitives_list)} primitives into {repr(merged_primitive)}")
 
-        # Step 4: Merge batch and meta
         if len(batch.context) == 1:
             merged_batch = batch
-
         else:
             merged_context_rig, context_frame_mapping = merge_rig_trajectories(
                 [
@@ -264,10 +223,7 @@ class PrimitiveMerge(ABC, Generic[NRMPrimitiveType]):
             merged_context_batch = DataAndRenderingBatch(
                 data=merged_context_data, rendering=RenderingBatch(camera=merged_context_rendering)
             )
-
-            # process meta data from all the chunks
             merged_meta = None if batch.meta is None else list_of_dicts_to_dict_of_lists(batch.meta, singleton=True)
-
             merged_batch = NRMDataBatch(
                 context=[merged_context_batch],
                 context_rig=[merged_context_rig],
@@ -278,32 +234,6 @@ class PrimitiveMerge(ABC, Generic[NRMPrimitiveType]):
             )
 
         return merged_primitive, merged_batch
-
-
-primitive_mergers: dict[Type[BaseNRMPrimitive], Type[PrimitiveMerge[BaseNRMPrimitive]]] = {}
-
-
-def register(primitive_type: Type[BaseNRMPrimitive]):
-    def decorator(cls):
-        primitive_mergers[primitive_type] = cls
-        return cls
-
-    return decorator
-
-
-def make(
-    primitive_type: Type[BaseNRMPrimitive],
-    config: PrimitiveMergeConfig,
-    export_preprocess_config: PrimitiveExportPreprocessConfig | None = None,
-) -> PrimitiveMerge[BaseNRMPrimitive]:
-    return primitive_mergers[primitive_type](config, export_preprocess_config)
-
-
-@register(KelvinNRMPrimitive)
-class KelvinPrimitiveMerge(PrimitiveMerge[KelvinNRMPrimitive]):
-    """
-    Merge Kelvin primitives from non-overlapping chunks into a single primitive.
-    """
 
     @staticmethod
     def _soften_cubemap_mask(
@@ -476,8 +406,3 @@ class KelvinPrimitiveMerge(PrimitiveMerge[KelvinNRMPrimitive]):
         )
         return merged_primitive
 
-    def postprocess_merged_primitive(self, merged_primitive: KelvinNRMPrimitive) -> None:
-        # Voxelization (config.enable_voxelization=true in NRE) was the only
-        # consumer of KelvinStaticLayer.voxelize; predict pretrained config
-        # pins it to false, so the path was dropped in Phase 1 step 4.3.
-        del merged_primitive
