@@ -23,7 +23,6 @@ logger = logging.getLogger(__name__)
 
 
 def _seed_everything(seed: int) -> None:
-    os.environ["PL_GLOBAL_SEED"] = str(seed)
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)

@@ -9,16 +9,12 @@
 # its affiliates is strictly prohibited.
 
 from nre.nrm.datasets.datamodule import NRMDataModule
-from nre.nrm.datasets.nrm_base import (
-    BaseNRMDataset,
-    BaseNRMIndexableDataset,
-)
+from nre.nrm.datasets.nrm_base import BaseNRMIndexableDataset
 from nre.nrm.datasets.nrm_ncore import NCoreNRMDataset
 
 
 __all__ = [
     "NRMDataModule",
-    "BaseNRMDataset",
     "BaseNRMIndexableDataset",
     "NCoreNRMDataset",
 ]

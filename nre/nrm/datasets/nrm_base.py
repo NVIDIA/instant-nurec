@@ -10,13 +10,10 @@
 
 from __future__ import annotations
 
-import hashlib
 import logging
-import os
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from typing import Literal, Sized, Tuple
+from typing import Sized, Tuple
 
 import numpy as np
 import torch
@@ -24,9 +21,7 @@ import torch.nn.functional as F
 
 import ncore.data
 
-from nre.nrm.config.dataset import (
-    CameraSubsamplerConfig,
-)
+from nre.nrm.config.dataset import CameraSubsamplerConfig
 from nre.utils.batch import NRMDataBatch, RectSubsampled
 
 
@@ -131,10 +126,13 @@ class CameraSubsampler:
         ]
         return frame_data if batch_dim else frame_data[..., 0]
 
+
 class NRMDataError(Exception):
     """
     Exception raised when an error occurs while loading NRM data.
-    This is used to handle errors in a way that allows the dataset to continue loading other samples.
+    Predict-only standalone propagates this directly: the NRE retry-on-error
+    loop made sense for training over millions of samples but not for a
+    single inference run where a bad sample should fail loud.
     """
 
     def __init__(self, message: str = "An error occurred while loading NRM data"):
@@ -142,61 +140,12 @@ class NRMDataError(Exception):
         self.message = message
 
 
-class BaseNRMDataset(torch.utils.data.Dataset[NRMDataBatch], ABC):
-    """Base class for the NRM dataset; provides per-batch deterministic RNGs."""
-
-    def _get_rng(self, batch_idx: int) -> np.random.Generator:
-        """Hash (PL_GLOBAL_SEED, batch_idx) to get a per-batch deterministic generator."""
-        assert "PL_GLOBAL_SEED" in os.environ, (
-            "PL_GLOBAL_SEED environment variable is not set."
-        )
-        global_seed: int = int(os.environ["PL_GLOBAL_SEED"])
-        digest = hashlib.sha256(f"{batch_idx}_{global_seed}".encode()).digest()
-        return np.random.default_rng(seed=int.from_bytes(digest[:8], "big"))
-
-
-class BaseNRMIndexableDataset(BaseNRMDataset, Sized):
-    """
-    Base class for the NRM dataset where the dataset is indexable via __getitem__.
-    """
+class BaseNRMIndexableDataset(torch.utils.data.Dataset[NRMDataBatch], Sized, ABC):
+    """Indexable NRM dataset; predict pipeline calls __getitem__ once per
+    sample and surfaces any failure directly."""
 
     def __getitem__(self, batch_idx: int) -> NRMDataBatch:
-        current_batch_idx = batch_idx
-        failed_batch_indices: list[int] = []
-
-        # We allow up to 10 attempts.
-        while len(failed_batch_indices) < 10:
-            rng = self._get_rng(current_batch_idx)
-            try:
-                return self.getitem_allow_exceptions(current_batch_idx)
-            except Exception as e:
-                failed_batch_indices.append(current_batch_idx)
-                # Iterate until we find a new valid batch index
-                while (new_batch_idx := rng.integers(0, len(self))) in failed_batch_indices:
-                    pass
-
-                if isinstance(e, NRMDataError):
-                    # Don't print the full exception traceback because this error is known.
-                    logger.warning(
-                        f"Known NRMDataError occurred while getting item {current_batch_idx} in {self.__class__.__name__}. "
-                        f"Reason: {e.message}. Switching to a random index {new_batch_idx}."
-                    )
-                else:
-                    logger.error(
-                        f"Unexpected error occurred while getting item {current_batch_idx} in {self.__class__.__name__}. "
-                        f"Switching to a random index {new_batch_idx}."
-                    )
-                    # Print the full exception traceback because this is unexpected.
-                    logger.exception(e)
-                    # Still allow continue execution since we don't want training to fail due to outliers.
-
-                current_batch_idx = new_batch_idx
-
-        # This definitely means that the dataset is broken, and we cannot recover.
-        raise NRMDataError(
-            f"{self.__class__.__name__} tried out {len(failed_batch_indices)} attempts = {failed_batch_indices} and none of them worked. "
-            f"Please check the dataset integrity and ensure that the data is not corrupted."
-        )
+        return self.getitem_allow_exceptions(batch_idx)
 
     @abstractmethod
     def __len__(self) -> int:
