@@ -8,8 +8,6 @@
 # without an express license agreement from NVIDIA CORPORATION or
 # its affiliates is strictly prohibited.
 
-from typing import Literal
-
 import numpy as np
 import torch
 
@@ -19,76 +17,35 @@ from ncore.impl.sensors.camera import CameraModel
 
 def to_simple_pinhole_model_parameters(
     camera_model_parameters: ConcreteCameraModelParametersUnion,
-    method: Literal["corner", "horizontal", "vertical"],
-    reduce: Literal["min", "max", "mean"],
-    percentile: float = 1.0,
 ) -> OpenCVPinholeCameraModelParameters:
-    """
-    Converts any camera model parameters to simple pinhole model parameters (equal focal lengths, principal point at image center).
-    The method works by computing the rays either at the corners or the horizontal/vertical directions of the image (specified by `method`),
-      and then reduce the fov of the rays (specified by `reduce`). The reduced fov value is then used to determine the fov value at `method` direction
-      in the final simple pinhole model parameters.
+    """Convert any camera model parameters to simple pinhole model parameters
+    (equal focal lengths, principal point at image center).
 
-    Args:
-        camera_model_parameters: The camera model parameters to convert.
-        method: The method to use to compute the rays.
-        reduce: The method to use to reduce the fov of the rays.
-        percentile: The percentile of the pixels to determine the mapping (use a small value to approximate 1st-order gradient as implemented in nre.viewer.viewpoint).
-    Returns:
-        The simple pinhole model parameters.
+    Predict-only standalone always uses the `method="horizontal"`, `reduce="min"`,
+    `percentile=1.0` configuration that the encoder calls with; the
+    `corner`/`vertical` methods, the `max`/`mean` reductions, and the
+    sub-1.0 percentile path were all dead.
+
+    Computes camera rays at the horizontal image edges, takes the smallest
+    angle off the optical axis, and uses that to set the focal length.
     """
     camera_model = CameraModel.from_parameters(camera_model_parameters, device="cpu")
     original_resolution = camera_model_parameters.resolution.astype(np.int64)
     original_principal_point = camera_model_parameters.principal_point
     pinhole_principal_point = camera_model_parameters.resolution.astype(np.float32) / 2.0
 
-    match method:
-        case "corner":
-            image_points = torch.tensor(
-                [
-                    [0, 0],
-                    [0, original_resolution[1]],
-                    [original_resolution[0], 0],
-                    [original_resolution[0], original_resolution[1]],
-                ]
-            )
-            pinhole_pixel_distance = np.linalg.norm(pinhole_principal_point).item()
-        case "horizontal":
-            image_points = torch.tensor(
-                [
-                    [0, original_principal_point[1]],
-                    [original_resolution[0], original_principal_point[1]],
-                ]
-            )
-            pinhole_pixel_distance = pinhole_principal_point[0].item()
-        case "vertical":
-            image_points = torch.tensor(
-                [
-                    [original_principal_point[0], 0],
-                    [original_principal_point[0], original_resolution[1]],
-                ]
-            )
-            pinhole_pixel_distance = pinhole_principal_point[1].item()
-        case _:
-            raise ValueError(f"Invalid method: {method}")
-
-    if percentile != 1.0:
-        center_torch = torch.from_numpy(original_principal_point)
-        image_points = (image_points.float() - center_torch) * percentile + center_torch
-        pinhole_pixel_distance *= percentile
+    image_points = torch.tensor(
+        [
+            [0, original_principal_point[1]],
+            [original_resolution[0], original_principal_point[1]],
+        ]
+    )
+    pinhole_pixel_distance = pinhole_principal_point[0].item()
 
     camera_rays = camera_model.image_points_to_camera_rays(image_points.float())
     camera_rays = torch.nn.functional.normalize(camera_rays, dim=-1)
     angles = torch.arccos(camera_rays[:, 2])
-    match reduce:
-        case "min":
-            fov = torch.min(angles).item()
-        case "max":
-            fov = torch.max(angles).item()
-        case "mean":
-            fov = torch.mean(angles).item()
-        case _:
-            raise ValueError(f"Invalid reduce: {reduce}")
+    fov = torch.min(angles).item()
 
     focal = pinhole_pixel_distance / np.tan(fov)
     return OpenCVPinholeCameraModelParameters(
@@ -101,5 +58,3 @@ def to_simple_pinhole_model_parameters(
         tangential_coeffs=np.zeros(2, dtype=np.float32),
         thin_prism_coeffs=np.zeros(4, dtype=np.float32),
     )
-
-

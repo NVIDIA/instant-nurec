@@ -130,9 +130,6 @@ class KelvinDAv3Encoder(KelvinEncoderBase):
             pinhole_parameters = [
                 to_simple_pinhole_model_parameters(
                     cast(ConcreteCameraModelParametersUnion, rendering.sensor_model_parameters[vidx]),
-                    method="horizontal",
-                    reduce="min",
-                    percentile=1.0,
                 )
                 for vidx in range(num_imgs)
             ]
