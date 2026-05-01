@@ -19,7 +19,6 @@ import torch  # type: ignore
 
 from ncore.data import ConcreteCameraModelParametersUnion  # type: ignore
 from ncore.sensors import CameraModel  # type: ignore
-from nre.nrm.config.models import PrimitiveExportPreprocessConfig
 from nre.nrm.config.predict import PrimitiveMergeConfig
 from nre.nrm.primitives.kelvin_primitive import KelvinDynamicLayer, KelvinNRMPrimitive, KelvinStaticLayer
 from nre.nrm.utils.cubemap import unproject_to_sky_cubemap
@@ -168,13 +167,8 @@ class KelvinPrimitiveMerge:
     Merge Kelvin primitives from non-overlapping chunks into a single primitive.
     """
 
-    def __init__(
-        self,
-        config: PrimitiveMergeConfig,
-        export_preprocess_config: PrimitiveExportPreprocessConfig | None = None,
-    ):
+    def __init__(self, config: PrimitiveMergeConfig):
         self.config = config
-        self.export_preprocess_config = export_preprocess_config
 
     @torch.autocast(device_type="cuda", enabled=False)
     def merge_primitives_and_batch(

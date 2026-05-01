@@ -21,10 +21,6 @@ class PrimitiveExportPreprocessConfig(BaseConfigSchema):
     Used by preprocess_for_export(); not part of merge logic.
     """
 
-    enabled: bool = Field(
-        default=True,
-        description="Whether to run per-chunk preprocess (density/sky/road filtering) before export or merge.",
-    )
     density_prune_threshold: float = Field(
         default=0.01, description="Density threshold for pruning Gaussians in each chunk."
     )

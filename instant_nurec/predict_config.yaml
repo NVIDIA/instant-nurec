@@ -89,7 +89,6 @@ model:
     scale_max: 0.045
     scale_min: 0.0
   export_preprocess:
-    enabled: true
     density_prune_threshold: 0.01
 predict:
   chunk_size: 1

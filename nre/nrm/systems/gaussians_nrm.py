@@ -82,13 +82,12 @@ class GaussiansNRMSystem(nn.Module):
         while inner_batch_idx < len(batch):
             batch_chunk = batch[inner_batch_idx : inner_batch_idx + self.predict_config.chunk_size]
             primitives_chunk_list = self.forward(batch_chunk)
-            if self.export_preprocess.enabled:
-                context_rig_list = batch_chunk.context_rig if batch_chunk.context_rig is not None else None
-                for i in range(len(primitives_chunk_list)):
-                    context_rig_i = context_rig_list[i] if context_rig_list is not None else None
-                    primitives_chunk_list[i] = primitives_chunk_list[i].preprocess_for_export(
-                        batch_chunk.context[i], self.export_preprocess, context_rig=context_rig_i
-                    )
+            context_rig_list = batch_chunk.context_rig if batch_chunk.context_rig is not None else None
+            for i in range(len(primitives_chunk_list)):
+                context_rig_i = context_rig_list[i] if context_rig_list is not None else None
+                primitives_chunk_list[i] = primitives_chunk_list[i].preprocess_for_export(
+                    batch_chunk.context[i], self.export_preprocess, context_rig=context_rig_i
+                )
             primitives_list.extend(primitives_chunk_list)
             inner_batch_idx += self.predict_config.chunk_size
             progress_bar.update(self.predict_config.chunk_size)
@@ -96,10 +95,7 @@ class GaussiansNRMSystem(nn.Module):
 
         # Merge the primitives if enabled
         if self.predict_config.primitive_merge.enabled:
-            primitive_merge = KelvinPrimitiveMerge(
-                self.predict_config.primitive_merge,
-                self.export_preprocess,
-            )
+            primitive_merge = KelvinPrimitiveMerge(self.predict_config.primitive_merge)
             merged_primitive, batch = primitive_merge.merge_primitives_and_batch(primitives_list, batch)
             primitives_list = [merged_primitive]
 
