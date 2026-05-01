@@ -185,17 +185,11 @@ class KelvinDynamicLayer(KelvinLayer):
         - keyframe_positions:      Timed positions of the Gaussians (x, y, z)                         [n_gaussians, T, 3]
         - keyframe_timestamps_us:  Timestamps of each keyframe position (must be sorted)               [n_gaussians, T]
     Note that each layer can either represent a single actor or multiple actors.
-    The Gaussian will additionally fade in/out in the first and last segments if falloff is True.
     """
 
     max_densities: torch.Tensor
     keyframe_positions: torch.Tensor
     keyframe_timestamps_us: torch.Tensor
-    falloff: bool = True
-
-    # Exponential factor for generalized gaussian
-    # https://www.desmos.com/calculator/u1cbfaqj7g
-    FALLOFF_GAUSSIAN_EXP = 10.0
 
     def __post_init__(self):
         super().__post_init__()
@@ -246,46 +240,7 @@ class KelvinDynamicLayer(KelvinLayer):
             max_densities=torch.cat([layer.max_densities for layer in layers], dim=0),
             keyframe_positions=torch.cat([layer.keyframe_positions for layer in layers], dim=0),
             keyframe_timestamps_us=torch.cat([layer.keyframe_timestamps_us for layer in layers], dim=0),
-            falloff=layers[0].falloff,
             **asdict(KelvinLayer._concatenate_base(layers)),
-        )
-
-    def interpolate(self, timestamp_us: int) -> KelvinStaticLayer:
-        assert timestamp_us >= 0, "Timestamp must be non-negative"
-
-        # Obtain interpolation alpha (for edge segments alpha can be <0 or >1)
-        query_timestamps = torch.tensor([timestamp_us], device=self.device())
-        query_timestamps = query_timestamps.expand(len(self))[..., None]
-        inds = torch.searchsorted(self.keyframe_timestamps_us, query_timestamps).clamp(1, self.n_keyframes - 1)
-        left_timestamps = torch.gather(self.keyframe_timestamps_us, 1, inds - 1)
-        right_timestamps = torch.gather(self.keyframe_timestamps_us, 1, inds)
-        alpha = (query_timestamps - left_timestamps) / (right_timestamps - left_timestamps)
-
-        # Interpolate positions
-        left_positions = torch.gather(self.keyframe_positions, 1, (inds - 1).expand(-1, 3)[:, None])[:, 0]
-        right_positions = torch.gather(self.keyframe_positions, 1, inds.expand(-1, 3)[:, None])[:, 0]
-        positions = torch.lerp(left_positions, right_positions, alpha)
-
-        # Obtain densities
-        densities = self.max_densities
-        if self.falloff:
-            # Falloffs are only applied on edge segments.
-            leftmost_inds = torch.where(inds == 1)[0]
-            rightmost_inds = torch.where(inds == self.n_keyframes - 1)[0]
-            falloff_factor = torch.ones_like(densities)
-            # The *= operator is useful when we only have 1 segment.
-            falloff_factor[leftmost_inds] *= 1 - torch.exp(
-                -((1 + torch.clamp(alpha[leftmost_inds], min=-1.0)) ** self.FALLOFF_GAUSSIAN_EXP)
-            )
-            falloff_factor[rightmost_inds] *= torch.exp(-(alpha[rightmost_inds] ** self.FALLOFF_GAUSSIAN_EXP))
-            densities = densities * falloff_factor
-
-        return KelvinStaticLayer(
-            positions=positions,
-            densities=densities,
-            rotations=self.rotations,
-            scales=self.scales,
-            rgb=self.rgb,
         )
 
 
