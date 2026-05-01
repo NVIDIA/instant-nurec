@@ -13,30 +13,20 @@ from __future__ import annotations
 from typing import (
     Any,
     Callable,
-    ClassVar,
     List,
-    Literal,
     Optional,
     OrderedDict,
-    Protocol,
-    Sequence,
     TypeAlias,
     TypeVar,
-    Union,
-    runtime_checkable,
 )
 
 
 try:
-    # Python 3.11+ provides dataclass_transform and Self in standard library
-    from typing import Self, dataclass_transform
+    from typing import Self
 except ImportError:
-    # Fall-back to importing dataclass_transform and Self from typing extensions
-    # for older toolchains
-    from typing_extensions import Self, dataclass_transform
+    from typing_extensions import Self
 
-from collections import defaultdict
-from dataclasses import asdict, dataclass, field, replace
+from dataclasses import dataclass, field, replace
 from enum import IntEnum, IntFlag, auto
 
 import dataclasses_json
@@ -56,14 +46,7 @@ from nre.utils.fields import (
     field_numpy_array,
     field_torch_tensor,
 )
-from nre.utils.misc import (
-    assert_same_type,
-    collate_fn,
-    dataclass_items,
-    dataclass_keys,
-    flatten_list,
-    unpack_optional,
-)
+from nre.utils.misc import unpack_optional
 
 M = TypeVar("M", bound=torch.nn.Module)
 # ModuleRef is an annotation for a getter of torch Modules. It is used when we want to pass a module
@@ -99,187 +82,6 @@ class HalfClosedInterval:
 
 
 
-@runtime_checkable
-class Chunkable(Protocol):
-    """Marks classes as chunkable"""
-
-    def __getitem__(self: Chunkable, key: Any) -> Any:
-        pass
-
-
-@dataclass_transform(
-    # Note that these `*_default` parameters are for static type hinting only, and actual runtime-
-    # behavior is adapted in the body below
-    eq_default=False,
-    kw_only_default=True,
-)
-def chunkable_dataclass_decorator(cls=None, eq: Literal[False] = False, **kwargs: Any):
-    """Custom decorator for all chunkable dataclasses, which have the restriction to not define their own __eq__ functions"""
-    assert eq == False, "Chunkable dataclasses are not allowed to define their own __eq__ function"
-    kwargs["eq"] = False
-    return dataclass(cls, **kwargs)
-
-
-@dataclass
-class TorchChunkable(Chunkable):
-    def _getitem_basedict(self, key: torch.Tensor | slice | int) -> dict[str, Any]:
-        return {k: v[key] if isinstance(v, (torch.Tensor, TorchChunkable)) else v for k, v in dataclass_items(self)}
-
-    def __getitem__(self, key: torch.Tensor | slice | int) -> Self:
-        return type(self)(**self._getitem_basedict(key))
-
-    def __setitem__(self, key: torch.Tensor | slice | int, val: Any) -> None:
-        for _, v in dataclass_items(self):
-            if isinstance(v, (torch.Tensor, TorchChunkable)):
-                v[key] = val
-
-    def __eq__(self, other) -> bool:
-        if isinstance(other, TorchChunkable):
-            for k, v in dataclass_items(self):
-                if isinstance(v, torch.Tensor):
-                    if not isinstance(other_tensor := getattr(other, k), torch.Tensor) or not torch.equal(
-                        v, other_tensor
-                    ):
-                        return False
-                else:
-                    if v != getattr(other, k):
-                        return False
-            return True
-
-        return False
-
-    def __ne__(self, other) -> bool:
-        return not self.__eq__(other)
-
-    @classmethod
-    def _collate_fn_basedict(
-        cls,
-        item_or_seq: Union[TorchChunkable, Sequence[TorchChunkable]],
-        device: torch.device = torch.device("cpu"),
-        unsqueeze_if_zero_dim: bool = True,
-        allow_partial_none: bool = True,
-    ) -> dict[str, Any]:
-        if isinstance(item_or_seq, TorchChunkable):
-            return asdict(item_or_seq)
-
-        assert isinstance(item_or_seq[0], cls), f"{cls.__name__} got invalid item type {type(item_or_seq[0])}"
-        assert len(item_or_seq), f"Sequence of {cls.__name__} is empty"
-        dict_of_lst = {k: [getattr(v, k) for v in item_or_seq] for k in dataclass_keys(cls)}
-
-        def _collate_vals(vals: list[Any], k: str) -> Any:
-            # Flatten the lists in case we are collating a single TorchChunkable with one that was collated before
-            vals = flatten_list(vals)
-            if (n_nones := sum([v is None for v in vals])) == len(vals):
-                return None
-            elif n_nones > 0:
-                assert allow_partial_none, (
-                    "TorchChunkable: set to not allowed: some of the item being None and some not"
-                )
-
-            if len(tensor_vals := [v for v in vals if isinstance(v, torch.Tensor)]):
-                if unsqueeze_if_zero_dim:
-                    tensor_vals = [v.unsqueeze(0) if v.dim() == 0 else v for v in tensor_vals]
-
-                # Assert that all elements are of the same type
-                assert_same_type(tensor_vals)
-
-                return torch.cat([v.to(device, non_blocking=True) for v in tensor_vals], dim=0)
-            elif len(chunkable_vals := [v for v in vals if isinstance(v, TorchChunkable)]):
-                # Assert that all elements are of the same type
-                assert_same_type(chunkable_vals)
-
-                return type(chunkable_vals[0]).collate_fn(
-                    chunkable_vals, device=device, unsqueeze_if_zero_dim=unsqueeze_if_zero_dim
-                )
-            else:
-                # Assert that all elements are of the same type
-                assert_same_type(vals)
-                return collate_fn(vals, target_device=device, name_hint=k, return_list_if_unknown=True)
-
-        return {k: _collate_vals(v, k) for k, v in dict_of_lst.items()}
-
-    @classmethod
-    def collate_fn(
-        cls,
-        item_or_seq: Union[TorchChunkable, Sequence[TorchChunkable]],
-        device: torch.device,
-        unsqueeze_if_zero_dim: bool = True,
-    ) -> Self:
-        if isinstance(item_or_seq, cls):
-            return item_or_seq
-
-        return cls(**cls._collate_fn_basedict(item_or_seq, device=device, unsqueeze_if_zero_dim=unsqueeze_if_zero_dim))
-
-    @classmethod
-    def concatenate(cls, seq: Sequence[TorchChunkable], dim: int = 0) -> Self:
-        assert isinstance(seq[0], cls), f"{cls.__name__} got invalid item type {type(seq[0])}"
-        assert len(seq), f"Sequence of {cls.__name__} is empty"
-        dict_of_lst = {k: [getattr(v, k) for v in seq] for k in dataclass_keys(cls)}
-
-        def _concat_vals(vals: list[Any]) -> Any:
-            v0 = vals[0]
-            if isinstance(v0, torch.Tensor):
-                return torch.cat(vals, dim=dim)
-            elif isinstance(v0, TorchChunkable):
-                return type(v0).concatenate(vals, dim=dim)
-            elif v0 is None:
-                return None
-            else:
-                return vals
-
-        return cls(**{k: _concat_vals(v) for k, v in dict_of_lst.items()})
-
-    @classmethod
-    def stack(cls, seq: Sequence[TorchChunkable], dim: int = 0) -> Self:
-        assert isinstance(seq[0], cls), f"{cls.__name__} got invalid item type {type(seq[0])}"
-        assert len(seq), f"Sequence of {cls.__name__} is empty"
-        dict_of_lst = {k: [getattr(v, k) for v in seq] for k in dataclass_keys(cls)}
-
-        def _stack_vals(vals: list[Any]) -> Any:
-            v0 = vals[0]
-            if isinstance(v0, torch.Tensor):
-                return torch.stack(vals, dim=dim)
-            elif isinstance(v0, TorchChunkable):
-                return type(v0).stack(vals, dim=dim)
-            elif v0 is None:
-                return None
-            else:
-                return vals
-
-        return cls(**{k: _stack_vals(v) for k, v in dict_of_lst.items()})
-
-    def apply(
-        self,
-        fn: Callable[
-            [
-                torch.Tensor | TorchChunkable,
-            ],
-            torch.Tensor | TorchChunkable,
-        ],
-    ) -> Self:
-        return type(self)(
-            **{k: fn(v) if isinstance(v, (torch.Tensor, TorchChunkable)) else v for k, v in dataclass_items(self)}
-        )
-
-    def to(self, *args, **kwargs) -> Self:
-        with torch.cuda.nvtx.range("TorchChunkable_to", color="red"):
-            return self.apply(lambda t: t.to(*args, **kwargs))
-
-    def to_device(self, device: torch.device) -> Self:
-        return self.to(device)
-
-    def detach(self) -> Self:
-        return self.apply(lambda t: t.detach())
-
-    def clone(self) -> Self:
-        return self.apply(lambda t: t.clone())
-
-    def gather(self, dim: int, index: torch.Tensor) -> Self:
-        return self.apply(lambda t: t.gather(dim, index))
-
-
-
-
 class RayFlags(IntFlag):
     """Bitmask flags of per-ray properties (note: limited to 32 variants)"""
 
@@ -302,147 +104,6 @@ class RayFlags(IntFlag):
 
     DIFIXED = auto()  # set if the ray label has been processed by the Difix model (via TrainingDifixController)
     SYNTHETIC = auto()  # set if the ray is synthesized by e.g. Gen3C
-
-
-@chunkable_dataclass_decorator
-class ExtraSignal(TorchChunkable):
-    """
-    Contains all other ray-renderable signals besides [opacity, distance, radiance, transmittance] as in `AlphaCompositing`.
-        Each potential field stores the sample-wise data
-        Each potential field stores the ray-wise data, as in:
-            - VolumeRenderingReturn.extra_ray_signals
-    Contains:
-        - dinov2_feats:     DINOv2 features [float]     (n_samples or n_rays, 64)        [float32]
-        - dinov2_mask:      DINOv2 mask [bool]          (n_rays)                         [bool]
-        - semantic: semantic labels                     (n_samples or n_rays, 64)        [float32]
-            inferred for camera rays/pixels using a pretrained semantic seg network
-        - semantic_logits:  semantic logits             (n_samples or n_rays, n_classes) [float32]
-        - normals:  scene-space surface normals         (n_samples or n_rays, 3)         [float32]
-            For sample-wise data, this represents the normalized gradients of scalar geometry (density or SDF)
-            For ray-wise data, this represents the surface normals of the ray-hit surface element
-        - intensity:  intensity for Lidar simulation    (n_samples or n_rays)            [float32]
-        - raydrop:  raydrop for Lidar simulation        (n_samples or n_rays)            [float32]
-            For sample-wise data, this represents the raydrop possibility of sample
-            For ray-wise data, this represents the possibility be dropped of this ray
-            Both probabilities range from [0, 1].
-        - rgb_background: rgb originating from background model (n_rays, 3)              [float32]
-            The foreground opacity is not substracted from the rgb
-        - rgb_before_post_processing: rgb before applying (n_rays, 3)                    [float32]
-          post-processing
-        - velocity: velocity vector (also known as scene flow) of the point
-            Unit is meters per second (mps)              (n_rays, 3)                     [float32]
-    """
-
-    normals: Optional[torch.Tensor] = None
-    intensity: Optional[torch.Tensor] = None
-    dinov2_feats: Optional[torch.Tensor] = None
-    dinov2_mask: Optional[torch.Tensor] = None
-    semantic: Optional[torch.Tensor] = None
-    semantic_logits: Optional[torch.Tensor] = None
-    raydrop: Optional[torch.Tensor] = None
-    rgb_background: Optional[torch.Tensor] = None
-    rgb_before_post_processing: Optional[torch.Tensor] = None
-    velocity: Optional[torch.Tensor] = None
-
-    def extend(self, other: ExtraSignal) -> None:
-        for k, v in dataclass_items(self):
-            if (other_v := getattr(other, k, None)) is None:
-                continue
-            assert v is None or v is other_v, f"Got conflict values for field {k}"
-            setattr(self, k, other_v)
-
-    def to_tuple(self) -> tuple[torch.Tensor | None, ...]:
-        """Return a tuple of all items in the class, useful when the class is used as checkpoint output."""
-        return tuple(v for _, v in dataclass_items(self))
-
-    @classmethod
-    def from_tuple(cls, tuple: tuple[torch.Tensor | None, ...]) -> ExtraSignal:
-        """Create an ExtraSignal from a tuple, useful when the class is used as checkpoint input."""
-        return cls(**dict(zip(dataclass_keys(cls), tuple)))
-
-    @classmethod
-    def from_packed_tensor(
-        cls,
-        extra_signal_tensor: torch.Tensor,
-        extra_signal_infos: tuple[list[str], list[int], list[Callable]],
-    ) -> ExtraSignal:
-        extra_signals_names = extra_signal_infos[0]
-        extra_signals_dims = extra_signal_infos[1]
-        extra_signals_activations = extra_signal_infos[2]
-
-        assert (
-            sum(extra_signals_dims) == extra_signal_tensor.shape[-1]
-            and len(extra_signals_names) == len(extra_signals_dims)
-            and len(extra_signals_names) == len(extra_signals_activations)
-        ), f"Incorrect extra_signal_infos: {extra_signal_infos}, {extra_signal_tensor.shape[-1]}"
-
-        extra_signals_tensors = torch.split(extra_signal_tensor, extra_signals_dims, dim=-1)
-
-        extra_signal = cls()
-        for i in range(len(extra_signals_names)):
-            setattr(extra_signal, extra_signals_names[i], extra_signals_activations[i](extra_signals_tensors[i]))
-
-        return extra_signal
-
-
-@chunkable_dataclass_decorator(slots=False, kw_only=True)
-@dataclass(slots=True, kw_only=True)
-class GaussiansRenderReturn(TorchChunkable):
-    """
-    Return of the rendering of the gaussians
-    """
-
-    rgb: Optional[torch.Tensor] = None
-    opacity: torch.Tensor
-    distance: torch.Tensor
-    normal: Optional[torch.Tensor] = None
-    extra_ray_signals: Optional[ExtraSignal] = None
-    visibility: Optional[torch.Tensor] = None
-    cumulated_weights: Optional[torch.Tensor] = None
-
-    # Per-Gaussian scene-level fields (NOT per-ray). These are excluded from
-    # per-ray indexing in _getitem_basedict to avoid shape mismatches.
-    _SCENE_LEVEL_FIELDS: ClassVar[frozenset[str]] = frozenset({"visibility", "cumulated_weights"})
-
-    def _getitem_basedict(self, key: torch.Tensor | slice | int) -> dict[str, Any]:
-        result: dict[str, Any] = {}
-        for k, v in dataclass_items(self):
-            if k in self._SCENE_LEVEL_FIELDS:
-                result[k] = None
-            elif isinstance(v, (torch.Tensor, TorchChunkable)):
-                result[k] = v[key]
-            else:
-                result[k] = v
-        return result
-
-    def to_tuple(self) -> tuple[torch.Tensor | None, ...]:
-        """Return a tuple of all items in the class, useful when the class is used as checkpoint output."""
-        return (self.rgb, self.opacity, self.distance, self.normal) + (
-            self.extra_ray_signals.to_tuple() if self.extra_ray_signals is not None else ()
-        )
-
-    @classmethod
-    def from_tuple(cls, tuple: tuple[torch.Tensor | None, ...]) -> GaussiansRenderReturn:
-        """Create an GaussiansRenderReturn from a tuple, useful when the class is used as checkpoint input."""
-        return cls(
-            rgb=unpack_optional(tuple[0]),
-            opacity=unpack_optional(tuple[1]),
-            distance=unpack_optional(tuple[2]),
-            normal=tuple[3],
-            extra_ray_signals=ExtraSignal.from_tuple(tuple[4:]) if len(tuple) > 4 else None,
-        )
-
-
-@dataclass(slots=True, kw_only=True)
-class GaussiansCompositeReturn:
-    """
-    Return of the GaussianComposite model
-    """
-
-    rendered_cam: Optional[GaussiansRenderReturn] = None
-    rendered_lidar: Optional[GaussiansRenderReturn] = None
-    deform_smoothness: Optional[torch.Tensor] = None
-    deform_smoothness_mask: Optional[torch.Tensor] = None
 
 
 @dataclass(slots=True, kw_only=True)
