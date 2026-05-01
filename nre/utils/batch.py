@@ -27,18 +27,13 @@ from libs.sensors.kernels.cameras import image_points_to_world_rays_shutter_pose
 from ncore.data import (
     ConcreteCameraModelParametersUnion,
     ConcreteLidarModelParametersUnion,
-    FThetaCameraModelParameters,
-    OpenCVFisheyeCameraModelParameters,
-    OpenCVPinholeCameraModelParameters,
 )
 from ncore.impl.common.transformations import PoseInterpolator
 from ncore.sensors import (
     CameraModel,
     FThetaCameraModel,
-    LidarModel,
     OpenCVFisheyeCameraModel,
     OpenCVPinholeCameraModel,
-    RowOffsetStructuredSpinningLidarModel,
 )
 from nre.utils.geometry import tquat_to_se3_matrix
 from nre.utils.misc import assert_same_type, collate_fn, to_torch, unpack_optional
@@ -61,7 +56,6 @@ from nre.utils.types import (
 
 
 ConcreteCameraModelsUnion: TypeAlias = FThetaCameraModel | OpenCVFisheyeCameraModel | OpenCVPinholeCameraModel
-ConcreteLidarModelsUnion: TypeAlias = RowOffsetStructuredSpinningLidarModel
 ConcreteSensorModelParametersUnion: TypeAlias = ConcreteCameraModelParametersUnion | ConcreteLidarModelParametersUnion
 
 
@@ -102,26 +96,6 @@ class RectSubsampled(RectSubsampledSensor):
         if not isinstance(other, RectSubsampled):
             return False
         return self.to_json() == other.to_json()
-
-    def coordinates_in_original_sensor(self, normalized: bool, device: torch.device | str = "cpu") -> torch.Tensor:
-        """Create normalized coordinates for the region.
-
-        If normalized is True, the coordinates are normalized to the range [0, 1]. I.E. dividing by (original_width - 1, original_height - 1).
-
-        Return [height, width, 2] torch.Tensor[float32]
-        """
-        resized_width = round(self.original_width / self.subsample_factor)
-        resized_factor_x = self.original_width / resized_width
-        resized_height = round(self.original_height / self.subsample_factor)
-        resized_factor_y = self.original_height / resized_height
-
-        x = torch.arange(self.i, self.i + self.width, device=device) * resized_factor_x
-        y = torch.arange(self.j, self.j + self.height, device=device) * resized_factor_y
-        camera_pixels_x, camera_pixels_y = torch.meshgrid(x, y, indexing="xy")
-        if normalized:
-            camera_pixels_x = camera_pixels_x / (self.original_width - 1)
-            camera_pixels_y = camera_pixels_y / (self.original_height - 1)
-        return torch.stack([camera_pixels_x, camera_pixels_y], dim=-1)
 
     def crop_array(self, arr: np.ndarray) -> np.ndarray:
         """Crop an array to the pixel region.
@@ -188,48 +162,6 @@ class RectSubsampled(RectSubsampledSensor):
         # crop
         return self.crop_array(arr)
 
-    def apply_to_camera_model(self, sensor_model: CameraModel) -> CameraModel:
-        """Apply the subsampling to the camera sensor model.
-
-        Args:
-            sensor_model: The model before subsampling.
-
-        Returns:
-            The camera model after subsampling.
-        """
-        assert self.original_width == int(sensor_model.resolution[0].item()), (
-            "Image width does not match the original width"
-        )
-        assert self.original_height == int(sensor_model.resolution[1].item()), (
-            "Image height does not match the original height"
-        )
-
-        sensor_model_parameters = cast(ConcreteCameraModelsUnion, sensor_model).get_parameters()
-        ncore_camera_model_parameters_json = sensor_model_parameters.to_json()
-        ncore_camera_model_parameter_type = sensor_model_parameters.type()
-
-        # deserialize NCore camera model parameters
-        ncore_camera_model_parameters: ConcreteCameraModelParametersUnion
-        if ncore_camera_model_parameter_type == FThetaCameraModelParameters.type():
-            ncore_camera_model_parameters = FThetaCameraModelParameters.from_json(ncore_camera_model_parameters_json)
-        elif ncore_camera_model_parameter_type == OpenCVFisheyeCameraModelParameters.type():
-            ncore_camera_model_parameters = OpenCVFisheyeCameraModelParameters.from_json(
-                ncore_camera_model_parameters_json
-            )
-        elif ncore_camera_model_parameter_type == OpenCVPinholeCameraModelParameters.type():
-            ncore_camera_model_parameters = OpenCVPinholeCameraModelParameters.from_json(
-                ncore_camera_model_parameters_json
-            )
-        else:
-            raise Exception(f"Unsupported camera model type: {ncore_camera_model_parameter_type}")
-
-        transformed_parameters = ncore_camera_model_parameters.transform(
-            image_domain_scale=1.0 / self.subsample_factor,
-            image_domain_offset=(self.i, self.j),
-            new_resolution=(self.width, self.height),
-        )
-
-        return CameraModel.from_parameters(transformed_parameters, device=sensor_model.device, dtype=torch.float32)
 
 
 @torch.autocast(device_type="cuda", enabled=False)
@@ -419,18 +351,6 @@ class RenderingData:
                 f"Depth to distance scale must be a 4D tensor (B, height, width, 1) and match the rays shape (B, height, width, 6), but got {self._distance_to_depth_scale.shape}"
             )
 
-    def record_stream(self, stream: torch.cuda.Stream) -> None:
-        self.rays.record_stream(stream)
-        # skip self.sensor_model_parameters. Assumption: it doesn't contain any tensors.
-        self.poses_tquat_startend.record_stream(stream)
-        self.timestamps_startend_us.record_stream(stream)
-        if self.rays_timestamps_us is not None:
-            self.rays_timestamps_us.record_stream(stream)
-        if self._rays_footprints is not None:
-            self._rays_footprints.record_stream(stream)
-        if self._rays_is_sky is not None:
-            self._rays_is_sky.record_stream(stream)
-
     @property
     def b(self) -> int:
         return self.rays.shape[0]
@@ -618,12 +538,6 @@ class FrameMeta:
             else None,
             unique_sensor_idx_str=self.unique_sensor_idx_str,
         )
-
-    def record_stream(self, stream: torch.cuda.Stream) -> None:
-        if self.T_offset_nre_startend is not None:
-            self.T_offset_nre_startend.record_stream(stream)
-        if self.unique_frame_idx_tensor is not None:
-            self.unique_frame_idx_tensor.record_stream(stream)
 
 
 @dataclass(kw_only=True, slots=True)
