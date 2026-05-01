@@ -51,28 +51,16 @@ class PrimitiveMergeConfig(BaseConfigSchema):
     """
     Configuration for primitive merging. It typically contains the following stages:
     1. Transform each primitive to a reference frame (defined by the first chunk); filtering is done per-chunk via model.export_preprocess.
-    2. Merge primitives into a single primitive. Optionally de-overlap so that GS from one chunk do not interfere with others.
-    3. Postprocess the merged primitive (such as voxelization)
+    2. Merge primitives into a single primitive with frustum-ownership de-overlap so GS from one chunk do not interfere with others.
     """
 
     enabled: bool = Field(default=False, description="Whether to enable primitive merging")
-
-    # Stage 2 options:
-    overlap_strategy: Literal["none", "frustum_ownership"] = Field(
-        default="frustum_ownership", description="Strategy for conflicts of gaussians from different chunks"
-    )
     frustum_ownership_max_diff_m: float = Field(
         default=0.0,
         description="Maximum distance in meters between the distances from one GS to non-owned chunks and owned chunks",
     )
-    enable_sky_mask: bool = Field(
-        default=True,
-        description="Whether to enable sky mask (to render sky based on sky token) for the merged primitive. When False, Celsius typically uses model.export_preprocess.keep_sky_gaussians.",
-    )
 
     def __post_init__(self):
-        # When merge is enabled, ensure merged output has sky: either enable_sky_mask (render via token) or
-        # model.export_preprocess.keep_sky_gaussians (Celsius) must be True; validated at runtime if needed.
         assert self.frustum_ownership_max_diff_m >= 0.0, (
             f"{self.__class__.__name__}: 'frustum_ownership_max_diff_m' must be non-negative"
         )

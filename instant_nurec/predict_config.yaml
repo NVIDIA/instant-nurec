@@ -157,9 +157,7 @@ model:
 predict:
   chunk_size: 1
   primitive_merge:
-    overlap_strategy: frustum_ownership
     frustum_ownership_max_diff_m: 5.0
-    enable_sky_mask: true
   export_ply:
     enabled: true
     density_activation: sigmoid

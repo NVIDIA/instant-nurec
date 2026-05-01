@@ -438,17 +438,8 @@ class KelvinPrimitiveMerge(PrimitiveMerge[KelvinNRMPrimitive]):
     def merge_processed_primitives(
         self, all_primitives: list[KelvinNRMPrimitive], batch_rig_transforms: list[torch.Tensor], batch: NRMDataBatch
     ) -> KelvinNRMPrimitive:
-        # Merged output must have sky (Kelvin has no keep_sky_gaussians; require enable_sky_mask).
-        assert self.config.enable_sky_mask, (
-            "When merging Kelvin primitives, primitive_merge.enable_sky_mask must be True (merged output must have sky)."
-        )
-        # Simplified case: no overlap strategy or only one primitive
-        if self.config.overlap_strategy == "none" or len(all_primitives) == 1:
+        if len(all_primitives) == 1:
             return all_primitives[0]
-
-        assert self.config.overlap_strategy == "frustum_ownership", (
-            "Only frustum ownership strategy is supported for Kelvin model"
-        )
 
         batch_camera_frustums = build_world_camera_frustums(batch, batch_rig_transforms)
 
