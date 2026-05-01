@@ -95,8 +95,8 @@ def warp_points_with_cuboid_tracks(
     source_timestamps_us: torch.Tensor,
     target_timestamps_us_list: list[torch.Tensor],
     dynamic_tracks: CuboidTracks,
-    aux_tracks_idx: torch.Tensor | None = None,
-    cuboids_dims_padding: torch.Tensor | None = None,
+    aux_tracks_idx: torch.Tensor,
+    cuboids_dims_padding: torch.Tensor,
 ) -> tuple[torch.Tensor, list[torch.Tensor]]:
     """
     Associate each point with a dynamic cuboid track at its source timestamp, then warp
@@ -111,9 +111,9 @@ def warp_points_with_cuboid_tracks(
         source_timestamps_us: [...] (or [..., 1]) source timestamps per point.
         target_timestamps_us_list: list of target timestamp tensors, each [...] (or [..., 1]).
         dynamic_tracks: dynamic CuboidTracks to associate against.
-        aux_tracks_idx: optional [...] fallback track ids for points whose point-cuboid
+        aux_tracks_idx: [...] fallback track ids for points whose point-cuboid
             intersection returns -1; pass -1 for "no fallback" entries.
-        cuboids_dims_padding: optional 3D padding broadcastable to N_tracks x 3.
+        cuboids_dims_padding: 3D padding broadcastable to N_tracks x 3.
 
     Returns:
         - dynamic_mask: [...] bool, True for points associated with a track.
@@ -135,9 +135,8 @@ def warp_points_with_cuboid_tracks(
     _, tracks_idx = dynamic_tracks.point_intersection_interpolate_pose(points, src_ts, cuboids_dims_padding)  # [...]
 
     # Fallback association via aux idx (e.g. ray-cuboid for movable rays).
-    if aux_tracks_idx is not None:
-        unassoc = tracks_idx == -1
-        tracks_idx[unassoc] = aux_tracks_idx[unassoc]
+    unassoc = tracks_idx == -1
+    tracks_idx[unassoc] = aux_tracks_idx[unassoc]
 
     dynamic_mask = tracks_idx != -1
     sel = torch.where(dynamic_mask)
