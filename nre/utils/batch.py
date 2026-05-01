@@ -424,10 +424,6 @@ class CameraFrameLabels:
     - metric_distance: Optional. Non-metric ray depth from a depth estimation model. Default is None. [Tensor[float32]]. (B, height, width, 1).
     - semantic: Optional. Semantic class of the pixel. Default is None. [Tensor[uint8]]. (B, height, width, 1).
     - normals: Optional. Per-pixel normal vectors relative to the world frame. Default is None. [Tensor[float32]]. (B, height, width, 3).
-    - _n_valid_rgb: Optional. Number of valid RGB channels as cache for n_valid_rgb property. Default is None. int32.
-    - _n_valid: Optional. Number of valid pixels as cache for n_valid property. Default is None. int32.
-    - _n_difixed: Optional. Number of Difixed as cache for n_difixed property. Default is None. int32.
-    - _n_valid_bg: Optional. Number of valid pixels for background loss (excludes INVALID, DIFIXED, SYNTHETIC). Default is None. int32.
     """
 
     flags: torch.Tensor | None = None
@@ -435,11 +431,6 @@ class CameraFrameLabels:
     metric_distance: torch.Tensor | None = None
     semantic: torch.Tensor | None = None
     normals: torch.Tensor | None = None
-    _n_valid_rgb: int | None = None
-    _n_valid: int | None = None
-    _n_difixed: int | None = None
-    _n_valid_bg: int | None = None
-    # TODO: add other labels from ExtraSignals
 
     def __post_init__(self):
         if self.flags is not None:
@@ -463,47 +454,6 @@ class CameraFrameLabels:
                 "Normals must be a 4D tensor (B, height, width, 3)"
             )
             assert self.normals.dtype == torch.float32, "Normals must be a float32 tensor"
-        if self._n_valid_rgb is not None:
-            assert isinstance(self._n_valid_rgb, int), "N valid RGB must be an int"
-        if self._n_valid is not None:
-            assert isinstance(self._n_valid, int), "N valid must be an int"
-        if self._n_difixed is not None:
-            assert isinstance(self._n_difixed, int), "N Difixed must be an int"
-        if self._n_valid_bg is not None:
-            assert isinstance(self._n_valid_bg, int), "N valid bg must be an int"
-
-    @property
-    def n_valid_rgb(self) -> int:
-        if self._n_valid_rgb is None:
-            rgb_valid_mask = self.get_mask_flags_all(RayFlags.RGB_LABEL) & self.get_mask_flags_none(RayFlags.INVALID)
-            self._n_valid_rgb = int(rgb_valid_mask.sum().item()) * 3
-        return self._n_valid_rgb
-
-    @property
-    def n_valid(self) -> int:
-        if self._n_valid is None:
-            valid_mask = self.get_mask_flags_none(RayFlags.INVALID)
-            self._n_valid = int(valid_mask.sum().item())
-        return self._n_valid
-
-    @property
-    def n_difixed(self) -> int:
-        if self._n_difixed is None:
-            difixed_mask = self.get_mask_flags_all(RayFlags.DIFIXED)
-            self._n_difixed = int(difixed_mask.sum().item())
-        return self._n_difixed
-
-    @property
-    def n_valid_bg(self) -> int:
-        """Number of valid pixels for background loss (excludes INVALID, DIFIXED, SYNTHETIC)."""
-        if self._n_valid_bg is None:
-            valid_mask = (
-                self.get_mask_flags_none(RayFlags.INVALID)
-                & self.get_mask_flags_none(RayFlags.DIFIXED)
-                & self.get_mask_flags_none(RayFlags.SYNTHETIC)
-            )
-            self._n_valid_bg = int(valid_mask.sum().item())
-        return self._n_valid_bg
 
     @property
     def b(self) -> int | None:
@@ -578,10 +528,6 @@ class CameraFrameLabels:
             metric_distance=collate_fn(metric_distance_seq, device),
             semantic=collate_fn([item.semantic for item in seq], device),
             normals=collate_fn([item.normals for item in seq], device),
-            _n_valid_rgb=sum([item.n_valid_rgb for item in seq]),
-            _n_valid=sum([item.n_valid for item in seq]),
-            _n_difixed=sum([item.n_difixed for item in seq]),
-            _n_valid_bg=sum([item.n_valid_bg for item in seq]),
         )
 
     def to(self, *args, **kwargs) -> Self:
@@ -591,10 +537,6 @@ class CameraFrameLabels:
             metric_distance=self.metric_distance.to(*args, **kwargs) if self.metric_distance is not None else None,
             semantic=self.semantic.to(*args, **kwargs) if self.semantic is not None else None,
             normals=self.normals.to(*args, **kwargs) if self.normals is not None else None,
-            _n_valid_rgb=self._n_valid_rgb,
-            _n_valid=self._n_valid,
-            _n_difixed=self._n_difixed,
-            _n_valid_bg=self._n_valid_bg,
         )
 
     def __getitem__(self, item: Union[int, slice, torch.Tensor]) -> Self:
@@ -620,7 +562,6 @@ class LidarFrameLabels:
     - distance: Optional. Metric ray-depth in NRE scale (not z-depth). Default is None. [Tensor[float32]]. (B, height, width, 1).
     - intensity: Optional. Intensity of the lidar response. Default is None. [Tensor[float32]]. (B, height, width, 1).
     - raydrop: Optional. The possiblity that the ray should be dropped. Default is None. [Tensor[float32]]. (B, height, width, 1).
-    - _n_valid_lidar: Optional. The number of valid lidar rays as cache for n_valid_lidar property. Default is None. int32.
     - sparse_rays: Optional. The rays from the lidar points. Default is None. [Tensor[float32]]. (B, n_sparse_rays, 6).
     - sparse_timestamps: Optional. The timestamps of the lidar points. Default is None. [Tensor[int64]]. (B, n_sparse_rays, 1).
     - sparse_elements: Optional. The elements (row, col) of the lidar points. Default is None. [Tensor[int64]]. (B, n_sparse_rays, 2).
@@ -630,8 +571,6 @@ class LidarFrameLabels:
     distance: torch.Tensor | None = None
     intensity: torch.Tensor | None = None
     raydrop: torch.Tensor | None = None
-    _n_valid_lidar: int | None = None
-    # TODO: add other labels from ExtraSignals
 
     # To support cases where rays are computed from the lidar points.
     sparse_rays: torch.Tensor | None = None
@@ -657,8 +596,6 @@ class LidarFrameLabels:
                 "Raydrop must be a 4D tensor (B, height, width, 1)"
             )
             assert self.raydrop.dtype == torch.float32, "Raydrop must be a float32 tensor"
-        if self._n_valid_lidar is not None:
-            assert isinstance(self._n_valid_lidar, int), "N valid must be an int"
         if self.sparse_rays is not None:
             assert self.sparse_rays.ndim == 3 and self.sparse_rays.shape[2] == 6, (
                 "Rays must be a 4D tensor (B, n_sparse_rays, 6)"
@@ -674,13 +611,6 @@ class LidarFrameLabels:
                 "Elements must be a 4D tensor (B, n_sparse_rays, 2)"
             )
             assert self.sparse_elements.dtype == torch.int64, "Elements must be a int64 tensor"
-
-    @property
-    def n_valid_lidar(self) -> int:
-        if self._n_valid_lidar is None:
-            valid_lidar_mask = self.get_mask_flags_none(RayFlags.INVALID) & self.get_mask_flags_none(RayFlags.DROPPED)
-            self._n_valid_lidar = int(valid_lidar_mask.sum().item())
-        return self._n_valid_lidar
 
     @property
     def b(self) -> int | None:
@@ -742,7 +672,6 @@ class LidarFrameLabels:
             distance=collate_fn([item.distance for item in seq], device),
             intensity=collate_fn([item.intensity for item in seq], device),
             raydrop=collate_fn([item.raydrop for item in seq], device),
-            _n_valid_lidar=sum([item.n_valid_lidar for item in seq]),
             sparse_rays=collate_fn([item.sparse_rays for item in seq], device),
             sparse_timestamps=collate_fn([item.sparse_timestamps for item in seq], device),
             sparse_elements=collate_fn([item.sparse_elements for item in seq], device),
@@ -754,7 +683,6 @@ class LidarFrameLabels:
             distance=self.distance.to(*args, **kwargs) if self.distance is not None else None,
             intensity=self.intensity.to(*args, **kwargs) if self.intensity is not None else None,
             raydrop=self.raydrop.to(*args, **kwargs) if self.raydrop is not None else None,
-            _n_valid_lidar=self._n_valid_lidar,
             sparse_rays=self.sparse_rays.to(*args, **kwargs) if self.sparse_rays is not None else None,
             sparse_timestamps=self.sparse_timestamps.to(*args, **kwargs)
             if self.sparse_timestamps is not None
