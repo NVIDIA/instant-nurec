@@ -12,8 +12,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, replace
-from typing import Self, TypeAlias, Union, cast
+from dataclasses import dataclass, field
+from typing import TypeAlias, Union, cast
 
 import torch
 
@@ -69,14 +69,6 @@ class RectSubsampledSensor:
             dtype=torch.float32,
         )
         self.resolution = torch.tensor([self.original_width, self.original_height], dtype=torch.float32)
-
-    def to(self, *args, **kwargs) -> Self:
-        obj = replace(self)
-        obj.rect_points_lb = obj.rect_points_lb.to(*args, **kwargs)
-        obj.resolution = obj.resolution.to(*args, **kwargs)
-        assert obj.rect_points_lb.shape == (2, 2) and obj.rect_points_lb.dtype == torch.float32
-        assert obj.resolution.shape == (2,) and obj.resolution.dtype == torch.float32
-        return obj
 
 
 class SensorModelComputations:
