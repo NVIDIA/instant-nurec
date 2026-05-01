@@ -82,27 +82,11 @@ def assert_same_type(seq: Sequence):
     )
 
 
-def collate_fn(
-    batch: List[Any],
-    target_device: torch.device | None,
-    name_hint: str | None = None,
-    return_list_if_unknown: bool = False,
-) -> Any:
+def collate_fn(batch: List[Any], target_device: torch.device | None) -> Any:
     """
     Returns a collated version of possibly nested tensors and dataclasses.
     """
     elem = batch[0]
-
-    if name_hint is not None:
-        if name_hint in ["n_rm_samples", "n_vr_samples"]:
-            return sum(batch)
-        if name_hint == "pack_info":
-            # Note pack_info is a packed auxiliary tensor containing starting indices and num samples for each ray [int] (n_rays, 2)
-            num_samples = torch.concat(batch, dim=0).to(target_device)[:, 1]
-            return get_pack_info_from_n(num_samples)
-        if name_hint == "radiance_embedding_type":
-            assert [b == elem for b in batch], "Collating different `radiance_embedding_type` is not supported."
-            return batch[0]
 
     if elem is None:
         return None
@@ -112,17 +96,14 @@ def collate_fn(
         return type(elem).collate_fn(batch, device=target_device)
     elif is_dataclass(type(elem)):
         return replace(
-            elem, **{k: collate_fn([getattr(e, k) for e in batch], target_device, k) for k in dataclass_keys(elem)}
+            elem, **{k: collate_fn([getattr(e, k) for e in batch], target_device) for k in dataclass_keys(elem)}
         )
     elif isinstance(elem, list):
         return [collate_fn([b[i] for b in batch], target_device) for i in range(len(elem))]
     elif isinstance(elem, dict):
         return {k: collate_fn([b[k] for b in batch], target_device) for k in elem.keys()}
     else:
-        if not return_list_if_unknown:
-            raise NotImplementedError(f"Collating of type {type(elem)} is not supported.")
-        else:
-            return batch
+        raise NotImplementedError(f"Collating of type {type(elem)} is not supported.")
 
 
 def list_of_dicts_to_dict_of_lists(
