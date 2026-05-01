@@ -1182,36 +1182,30 @@ class CameraFreePoseViewGeometry(torch.nn.Module):
 @dataclass(slots=False, kw_only=True)
 class NRMDataBatch:
     """
-    A batch that contains (B,) groups of context and supervision DataBatch(es).
+    A batch that contains (B,) groups of context DataBatch(es).
     We also precompute RenderingBatch altogether to hide latency for data preprocessing.
+
+    Predict-only standalone never produces or consumes supervision data;
+    the NRE-side `supervision` / `supervision_rig` fields were dropped
+    (Phase 1 step 4.3).
 
     Contains
         - context: list of context images (A DataAndRenderingBatch)
-        - supervision: list of supervision images (A DataAndRenderingBatch)
         - cuboid_tracks: list of cuboid tracks
         - context_rig: list of rig trajectories for context (intrinsics subsampled already to context images)
-        - supervision_rig: list of rig trajectories for supervision (intrinsics subsampled already to supervision images)
         - meta: list of dictionaries of metadata for each batch, e.g. sequence_id, ncore_json_path, etc.
     """
 
     context: list[DataAndRenderingBatch]
-    supervision: list[DataAndRenderingBatch] | None = None
     cuboid_tracks: list[CuboidTracksDataPack] | None = None
     context_rig: list[RigTrajectories] | None = None
-    supervision_rig: list[RigTrajectories] | None = None
     meta: list[dict[str, Any]] | None = None
 
     def __post_init__(self):
-        if self.supervision is not None:
-            assert len(self.context) == len(self.supervision), "Number of context and supervision batches must match"
         if self.cuboid_tracks is not None:
             assert len(self.context) == len(self.cuboid_tracks), "Number of context and cuboid tracks must match"
         if self.context_rig is not None:
             assert len(self.context) == len(self.context_rig), "Number of context and context_rig must match"
-        if self.supervision_rig is not None:
-            assert len(self.context) == len(self.supervision_rig), (
-                "Number of supervision and supervision_rig must match"
-            )
 
     def __getitem__(self, item: Union[int, slice]) -> Self:
         """Allows indexing into the dataclass to get a subset of the data."""
@@ -1220,10 +1214,8 @@ class NRMDataBatch:
 
         return self.__class__(
             context=self.context[item],
-            supervision=self.supervision[item] if self.supervision is not None else None,
             cuboid_tracks=self.cuboid_tracks[item] if self.cuboid_tracks is not None else None,
             context_rig=self.context_rig[item] if self.context_rig is not None else None,
-            supervision_rig=self.supervision_rig[item] if self.supervision_rig is not None else None,
             meta=self.meta[item] if self.meta is not None else None,
         )
 
@@ -1250,36 +1242,33 @@ class NRMDataBatch:
 
         return self.__class__(
             context=_move_list(self.context),
-            supervision=_move_list(self.supervision),
             cuboid_tracks=_move_list(self.cuboid_tracks),
             context_rig=_move_list(self.context_rig),
-            supervision_rig=_move_list(self.supervision_rig),
             meta=self.meta,
         )
 
     @torch.autocast(device_type="cuda", enabled=False)
     def maybe_compute_rendering_data(self, device: torch.device):
-        """Populates self.{context,supervision}[...].data.rendering unless already present"""
+        """Populates self.context[...].data.rendering unless already present."""
 
-        for batch, rigs in ((self.context, self.context_rig), (self.supervision, self.supervision_rig)):
-            if rigs is None or batch is None:
+        if self.context_rig is None:
+            return
+        for data, rig in zip(self.context, self.context_rig):
+            # Do not re-compute if rendering data already exists.
+            if data.rendering is not None:
                 continue
-            for data, rig in zip(batch, rigs):
-                # Do not re-compute if rendering data already exists.
-                if data.rendering is not None:
-                    continue
-                # Standalone predict only computes camera rendering data; lidar rendering was the
-                # `LidarFreePoseViewGeometry` path which the prune dropped (and `data.data.lidar`
-                # is None at this point in the standalone predict pipeline).
-                assert data.data.lidar is None, "Lidar rendering data is not supported in the standalone."
-                camera_rendering_data = (
-                    CameraFreePoseViewGeometry.from_rig_trajectories(rig)
-                    .to(device=device)
-                    .to_rendering_data(data.data.camera.to(device), cache_sensor_params=True)
-                    if data.data.camera is not None
-                    else None
-                )
-                data.rendering = RenderingBatch(camera=camera_rendering_data, lidar=None)
+            # Standalone predict only computes camera rendering data; lidar rendering was the
+            # `LidarFreePoseViewGeometry` path which the prune dropped (and `data.data.lidar`
+            # is None at this point in the standalone predict pipeline).
+            assert data.data.lidar is None, "Lidar rendering data is not supported in the standalone."
+            camera_rendering_data = (
+                CameraFreePoseViewGeometry.from_rig_trajectories(rig)
+                .to(device=device)
+                .to_rendering_data(data.data.camera.to(device), cache_sensor_params=True)
+                if data.data.camera is not None
+                else None
+            )
+            data.rendering = RenderingBatch(camera=camera_rendering_data, lidar=None)
 
     @classmethod
     def collate_fn(
@@ -1309,9 +1298,7 @@ class NRMDataBatch:
 
         return cls(
             context=unpack_optional(_collate_vals(*[batch.context for batch in seq])),
-            supervision=_collate_vals(*[batch.supervision for batch in seq]),
             cuboid_tracks=_collate_vals(*[batch.cuboid_tracks for batch in seq]),
             context_rig=_collate_vals(*[batch.context_rig for batch in seq]),
-            supervision_rig=_collate_vals(*[batch.supervision_rig for batch in seq]),
             meta=_collate_vals(*[batch.meta for batch in seq]),
         )

@@ -954,10 +954,6 @@ class NCoreNRMDataset(BaseNRMIndexableDataset):
             )
         )
 
-        # Predict pins supervision_frame_batch.n_frames_per_sample=0; supervision is disabled.
-        supervision = None
-        supervision_rig_trajectory = None
-
         cuboid_tracks = self._compute_cuboid_tracks(
             context_frame_batch,
             main_sequence_loader,
@@ -974,8 +970,6 @@ class NCoreNRMDataset(BaseNRMIndexableDataset):
         nrm_data_batch = NRMDataBatch(
             context=[context],
             context_rig=[context_rig_trajectory],
-            supervision=[supervision] if supervision is not None else None,
-            supervision_rig=[supervision_rig_trajectory] if supervision_rig_trajectory is not None else None,
             cuboid_tracks=[cuboid_tracks],
             meta=[meta],
         )

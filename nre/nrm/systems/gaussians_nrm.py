@@ -57,8 +57,6 @@ class GaussiansNRMSystem(BaseNRMSystem):
         # In the future maybe rendering data is not required any more for model forwarding.
         batch.maybe_compute_rendering_data(device=self.device)
 
-        # Note that we don't guarantee that batch.supervision is not None here.
-
         # For large batch sizes, process in chunks
         primitives_list: list[BaseNRMPrimitive] = []
 

@@ -227,9 +227,7 @@ class KelvinPrimitiveMerge:
             merged_batch = NRMDataBatch(
                 context=[merged_context_batch],
                 context_rig=[merged_context_rig],
-                supervision=None,
                 cuboid_tracks=None,
-                supervision_rig=None,
                 meta=[merged_meta] if merged_meta is not None else None,
             )
 
