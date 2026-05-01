@@ -23,7 +23,6 @@ py_library(
     name = "pylib",
     srcs = [
         "__init__.py",
-        "renderers.py",
         "utils.py",
     ],
     visibility = ["//:core_package_group"],

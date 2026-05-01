@@ -11,7 +11,6 @@ from typing import Self, Sequence
 import torch
 
 
-from nre.models.gaussians.renderers import BaseGaussianRenderer
 from nre.nrm.config.models import PrimitiveExportPreprocessConfig
 from nre.nrm.primitives.base import BaseGaussiansNRMPrimitive
 from nre.nrm.utils.cubemap import rotate_sky_cubemap
@@ -268,13 +267,7 @@ class KelvinNRMPrimitive(BaseGaussiansNRMPrimitive):
         dynamic_layers: list[KelvinDynamicLayer],
         sky_cubemap: torch.Tensor,
         affine_matrix: torch.Tensor,
-        gaussians_renderer: BaseGaussianRenderer | None,
     ):
-        super().__init__(
-            gaussians_renderer=gaussians_renderer,
-            checkpointing="all",  # Maximum memory savings.
-            shared_gaussian_parameters=len(dynamic_layers) == 0,
-        )
         self.static_layer = static_layer
         self.dynamic_layers = dynamic_layers
         self.sky_cubemap = sky_cubemap
@@ -319,7 +312,6 @@ class KelvinNRMPrimitive(BaseGaussiansNRMPrimitive):
             dynamic_layers=new_dynamic_layers,
             sky_cubemap=self.sky_cubemap,
             affine_matrix=self.affine_matrix,
-            gaussians_renderer=self.gaussians_renderer,
         )
 
     @torch.autocast(device_type="cuda", enabled=False)
@@ -329,7 +321,6 @@ class KelvinNRMPrimitive(BaseGaussiansNRMPrimitive):
             dynamic_layers=[layer.rigid_transform(T_new) for layer in self.dynamic_layers],
             sky_cubemap=rotate_sky_cubemap(self.sky_cubemap, T_new[:3, :3]),
             affine_matrix=self.affine_matrix,
-            gaussians_renderer=self.gaussians_renderer,
         )
 
     @torch.autocast(device_type="cuda", enabled=False)

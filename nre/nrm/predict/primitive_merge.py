@@ -400,7 +400,6 @@ class KelvinPrimitiveMerge:
             dynamic_layers=[KelvinDynamicLayer.concatenate(all_dynamic_layers)],
             sky_cubemap=merged_sky_cubemap,
             affine_matrix=merged_affine_matrix,
-            gaussians_renderer=all_primitives[0].gaussians_renderer,
         )
         return merged_primitive
 

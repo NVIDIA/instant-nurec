@@ -50,12 +50,6 @@ class KelvinNRM(BaseNRM[KelvinNRMPrimitive]):
         self.scene_rescale = self.config.scene_rescale
         self.cuboids_dims_padding = torch.nn.Buffer(torch.tensor(self.config.track_padding_m, dtype=torch.float32))
 
-        # Predict mode never invokes primitive.forward()/render(), so the
-        # gaussians_renderer is set to None and the factory + nrend deps are
-        # not exercised. Predict runs under torch.inference_mode() so
-        # the dropped freeze_encoder/requires_grad bookkeeping is irrelevant.
-        self.gaussians_renderer = None
-
     @staticmethod
     def _maybe_derive_normals_from_distance(batch: DataAndRenderingBatch) -> DataAndRenderingBatch:
         """Compute world-space normals + VALID_NORMAL flag from metric_distance via
@@ -180,7 +174,6 @@ class KelvinNRM(BaseNRM[KelvinNRMPrimitive]):
                 dynamic_layers=dynamic_layers[bidx],
                 sky_cubemap=sky_cubemaps[bidx],
                 affine_matrix=affine_matrix[bidx],
-                gaussians_renderer=self.gaussians_renderer,
             )
             primitives.append(primitive)
 

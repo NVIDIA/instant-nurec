@@ -11,11 +11,10 @@
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing import Literal, Self, TypeVar
+from typing import Self, TypeVar
 
 import torch
 
-from nre.models.gaussians.renderers import BaseGaussianRenderer
 from nre.models.nrenderable import NRenderableModel
 from nre.nrm.config.models import PrimitiveExportPreprocessConfig
 from nre.utils.batch import DataAndRenderingBatch
@@ -44,7 +43,6 @@ class BaseNRMPrimitive(NRenderableModel):
         Filter and preprocess the primitive for export (e.g. density/sky/road masking).
         Called per chunk after forward; when merging is enabled, merge will then apply
         rigid_transform to align chunks. Implementations must not apply rigid_transform.
-        context_rig is optional; Celsius may require it when project_to_z_offset is True.
         """
 
     @abstractmethod
@@ -55,20 +53,8 @@ NRMPrimitiveType = TypeVar("NRMPrimitiveType", bound=BaseNRMPrimitive)
 
 
 class BaseGaussiansNRMPrimitive(BaseNRMPrimitive):
-    """
-    Predict-only carrier for Gaussian primitives. The renderer is unused but the
-    field is retained so downstream type annotations and merge helpers can keep
-    propagating it as None.
-    """
-
-    gaussians_renderer: BaseGaussianRenderer | None
-
-    def __init__(
-        self,
-        gaussians_renderer: BaseGaussianRenderer | None,
-        checkpointing: Literal["render", "all", "none"] = "render",
-        shared_gaussian_parameters: bool = False,
-    ):
-        self.gaussians_renderer = gaussians_renderer
-        self.checkpointing = checkpointing
-        self.shared_gaussian_parameters = shared_gaussian_parameters
+    """Marker base class for Gaussian-primitive NRMs. The NRE-side renderer
+    plumbing (gaussians_renderer, checkpointing, shared_gaussian_parameters)
+    was removed in Phase 1 step 4.3 -- predict never invokes
+    `primitive.forward()` / `render()`, so the renderer was always None and
+    the checkpointing/shared-param flags went unread."""
