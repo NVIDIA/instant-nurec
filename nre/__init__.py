@@ -17,15 +17,9 @@
 import logging
 import os
 
-from nre.config.version import get_version
-from nre.repo_root import __reporoot__
 from nre.utils.colored_exceptions import enable_colored_exceptions
 from nre.utils.misc import is_env_true
 
-
-# Note: version information is not available *intentionally* in some environments
-# (like build / test sandboxes) to prevent build / test cache invalidations
-__version__ = get_version()
 
 log_level = os.environ.get("LOGLEVEL", "INFO")
 level = getattr(logging, log_level)

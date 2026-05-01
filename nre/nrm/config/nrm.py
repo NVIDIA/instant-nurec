@@ -27,7 +27,6 @@ import nre.config.parse  # noqa: F401
 
 from nre.config.base_schema import BaseConfigSchema, Field
 from nre.config.logger import LoggerConfigType
-from nre.config.version import Version, get_version
 from nre.nrm.config.dataset import NRMSplitsConfig
 from nre.nrm.config.models import KelvinModelConfig
 from nre.nrm.config.predict import PredictConfig
@@ -37,7 +36,6 @@ from nre.utils.model_registry import create_model_registry
 
 SENTINEL = "<sentinel>"
 
-current_version = get_version()
 
 cmd_logger = logging.getLogger(__name__)
 
@@ -92,11 +90,6 @@ class NRMConfig(BaseConfigSchema):
     predict: PredictConfig = Field(
         default_factory=PredictConfig,
         description="Configuration for predict-time-only functionality such as primitive merging",
-    )
-
-    version: Version | None = Field(
-        default=current_version,
-        description="Not to be set by the user. Used to detect NRE version mismatch when loading old configs. Not available in sandboxed test executions",
     )
 
     save_dir: str = Field(
