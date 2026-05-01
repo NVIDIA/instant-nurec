@@ -66,21 +66,6 @@ class CameraSubsamplerConfig(BaseConfigSchema):
 class BaseNCoreNRMDatasetConfig(BaseConfigSchema):
     """Base config for NCore-based datasets. Subclasses must define `name`."""
 
-    class ExternalSupervisionCameraIdConfig(BaseConfigSchema):
-        """Supervision cameras that are loaded from external ncore files"""
-
-        ncore_path: str = Field(
-            description="Path to the external ncore file, relative to the current sequence json file."
-        )
-        camera_id: str
-        unique_sensor_idx: int = Field(
-            description="Unique sensor index for the camera, used to determine the canonical order of cameras.",
-        )
-        sample_ratio: float = Field(
-            default=1.0,
-            description="Sample ratio of the camera on top of the supervision frame batch sampling.",
-        )
-
     # V3 sequence loader parameters
     cuboid_loading_max_workers: Optional[int] = Field(
         description="If specified, set the max_workers for thread parallel cuboid loading in the V3 sequence loader"
@@ -130,12 +115,12 @@ class BaseNCoreNRMDatasetConfig(BaseConfigSchema):
 
     camera_subsampler: CameraSubsamplerConfig = Field(description="Image resize to a given height/width.")
 
-    context_camera_ids: list[str | ExternalSupervisionCameraIdConfig] = Field(
+    context_camera_ids: list[str] = Field(
         description="A list of camera ids, such as `camera_front_wide_120fov`",
     )
 
     frame_batch_sampler: AdaptiveSequentialFrameBatchSamplerConfig
-    supervision_camera_ids: list[str | ExternalSupervisionCameraIdConfig] = Field(
+    supervision_camera_ids: list[str] = Field(
         description="A list of camera ids, such as `camera_front_wide_120fov`. This is also used to determine the canonical order of cameras in unique sensor idx",
     )
 

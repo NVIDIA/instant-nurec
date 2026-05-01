@@ -123,46 +123,30 @@ class NCoreNRMDataset(BaseNRMIndexableDataset):
 
     @dataclass(frozen=True)
     class ExtendedCameraId:
-        """Extended camera id that includes potential external ncore data sources"""
+        """Camera id with a unique sensor index. Predict-only standalone never
+        loads from external ncore archives, so the NRE-side `external_ncore_path`
+        / `sample_ratio` extras are gone (Phase 1 step 4.3)."""
 
         camera_id: str
         unique_sensor_idx: int
-        external_ncore_path: str | None = None
-        sample_ratio: float = 1.0
 
         @staticmethod
-        def from_config(
-            config: str | BaseNCoreNRMDatasetConfig.ExternalSupervisionCameraIdConfig, unique_sensor_idx: int = -1
-        ):
-            if isinstance(config, str):
-                return NCoreNRMDataset.ExtendedCameraId(
-                    camera_id=config, unique_sensor_idx=unique_sensor_idx, external_ncore_path=None, sample_ratio=1.0
-                )
-            else:
-                return NCoreNRMDataset.ExtendedCameraId(
-                    camera_id=config.camera_id,
-                    unique_sensor_idx=config.unique_sensor_idx,
-                    external_ncore_path=config.ncore_path,
-                    sample_ratio=config.sample_ratio,
-                )
+        def from_config(camera_id: str, unique_sensor_idx: int = -1) -> "NCoreNRMDataset.ExtendedCameraId":
+            return NCoreNRMDataset.ExtendedCameraId(
+                camera_id=camera_id, unique_sensor_idx=unique_sensor_idx
+            )
 
         def __str__(self) -> str:
-            if self.external_ncore_path is None:
-                return self.camera_id
-            # Replace slashes since these names will be used to save e.g. vis files into filesystem.
-            return f"{self.camera_id}-({self.external_ncore_path.replace('/', '_')})"
+            return self.camera_id
 
         @property
         def loader_key(self) -> str:
-            return self.main_loader_key() if self.external_ncore_path is None else self.external_ncore_path
+            return self.main_loader_key()
 
         @property
         def canonical_order(self) -> str:
             """Canonical order to be in rig trajectory and the data batch."""
-            seq = f"{self.unique_sensor_idx:03d}"
-            if self.external_ncore_path is not None:
-                seq += f"-{self.external_ncore_path}"
-            return seq
+            return f"{self.unique_sensor_idx:03d}"
 
         @staticmethod
         def main_loader_key() -> str:
@@ -796,11 +780,9 @@ class NCoreNRMDataset(BaseNRMIndexableDataset):
         # ShardDataLoader is logging using root. Let's suppress this information.
         (root_logger := logging.getLogger()).setLevel(logging.WARNING)
         for camera_id in all_camera_ids:
-            # Determine the ncore file to load
-            if camera_id.external_ncore_path is not None:
-                current_dataset_paths = [ncore_json_path.parent / camera_id.external_ncore_path]
-            else:
-                current_dataset_paths = dataset_paths
+            # Predict-only standalone never loads from external ncore archives,
+            # so the per-camera dataset path is always the main dataset path.
+            current_dataset_paths = dataset_paths
 
             # Load the ncore files
             if (sequence_loader := sequence_loaders.get(camera_id.loader_key)) is None:
@@ -850,7 +832,7 @@ class NCoreNRMDataset(BaseNRMIndexableDataset):
 
             # Load all the lidar sensors for the first time meeting a main loader.
             # Allow multiple possibilities of lidar ids separated by semicolon.
-            if len(lidar_sensors) == 0 and camera_id.external_ncore_path is None:
+            if len(lidar_sensors) == 0:
                 lidar_sensors = {
                     lidar_id: get_lidar_sensor_from_sequence_loader(
                         sequence_loader,
