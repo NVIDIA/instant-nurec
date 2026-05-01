@@ -221,10 +221,6 @@ class Tracks(dataclasses_json.DataClassJsonMixin):
         """Mask indicating the tracks that have *all* flag bits of 'flags' set"""
         return torch.bitwise_and(self.tracks_flags, flags.value).eq(flags.value)
 
-    def get_mask_flags_any(self, flags: TrackFlags) -> torch.Tensor:
-        """Mask indicating the tracks that have *any* flag bits of 'flags' set"""
-        return torch.bitwise_and(self.tracks_flags, flags.value).ne(0)
-
     def get_mask_flags_none(self, flags: TrackFlags) -> torch.Tensor:
         """Mask indicating the tracks that have *none* of the flag bits of 'flags' set"""
         return torch.bitwise_and(self.tracks_flags, flags.value).eq(0)

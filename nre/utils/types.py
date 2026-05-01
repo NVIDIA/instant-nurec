@@ -367,23 +367,6 @@ class ExtraSignal(TorchChunkable):
             assert v is None or v is other_v, f"Got conflict values for field {k}"
             setattr(self, k, other_v)
 
-    def fill_with_defaults(self, to_fill_with_defaults: dict[str, torch.Tensor], prefix_shape) -> None:
-        for signal_type, default in to_fill_with_defaults.items():
-            if getattr(self, signal_type) is None:
-                setattr(self, signal_type, default.tile(prefix_shape, *[1] * default.dim()))
-
-    def concatenated(self) -> Optional[torch.Tensor]:
-        """Returns a concatenated tensor of all non-None tensors in the ExtraSignal class.
-        Returns None if all tensors are None.
-        """
-        tensors = []
-        for _, v in dataclass_items(self):
-            if isinstance(v, torch.Tensor):
-                assert v.dim() == 1 or v.dim() == 2, f"Tensor {v.shape} is not 1D or 2D"
-                tensors.append(v.unsqueeze(-1) if v.dim() == 1 else v)
-
-        return torch.cat(tensors, dim=-1) if tensors else None
-
     def to_tuple(self) -> tuple[torch.Tensor | None, ...]:
         """Return a tuple of all items in the class, useful when the class is used as checkpoint output."""
         return tuple(v for _, v in dataclass_items(self))
