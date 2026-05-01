@@ -10,7 +10,6 @@
 
 import logging
 import math
-import pickle
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -369,10 +368,6 @@ class KelvinDPTDecoder(KelvinDecoderBase):
         state_dict["cuboids_dims_padding"] = self.cuboids_dims_padding.data
         self.load_state_dict(state_dict, strict=True)
 
-    @staticmethod
-    def inverse_log_transform(x: torch.Tensor) -> torch.Tensor:
-        return torch.sign(x) * (torch.expm1(torch.abs(x)))
-
     def _log_gaussian_statistics(
         self,
         media_logger: BatchMediaLogger,
@@ -439,30 +434,6 @@ class KelvinDPTDecoder(KelvinDecoderBase):
                 grid_width=grid_width,
             ),
         )
-
-    def _dump_meshing_data(
-        self,
-        gaussian_params: GaussianParams,
-        supervision_pack: KelvinNRMSupervisionPack,
-        context: DataAndRenderingBatch,
-    ):
-        """
-        Dump useful data for meshing using meshing tool.
-        """
-        rendering = unpack_optional(unpack_optional(context.rendering).camera)
-        save_path = "/tmp/meshing_data.pkl"
-        with open(save_path, "wb") as f:
-            pickle.dump(
-                {
-                    "xyz": unpack_optional(gaussian_params.xyz).detach().cpu().numpy(),  # [V, H, W, 3]
-                    "depth": unpack_optional(supervision_pack.context_depth).detach().cpu().numpy(),  # [V, H, W, 1]
-                    "rgb": unpack_optional(supervision_pack.context_rgb).detach().cpu().numpy(),  # [V, H, W, 3]
-                    "rays": unpack_optional(rendering.rays).detach().cpu().numpy(),  # [V, H, W, 6]
-                    "intrinsics": [i.to_dict() for i in rendering.sensor_model_parameters],
-                },
-                f,
-            )
-        logger.info(f"Dumped meshing information to {save_path}...")
 
     def get_potential_unused_parameters(self) -> Iterator[torch.nn.Parameter]:
         # Note -- if we shard model parameters need to reconsider this design.
