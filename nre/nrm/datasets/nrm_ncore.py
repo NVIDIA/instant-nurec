@@ -179,15 +179,9 @@ class NCoreNRMDataset(BaseNRMIndexableDataset):
         lidar_sensors: dict[str, ncore.data.LidarSensorProtocol]
 
     def __init__(self, config: BaseNCoreNRMDatasetConfig, split: str = "train"):
-        self.ncore_json_list_path = parse_universal_path(
-            unpack_optional(config.ncore_json_list_path), s3_block_size_mb=config.s3_block_size_mb
-        )
+        self.ncore_json_list_path = parse_universal_path(unpack_optional(config.ncore_json_list_path))
         self.ncore_json_base_path = (
-            parse_universal_path(
-                config.ncore_json_base_path,
-                s3_block_size_mb=config.s3_block_size_mb,
-                s3_cache_type=config.s3_cache_type,
-            )
+            parse_universal_path(config.ncore_json_base_path)
             if config.ncore_json_base_path is not None
             else None
         )
@@ -240,9 +234,7 @@ class NCoreNRMDataset(BaseNRMIndexableDataset):
                 if self.ncore_json_base_path is not None:
                     ncore_path = self.ncore_json_base_path / line
                 else:
-                    ncore_path = parse_universal_path(
-                        line, s3_block_size_mb=config.s3_block_size_mb, s3_cache_type=config.s3_cache_type
-                    )
+                    ncore_path = parse_universal_path(line)
                 self.ncore_json_paths.append(ncore_path)
         n_ncore_json_files = len(self.ncore_json_paths)
         self.sequence_subranges: dict[str, list[tuple[float, float]]] = {

@@ -118,9 +118,6 @@ class BaseNCoreNRMDatasetConfig(BaseConfigSchema):
         default=None,
         description="If specified, will be the list of data files to load. Used to quickly run test on smaller number of datapoints.",
     )
-    s3_block_size_mb: int = Field(default=50, description="The block size in MB for S3 universal paths.")
-    s3_cache_type: str = Field(default="readahead", description="The cache type for S3 universal paths.")
-
     open_consolidated: bool = Field(default=True)
     camera_max_fov_deg: float = Field(
         default=190.0,
