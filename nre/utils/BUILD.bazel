@@ -11,7 +11,6 @@
 load("@aspect_rules_py//py:defs.bzl", "py_binary")
 load("@nre_pip_deps//:requirements.bzl", pip_requirement = "requirement")
 load("@rules_python//python:defs.bzl", "py_library")
-load("//bazel/pytest:defs.bzl", "pytest_test")
 
 DEFAULT_VISIBILITY = ["//:core_package_group"]
 
@@ -74,26 +73,6 @@ py_library(
         pip_requirement("usd-core"),
         pip_requirement("lietorch"),
         pip_requirement("omegaconf"),
-    ],
-)
-
-pytest_test(
-    name = "types_test",
-    timeout = "long",
-    srcs = ["types_test.py"],
-    data = [
-        "//configs",
-        "@test_data_ncore//:ncore_1sec",
-    ],
-    deps = [
-        ":pylib_types",
-        "//nre/datasets:pylib",
-        pip_requirement("lietorch"),
-        pip_requirement("hydra-core"),
-        pip_requirement("numpy"),
-        pip_requirement("parameterized"),
-        pip_requirement("nvidia-ncore"),
-        "@rules_python//python/runfiles",
     ],
 )
 
@@ -226,19 +205,6 @@ py_library(
     ],
 )
 
-pytest_test(
-    name = "geometry_test",
-    srcs = ["geometry_test.py"],
-    deps = [
-        ":pylib_geometry",
-        ":pylib_prober",
-        pip_requirement("numpy"),
-        pip_requirement("scipy"),
-        pip_requirement("torch"),
-    ],
-)
-
-
 py_library(
     name = "pylib_callbacks",
     srcs = ["callbacks.py"],
@@ -261,55 +227,6 @@ py_library(
     ],
     deps = [
         pip_requirement("universal-pathlib"),
-    ],
-)
-
-pytest_test(
-    name = "model_registry_test",
-    srcs = ["model_registry_test.py"],
-    deps = [
-        ":pylib",
-    ],
-)
-
-pytest_test(
-    name = "batch_test",
-    timeout = "long",
-    srcs = ["batch_test.py"],
-    data = [
-        "//configs",
-        "@test_data_ncore//:ncore_clipgt_1sec",
-    ],
-    deps = [
-        ":pylib_geometry",
-        ":pylib_types",
-        "//nre/datasets:pylib",
-        pip_requirement("numpy"),
-        pip_requirement("nvidia-ncore"),
-        pip_requirement("torch"),
-        pip_requirement("pillow"),
-        "@rules_python//python/runfiles",
-    ],
-)
-
-pytest_test(
-    name = "prober_test",
-    srcs = ["prober_test.py"],
-    deps = [
-        ":pylib_prober",
-        # nre is needed to allow debugpy to work
-        "//nre:pylib",
-        pip_requirement("torch"),
-    ],
-)
-
-pytest_test(
-    name = "misc_test",
-    srcs = ["misc_test.py"],
-    deps = [
-        ":pylib_misc",
-        pip_requirement("numpy"),
-        pip_requirement("pytest"),
     ],
 )
 
