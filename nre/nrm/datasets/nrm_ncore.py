@@ -52,20 +52,6 @@ from nre.utils.types import FrameConversion, HalfClosedInterval, RayFlags, RigTr
 logger = logging.getLogger(__name__)
 
 
-def subranges_to_intervals(timestamps_us: np.ndarray, subranges: list[tuple[float, float]]) -> list[HalfClosedInterval]:
-    intervals: list[HalfClosedInterval] = []
-    min_timestamps_us: int = int(timestamps_us.min())
-    max_timestamps_us: int = int(timestamps_us.max())
-    inner_timestamps_us = max_timestamps_us - min_timestamps_us
-    for start, end in subranges:
-        intervals.append(
-            HalfClosedInterval(
-                min_timestamps_us + int(start * inner_timestamps_us), min_timestamps_us + int(end * inner_timestamps_us)
-            )
-        )
-    return intervals
-
-
 def interval_list_intersect(
     intervals: list[HalfClosedInterval], other_interval: HalfClosedInterval
 ) -> list[HalfClosedInterval]:
@@ -201,9 +187,6 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
             for line in f.readlines():
                 self.ncore_json_paths.append(self.ncore_json_base_path / line.strip())
         n_ncore_json_files = len(self.ncore_json_paths)
-        self.sequence_subranges: dict[str, list[tuple[float, float]]] = {
-            path.stem: [(0.0, 1.0)] for path in self.ncore_json_paths
-        }
 
         logger.info(
             f"Loaded {len(self.ncore_json_paths)}/{n_ncore_json_files} samples from {self.ncore_json_list_path}"
@@ -850,16 +833,10 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
         main_sequence_loader = sequence_loaders[main_loader_key]
         context_camera_frame_timestamps_us: dict[str, np.ndarray] = {}
 
-        select_intervals = subranges_to_intervals(
-            T_rig_worlds_with_timestamps_us[main_loader_key][1],  # T_rig_world_timestamps_us
-            self.sequence_subranges[ncore_json_path.stem],
-        )
-        for loader_key, (_, T_rig_world_timestamps_us) in T_rig_worlds_with_timestamps_us.items():
-            if loader_key != main_loader_key:
-                select_intervals = interval_list_intersect(
-                    select_intervals,
-                    HalfClosedInterval(T_rig_world_timestamps_us.min(), T_rig_world_timestamps_us.max()),
-                )
+        # Standalone predict always selects the full sequence range; subranges
+        # were a training-time control that the predict YAML never carried.
+        main_timestamps = T_rig_worlds_with_timestamps_us[main_loader_key][1]
+        select_intervals = [HalfClosedInterval(int(main_timestamps.min()), int(main_timestamps.max()))]
         # Intersect also with sensor timestamps (with +/- 0.1s tolerance)
         for camera_id in context_camera_ids:
             timestamps_us = camera_sensors[camera_id].get_frames_timestamps_us(ncore.data.FrameTimepoint.END)
