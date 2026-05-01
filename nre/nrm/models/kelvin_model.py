@@ -8,12 +8,12 @@ from dataclasses import replace
 from typing import Optional
 
 import torch
+import torch.nn as nn
 
 from einops import rearrange
 
 from nre.datasets.tracks import CuboidTracks
 from nre.nrm.config.models import KelvinModelConfig
-from nre.nrm.models.base import BaseNRM
 from nre.nrm.models.kelvin_backbone.decoders import make_decoder
 from nre.nrm.models.kelvin_backbone.encoders import make_encoder
 from nre.nrm.models.kelvin_backbone.sky import make_sky
@@ -29,7 +29,7 @@ from nre.utils.types import RayFlags
 logger = logging.getLogger(__name__)
 
 
-class KelvinNRM(BaseNRM[KelvinNRMPrimitive]):
+class KelvinNRM(nn.Module):
     """
     Please refer to the [Kelvin Model](../docs/KELVIN_MODEL.md) for more details.
     """
@@ -37,7 +37,8 @@ class KelvinNRM(BaseNRM[KelvinNRMPrimitive]):
     config: KelvinModelConfig
 
     def __init__(self, config: KelvinModelConfig):
-        super().__init__(config)
+        super().__init__()
+        self.config = config
         self.encoder = make_encoder(config)
         self.decoder = make_decoder(config)
         self.sky = make_sky(config)

@@ -11,7 +11,7 @@
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing import Self, TypeVar
+from typing import Self
 
 import torch
 
@@ -47,6 +47,3 @@ class BaseNRMPrimitive(NRenderableModel):
 
     @abstractmethod
     def __len__(self) -> int: ...
-
-
-NRMPrimitiveType = TypeVar("NRMPrimitiveType", bound=BaseNRMPrimitive)

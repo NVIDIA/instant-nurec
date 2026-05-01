@@ -18,7 +18,7 @@ from torch import nn
 
 from nre.nrm.config.nrm import GaussiansNRMSystemConfig, NRMConfig
 from nre.nrm.datasets.datamodule import NRMDataModule
-from nre.nrm.models.base import BaseNRM
+from nre.nrm.models.kelvin_model import KelvinNRM
 
 
 class BaseNRMSystem(nn.Module, ABC):
@@ -27,7 +27,7 @@ class BaseNRMSystem(nn.Module, ABC):
     predict driver invokes hooks directly."""
 
     config: GaussiansNRMSystemConfig
-    model: BaseNRM
+    model: KelvinNRM
     datamodule: NRMDataModule
 
     def __init__(self, config: NRMConfig) -> None:

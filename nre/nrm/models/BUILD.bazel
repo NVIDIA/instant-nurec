@@ -28,7 +28,6 @@ py_library(
     srcs = [
         "__init__.py",
         "activations.py",
-        "base.py",
         "kelvin_model.py",
         "post_processing.py",
     ],
