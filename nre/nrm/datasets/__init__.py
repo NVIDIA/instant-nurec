@@ -14,7 +14,6 @@ from nre.nrm.datasets.nrm_base import (
     BaseNRMIndexableDataset,
 )
 from nre.nrm.datasets.nrm_ncore import NCoreNRMDataset
-from nre.nrm.datasets.registry import make, register
 
 
 __all__ = [

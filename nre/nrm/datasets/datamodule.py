@@ -10,14 +10,11 @@
 
 import logging
 
-from typing import cast
-
 from torch.utils.data import DataLoader
 
 from nre.nrm.config.dataset import NRMSplitsConfig
 from nre.nrm.config.nrm import NRMConfig
-from nre.nrm.datasets.nrm_base import BaseNRMDataset
-from nre.nrm.datasets.registry import make as make_dataset
+from nre.nrm.datasets.nrm_ncore import NCoreNRMDataset
 from nre.utils.batch import NRMDataBatch
 from nre.utils.misc import unpack_optional
 
@@ -29,7 +26,7 @@ class NRMDataModule:
     nrm_config: NRMConfig
     dataset_config: NRMSplitsConfig
 
-    predict_dataset: BaseNRMDataset | None = None
+    predict_dataset: NCoreNRMDataset | None = None
 
     def __init__(self, nrm_config: NRMConfig) -> None:
         self.nrm_config = nrm_config
@@ -41,7 +38,7 @@ class NRMDataModule:
         dataset_config = self.dataset_config.predict
         assert dataset_config is not None, "dataset.predict has to be specified in the config to use the predict mode"
 
-        self.predict_dataset = cast(BaseNRMDataset, make_dataset(dataset_config.name, dataset_config, "predict"))
+        self.predict_dataset = NCoreNRMDataset(dataset_config, split="predict")
 
         return DataLoader(
             unpack_optional(self.predict_dataset),

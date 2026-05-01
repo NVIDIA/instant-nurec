@@ -29,7 +29,6 @@ py_library(
         "datamodule.py",
         "nrm_base.py",
         "nrm_ncore.py",
-        "registry.py",
         "samplers.py",
     ],
     visibility = DEFAULT_VISIBILITY,

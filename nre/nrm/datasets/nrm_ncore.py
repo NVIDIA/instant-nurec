@@ -31,7 +31,6 @@ from nre.datasets.tracks import CuboidTracks, CuboidTracksDataPack, TrackFlags
 from nre.datasets.utils import compute_cuboid_df, consolidate_cuboid_tracks
 from nre.nrm.config.dataset import BaseNCoreNRMDatasetConfig
 from nre.nrm.datasets.nrm_base import BaseNRMIndexableDataset, CameraSubsampler, NRMDataError
-from nre.nrm.datasets.registry import register as register_dataset
 from nre.nrm.datasets.samplers import (
     AdaptiveSequentialFrameBatchSampler,
     FrameBatchSamplerReturn,
@@ -97,7 +96,6 @@ def get_lidar_sensor_from_sequence_loader(
     )
 
 
-@register_dataset("nrm-ncore")
 class NCoreNRMDataset(BaseNRMIndexableDataset):
     """
     The native ncore dataset loader
