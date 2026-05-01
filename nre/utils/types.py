@@ -284,12 +284,6 @@ class TorchChunkable(Chunkable):
     def clone(self) -> Self:
         return self.apply(lambda t: t.clone())
 
-    def tile(self, *dims) -> Self:
-        return self.apply(lambda t: t.tile(*dims))
-
-    def take_along_dim(self, index: torch.Tensor, dim: int) -> Self:
-        return self.apply(lambda t: t.take_along_dim(index, dim))
-
     def gather(self, dim: int, index: torch.Tensor) -> Self:
         return self.apply(lambda t: t.gather(dim, index))
 
