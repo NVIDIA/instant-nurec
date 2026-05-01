@@ -31,7 +31,6 @@ from nre.nrm.models.kelvin_backbone.base import (
     KelvinLatent,
     KelvinMultiscaleFeaturesLatent,
 )
-from nre.nrm.utils.motion import TimeRemapping
 from nre.nrm.utils.sensor import to_simple_pinhole_model_parameters
 from nre.utils.batch import DataAndRenderingBatch
 from nre.utils.geometry import tquat_to_se3_matrix
@@ -84,7 +83,6 @@ class KelvinDAv3Encoder(nn.Module):
     def encode(
         self,
         batches: list[DataAndRenderingBatch],
-        time_remappings: list[TimeRemapping],
         scene_rescale: float = 1.0,
     ) -> KelvinLatent:
         batch_rgbs: list[torch.Tensor] = []

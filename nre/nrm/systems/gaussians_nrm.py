@@ -65,7 +65,7 @@ class GaussiansNRMSystem(nn.Module):
         if batch.cuboid_tracks is not None:
             cuboid_tracks = [CuboidTracks.Factory.from_pack(ct) for ct in batch.cuboid_tracks]
 
-        batch.context = self.model.prepare_context(batch.context, cuboid_tracks)
+        batch.context = self.model.prepare_context(batch.context)
         return self.model.reconstruct(batch.context, cuboid_tracks)
 
     def predict_step(self, batch: NRMDataBatch) -> dict[str, list[BaseNRMPrimitive] | NRMDataBatch]:

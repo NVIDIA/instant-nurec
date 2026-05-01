@@ -92,7 +92,6 @@ class KelvinNRM(nn.Module):
     def prepare_context(
         self,
         context: list[DataAndRenderingBatch],
-        cuboid_tracks: list[CuboidTracks] | None,
     ) -> list[DataAndRenderingBatch]:
         return [self._maybe_derive_normals_from_distance(batch) for batch in context]
 
@@ -106,7 +105,7 @@ class KelvinNRM(nn.Module):
 
         batch_camera_idxs: list[torch.Tensor] = []
         time_remappings: list[TimeRemapping] = []
-        for bidx, batch in enumerate(context):
+        for batch in context:
             context_data = unpack_optional(batch.data.camera)
             unique_sensor_idx = torch.tensor([meta.unique_sensor_idx for meta in context_data.meta], dtype=torch.int64)
             num_views_bidx = len(unique_sensor_idx.unique())
@@ -131,7 +130,7 @@ class KelvinNRM(nn.Module):
         num_imgs, num_views, camera_idxs, time_remappings = self._grab_metainfo(context)
 
         # Encode the inputs
-        encoded_latent = self.encoder.encode(context, time_remappings, self.scene_rescale)
+        encoded_latent = self.encoder.encode(context, self.scene_rescale)
 
         # Forward the decoder
         decoder_returns = self.decoder.decode(

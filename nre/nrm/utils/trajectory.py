@@ -73,7 +73,7 @@ def merge_rig_trajectories(
         lidars_frame_timestamps_us_list: dict[str, list[torch.Tensor]] = defaultdict(list)
 
         # Iterate over all the chunks
-        for bidx, other_rig_trajectories in enumerate(rig_trajectories_list):
+        for other_rig_trajectories in rig_trajectories_list:
             other_rig_trajectory = other_rig_trajectories.rig_trajectories[traj_idx]
             assert other_rig_trajectory.sequence_id == rig_trajectory.sequence_id
 
