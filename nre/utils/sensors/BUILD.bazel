@@ -28,7 +28,6 @@ py_library(
     visibility = DEFAULT_VISIBILITY,
     deps = [
         "//libs/sensors:camera_kernels",
-        "//libs/sensors:lidar_kernels",
         pip_requirement("nvidia-ncore"),
         pip_requirement("torch"),
     ],

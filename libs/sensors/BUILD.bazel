@@ -78,43 +78,6 @@ slangtorch_library(
 )
 
 # ============================================================================
-# LiDAR Slang Files
-# ============================================================================
-
-LIDAR_SLANG_FILES = [
-    "kernels/lidars/interface.slang",
-    "kernels/lidars/parameters.slang",
-    "kernels/lidars/lidar.slang",
-    "kernels/lidars/lidar_kernels.slang",
-]
-
-# Filegroup for lidar slang files to be reused by other packages
-filegroup(
-    name = "lidar_slang_files",
-    srcs = LIDAR_SLANG_FILES,
-    visibility = ["//:core_package_group"],
-)
-
-# Compile the LiDAR Slang module into a SlangTorch C++ CUDA extension
-slangtorch_library(
-    name = "lidar_slang_cc",
-    srcs = ["kernels/lidars/lidar_kernels.slang"],
-    extra_cmd_args = "-I$$(dirname $$(dirname $(location //libs/slang_utils:constants_slang)))",
-    visibility = ["//:core_package_group"],
-    deps = [
-        "kernels/common/interface.slang",
-        "kernels/common/interpolation.slang",
-        "kernels/common/trajectory.slang",
-        "kernels/lidars/interface.slang",
-        "kernels/lidars/lidar.slang",
-        "kernels/lidars/parameters.slang",
-        "//libs/geometry/kernels:slang_files",
-        "//libs/slang_utils:constants_slang",
-        "//libs/slang_utils:extensions_slang",
-    ],
-)
-
-# ============================================================================
 # Pose Calibration Slang Files
 # ============================================================================
 
@@ -197,7 +160,7 @@ cc_binary(
 
 filegroup(
     name = "slang_files",
-    srcs = COMMON_SLANG_FILES + CAMERA_SLANG_FILES + LIDAR_SLANG_FILES + POSE_CALIB_SLANG_FILES,
+    srcs = COMMON_SLANG_FILES + CAMERA_SLANG_FILES + POSE_CALIB_SLANG_FILES,
     visibility = [
     ],
 )
@@ -231,23 +194,6 @@ py_library(
         pip_requirement("numpy"),
         pip_requirement("scipy"),
         pip_requirement("torch"),
-    ],
-)
-
-py_library(
-    name = "lidar_kernels",
-    srcs = [
-        "kernels/lidars/__init__.py",
-        "kernels/lidars/parameters.py",
-    ],
-    deps = [
-        ":kernels_common",
-        ":lidar_slang_cc",
-        "//libs/slang_utils:pylib_utils",
-        pip_requirement("numpy"),
-        pip_requirement("scipy"),
-        pip_requirement("torch"),
-        pip_requirement("slangtorch"),
     ],
 )
 
@@ -299,8 +245,6 @@ py_library(
         ":camera_kernels",
         ":camera_slang_cc",
         ":kernels_common",
-        ":lidar_kernels",
-        ":lidar_slang_cc",
         ":pose_calib_kernels",
         "//libs/geometry/kernels:pylib",
         "//libs/slang_utils:pylib_utils",
@@ -359,28 +303,6 @@ pytest_test(
     ],
 )
 
-# LiDAR test data files
-filegroup(
-    name = "lidar_test_data",
-    srcs = glob(["kernels/lidars/test_data/*.json"]),
-    visibility = ["//:core_package_group"],
-)
-
-pytest_test(
-    name = "lidar_kernels_test",
-    srcs = ["kernels/lidars/lidar_kernels_test.py"],
-    data = [":lidar_test_data"],
-    deps = [
-        ":kernels_common",
-        ":lidar_kernels",
-        ":pylib_slang",
-        "//libs/geometry/kernels:pylib",
-        pip_requirement("numpy"),
-        pip_requirement("parameterized"),
-        pip_requirement("scipy"),
-        pip_requirement("torch"),
-    ],
-)
 
 pytest_test(
     name = "pose_calib_kernels_test",
