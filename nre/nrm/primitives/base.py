@@ -124,9 +124,6 @@ class BaseNRMPrimitive(NRenderableModel):
     @abstractmethod
     def __len__(self) -> int: ...
 
-    def get_all_gaussian_positions(self) -> torch.Tensor | None:
-        return None
-
 
 NRMPrimitiveType = TypeVar("NRMPrimitiveType", bound=BaseNRMPrimitive)
 
@@ -158,19 +155,6 @@ class BaseGaussiansNRMPrimitive(BaseNRMPrimitive):
 
     @abstractmethod
     def get_gaussian_parameters(self, timestamps_us: torch.Tensor | None) -> dict[str, torch.Tensor]: ...
-
-    def get_all_gaussian_positions(self) -> torch.Tensor | None:
-        """
-        Get all Gaussian center positions from the primitive.
-
-        Returns:
-            torch.Tensor | None: Positions of all Gaussians, shape (N, 3), or None if not available
-        """
-        gaussian_params = self.get_gaussian_parameters(None)
-        if "positions" in gaussian_params:
-            return gaussian_params["positions"]
-        else:
-            return None
 
     def get_extra_ray_signal_infos(self) -> tuple[list[str], list[int], list[Callable]]:
         return ([], [], [])

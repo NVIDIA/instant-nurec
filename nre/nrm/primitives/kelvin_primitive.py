@@ -621,10 +621,6 @@ class KelvinNRMPrimitive(BaseGaussiansNRMPrimitive):
             }
         )
 
-    def get_all_gaussian_positions(self) -> torch.Tensor | None:
-        logger.warning("get_all_gaussian_positions() only supports static layers for now.")
-        return self.static_layer.positions
-
     def get_checkpoint(self) -> Checkpoint:
         return {
             "static_layer": self.static_layer.get_checkpoint(),
