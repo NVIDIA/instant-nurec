@@ -1050,7 +1050,6 @@ class CameraFreePoseViewGeometry(torch.nn.Module):
             unique_frame_idx=meta.unique_frame_idx,
             unique_frame_idx_tensor=meta.unique_frame_idx_tensor,
             unique_sensor_idx_str=unpack_optional(meta.unique_sensor_idx_str),
-            is_lidar=False,
         )
 
     @ScopedTimer("CameraFreePoseViewGeometry/to_rendering_data")

@@ -120,7 +120,6 @@ class SensorModelComputations:
         shutter_type: ShutterType,
         unique_frame_idx: int,
         unique_frame_idx_tensor: Optional[torch.Tensor],
-        is_lidar: bool = False,
     ) -> SensorModelComputations.PosesAndTimestampsStartendReturn:
         """
         GPU implementation using Slang kernel for rolling shutter interpolation.
@@ -130,10 +129,6 @@ class SensorModelComputations:
         # Prepare frame_idx tensor
         if unique_frame_idx_tensor is None:
             unique_frame_idx_tensor = torch.tensor([unique_frame_idx], dtype=torch.int64, device=device)
-
-        # Lidar doesn't support subsampling
-        if is_lidar and subsample_rect_points_lb is not None:
-            raise NotImplementedError("subsample on poses and timestamps is not supported for Lidar")
 
         # Call Slang kernel
         T_sensor_world_startend_batch, timestamps_startend_us_batch = compute_poses_and_timestamps(
@@ -184,16 +179,13 @@ class SensorModelComputations:
         unique_frame_idx: int,
         unique_frame_idx_tensor: Optional[torch.Tensor],
         unique_sensor_idx_str: str,
-        is_lidar: bool = False,
     ):
         # Standalone predict requires CUDA tensors; the compiled CPU fallback
         # was dropped in Phase 1 step 4.3.
         assert T_sensor_world_startend_allviews.is_cuda, (
             "get_poses_and_timestamps_startend requires CUDA tensors in the standalone predict pipeline."
         )
-        shutter_type = (
-            ShutterType.GLOBAL if is_lidar else cast(ShutterType, sensor_models[unique_sensor_idx_str].shutter_type)
-        )
+        shutter_type = cast(ShutterType, sensor_models[unique_sensor_idx_str].shutter_type)
         return SensorModelComputations._get_poses_and_timestamps_startend_slang(
             subsample.rect_points_lb.unsqueeze(0) if subsample is not None else None,
             subsample.resolution.unsqueeze(0) if subsample is not None else None,
@@ -205,7 +197,6 @@ class SensorModelComputations:
             shutter_type,
             unique_frame_idx,
             unique_frame_idx_tensor,
-            is_lidar,
         )
 
 
