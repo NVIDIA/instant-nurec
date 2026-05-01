@@ -132,13 +132,7 @@ class BaseNCoreNRMDatasetConfig(BaseConfigSchema):
     s3_block_size_mb: int = Field(default=50, description="The block size in MB for S3 universal paths.")
     s3_cache_type: str = Field(default="readahead", description="The cache type for S3 universal paths.")
 
-    subrange_json_path: Optional[str] = Field(
-        default=None,
-        description="If specified, will only load the *intersection* of the sequences specified in the json_list_path and "
-        "the ones in the keys of this subrange. The json file is a dictionary with format {sequence_name: [subrange_1, "
-        "subrange_2, ...]}, where each subrange is a tuple of start/end time points normalized to 0~1 of the sequence length.",
-    )
-    open_consolidated: bool = Field(default=True)  # Does not appear to be used
+    open_consolidated: bool = Field(default=True)
     camera_max_fov_deg: float = Field(
         default=190.0,
         description="For FTheta and OpenCVFishEye camera models, this is used to control the max camera angle, such that "
@@ -169,12 +163,6 @@ class BaseNCoreNRMDatasetConfig(BaseConfigSchema):
     compute_rendering_data: bool = Field(
         default=True,
         description="Whether to pre-compute the rendering data (e.g. rays) in the dataloader (CPU). Turning this off will significantly reduce data loader memory consumption.",
-    )
-
-    cache_loaders_and_sensors: bool = Field(
-        default=False,
-        description="If True, cache the result of _get_loaders_and_sensors (one entry keyed by ncore_json_path). "
-        "This helps cut loading time during prediction when multiple consecutive batches share the same sequence loader instance.",
     )
 
     camera_id_mapping: dict[str, str] = Field(

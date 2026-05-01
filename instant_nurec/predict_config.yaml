@@ -33,7 +33,6 @@ dataset:
     ncore_json_paths: null
     s3_block_size_mb: 50
     s3_cache_type: readahead
-    subrange_json_path: null
     open_consolidated: true
     camera_max_fov_deg: 190.0
     n_camera_mask_dilation_iterations: 10
@@ -64,7 +63,6 @@ dataset:
     lidar_frame_batch:
       gap_from_image_us: 0
     compute_rendering_data: false
-    cache_loaders_and_sensors: false
     camera_id_mapping: {}
     lidar_id_mapping: {}
     name: nrm-ncore

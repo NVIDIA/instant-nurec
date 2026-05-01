@@ -9,7 +9,6 @@
 # its affiliates is strictly prohibited.
 
 import dataclasses
-import json
 import logging
 
 from collections import OrderedDict, defaultdict
@@ -250,17 +249,9 @@ class NCoreNRMDataset(BaseNRMIndexableDataset):
                     )
                 self.ncore_json_paths.append(ncore_path)
         n_ncore_json_files = len(self.ncore_json_paths)
-        self.sequence_subranges: dict[str, list[tuple[float, float]]] = {}
-
-        if (subrange_json_path := config.subrange_json_path) is not None:
-            with Path(subrange_json_path).open("r") as f:
-                subrange_data = json.load(f)
-            for sequence_id, subranges in subrange_data.items():
-                self.sequence_subranges[sequence_id] = [(s[0], s[1]) for s in subranges]
-            # Filter ncore_json_paths to be only including those with subranges
-            self.ncore_json_paths = [path for path in self.ncore_json_paths if path.stem in self.sequence_subranges]
-        else:
-            self.sequence_subranges = {path.stem: [(0.0, 1.0)] for path in self.ncore_json_paths}
+        self.sequence_subranges: dict[str, list[tuple[float, float]]] = {
+            path.stem: [(0.0, 1.0)] for path in self.ncore_json_paths
+        }
 
         logger.info(
             f"Loaded {len(self.ncore_json_paths)}/{n_ncore_json_files} samples from {self.ncore_json_list_path}"
@@ -270,10 +261,6 @@ class NCoreNRMDataset(BaseNRMIndexableDataset):
 
         # Whether to (or not) consolidate rendering batch to save memory
         self.compute_rendering_data = config.compute_rendering_data
-
-        # Cache for _get_loaders_and_sensors: at most one entry, keyed by ncore_json_path (only used when not in a worker)
-        self.cache_loaders_and_sensors = config.cache_loaders_and_sensors
-        self._loaders_sensors_cache: dict[str, NCoreNRMDataset.LoadersAndSensorsResult] = {}
 
         # Camera and lidar id mappings
         self.camera_id_mapping = config.camera_id_mapping
@@ -808,31 +795,9 @@ class NCoreNRMDataset(BaseNRMIndexableDataset):
         all_camera_ids: "list[NCoreNRMDataset.ExtendedCameraId]",
     ) -> "NCoreNRMDataset.LoadersAndSensorsResult":
         """
-        Load sequence loaders, aux loaders, camera/lidar sensors, and rig poses for the given
-        ncore sequence meta path. Returns a LoadersAndSensorsResult dataclass.
-        When cache_loaders_and_sensors is True and not in a DataLoader worker, result is cached (one entry keyed by ncore_json_path).
+        Load sequence loaders, aux loaders, camera/lidar sensors, and rig poses for the
+        given ncore sequence meta path. Returns a LoadersAndSensorsResult dataclass.
         """
-        use_cache = False
-        if self.cache_loaders_and_sensors:
-            worker_info = torch.utils.data.get_worker_info()
-            if worker_info is not None:
-                logger.warning(
-                    "cache_loaders_and_sensors is enabled but running inside a DataLoader worker (worker_id=%s); "
-                    "caching is disabled to avoid per-worker caches. Use num_workers=0 to enable caching.",
-                    worker_info.id,
-                )
-            else:
-                use_cache = True
-
-        if use_cache:
-            cache_key = str(ncore_json_path)
-            cached = self._loaders_sensors_cache.get(cache_key)
-            if cached is not None:
-                return cached
-
-        # Clear cache to release memory
-        self._loaders_sensors_cache.clear()
-
         (
             data_format,
             _,  # sequence_id
@@ -926,17 +891,13 @@ class NCoreNRMDataset(BaseNRMIndexableDataset):
                 }
 
         root_logger.setLevel(logging.INFO)
-        result = NCoreNRMDataset.LoadersAndSensorsResult(
+        return NCoreNRMDataset.LoadersAndSensorsResult(
             T_rig_worlds_with_timestamps_us=T_rig_worlds_with_timestamps_us,
             sequence_loaders=sequence_loaders,
             aux_loaders=aux_loaders,
             camera_sensors=camera_sensors,
             lidar_sensors=lidar_sensors,
         )
-        if use_cache:
-            # Cache only 1 entry by overwriting the existing entry.
-            self._loaders_sensors_cache = {str(ncore_json_path): result}
-        return result
 
     def getitem_allow_exceptions(self, batch_idx: int) -> NRMDataBatch:
         # Disable fsspect INFO logs to not spam the logs.
@@ -1067,13 +1028,10 @@ class NCoreNRMDataset(BaseNRMIndexableDataset):
             T_world_ref,
         )
 
-        # Compute meta data
         meta = {
             "ncore_json_path": ncore_json_path,
             "sequence_id": main_sequence_loader.sequence_id,
         }
-        if self.cache_loaders_and_sensors:
-            meta["sequence_loader"] = main_sequence_loader
 
         nrm_data_batch = NRMDataBatch(
             context=[context],
