@@ -42,17 +42,12 @@ import ncore_internal.data.v3
 from nre.utils.types import HalfClosedInterval
 
 
-# Common aux base-group names used by both the aux data writer and loader
+# Common aux base-group names. Predict-only standalone uses just three;
+# instance_segmentation, optical_flow, scene_flow, normal,
+# lidar_semantic_segmentation, lidar_camera_visibility, semantic_logits,
+# and dinov2 were defined but unreferenced (Phase 1 step 4.3).
 SEMANTIC_SEG_BASE_GROUP = "semantic_segmentation"
-INSTANCE_SEG_BASE_GROUP = "instance_segmentation"
-OPTICAL_FLOW_BASE_GROUP = "optical_flow"
-SCENE_FLOW_BASE_GROUP = "scene_flow"
-NORMAL_BASE_GROUP = "normal"
 DEPTH_BASE_GROUP = "depth"
-LIDAR_SEMANTIC_SEG_BASE_GROUP = "lidar_semantic_segmentation"
-LIDAR_CAMERA_VISIBILITY_BASE_GROUP = "lidar_camera_visibility"
-SEG_LOGIT_BASE_GROUP = "semantic_logits"
-DINOV2_BASE_GROUP = "dinov2"
 EGO_MASK_BASE_GROUP = "egomask"
 
 
