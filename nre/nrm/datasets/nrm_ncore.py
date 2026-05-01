@@ -417,10 +417,6 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
                     device="cpu",
                 )
 
-                # For non-main loaders, we assume they are synthetic
-                if camera_id.loader_key != camera_id.main_loader_key():
-                    flags |= RayFlags.SYNTHETIC.value
-
                 # Collect labels data
                 labels = CameraFrameLabels()
                 frame_image_array = camera_sensor.get_frame_image_array(frame_idx).astype(np.float32) / 255.0
