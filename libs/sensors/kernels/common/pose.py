@@ -87,18 +87,6 @@ class DynamicPose:
     start_pose: Pose
     end_pose: Pose
 
-    @staticmethod
-    def from_static_pose(pose: Pose) -> "DynamicPose":
-        """Create a DynamicPose from a static pose (constant over time).
-
-        Args:
-            pose: Static pose to use for both start and end
-
-        Returns:
-            DynamicPose with constant pose over [0, 1]
-        """
-        return DynamicPose(start_pose=pose, end_pose=pose)
-
     def to_trajectory(self) -> Trajectory:
         """Convert to Trajectory for kernel consumption.
 

@@ -13,7 +13,6 @@ from typing import (
     Any,
     Dict,
     Generator,
-    Hashable,
     List,
     Optional,
     Sequence,
@@ -25,9 +24,6 @@ import torch
 
 
 T = TypeVar("T")
-U = TypeVar("U")
-KT = TypeVar("KT", bound=Hashable)
-VT = TypeVar("VT")
 
 
 def get_pack_info_from_n(n_per_pack: torch.Tensor) -> torch.Tensor:

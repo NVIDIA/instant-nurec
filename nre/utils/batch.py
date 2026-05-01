@@ -692,21 +692,6 @@ class CameraFreePoseViewGeometry(torch.nn.Module):
             sensor_ids_to_frame_range=sensor_ids_to_frame_range,
         )
 
-    def get_timestamps(self, unique_frame_idx: int | None = None) -> torch.Tensor:
-        """Get frame start/end timestamps of either a selected training frame or all training frames from all cameras.
-
-        Args:
-            unique_frame_idx: The index of a specfic camera frame or -1 or None to return all timestamps.
-
-        Returns:
-            A (2,) tensor containing the start and end timestamps of a frame if unique_frame_idx is provided,
-            otherwise a tensor of shape (n_frames, 2) containing the start and end timestamp of each camera frame.
-        """
-        if unique_frame_idx is None or unique_frame_idx == -1:
-            return self.timestamps_startend_us_allviews  # (n_frames, 2)
-        else:
-            return self.timestamps_startend_us_allviews[unique_frame_idx]  # (2,)
-
     def get_sensor_model(self, frame_meta: FrameMeta) -> CameraModel:
         """
         Getter to request sensor model for a given sensor index.

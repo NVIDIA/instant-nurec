@@ -13,20 +13,6 @@ from dataclasses import dataclass
 
 import torch
 
-from torch import nn
-
-
-def _tokengs_init_weights(m: nn.Module):
-    """Initialize weights of the transformer backbone."""
-    if isinstance(m, nn.Linear):
-        nn.init.trunc_normal_(m.weight, std=0.02)
-        if m.bias is not None:
-            nn.init.constant_(m.bias, 0)
-
-    elif isinstance(m, nn.LayerNorm) and m.elementwise_affine:
-        nn.init.constant_(m.bias, 0)
-        nn.init.constant_(m.weight, 1.0)
-
 
 @dataclass(kw_only=True, slots=True)
 class KelvinLatent(ABC):
