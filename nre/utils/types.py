@@ -10,16 +10,7 @@
 
 from __future__ import annotations
 
-from typing import (
-    Optional,
-    OrderedDict,
-)
-
-
-try:
-    from typing import Self
-except ImportError:
-    from typing_extensions import Self
+from typing import Optional, OrderedDict, Self
 
 from dataclasses import dataclass
 from enum import IntEnum, IntFlag, auto
