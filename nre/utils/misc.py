@@ -26,11 +26,9 @@ from typing import (
     List,
     Optional,
     Sequence,
-    Tuple,
     Type,
     TypeVar,
     Union,
-    get_args,
 )
 
 import numpy as np
@@ -120,16 +118,6 @@ def dataclass_keys(dataclass_: Any) -> Generator[str, Any, None]:
         yield field.name
 
 
-def dataclass_items(dataclass_: Any) -> Generator[tuple[str, Any], Any, None]:
-    """
-    Iterate over dataclass keys and values
-    https://stackoverflow.com/a/77486666/24150771
-    """
-    assert is_dataclass(dataclass_), "Only applicable to dataclasses"
-    for field in fields(dataclass_):
-        yield field.name, getattr(dataclass_, field.name)
-
-
 def assert_same_type(seq: Sequence):
     """
     Asserts that all elements of a sequence are of the same type
@@ -142,18 +130,6 @@ def assert_same_type(seq: Sequence):
     assert all(isinstance(item, first_type) for item in seq), (
         f"Not all elements in the sequence are of the same type {first_type}"
     )
-
-
-def flatten_list(x: list) -> list:
-    """
-    Deep flattens a list of lists in place. For example:
-    Input: [1, 2, 3,[1, 2,[[3, 4,[5]], 7, 0, 1, 10], 100,[101,[101,[[101]], 2]],0]]
-    Output: [1, 2, 3, 1, 2, 3, 4, 5, 7, 0, 1, 10, 100, 101, 101, 101, 2, 0]
-    """
-    if isinstance(x, list):
-        return [a for i in x for a in flatten_list(i)]
-    else:
-        return [x]
 
 
 def collate_fn(
@@ -198,17 +174,6 @@ def collate_fn(
         else:
             return batch
 
-
-
-def get_union_types(union_type: Any) -> Tuple[Type, ...]:
-    """Get the union types of a type or union.
-
-    For example, if union_type is `Union[int, float]`, this function will return `(int, float)`.
-    """
-    args = get_args(union_type)
-    if args == ():  # if union_type is not a union, return the type itself
-        return (union_type,)
-    return args
 
 
 # https://github.com/nerfstudio-project/gsplat/blob/2323de5905d5e90e035f792fe65bad0fedd413e7/gsplat/distributed.py#L10
