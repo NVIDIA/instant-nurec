@@ -45,13 +45,6 @@ class PrimitivePLYExportConfig(BaseConfigSchema):
         default=0.0,
         description="Primitives with strictly lower surface area (scale x^2 + y^2 + z^2) than this will be filtered out.",
     )
-    maximum_velocity: float | None = Field(
-        default=0.01,
-        description="Primitives with strictly higher velocity (m/s) than this will be filtered out.",
-    )
-    maximum_sky_mask: float | None = Field(
-        default=0.5, description="Primitives with a strictly higher sky_mask value will be filtered out."
-    )
 
 
 class PrimitiveMergeConfig(BaseConfigSchema):
