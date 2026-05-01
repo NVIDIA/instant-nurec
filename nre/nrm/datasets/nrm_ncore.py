@@ -742,7 +742,6 @@ class NCoreNRMDataset(BaseNRMIndexableDataset):
                     str(camera_id),
                     RigTrajectories.CameraCalibration(
                         sequence_id=sequence_id_prefix + camera_id.loader_key,
-                        logical_sensor_name=str(camera_id),
                         unique_sensor_idx=camera_id.unique_sensor_idx,
                         T_sensor_rig=to_torch(unpack_optional(camera_sensors[camera_id].T_sensor_rig), device="cpu"),
                         camera_model_parameters=all_camera_model_parameters[camera_id],
@@ -758,7 +757,6 @@ class NCoreNRMDataset(BaseNRMIndexableDataset):
                     str(lidar_id),
                     RigTrajectories.LidarCalibration(
                         sequence_id=sequence_id_prefix + lidar_loader_key,
-                        logical_sensor_name=str(lidar_id),
                         unique_sensor_idx=self.lidar_ids.index(lidar_id),
                         T_sensor_rig=to_torch(unpack_optional(lidar_sensors[lidar_id].T_sensor_rig), device="cpu"),
                         lidar_model_parameters=all_lidar_model_parameters[lidar_id],

@@ -227,7 +227,6 @@ class RigTrajectories:
         """Represents a generic sensor-associated calibration"""
 
         sequence_id: str  # sequence id
-        logical_sensor_name: str  # logical sensor name (potentially non-unique for multi-rig-trajectories)
         unique_sensor_idx: int  # unique sensor index (of this associated sensor type!)
 
         T_sensor_rig: torch.Tensor  # extrinsics 4x4
