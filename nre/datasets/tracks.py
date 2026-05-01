@@ -358,7 +358,6 @@ class CuboidTracks(Tracks):
         rays_o: torch.Tensor,
         rays_d: torch.Tensor,
         rays_timestamps_us: torch.Tensor,
-        cuboids_dims_padding: torch.Tensor | None = None,
         max_intersections_per_ray: int = 32,
     ) -> CuboidTracks.RayIntersectionResult:
         """
@@ -368,18 +367,11 @@ class CuboidTracks(Tracks):
         - rays_o: ray origins / 3d world positions, N_rays x 3 [float]
         - rays_d: normalized 3d world directions, N_rays x 3 [float]
         - rays_timestamps_us: per ray timestamp, N_rays [int64]
-        - cuboids_dims_padding: if non-None, 3d padding to add to cuboids, broadcastable to N_tracks x 3 [float]
         - max_intersections_per_ray: upper limit of intersections to return [int]
 
         Returns:
         - RayIntersectionResult: result of the ray intersection
         """
-
-        cuboids_dims = self.cuboids_dims
-
-        if cuboids_dims_padding is not None:
-            cuboids_dims = cuboids_dims + cuboids_dims_padding
-
         intersection_result = vren.ray_cuboidtracks_intersection(
             rays_o,
             rays_d,
@@ -387,7 +379,7 @@ class CuboidTracks(Tracks):
             self.tracks_packinfo,
             self.tracks_poses.data,
             self.tracks_timestamps_us,
-            cuboids_dims,
+            self.cuboids_dims,
             self.max_track_n_poses,
             max_intersections_per_ray,
             False,  # with_intersections_ts: standalone never reads .intersections_ts
