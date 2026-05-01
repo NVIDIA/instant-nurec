@@ -68,7 +68,6 @@ class RayFlags(IntFlag):
     )  # rays can be invalid due to e.g. motion state, mask, ... - all training rays are usually considered to be valid,
     # but invalid rays can be produced in validation mode and should be discarded for, e.g., metric estimation
 
-    DIFIXED = auto()  # set if the ray label has been processed by the Difix model (via TrainingDifixController)
     SYNTHETIC = auto()  # set if the ray is synthesized by e.g. Gen3C
 
 
