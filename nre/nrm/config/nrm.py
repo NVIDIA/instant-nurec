@@ -26,7 +26,7 @@ from pydantic import model_validator
 import nre.config.parse  # noqa: F401
 
 from nre.config.base_schema import BaseConfigSchema, Field
-from nre.config.logger import BatchMediaLoggerConfigMixin, LoggerConfigType
+from nre.config.logger import LoggerConfigType
 from nre.config.trainer import infer_slurm_environment
 from nre.config.version import Version, get_version
 from nre.nrm.config.dataset import NRMSplitsConfig
@@ -43,7 +43,7 @@ current_version = get_version()
 cmd_logger = logging.getLogger(__name__)
 
 
-class BaseNRMSystemConfig(BatchMediaLoggerConfigMixin, BaseConfigSchema):
+class BaseNRMSystemConfig(BaseConfigSchema):
     """
     Currently we only have one NRM system, and this is the base class for it.
     In the future we might want to have different subclasses for this.
