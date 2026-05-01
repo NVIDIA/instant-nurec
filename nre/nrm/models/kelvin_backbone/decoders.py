@@ -253,10 +253,11 @@ class KelvinDPTDecoder(nn.Module):
             checkpointing=config.checkpointing,
         )
         self.context_head_init_values = [0.0] * 3 + [0.0, -1.0, 0.0] + [float("nan")] * self.n_semantic_classes
-        # Time-conditioned training heads (motion-offset for now)
-        self.context_motion_head: KelvinDPTDecoder.TimeModulatedMotionHead | nn.Identity = nn.Identity()
-        if config.motion_depth > 0:
-            self.context_motion_head = self.TimeModulatedMotionHead(config, model_config)
+        # Time-conditioned motion-offset head (the kelvin_pa_front config sets
+        # `motion_depth = 4`, so the NRE-side `motion_depth == 0` Identity
+        # branch is unreachable; the inverse-flow `target_motion_head` was
+        # also pruned earlier in the strip).
+        self.context_motion_head = self.TimeModulatedMotionHead(config, model_config)
 
         # GS-training heads: predict (scale[3], world-quaternion[4], opacity[1]).
         # NRE additionally predicted higher-order SH bands; the kelvin_pa_front
@@ -341,21 +342,18 @@ class KelvinDPTDecoder(nn.Module):
         # This typically gives sharp motion boundary.
         context_dynamic_mask = torch.argmax(context_semantic_logits, dim=-1) == KelvinSemanticClass.MOVABLE.value
 
-        context_prev_flow: torch.Tensor | None = None
-        context_next_flow: torch.Tensor | None = None
-        if isinstance(self.context_motion_head, self.TimeModulatedMotionHead):
-            context_prev_flow, context_next_flow = self.context_motion_head.forward(
-                encoded_latent,
-                output_shape=(H, W),
-                fusion_features=None,
-                chunk_size=self.config.dpt_chunk_size,
-                time_remappings=time_remappings,
-                source_timestamps_us=source_timestamps_us,
-                prev_target_timestamps_us=prev_target_timestamps_us,
-                next_target_timestamps_us=next_target_timestamps_us,
-            )
-            context_prev_flow = context_prev_flow / scene_rescale
-            context_next_flow = context_next_flow / scene_rescale
+        context_prev_flow, context_next_flow = self.context_motion_head.forward(
+            encoded_latent,
+            output_shape=(H, W),
+            fusion_features=None,
+            chunk_size=self.config.dpt_chunk_size,
+            time_remappings=time_remappings,
+            source_timestamps_us=source_timestamps_us,
+            prev_target_timestamps_us=prev_target_timestamps_us,
+            next_target_timestamps_us=next_target_timestamps_us,
+        )
+        context_prev_flow = context_prev_flow / scene_rescale
+        context_next_flow = context_next_flow / scene_rescale
 
         # If cuboid tracks are provided, use them instead.
         if cuboid_tracks is not None:
@@ -406,11 +404,6 @@ class KelvinDPTDecoder(nn.Module):
             context_prev_flow = torch.stack(context_prev_flow_list, dim=0)
             context_next_flow = torch.stack(context_next_flow_list, dim=0)
             context_dynamic_mask = torch.stack(context_dynamic_mask_list, dim=0)
-
-        if context_prev_flow is None or context_next_flow is None:
-            raise RuntimeError(
-                "No motion head found in the model, and cuboid tracks are not provided. Dynamic actors cannot be inferred."
-            )
 
         # Forward and activate gaussian parameters
         gs_params_tensor = self.gaussians_head(
