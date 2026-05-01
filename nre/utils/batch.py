@@ -383,16 +383,13 @@ class CameraFrameLabels:
     The fields are:
     - flags: Optional. Bitmask integer value (see RayFlags). Default is None. [Tensor[int32]]. (B, height, width, 1).
     - rgb: Optional. RGB value within [0, 1]. Default is None. [Tensor[float32]]. (B, height, width, 3).
-    - distance: Optional. Metric ray-depth in NRE scale (not z-depth). Default is None. [Tensor[float32]]. (B, height, width, 1).
     - metric_distance: Optional. Non-metric ray depth from a depth estimation model. Default is None. [Tensor[float32]]. (B, height, width, 1).
-    - semantic: Optional. Semantic class of the pixel. Default is None. [Tensor[uint8]]. (B, height, width, 1).
     - normals: Optional. Per-pixel normal vectors relative to the world frame. Default is None. [Tensor[float32]]. (B, height, width, 3).
     """
 
     flags: torch.Tensor | None = None
     rgb: torch.Tensor | None = None
     metric_distance: torch.Tensor | None = None
-    semantic: torch.Tensor | None = None
     normals: torch.Tensor | None = None
 
     def __post_init__(self):
@@ -407,11 +404,6 @@ class CameraFrameLabels:
                 "Metric distance must be a 4D tensor (B, height, width, 1)"
             )
             assert self.metric_distance.dtype == torch.float32, "Metric distance must be a float32 tensor"
-        if self.semantic is not None:
-            assert self.semantic.ndim == 4 and self.semantic.shape[3] == 1, (
-                "Semantic must be a 4D tensor (B, height, width, 1)"
-            )
-            assert self.semantic.dtype == torch.uint8, "Semantic must be a uint8 tensor"
         if self.normals is not None:
             assert self.normals.ndim == 4 and self.normals.shape[3] == 3, (
                 "Normals must be a 4D tensor (B, height, width, 3)"
@@ -484,7 +476,6 @@ class CameraFrameLabels:
             flags=collate_fn([item.flags for item in seq], device),
             rgb=collate_fn([item.rgb for item in seq], device),
             metric_distance=collate_fn(metric_distance_seq, device),
-            semantic=collate_fn([item.semantic for item in seq], device),
             normals=collate_fn([item.normals for item in seq], device),
         )
 
@@ -493,7 +484,6 @@ class CameraFrameLabels:
             flags=self.flags.to(*args, **kwargs) if self.flags is not None else None,
             rgb=self.rgb.to(*args, **kwargs) if self.rgb is not None else None,
             metric_distance=self.metric_distance.to(*args, **kwargs) if self.metric_distance is not None else None,
-            semantic=self.semantic.to(*args, **kwargs) if self.semantic is not None else None,
             normals=self.normals.to(*args, **kwargs) if self.normals is not None else None,
         )
 
@@ -506,7 +496,6 @@ class CameraFrameLabels:
             flags=self.flags[item] if self.flags is not None else None,
             rgb=self.rgb[item] if self.rgb is not None else None,
             metric_distance=self.metric_distance[item] if self.metric_distance is not None else None,
-            semantic=self.semantic[item] if self.semantic is not None else None,
             normals=self.normals[item] if self.normals is not None else None,
         )
 
