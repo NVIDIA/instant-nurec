@@ -33,10 +33,6 @@ py_library(
     srcs = ["utils.py"],
     deps = [
         pip_requirement("torch"),
-        pip_requirement("omegaconf"),
-        "//nre/models/base:pylib",
-        "//nre/utils:pylib",
-        "//nre/utils:pylib_misc",
     ],
 )
 
@@ -50,11 +46,5 @@ py_library(
         ":pylib_nn_extensions",
         ":pylib_utils",
         pip_requirement("torch"),
-        pip_requirement("nvidia-ncore"),
-        pip_requirement("numpy"),
-        pip_requirement("lietorch"),
-        "//nre/models/base:pylib",
-        "//nre/utils:pylib",
-        "//nre/utils:pylib_types",
     ],
 )
