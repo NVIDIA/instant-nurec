@@ -76,21 +76,6 @@ class CameraSubsamplerConfig(BaseConfigSchema):
     frame_height: int = Field(description="Height of the image to subsample (aspect-preserving center crop)")
 
 
-class SupervisionFrameBatchParamsConfig(BaseConfigSchema):
-    n_frames_per_sample: int = 12
-    prepend_timestamps_us: int = 0
-    append_timestamps_us: int = 0
-    sample_strategy: Literal["random", "stratified"] = "random"
-    include_context_frames: bool = Field(
-        default=False,
-        description="If True, every context frame index is unioned into the supervision batch per sensor "
-        "(for sensors listed in supervision_sensor_ids that also appear in the context batch).",
-    )
-    camera_subsampler: CameraSubsamplerConfig | None = Field(
-        default=None, description="Image resize to a given height/width."
-    )
-
-
 class BaseNCoreNRMDatasetConfig(BaseConfigSchema):
     """Base config for NCore-based datasets. Subclasses must define `name`."""
 
@@ -176,10 +161,6 @@ class BaseNCoreNRMDatasetConfig(BaseConfigSchema):
         description="A list of camera ids, such as `camera_front_wide_120fov`. This is also used to determine the canonical order of cameras in unique sensor idx",
     )
 
-    supervision_frame_batch: SupervisionFrameBatchParamsConfig = Field(
-        description="As our supervision always enforces stratified sampling, so no sampler needed here"
-    )
-
     # Note: this is not the same as the other cuboid tracks params
     cuboid_tracks_params: NCoreNRMCuboidTracksParamsConfig
 
@@ -211,8 +192,6 @@ class BaseNCoreNRMDatasetConfig(BaseConfigSchema):
         assert self.ncore_json_list_path is not None or self.ncore_json_paths is not None, (
             "Either ncore_json_list_path or ncore_json_paths must be provided"
         )
-        if self.supervision_frame_batch.camera_subsampler is None:
-            self.supervision_frame_batch.camera_subsampler = self.camera_subsampler
 
     def concretize(self, epoch: int, rng: np.random.Generator) -> Self:
         """Predict-only standalone has no augmentations; concretize is a no-op

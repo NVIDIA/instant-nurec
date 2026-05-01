@@ -19,7 +19,6 @@ import numpy as np
 from nre.nrm.config.dataset import (
     AdaptiveSequentialFrameBatchSamplerConfig,
     LidarFrameBatchParamsConfig,
-    SupervisionFrameBatchParamsConfig,
 )
 from nre.nrm.datasets.nrm_base import NRMDataError
 from nre.utils.types import HalfClosedInterval
@@ -51,118 +50,6 @@ def get_closest_frame_index(frame_timestamps_us: np.ndarray, target_timestamp_us
         int: Index of the closest frame.
     """
     return int(np.abs(frame_timestamps_us.astype(np.int64) - target_timestamp_us).argmin())
-
-
-def random_valid_start_time_from_intervals(
-    rng: np.random.Generator,
-    intervals: list[HalfClosedInterval],
-    total_time_gap: int,
-) -> int:
-    """
-    Args:
-        rng (np.random.Generator): Random number generator.
-        intervals (list[HalfClosedInterval]): List of half-closed intervals to sample from.
-        total_time_gap (int): Total time gap to ensure the selected value is valid.
-
-    Returns:
-        int: A valid start timestamp where [ans, ans + total_time_gap) is within one of the intervals.
-    """
-
-    @dataclass(slots=True)
-    class ClosedInterval:
-        """Represents a closed interval [start, end]"""
-
-        start: int
-        end: int
-
-        @property
-        def valid_integers(self) -> int:
-            return self.end - self.start + 1
-
-    # Obtain valid start time intervals
-    start_time_intervals: list[ClosedInterval] = []
-    for time_interval in intervals:
-        if time_interval.length >= total_time_gap:
-            start_time_intervals.append(ClosedInterval(time_interval.start, time_interval.end - total_time_gap))
-    if len(start_time_intervals) == 0:
-        if len(intervals) == 0:
-            raise NRMDataError(
-                "No time intervals to sample from (empty list). Rig, auxiliary loaders, and context cameras "
-                "may not overlap in time for this sequence."
-            )
-        max_len = max(ti.length for ti in intervals)
-        raise NRMDataError(
-            f"Uniform frame batch needs a contiguous time span of at least {total_time_gap} us "
-            f"(frame_gap * (n_frames_per_sample - 1)), but after intersecting sensors the longest span is "
-            f"{max_len} us. Reduce n_frames_per_sample or frame_gap_timestamp_us, or use a longer subrange."
-        )
-
-    # Pick a random start time from the valid intervals
-    total_length = sum(interval.valid_integers for interval in start_time_intervals)
-    sample_time = rng.integers(total_length)
-    for interval in start_time_intervals:
-        if sample_time < interval.valid_integers:
-            return interval.start + sample_time
-        sample_time -= interval.valid_integers
-    raise RuntimeError("Should not reach here")
-
-def sample_supervision_frame_batch(
-    config: SupervisionFrameBatchParamsConfig,
-    rng: np.random.Generator,
-    context_frame_batch: FrameBatchSamplerReturn,
-    sensor_frame_timestamps_us: dict[str, np.ndarray],
-    supervision_sensor_ids: list[str],
-    sensor_sample_ratios: list[float],
-) -> FrameBatchSamplerReturn:
-    context_timestamps_us_min = min(
-        sensor_frame_timestamps_us[sensor_id][min(frame_idxs)]
-        for sensor_id, frame_idxs in context_frame_batch.sampled_sensor_frame_idxs.items()
-    )
-    context_timestamps_us_max = max(
-        sensor_frame_timestamps_us[sensor_id][max(frame_idxs)]
-        for sensor_id, frame_idxs in context_frame_batch.sampled_sensor_frame_idxs.items()
-    )
-    n_samples: int = config.n_frames_per_sample
-    supervision_sensor_frame_idxs: dict[str, list[int]] = {}
-    for sensor_id, sample_ratio in zip(supervision_sensor_ids, sensor_sample_ratios, strict=True):
-        sensor_timestamps = sensor_frame_timestamps_us[sensor_id]
-        min_frame_idx = max(
-            get_closest_frame_index(sensor_timestamps, context_timestamps_us_min - config.prepend_timestamps_us), 0
-        )
-        max_frame_idx = min(
-            get_closest_frame_index(sensor_timestamps, context_timestamps_us_max + config.append_timestamps_us),
-            len(sensor_timestamps) - 1,
-        )
-        frame_idxs = list(range(min_frame_idx, max_frame_idx + 1))
-        sampled_indices: list[int] = []
-        match config.sample_strategy:
-            case "random":
-                sampled_indices = np.sort(rng.choice(frame_idxs, size=n_samples, replace=True)).tolist()
-            case "stratified":
-                bins = np.linspace(0, len(frame_idxs), n_samples + 1, dtype=int)
-                for i in range(n_samples):
-                    bin_start, bin_end = bins[i], bins[i + 1]
-                    if bin_start == bin_end:
-                        sampled_indices.append(frame_idxs[bin_start])
-                    else:
-                        sampled_indices.append(rng.choice(frame_idxs[bin_start:bin_end]))
-        if sample_ratio != 1.0:
-            sampled_size = round(len(sampled_indices) * sample_ratio)
-            sampled_indices = np.sort(rng.choice(sampled_indices, size=sampled_size, replace=False)).tolist()
-        if len(sampled_indices) > 0:
-            supervision_sensor_frame_idxs[sensor_id] = sampled_indices
-
-    if config.include_context_frames:
-        supervision_sensor_ids_set = set(supervision_sensor_ids)
-        for sensor_id, ctx_idxs in context_frame_batch.sampled_sensor_frame_idxs.items():
-            if sensor_id not in supervision_sensor_ids_set:
-                continue
-            existing = supervision_sensor_frame_idxs.get(sensor_id, [])
-            merged = sorted(set(existing) | set(ctx_idxs))
-            if merged:
-                supervision_sensor_frame_idxs[sensor_id] = merged
-
-    return FrameBatchSamplerReturn(sampled_sensor_frame_idxs=supervision_sensor_frame_idxs)
 
 
 def sample_lidar_frame_batch(

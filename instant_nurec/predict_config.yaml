@@ -55,15 +55,6 @@ dataset:
       max_frame_gap_timestamp_us: 750000
     supervision_camera_ids:
       - camera_front_wide_120fov
-    supervision_frame_batch:
-      n_frames_per_sample: 0
-      prepend_timestamps_us: 0
-      append_timestamps_us: 0
-      sample_strategy: random
-      include_context_frames: false
-      camera_subsampler:
-        frame_width: 784
-        frame_height: 448
     cuboid_tracks_params:
       lidar_id: lidar_top_360fov
       track_min_travel_distance_m: 1.5

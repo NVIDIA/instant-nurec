@@ -38,7 +38,6 @@ from nre.nrm.datasets.samplers import (
     FrameBatchSamplerReturn,
     RigPoses,
     sample_lidar_frame_batch,
-    sample_supervision_frame_batch,
 )
 from nre.utils.batch import (
     CameraFrameLabels,
@@ -290,7 +289,6 @@ class NCoreNRMDataset(BaseNRMIndexableDataset):
     def _compute_cuboid_tracks(
         self,
         context_frame_batch: FrameBatchSamplerReturn,
-        supervision_frame_batch: FrameBatchSamplerReturn,
         sequence_loader: ncore.data.SequenceLoaderProtocol,
         camera_sensors: dict[ExtendedCameraId, ncore.data.CameraSensorProtocol],
         lidar_sensors: dict[str, ncore.data.LidarSensorProtocol],
@@ -307,15 +305,12 @@ class NCoreNRMDataset(BaseNRMIndexableDataset):
 
         frame_batch_min_timestamps_us: int = int(1e16)
         frame_batch_max_timestamps_us: int = 0
-        for frame_batch in [context_frame_batch, supervision_frame_batch]:
-            for sensor_id, frame_idxs in frame_batch.sampled_sensor_frame_idxs.items():
-                sensor = [v for k, v in (camera_sensors | lidar_sensors).items() if str(k) == sensor_id][0]
-                sensor_min_timestamp_us = sensor.get_frame_timestamp_us(
-                    min(frame_idxs), ncore.data.FrameTimepoint.START
-                )
-                sensor_max_timestamp_us = sensor.get_frame_timestamp_us(max(frame_idxs), ncore.data.FrameTimepoint.END)
-                frame_batch_min_timestamps_us = min(frame_batch_min_timestamps_us, sensor_min_timestamp_us)
-                frame_batch_max_timestamps_us = max(frame_batch_max_timestamps_us, sensor_max_timestamp_us)
+        for sensor_id, frame_idxs in context_frame_batch.sampled_sensor_frame_idxs.items():
+            sensor = [v for k, v in (camera_sensors | lidar_sensors).items() if str(k) == sensor_id][0]
+            sensor_min_timestamp_us = sensor.get_frame_timestamp_us(min(frame_idxs), ncore.data.FrameTimepoint.START)
+            sensor_max_timestamp_us = sensor.get_frame_timestamp_us(max(frame_idxs), ncore.data.FrameTimepoint.END)
+            frame_batch_min_timestamps_us = min(frame_batch_min_timestamps_us, sensor_min_timestamp_us)
+            frame_batch_max_timestamps_us = max(frame_batch_max_timestamps_us, sensor_max_timestamp_us)
 
         time_range_us = HalfClosedInterval(
             frame_batch_min_timestamps_us - self.cuboid_tracks_params.track_extrapolate_timestamps_us,
@@ -1067,59 +1062,12 @@ class NCoreNRMDataset(BaseNRMIndexableDataset):
             )
         )
 
-        # Load supervision frames.
-        # Compute supervision frame batch based on context frames.
-        supervision_camera_subsampler = CameraSubsampler(
-            unpack_optional(concrete_config.supervision_frame_batch.camera_subsampler)
-        )
-        if concrete_config.supervision_frame_batch.n_frames_per_sample > 0:
-            all_camera_frame_timestamps_us = {
-                str(camera_id): camera_sensor.get_frames_timestamps_us()
-                for camera_id, camera_sensor in camera_sensors.items()
-            }
-            supervision_frame_batch = sample_supervision_frame_batch(
-                config=concrete_config.supervision_frame_batch,
-                rng=rng,
-                context_frame_batch=context_frame_batch,
-                sensor_frame_timestamps_us=all_camera_frame_timestamps_us,
-                supervision_sensor_ids=[str(s) for s in supervision_camera_ids],
-                sensor_sample_ratios=[s.sample_ratio for s in supervision_camera_ids],
-            )
-            supervision_rig_trajectory, supervision_camera_mapping, supervision_lidar_mapping = (
-                self._get_rig_trajectory(
-                    "supervision-",
-                    supervision_frame_batch,
-                    camera_sensors,
-                    lidar_sensors,
-                    T_world_ref,
-                    T_rig_worlds_with_timestamps_us,
-                    supervision_camera_subsampler,
-                )
-            )
-            supervision_data_batch = self._load_data_batch(
-                supervision_frame_batch,
-                supervision_camera_mapping,
-                camera_sensors,
-                supervision_lidar_mapping,
-                lidar_sensors,
-                aux_loaders,
-                supervision_camera_subsampler,
-            )
-            assert supervision_data_batch.lidar is None, "Lidar loading is not required for supervision."
-            supervision = DataAndRenderingBatch(data=supervision_data_batch)
-            del supervision_data_batch
+        # Predict pins supervision_frame_batch.n_frames_per_sample=0; supervision is disabled.
+        supervision = None
+        supervision_rig_trajectory = None
 
-        else:
-            # Disable supervision in batch if sampling is disabled
-            supervision_frame_batch = context_frame_batch
-            supervision = None
-            supervision_rig_trajectory = None
-
-        # Load cuboid tracks for the model to compute inputs or supervision.
-        # (Both context and supervision frame batches are needed to determine best time ranges to extract)
         cuboid_tracks = self._compute_cuboid_tracks(
             context_frame_batch,
-            supervision_frame_batch,
             main_sequence_loader,
             camera_sensors,
             lidar_sensors,
