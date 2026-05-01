@@ -213,25 +213,6 @@ py_library(
     ],
 )
 
-py_library(
-    name = "pylib_trainer",
-    deps = [
-        "//nre/config:pylib_trainer_config",
-        pip_requirement("torch"),
-        pip_requirement("pytorch-lightning"),
-    ],
-)
-
-py_library(
-    name = "pylib_schedulers",
-    srcs = ["schedulers.py"],
-    deps = [
-        ":pylib_trainer",
-        "//nre/config:pylib_trainer_config",
-        pip_requirement("omegaconf"),
-    ],
-)
-
 py_binary(
     name = "ffmpeg_wrap",
     srcs = [

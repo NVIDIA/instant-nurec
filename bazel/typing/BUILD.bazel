@@ -33,7 +33,6 @@ py_binary(
         pip_requirement("nvidia-ncore-internal"),
         pip_requirement("hydra-core"),
         pip_requirement("shortuuid"),
-        pip_requirement("pytorch_lightning"),
         pip_requirement("imageio"),
         pip_requirement("pillow"),
         pip_requirement("kornia"),

@@ -84,7 +84,6 @@ py_library(
         ":pylib_version",
         "//nre:pylib_reporoot",
         "//nre/utils:pylib_misc",
-        "//nre/utils:pylib_trainer",
     ],
 )
 
