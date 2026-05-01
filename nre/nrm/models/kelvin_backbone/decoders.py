@@ -13,7 +13,6 @@ import math
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Iterator
 
 import torch
 import torch.utils.checkpoint
@@ -88,9 +87,6 @@ class KelvinDecoderBase(nn.Module, ABC):
     def update_step_train_batch_start(self, epoch: int, global_step: int, system, **kwargs):
         # Do nothing by default
         pass
-
-    def get_potential_unused_parameters(self) -> Iterator[nn.Parameter]:
-        return iter([])
 
 
 class KelvinDPTDecoder(KelvinDecoderBase):
@@ -360,10 +356,6 @@ class KelvinDPTDecoder(KelvinDecoderBase):
 
         state_dict["cuboids_dims_padding"] = self.cuboids_dims_padding.data
         self.load_state_dict(state_dict, strict=True)
-
-    def get_potential_unused_parameters(self) -> Iterator[torch.nn.Parameter]:
-        # Note -- if we shard model parameters need to reconsider this design.
-        return self.gaussians_head.parameters()
 
     @ScopedTimer("KelvinDPTDecoder.decode")
     @torch.autocast("cuda", enabled=False)

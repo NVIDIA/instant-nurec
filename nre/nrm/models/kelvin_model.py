@@ -5,8 +5,7 @@ from __future__ import annotations
 import logging
 
 from dataclasses import replace
-from itertools import chain
-from typing import Any, Iterator, Optional
+from typing import Any, Optional
 
 import torch
 
@@ -169,15 +168,6 @@ class KelvinNRM(BaseNRM[KelvinNRMPrimitive]):
         self.encoder.update_step_train_batch_start(epoch, global_step, system, **kwargs)
         self.decoder.update_step_train_batch_start(epoch, global_step, system, **kwargs)
         return {}
-
-    def get_potential_unused_parameters(self) -> Iterator[torch.nn.Parameter]:
-        parts = [
-            self.encoder.get_potential_unused_parameters(),
-            self.decoder.get_potential_unused_parameters(),
-        ]
-        if self.post_processing is not None:
-            parts.append(self.post_processing.parameters())
-        return chain(*parts)
 
     @staticmethod
     def _grab_metainfo(

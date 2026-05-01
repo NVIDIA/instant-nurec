@@ -11,7 +11,7 @@
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing import Any, Generic, Iterator
+from typing import Generic
 
 import torch
 import torch.nn as nn
@@ -28,27 +28,10 @@ class BaseNRM(nn.Module, Generic[NRMPrimitiveType]):
         self.config = config
 
     def update_step_train_batch_start(self, epoch: int, global_step: int, system, **kwargs) -> dict[str, torch.Tensor]:
-        """
-        Hook function invoked at system.on_train_batch_start(), i.e. the very start of each train step.
-        """
         return {}
 
     def on_train_from_scratch_start(self, system, **kwargs) -> None:
-        """
-        Hook function for system, invoked at system.on_train_start() only when system.resume is False.
-        Useful for e.g. setting scalers, shape initialization process for sdf models, etc.
-        """
         pass
-
-    @torch.no_grad()
-    def serialize_to_json_dict(self, with_state_dict: bool = True) -> dict[str, Any]:
-        """
-        Temporary hack to properly initialize nrend because nrend expects a renderable primitive during initialization.
-        However, the renderable primitive is not available until the feed-forward pass is called.
-        Hence this function will then be used to serialize the future-generated primitive to a JSON dict.
-        TODO [JH]: Use lazy initialization for BaseGaussianRenderer.factory
-        """
-        return {}
 
     @abstractmethod
     def reconstruct(
@@ -56,12 +39,7 @@ class BaseNRM(nn.Module, Generic[NRMPrimitiveType]):
         context: list[DataAndRenderingBatch],
         cuboid_tracks: list[CuboidTracks] | None,
     ) -> list[NRMPrimitiveType]:
-        """
-        Perform a "reconstruction" step on the provided images.
-        """
-        pass
-
-
+        """Perform a reconstruction step on the provided images."""
 
     @abstractmethod
     def prepare_context(
@@ -69,15 +47,4 @@ class BaseNRM(nn.Module, Generic[NRMPrimitiveType]):
         context: list[DataAndRenderingBatch],
         cuboid_tracks: list[CuboidTracks] | None,
     ) -> list[DataAndRenderingBatch]:
-        """
-        Hook function to prepare context data for the model.
-        e.g. for the dynamic celsius model we have to compute the velocity for the context.
-        """
-        pass
-
-    def get_potential_unused_parameters(self) -> Iterator[nn.Parameter]:
-        """
-        Return an iterator of potential unused parameters that can be used to sink the parameters during training.
-        This is useful for avoiding unused parameters in DDP setting.
-        """
-        return iter([])
+        """Prepare context data before reconstruction."""

@@ -11,72 +11,21 @@
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing import Any, Literal, Self, TypeVar
+from typing import Literal, Self, TypeVar
 
 import torch
 
-from omegaconf import DictConfig, OmegaConf
-
-from nre.config.version import get_version
 from nre.models.gaussians.renderers import BaseGaussianRenderer
 from nre.models.nrenderable import NRenderableModel
 from nre.nrm.config.models import PrimitiveExportPreprocessConfig
 from nre.utils.batch import DataAndRenderingBatch
-from nre.utils.misc import map_optional, strip_none_from_config
-from nre.utils.types import (
-    Checkpoint,
-    RigTrajectories,
-)
+from nre.utils.types import RigTrajectories
 
 
 class BaseNRMPrimitive(NRenderableModel):
     """
     Base class for all renderable primitives reconstructed by an NRM.
     """
-
-    @abstractmethod
-    def state_dict_and_config(self) -> tuple[dict[str, Any], DictConfig]:
-        """Used for serialization to be used in nrend."""
-
-    @torch.no_grad()
-    def serialize_to_json_dict(self, with_state_dict: bool = True) -> dict[str, Any]:
-        """Used only during initialization time, and/or test time with nrend."""
-
-        state_dict, config = self.state_dict_and_config()
-        config_dict = strip_none_from_config(OmegaConf.to_container(config))
-        json_dict = {
-            "nre_data": {
-                "version": map_optional(get_version(), lambda v: v.semantic_string()),
-                "model": "nre",
-                # Empty to be filled by the derived class
-                "config": config_dict,
-                "state_dict": {f".{key}": value for key, value in state_dict.items()} if with_state_dict else {},
-            }
-        }
-
-        if with_state_dict:
-            assert isinstance(json_dict["nre_data"]["state_dict"], dict)
-            # add shape entries for every tensor
-            json_dict["nre_data"]["state_dict"].update(
-                {
-                    key + ".shape": list(value.size())
-                    for key, value in json_dict["nre_data"]["state_dict"].items()
-                    if isinstance(value, torch.Tensor) and isinstance(key, str)
-                }
-            )
-
-            # convert tensor to bytes
-            def tensor_to_bytes(tensor: torch.Tensor) -> bytes:
-                # default conversion to half for single precision tensor
-                tensor = tensor.to(dtype=torch.float16) if tensor.dtype == torch.float32 else tensor
-                return tensor.flatten().cpu().numpy().tobytes()
-
-            json_dict["nre_data"]["state_dict"] = {
-                key: tensor_to_bytes(value) if isinstance(value, torch.Tensor) else value
-                for key, value in json_dict["nre_data"]["state_dict"].items()
-            }
-
-        return json_dict
 
     @abstractmethod
     def device(self) -> torch.device: ...

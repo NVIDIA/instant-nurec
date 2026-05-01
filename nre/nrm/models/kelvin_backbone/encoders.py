@@ -11,7 +11,7 @@
 import logging
 
 from abc import ABC, abstractmethod
-from typing import Iterator, cast
+from typing import cast
 
 import numpy as np
 import torch
@@ -68,10 +68,6 @@ class KelvinEncoderBase(nn.Module, ABC):
     def update_step_train_batch_start(self, epoch: int, global_step: int, system, **kwargs):
         # Do nothing by default
         pass
-
-    def get_potential_unused_parameters(self) -> Iterator[nn.Parameter]:
-        return iter([])
-
 
 
 class KelvinDAv3Encoder(KelvinEncoderBase):

@@ -6,11 +6,10 @@ import logging
 
 from dataclasses import asdict, dataclass, replace
 from enum import IntEnum
-from typing import Any, Self, Sequence
+from typing import Self, Sequence
 
 import torch
 
-from omegaconf import DictConfig
 
 from nre.models.gaussians.renderers import BaseGaussianRenderer
 from nre.nrm.config.models import PrimitiveExportPreprocessConfig
@@ -420,20 +419,6 @@ class KelvinNRMPrimitive(BaseGaussiansNRMPrimitive):
             affine_matrix=self.affine_matrix,
             use_2dgs=self.use_2dgs,
             gaussians_renderer=self.gaussians_renderer,
-        )
-
-    def state_dict_and_config(self) -> tuple[dict[str, Any], DictConfig]:
-        return {}, DictConfig(
-            {
-                "name": "sh-gaussians",
-                "device": "cuda",
-                "particle": {
-                    "radiance_sph_degree": 0,
-                    "radiance_sph_O0": True,
-                    "extra_signal_dim": 0,
-                    "density_kernel_planar": self.use_2dgs,
-                },
-            }
         )
 
     @torch.autocast(device_type="cuda", enabled=False)
