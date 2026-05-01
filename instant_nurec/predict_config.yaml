@@ -97,16 +97,9 @@ model:
     enabled: true
   activations:
     opacity_shift: -2.0
-    scale_type: world
     scale_shift_log_ratio: -2.9
     scale_max: 0.045
     scale_min: 0.0
-    distance_type: none
-    distance_min: 0.1
-    distance_max: 500.0
-    distance_shift: -1.65
-    xyz_type: none
-    z_offset: 1.0
   export_preprocess:
     enabled: true
     density_prune_threshold: 0.01

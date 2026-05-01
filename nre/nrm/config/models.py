@@ -37,29 +37,22 @@ class PrimitiveExportPreprocessConfig(BaseConfigSchema):
 class GaussiansActivationConfig(BaseConfigSchema):
     """
     Configuration for activation functions used in neural reconstruction models.
+
+    Predict-only standalone keeps the active subset (opacity_shift, scale_*).
+    The NRE-side `scale_type`/`distance_*`/`xyz_*` knobs configured activation
+    classes that the decoder never invokes (Phase 1 step 4.3).
     """
 
     # Opacity activation parameters
     opacity_shift: float = Field(default=-2.0, description="Shift parameter for opacity sigmoid activation")
 
     # Scale activation parameters
-    scale_type: Literal["world", "pixel"] = Field(default="world", description="Type of scale activation")
     scale_shift_log_ratio: float = Field(default=-1.0, description="Shift parameter for scale activation")
     scale_max: float = Field(default=0.3, description="Maximum scale value")
     scale_min: float = Field(
         default=0.0,
         description="Minimum scale value (clamp applied after exp). Use 0.01 when using 3DGUT renderer to avoid NaN gradients.",
     )
-
-    # Distance activation parameters
-    distance_type: Literal["sigmoid", "none"] = Field(default="sigmoid", description="Type of distance activation")
-    distance_min: float = Field(default=0.1, description="Minimum distance value")
-    distance_max: float = Field(default=500.0, description="Maximum distance value")
-    distance_shift: float = Field(default=-1.65, description="Shift parameter for distance sigmoid")
-
-    # XYZ activation parameters
-    xyz_type: Literal["exp", "none"] = Field(default="exp", description="Type of XYZ activation")
-    z_offset: float = Field(default=1.0, description="Offset for XYZ activation")
 
 
 

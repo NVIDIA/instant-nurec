@@ -19,7 +19,6 @@ import torch.nn as nn
 from einops import rearrange
 from torch import Tensor
 
-from nre.models.nn_extensions import module_call_type
 from nre.nrm.config.models import GaussiansActivationConfig
 
 
@@ -50,7 +49,7 @@ class ScaleActivation(nn.Module):
         # When scale_shift_log_ratio = -1, the scale is scale_max / e when x is 0
         self._scale_shift = math.log(self.scale_max) + self.scale_shift_log_ratio
 
-    def forward(self, x: Tensor, scene_rescale: float = 1.0, pixel_scale: Tensor | None = None) -> Tensor:
+    def forward(self, x: Tensor, scene_rescale: float = 1.0) -> Tensor:
         """
         Apply exponential activation to scale values with clamping.
         Uses exponential activation to ensure positive scales, with maximum clamping
@@ -64,20 +63,6 @@ class ScaleActivation(nn.Module):
         return scale
 
 
-class PixelScaleActivation(nn.Module):
-    """Activation function for pixel scale values using exponential activation and clamping."""
-
-    def __init__(self, config: GaussiansActivationConfig):
-        super().__init__()
-        self.pixel_scale_min = config.scale_min
-        self.pixel_scale_max = config.scale_max
-
-    def forward(self, x: Tensor, scene_rescale: float = 1.0, pixel_scale: Tensor | None = None) -> Tensor:
-        scale = self.pixel_scale_min + (self.pixel_scale_max - self.pixel_scale_min) * x.sigmoid()
-        assert pixel_scale is not None, "Pixel scale must be provided"
-        return scale * pixel_scale
-
-
 class RotationActivation(nn.Module):
     """Activation function for rotation quaternions using L2 normalization."""
 
@@ -87,56 +72,6 @@ class RotationActivation(nn.Module):
     def forward(self, x: Tensor) -> Tensor:
         """Normalize rotation quaternions to unit length."""
         return torch.nn.functional.normalize(x, dim=-1)
-
-
-class DistanceActivation(nn.Module):
-    """Activation function for distance values using sigmoid with min/max bounds."""
-
-    def __init__(self, config: GaussiansActivationConfig):
-        super().__init__()
-        assert config.distance_type == "sigmoid", "Distance activation must be sigmoid"
-        self.distance_min = config.distance_min
-        self.distance_max = config.distance_max
-        self.distance_shift = config.distance_shift
-
-    def forward(self, x: Tensor, scene_rescale: float = 1.0) -> Tensor:
-        """
-        Apply sigmoid activation to map distance values to [distance_min, distance_max] range.
-        The sigmoid ensures smooth mapping from unbounded input to bounded distance range.
-        """
-        # Apply a shift so that w is sigmoid(distance_shift) when x is 0
-        # This makes training on object-centric data easier.
-        # Default distance_shift = -1.65 is legacy from BTimer.
-        # When distance_shift = -1.65, the initial depth is 0.16 * distance_max.
-        w = torch.sigmoid(x + self.distance_shift)
-        depth = self.distance_min + (self.distance_max - self.distance_min) * w
-        depth = depth / scene_rescale
-        return depth
-
-
-class XyzActivation(nn.Module):
-    """Activation function for direct XYZ coordinates using signed exponential with offset."""
-
-    def __init__(self, config: GaussiansActivationConfig):
-        super().__init__()
-        assert config.xyz_type == "exp", "XYZ activation must be exp"
-        self.z_offset = config.z_offset
-
-        # Add a fixed offset to the XYZ coordinates
-        # This is because the reference camera is at (0, 0, 0) facing +z
-        # so we need a offset on z-axis to make the initial gs visible.
-        self._z_offset_vec = nn.Buffer(torch.tensor([0.0, 0.0, self.z_offset]))
-
-    def forward(self, x: Tensor, scene_rescale: float = 1.0) -> Tensor:
-        """
-        Apply signed exponential activation to XYZ coordinates.
-        Uses sign(x) * (exp(|x|) - 1) to preserve sign while providing exponential growth,
-        then adds a fixed offset and rescales for the scene coordinate system.
-        """
-        xyz = torch.sign(x) * (torch.expm1(torch.abs(x)))
-        xyz = xyz + self._z_offset_vec
-        xyz = xyz / scene_rescale
-        return xyz
 
 
 class RgbActivation(nn.Module):
@@ -160,17 +95,18 @@ class GaussianParams:
     - scale: (*, 3)
     - rotation: (*, 4)
     - opacity: (*, 1)
-    These two are mutually exclusive:
-        - xyz: (*, 3)
-        - distance: (*, 1)
+    - xyz: (*, 3)
+
+    Predict-only standalone always carries `xyz` directly; the NRE-side
+    `distance` field and the activation/forward fan-out that resolved
+    distance->xyz via rays were removed in Phase 1 step 4.3.
     """
 
     rgb: Tensor
     scale: Tensor
     rotation: Tensor
     opacity: Tensor
-    xyz: Tensor | None = None
-    distance: Tensor | None = None
+    xyz: Tensor
 
     # Indicates whether this set of parameters has been already activated.
     activated: bool = False
@@ -181,8 +117,7 @@ class GaussianParams:
             scale=self.scale[key],
             rotation=self.rotation[key],
             opacity=self.opacity[key],
-            xyz=self.xyz[key] if self.xyz is not None else None,
-            distance=self.distance[key] if self.distance is not None else None,
+            xyz=self.xyz[key],
             activated=self.activated,
         )
 
@@ -192,8 +127,7 @@ class GaussianParams:
             scale=rearrange(self.scale, pattern, **axes_lengths),
             rotation=rearrange(self.rotation, pattern, **axes_lengths),
             opacity=rearrange(self.opacity, pattern, **axes_lengths),
-            xyz=rearrange(self.xyz, pattern, **axes_lengths) if self.xyz is not None else None,
-            distance=rearrange(self.distance, pattern, **axes_lengths) if self.distance is not None else None,
+            xyz=rearrange(self.xyz, pattern, **axes_lengths),
             activated=self.activated,
         )
 
@@ -203,8 +137,7 @@ class GaussianParams:
             scale=self.scale.reshape(-1, 3),
             rotation=self.rotation.reshape(-1, 4),
             opacity=self.opacity.reshape(-1, 1),
-            xyz=self.xyz.reshape(-1, 3) if self.xyz is not None else None,
-            distance=self.distance.reshape(-1, 1) if self.distance is not None else None,
+            xyz=self.xyz.reshape(-1, 3),
             activated=self.activated,
         )
 
@@ -213,15 +146,7 @@ class GaussianParams:
         assert self.rgb.shape[:-1] == prefix_shape, "RGB shape must match prefix shape"
         assert self.rotation.shape[:-1] == prefix_shape, "Rotation shape must match prefix shape"
         assert self.opacity.shape[:-1] == prefix_shape, "Opacity shape must match prefix shape"
-        if self.xyz is not None:
-            assert self.xyz.shape[:-1] == prefix_shape, "XYZ shape must match prefix shape"
-        if self.distance is not None:
-            assert self.distance.shape[:-1] == prefix_shape, "Distance shape must match prefix shape"
-        assert int(self.xyz is not None) + int(self.distance is not None) == 1, (
-            "Exactly one of xyz or distance must be provided"
-        )
-        if self.activated:
-            assert self.xyz is not None, "XYZ must be provided if Gaussian parameters are already activated"
+        assert self.xyz.shape[:-1] == prefix_shape, "XYZ shape must match prefix shape"
 
     @property
     def prefix_shape(self) -> tuple[int, ...]:
@@ -233,40 +158,17 @@ class GaussianParams:
 
 
 class GaussianActivations(nn.Module):
-    """Combined activation functions for Gaussian parameters."""
+    """Combined activation functions for Gaussian parameters.
+
+    Predict-only standalone calls the per-attribute submodules directly
+    (`self.gaussian_activations.{rgb,scale,opacity,rotation}` from the
+    decoder); `forward` was unused, so the `xyz` / `distance` activation
+    classes that fed it are gone (Phase 1 step 4.3).
+    """
 
     def __init__(self, config: GaussiansActivationConfig):
         super().__init__()
         self.rgb = RgbActivation(config)
-        self.scale = ScaleActivation(config) if config.scale_type == "world" else PixelScaleActivation(config)
+        self.scale = ScaleActivation(config)
         self.rotation = RotationActivation(config)
         self.opacity = OpacityActivation(config)
-        self.xyz = XyzActivation(config) if config.xyz_type != "none" else nn.Identity()
-        self.distance = DistanceActivation(config) if config.distance_type != "none" else nn.Identity()
-
-    def forward(
-        self,
-        gs_params: GaussianParams,
-        rays_o: Tensor | None = None,
-        rays_d: Tensor | None = None,
-        scene_rescale: float = 1.0,
-    ) -> GaussianParams:
-        assert not gs_params.activated, "Gaussian parameters must not be already activated"
-
-        rgb = self.rgb(gs_params.rgb)
-        scales = self.scale(gs_params.scale, scene_rescale)
-        rotations = self.rotation(gs_params.rotation)
-        opacity = self.opacity(gs_params.opacity)
-
-        xyz: Tensor | None = None
-        if gs_params.xyz is not None:
-            xyz = self.xyz(gs_params.xyz, scene_rescale)
-
-        elif gs_params.distance is not None:
-            assert rays_o is not None and rays_d is not None, "Rays must be provided for distance-based prediction"
-            distance = self.distance(gs_params.distance, scene_rescale)
-            xyz = rays_o + rays_d * distance  # Compute XYZ from ray and distance
-
-        return GaussianParams(rgb=rgb, scale=scales, rotation=rotations, opacity=opacity, xyz=xyz, activated=True)
-
-    __call__ = module_call_type(forward)

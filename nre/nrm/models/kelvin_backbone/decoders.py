@@ -449,11 +449,10 @@ class KelvinDPTDecoder(KelvinDecoderBase):
         gs_scale, gs_world_quaternion, gs_opacity = gs_params_tensor.split([3, 4, 1], dim=-1)
         gs_distance = torch.stack([pred_depth[bidx] / renderings[bidx].distance_to_depth_scale for bidx in range(B)])
 
-        # Scales are predicted in pixel units (resolution-agnostic); rescale by the pixel scale,
-        # defined by footprint(cone) * distance. (If rendered via 2D evaluation, the most accurate
-        # definition would be footprint(plane) * depth -- we assume 3DGUT is always used here.)
-        pixel_scale = torch.stack([renderings[bidx].ray_footprints for bidx in range(B)]) * gs_distance
-        gs_scale = self.gaussian_activations.scale(gs_scale, scene_rescale=scene_rescale, pixel_scale=pixel_scale)
+        # ScaleActivation (the world-space variant) ignores `pixel_scale`; the
+        # NRE-side PixelScaleActivation that consumed it was dropped along with
+        # `config.activations.scale_type` (Phase 1 step 4.3).
+        gs_scale = self.gaussian_activations.scale(gs_scale, scene_rescale=scene_rescale)
         gs_valid_mask = KelvinSemanticClass.opacity_mask_from_semantic_probs(
             torch.softmax(context_semantic_logits, dim=-1)
         )  # (B, V, H, W, 1)
