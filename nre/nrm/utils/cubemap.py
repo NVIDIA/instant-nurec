@@ -45,7 +45,7 @@ def unproject_to_sky_cubemap(
     R_camera_world: torch.Tensor,
     camera_model_parameters: list[CameraModelParameters],
     feature: torch.Tensor,
-    feature_mask: torch.Tensor | None = None,
+    feature_mask: torch.Tensor,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """
     Unproject the RGB image to the sky cubemap.
@@ -58,9 +58,6 @@ def unproject_to_sky_cubemap(
         The sky cubemap feature image. [6, self.sky_cubemap_size, self.sky_cubemap_size, C]
         The mask corresponding to the cubemap. [6, self.sky_cubemap_size, self.sky_cubemap_size, 1]
     """
-    # TODO: This function is very slow. Consider downsample the feature image or use batched implementation
-    # of camera_rays_to_image_points.
-
     sky_rays_d = cubemap_ray_directions(sky_cubemap_size, feature.device)
     feature_dim = feature.shape[-1]
     sky_cubemap_shape = (6, sky_cubemap_size, sky_cubemap_size)
@@ -69,24 +66,22 @@ def unproject_to_sky_cubemap(
     for vidx in range(feature.shape[0]):
         resolution = torch.from_numpy(camera_model_parameters[vidx].resolution).to(feature.device)
         with torch.autocast("cuda", enabled=False):
-            # Fastest implementation we found. Don't change.
             image_points_return = camera_rays_to_image_points(
                 camera_model_parameters[vidx], (sky_rays_d @ R_camera_world[vidx, :3, :3].float()).reshape(-1, 3)
             )
         image_points_valid_inds: torch.Tensor = torch.where(image_points_return.valid_flag)[0]
         valid_samples_uv = (image_points_return.image_points[image_points_valid_inds] / resolution) * 2 - 1
-        if feature_mask is not None:
-            valid_samples_mask = (
-                torch.nn.functional.grid_sample(
-                    rearrange(feature_mask[vidx].float(), "H W 1 -> 1 1 H W"),
-                    valid_samples_uv[None, None],
-                    padding_mode="border",
-                    align_corners=False,
-                ).reshape(-1)
-                > 0.9
-            )
-            valid_samples_uv = valid_samples_uv[valid_samples_mask]
-            image_points_valid_inds = image_points_valid_inds[valid_samples_mask]
+        valid_samples_mask = (
+            torch.nn.functional.grid_sample(
+                rearrange(feature_mask[vidx].float(), "H W 1 -> 1 1 H W"),
+                valid_samples_uv[None, None],
+                padding_mode="border",
+                align_corners=False,
+            ).reshape(-1)
+            > 0.9
+        )
+        valid_samples_uv = valid_samples_uv[valid_samples_mask]
+        image_points_valid_inds = image_points_valid_inds[valid_samples_mask]
 
         sky_cubemap_feature.view(-1, feature_dim)[image_points_valid_inds] += torch.nn.functional.grid_sample(
             rearrange(feature[vidx], "H W C -> 1 C H W"),
@@ -96,7 +91,6 @@ def unproject_to_sky_cubemap(
         )[0, :, 0].T
         sky_cubemap_valid_counts.view(-1)[image_points_valid_inds] += 1
 
-    # Average the features from multiple views
     sky_cubemap_feature /= torch.clamp(sky_cubemap_valid_counts[..., None].float(), min=1e-3)
     sky_cubemap_valid_mask = sky_cubemap_valid_counts > 0
 
