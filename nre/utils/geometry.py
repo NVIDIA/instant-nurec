@@ -165,6 +165,59 @@ def so3_matrix_to_quat(R: torch.Tensor | np.ndarray, unbatch: bool = True, norma
     return quat  # (N,4) or (4,)
 
 
+def quat_to_so3_matrix(quat: torch.Tensor | np.ndarray, unbatch: bool = True, normalize: bool = True) -> torch.Tensor:
+    """
+    Converts a single / batch of quaternions (4) to SO3 representation.
+
+    Args:
+        quat: single / batch of quaternions (XYZW convention) [bs, 4] or [4]]
+        unbatch: if the single example should be unbatched (first dimension removed) or not
+
+    Returns:
+        single / batch of SO3 matrices [bs, 3, 3] or [3,3]
+    """
+
+    # Convert numpy array to torch tensor
+    quat_torch: torch.Tensor = torch.from_numpy(quat) if isinstance(quat, np.ndarray) else quat
+    quat_torch = quat_torch.reshape((-1, 4))  # batch dimensions unconditionally
+
+    # Normalize the quaternions
+    if normalize:
+        quat_torch = quat_torch / torch.norm(quat_torch, dim=1, keepdim=True)
+
+    num_quats, _ = quat_torch.shape
+
+    x, y, z, w = torch.unbind(quat_torch, -1)
+    x_2 = x * x
+    y_2 = y * y
+    z_2 = z * z
+    xy = x * y
+    xz = x * z
+    xw = x * w
+    yz = y * z
+    yw = y * w
+    zw = z * w
+
+    R = torch.stack(
+        (
+            1 - 2 * (y_2 + z_2),
+            2 * (xy - zw),
+            2 * (xz + yw),
+            2 * (xy + zw),
+            1 - 2 * (x_2 + z_2),
+            2 * (yz - xw),
+            2 * (xz - yw),
+            2 * (yz + xw),
+            1 - 2 * (x_2 + y_2),
+        ),
+        -1,
+    ).reshape(num_quats, 3, 3)
+
+    if unbatch:  # unbatch dimensions conditionally
+        R = R.squeeze()
+
+    return R  # (N,3,3) or (3,3)
+
 def tquat_to_se3_matrix(tquat: torch.Tensor | np.ndarray, unbatch: bool = True) -> torch.Tensor:
     """
     Converts a single / batch of [t,q] 7d transformation representations consisting of
