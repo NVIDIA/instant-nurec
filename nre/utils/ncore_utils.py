@@ -59,28 +59,6 @@ EGO_MASK_BASE_GROUP = "egomask"
 class AuxShardDataLoader:
     """Very simple (~dumb / linear) annotation data loader for NCore multi-shard-associated aux data"""
 
-    @staticmethod
-    def from_shard_data_loader(
-        loader: ncore_internal.data.v3.ShardDataLoader, open_consolidated=True
-    ) -> AuxShardDataLoader:
-        """Factory method for V3 NCore sequence loaders"""
-        return AuxShardDataLoader(
-            sequence_id=loader.get_sequence_id(),
-            dataset_paths=loader.get_shard_paths(),
-            open_consolidated=open_consolidated,
-        )
-
-    @staticmethod
-    def from_sequence_loader(
-        sequence_loader: ncore.data.SequenceLoaderProtocol, open_consolidated=True
-    ) -> AuxShardDataLoader:
-        """Factory method for V4 NCore compat sequence loaders"""
-        return AuxShardDataLoader(
-            sequence_id=sequence_loader.sequence_id,
-            dataset_paths=sequence_loader.sequence_paths,
-            open_consolidated=open_consolidated,
-        )
-
     def __init__(
         self,
         sequence_id: str,
@@ -258,13 +236,6 @@ class AuxShardDataLoader:
     def has_depth(self, camera_id: str | None = None) -> bool:
         """Check if depth data exists. If camera_id is provided, check if it is available for the given camera ID."""
         return self._has_base_group(DEPTH_BASE_GROUP, camera_id)
-
-    def get_depth_meta(self, camera_id: str) -> dict:
-        if not self.has_depth(camera_id):
-            raise KeyError("No depth data found for {camera_id}")
-
-        # Take meta from first shard
-        return dict(self.base_groups[DEPTH_BASE_GROUP][0][camera_id].attrs)
 
     def get_depth(
         self, camera_id: str, frame_timestamps_us: int, target_width_height: tuple[int, int] | None = None
