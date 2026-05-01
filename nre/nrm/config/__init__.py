@@ -8,7 +8,7 @@
 # without an express license agreement from NVIDIA CORPORATION or
 # its affiliates is strictly prohibited.
 
-from nre.nrm.config.dataset import NRMEpochSplitConfig, NRMSplitsConfig
+from nre.nrm.config.dataset import NRMSplitsConfig
 from nre.nrm.config.nrm import BaseNRMSystemConfig, NRMConfig
 
 
@@ -16,5 +16,4 @@ __all__ = [
     "BaseNRMSystemConfig",
     "NRMConfig",
     "NRMSplitsConfig",
-    "NRMEpochSplitConfig",
 ]

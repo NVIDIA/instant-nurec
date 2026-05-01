@@ -11,13 +11,12 @@
 from __future__ import annotations
 
 import logging
-import re
 
 from typing import Annotated, Any, Dict, List, Literal, Optional, Self, Union
 
 import numpy as np
 
-from pydantic import RootModel, model_validator
+from pydantic import model_validator
 
 from nre.config.base_schema import BaseConfigSchema, Field
 from nre.utils.misc import unpack_optional
@@ -418,97 +417,14 @@ class NCoreNRMDatasetConfig(BaseNCoreNRMDatasetConfig):
     name: Literal["nrm-ncore"]
 
 
-class DummyNRMDatasetConfig(BaseConfigSchema):
-    """
-    Dummy dataset as a placeholder for testing-only configs, or to override a mixture to empty.
-    """
-
-    name: Literal["nrm-dummy"]
-
-
-class TestIndexNRMDatasetConfig(BaseConfigSchema):
-    """
-    TestIndexNRMDataset is a dataset class that returns a batch of data at the given index.
-    """
-
-    name: Literal["nrm-test-index"]
-    size: int = Field(description="Size of the dataset")
-
-
-SingleNRMDatasetConfig = Union[
-    NCoreNRMDatasetConfig, DummyNRMDatasetConfig, TestIndexNRMDatasetConfig
-]
-
-
-class NRMMixedDatasetConfig(BaseConfigSchema):
-    class MixtureComponentConfig(BaseConfigSchema):
-        sample_ratio: float = Field(
-            description="Sample ratio of the mixture component. Will be renormalized to sum to 1."
-        )
-        config: SingleNRMDatasetConfig = Field(
-            discriminator="name",
-            description="Config of the mixture component",
-        )
-
-    name: Literal["nrm-mixed"]
-    mixture: Dict[str, MixtureComponentConfig] = Field(description="List of mixture components")
-
-
-NRMSplitConfig = Annotated[
-    Union[
-        NCoreNRMDatasetConfig,
-        NRMMixedDatasetConfig,
-        DummyNRMDatasetConfig,
-        TestIndexNRMDatasetConfig,
-    ],
-    Field(discriminator="name"),
-]
-
-
-EPOCH_KEY_REGEX = re.compile(r"^epoch_(\d+)$")
-
-
-class NRMEpochSplitConfig(RootModel[Dict[str, NRMSplitConfig]]):
-    """
-    A dict of NRMSplitConfig, where the keys are the epoch numbers: epoch_{idx}.
-    For example, we will start to use "epoch_10" config after the 10th epoch.
-    """
-
-    root: Dict[str, NRMSplitConfig]
-
-    @model_validator(mode="before")
-    @classmethod
-    def validate_epoch_keys(cls, v: Any) -> Any:
-        """Validate that all keys start with 'epoch_' for epoch-based config switching"""
-        for key in v.keys():
-            match = EPOCH_KEY_REGEX.match(key)
-            if match is None:
-                raise ValueError(f"Epoch split config keys must be 'epoch_{{epoch_number}}', got {key}")
-
-        return v
-
-    def milestones(self) -> dict[int, NRMSplitConfig]:
-        """Returns `self` with keys parsed to integers."""
-        milestones = {}
-        for k, v in self.root.items():
-            match = EPOCH_KEY_REGEX.match(k)
-            assert match is not None, "This should've been caught in validate_epoch_keys"
-
-            milestones[int(match.group(1))] = v
-
-        return milestones
-
-    def last_milestone(self) -> NRMSplitConfig:
-        """Returns the last milestone config."""
-        return self.root[max(self.root.keys())]
+NRMSplitConfig = Annotated[NCoreNRMDatasetConfig, Field(discriminator="name")]
 
 
 class NRMSplitsConfig(BaseConfigSchema):
-    """NRM splits configuration into three splits: train, val, test"""
+    """NRM splits configuration. Predict-only standalone keeps just the predict
+    split; pydantic extras="ignore" drops the train/val/test entries that the
+    pretrained parsed.yaml still carries."""
 
     name: Literal["nrm"]
 
-    train: NRMSplitConfig | NRMEpochSplitConfig
-    val: NRMSplitConfig | NRMEpochSplitConfig
-    test: NRMSplitConfig | NRMEpochSplitConfig | None = Field(default=None, description="Dataset to use in test mode")
     predict: NRMSplitConfig | None = Field(default=None, description="Dataset to use in prediction mode")
