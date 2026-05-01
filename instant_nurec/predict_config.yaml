@@ -83,8 +83,6 @@ model:
     dpt_chunk_size: 4
     time_encoding_dim: 256
     motion_depth: 4
-  post_processing:
-    enabled: true
   activations:
     opacity_shift: -2.0
     scale_shift_log_ratio: -2.9

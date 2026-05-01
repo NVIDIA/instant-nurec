@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 
 from dataclasses import replace
-from typing import Optional
 
 import torch
 import torch.nn as nn
@@ -41,11 +40,9 @@ class KelvinNRM(nn.Module):
         self.encoder = KelvinDAv3Encoder(config.encoder, config)
         self.decoder = KelvinDPTDecoder(config.decoder, config)
         self.sky = CubemapDecoderSky(config.sky, config)
-        self.post_processing: Optional[PerCameraAffinePostProcessing] = None
-        if config.post_processing.enabled:
-            self.post_processing = PerCameraAffinePostProcessing(
-                embed_dim=config.encoder.embed_dim, init_token_scale=0.02
-            )
+        self.post_processing = PerCameraAffinePostProcessing(
+            embed_dim=config.encoder.embed_dim, init_token_scale=0.02
+        )
         self.scene_rescale = self.config.scene_rescale
         self.cuboids_dims_padding = torch.nn.Buffer(torch.tensor(self.config.track_padding_m, dtype=torch.float32))
 
@@ -150,18 +147,12 @@ class KelvinNRM(nn.Module):
         # Forward sky
         sky_cubemaps = self.sky.decode(encoded_latent, context).contiguous()
 
-        # Per-camera affine RGB (optional)
-        if self.post_processing is not None:
-            _, affine_latents = self.post_processing.transform_tokens(
-                rearrange(encoded_latent.deepest, "B V h w C -> B (V h w) C"), camera_idxs
-            )
-            affine_matrix_3, affine_bias = self.post_processing.decode_affine(affine_latents)
-            affine_matrix = torch.cat([affine_matrix_3, affine_bias[..., None]], dim=-1)
-        else:
-            device = encoded_latent.deepest.device
-            dtype = encoded_latent.deepest.dtype
-            affine_matrix = torch.zeros(len(context), num_views, 3, 4, device=device, dtype=dtype)
-            affine_matrix[..., :3, :3] = torch.eye(3, device=device, dtype=dtype)
+        # Per-camera affine RGB
+        _, affine_latents = self.post_processing.transform_tokens(
+            rearrange(encoded_latent.deepest, "B V h w C -> B (V h w) C"), camera_idxs
+        )
+        affine_matrix_3, affine_bias = self.post_processing.decode_affine(affine_latents)
+        affine_matrix = torch.cat([affine_matrix_3, affine_bias[..., None]], dim=-1)
 
         # Build the primitives
         primitives: list[KelvinNRMPrimitive] = []

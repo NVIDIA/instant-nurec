@@ -88,13 +88,6 @@ class KelvinSkyCubemapDecoderConfig(BaseConfigSchema):
     checkpointing: bool = Field(default=False, description="Whether to use checkpointing for the cubemap decoder")
 
 
-class KelvinPostProcessingConfig(BaseConfigSchema):
-    enabled: bool = Field(
-        default=True,
-        description="If False, skip the per-camera affine RGB module and use an identity transform at render time.",
-    )
-
-
 class KelvinModelConfig(BaseConfigSchema):
     """
     Configuration for the Kelvin model.
@@ -117,7 +110,6 @@ class KelvinModelConfig(BaseConfigSchema):
 
     encoder: KelvinDAv3EncoderConfig
     decoder: KelvinDPTDecoderConfig
-    post_processing: KelvinPostProcessingConfig = Field(default_factory=KelvinPostProcessingConfig)
     activations: GaussiansActivationConfig = Field(
         default_factory=GaussiansActivationConfig, description="Activation functions configuration."
     )
