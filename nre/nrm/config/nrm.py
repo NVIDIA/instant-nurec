@@ -30,7 +30,6 @@ from nre.config.base_schema import BaseConfigSchema, Field
 from nre.config.logger import BatchMediaLoggerConfigMixin, LoggerConfigType
 from nre.config.trainer import TrainerConfig, infer_slurm_environment
 from nre.config.version import Version, get_version
-from nre.config.viewer import ViewerConfig
 from nre.nrm.config.dataset import NRMSplitsConfig
 from nre.nrm.config.models import KelvinModelConfig
 from nre.nrm.config.predict import PredictConfig
@@ -172,16 +171,6 @@ class _CheckpointConfig(BaseConfigSchema):
     mode: Literal["min", "max"]
 
 
-class _ProfilingConfig(BaseConfigSchema):
-    enabled: bool = Field(default=False, description="Enable profiling mode.")
-    limit_train_val_batches: int = Field(
-        default=5, description="Limit the number of training and validation batches to profile."
-    )
-    scopedtimer: bool = Field(default=False, description="Enable scoped timer and print the summary at the end.")
-    disable_checkpoint: bool = Field(default=True, description="Disable checkpointing during profiling.")
-    record_memory_history: bool = Field(default=False, description="Record memory history during profiling.")
-
-
 class NRMConfig(BaseConfigSchema):
     """
     Top-level configuration for NRM training/validation/testing.
@@ -201,19 +190,11 @@ class NRMConfig(BaseConfigSchema):
         ),
     )
     verbose: bool = Field(default=False, description="Verbose mode.")
-    force_validate: bool = Field(default=False, description="Force validation of the config.")
-    preempt_on_interrupt: bool = Field(
-        default=False,
-        description="If True, register a signal handler (SIGINT) to save a checkpoint and exit gracefully on Ctrl+C.",
-    )
 
     out_dir: str
     logger: LoggerConfigType = Field(discriminator="name")
 
     checkpoint: _CheckpointConfig
-    viewer: ViewerConfig = Field(default_factory=ViewerConfig, description="Web-based viewer configuration.")
-
-    profiling: _ProfilingConfig = Field(default_factory=_ProfilingConfig, description="Profiling configuration.")
 
     system: GaussiansNRMSystemConfig = Field(discriminator="name")
     dataset: NRMSplitsConfig = Field(discriminator="name")
