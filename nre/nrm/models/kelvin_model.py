@@ -14,9 +14,9 @@ from einops import rearrange
 
 from nre.datasets.tracks import CuboidTracks
 from nre.nrm.config.models import KelvinModelConfig
-from nre.nrm.models.kelvin_backbone.decoders import make_decoder
-from nre.nrm.models.kelvin_backbone.encoders import make_encoder
-from nre.nrm.models.kelvin_backbone.sky import make_sky
+from nre.nrm.models.kelvin_backbone.decoders import KelvinDPTDecoder
+from nre.nrm.models.kelvin_backbone.encoders import KelvinDAv3Encoder
+from nre.nrm.models.kelvin_backbone.sky import CubemapDecoderSky
 from nre.nrm.models.post_processing import PerCameraAffinePostProcessing
 from nre.nrm.primitives.kelvin_primitive import KelvinNRMPrimitive
 from nre.nrm.utils.motion import TimeRemapping
@@ -39,9 +39,9 @@ class KelvinNRM(nn.Module):
     def __init__(self, config: KelvinModelConfig):
         super().__init__()
         self.config = config
-        self.encoder = make_encoder(config)
-        self.decoder = make_decoder(config)
-        self.sky = make_sky(config)
+        self.encoder = KelvinDAv3Encoder(config.encoder, config)
+        self.decoder = KelvinDPTDecoder(config.decoder, config)
+        self.sky = CubemapDecoderSky(config.sky, config)
         self.post_processing: Optional[PerCameraAffinePostProcessing] = None
         if config.post_processing.enabled:
             self.post_processing = PerCameraAffinePostProcessing(

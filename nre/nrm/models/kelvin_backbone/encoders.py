@@ -137,7 +137,3 @@ class KelvinDAv3Encoder(nn.Module):
             )
 
         return KelvinMultiscaleFeaturesLatent(features=img_feats, cls_tokens=cls_tokens)
-
-
-def make_encoder(config: KelvinModelConfig) -> KelvinDAv3Encoder:
-    return KelvinDAv3Encoder(config.encoder, config)

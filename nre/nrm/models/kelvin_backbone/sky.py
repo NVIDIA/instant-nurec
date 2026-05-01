@@ -188,7 +188,3 @@ class CubemapDecoderSky(nn.Module):
             queries = torch.clamp(queries, min=-1.0, max=1.0) * 0.5 + 0.5
 
         return queries
-
-
-def make_sky(config: KelvinModelConfig) -> CubemapDecoderSky:
-    return CubemapDecoderSky(config.sky, config)

@@ -507,7 +507,3 @@ class KelvinDPTDecoder(nn.Module):
             )
 
         return return_values
-
-
-def make_decoder(config: KelvinModelConfig) -> KelvinDPTDecoder:
-    return KelvinDPTDecoder(config.decoder, config)
