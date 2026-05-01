@@ -108,7 +108,6 @@ filegroup(
     srcs = [
         "__init__.py",
         "interface.py",
-        "lidars.py",
     ],
 )
 
