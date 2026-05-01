@@ -402,10 +402,7 @@ class KelvinNRMPrimitive(BaseGaussiansNRMPrimitive):
         context_rig: RigTrajectories | None = None,
     ) -> Self:
         """Filter static and dynamic layers by density threshold; do not apply rigid transform (merge does that)."""
-        if getattr(config, "project_to_z_offset", False):
-            raise NotImplementedError(
-                "project_to_z_offset is not implemented for KelvinNRMPrimitive; use Celsius or set to false."
-            )
+        del context_batch, context_rig  # unused (Celsius's project_to_z_offset path was Kelvin-irrelevant)
         static_mask = self.static_layer.densities[:, 0] > config.density_prune_threshold
         new_static_layer = self.static_layer.mask(static_mask)
         new_dynamic_layers: list[KelvinDynamicLayer] = []
