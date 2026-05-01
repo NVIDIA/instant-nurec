@@ -12,15 +12,13 @@ from __future__ import annotations
 
 import logging
 import os
-import re
 
 from pathlib import Path
-from typing import Any, Literal, Optional
+from typing import Literal
 
 import hydra
 
-from omegaconf import DictConfig, OmegaConf, open_dict
-from pydantic import model_validator
+from omegaconf import DictConfig, OmegaConf
 
 # Import from nre.config.parse to introduce OmegaConf resolvers
 import nre.config.parse  # noqa: F401
@@ -119,59 +117,6 @@ class NRMConfig(BaseConfigSchema):
             "If resuming training from a checkpoint, the previous run_id will be restored."
         ),
     )
-
-    class OverrideConfig(BaseConfigSchema):
-        selector: list[str] = Field(
-            description="Selector for the config to override. One can use regex to match the items."
-        )
-        config: Any = Field(description="The actual config to be merged with the selected configs.")
-
-    shared_config: Optional[Any] = Field(
-        default=None,
-        description="Place to put common configs to be shared via YAML's `<<: *shared_config` syntax. "
-        "This will not come to the final config, just for handy purposes",
-    )
-    override_config: dict[str, OverrideConfig] = Field(
-        default_factory=dict,
-        description="Override config for the entire config. Can be used in junction with shared_config to create various combinations.",
-    )
-
-    @model_validator(mode="before")
-    @classmethod
-    def merge_override_config(cls, objects: DictConfig) -> DictConfig:
-        # Recursively print out keys from the config to perform matching
-        def iter_key_paths(d: dict[str, Any], prefix: str = ""):
-            for k, v in d.items():
-                path = f"{prefix}.{k}" if prefix else k
-                if isinstance(v, dict):
-                    yield path
-                    yield from iter_key_paths(v, path)
-
-        # Apply the overrides one by one
-        if "override_config" in objects:
-            for override_name, override_item in objects.override_config.items():
-                override_model = cls.OverrideConfig.model_validate(override_item)
-
-                matched_paths: list[str] = []
-                for path in iter_key_paths(OmegaConf.to_container(objects)):  # type: ignore
-                    for sel_regex in override_model.selector:
-                        if re.fullmatch(sel_regex, path):
-                            matched_paths.append(path)
-                            break
-
-                # Override the config paths
-                for path in matched_paths:
-                    cmd_logger.info(f"Overriding {path} with override key '{override_name}'.")
-                    config_items = OmegaConf.select(objects, path)
-                    assert isinstance(config_items, DictConfig)
-                    with open_dict(config_items):
-                        config_items.merge_with(override_model.config)
-            OmegaConf.update(objects, "override_config", {}, merge=False)
-
-        # Remove config overrides from the final config.
-        if "shared_config" in objects:
-            OmegaConf.update(objects, "shared_config", None)
-        return objects
 
     def _setup_resume_path(self) -> None:
         if self.resume is None:
