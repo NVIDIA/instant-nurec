@@ -17,7 +17,6 @@ from typing import Optional
 
 import numpy as np
 import pandas as pd
-import torch
 import tqdm
 
 import ncore.data
@@ -25,9 +24,8 @@ import ncore.impl.common.transformations as ncore_transformations
 import ncore.sensors
 import nre.utils.ncore_utils as ncore_utils
 
-from nre.datasets.tracks import CuboidTracks
 from nre.utils.misc import unpack_optional
-from nre.utils.types import HalfClosedInterval, TracksData
+from nre.utils.types import HalfClosedInterval
 def compute_cuboid_df(
     sequence_loader: ncore.data.SequenceLoaderProtocol,
     time_range_us: HalfClosedInterval,
