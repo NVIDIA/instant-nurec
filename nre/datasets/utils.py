@@ -70,7 +70,7 @@ def compute_cuboid_df(
 def consolidate_cuboid_tracks(
     cuboids_df: pd.DataFrame,
     sequence_loader: ncore.data.SequenceLoaderProtocol,
-    track_label_sources: list[str] | None,
+    track_label_sources: list[str],
     track_min_centroid_rig_dist_m: float,
     T_world_world_base: np.ndarray | None,
     tqdm_disabled: bool,
@@ -81,7 +81,7 @@ def consolidate_cuboid_tracks(
     Args:
         cuboids_df (pd.DataFrame): Dataframe of all cuboid observations to consolidate into tracks
         sequence_loader (ncore.data.SequenceLoaderProtocol): The sequence loader to load the data from
-        track_label_sources (list[str] | None): List of label sources to consider for track consolidation
+        track_label_sources (list[str]): List of label sources to consider for track consolidation
         track_min_centroid_rig_dist_m (float): Minimum distance of the track centroid to the rig frame to consider the observation
         T_world_world_base (np.ndarray | None): Optional base transformation to apply to all world poses
         tqdm_disabled (bool): When true, no progress bars are showed
@@ -94,21 +94,16 @@ def consolidate_cuboid_tracks(
             - timestamps_us: (list[int]) List of timestamps corresponding to the poses
     """
 
-    # Container to keep track of all observed label sources (@-concatenation of label source names and optional versions or 'any')
-    all_label_sources_set: set[str] = set()
-
     # Setup the set of valid label sources set (@-concatenation of label source names and optional versions or 'any')
-    valid_label_sources: set[str] | None = None
-    if track_label_sources is not None:
-        valid_label_sources = set()
-        for track_label_source in track_label_sources:
-            # check if specified config label source is versioned
-            if len(track_label_source.split("@", 1)) > 1:
-                # if version is specified by the config, require this specific version for valid label sources
-                valid_label_sources.add(track_label_source)
-            else:
-                # otherwise any version of this label source type is considered valid
-                valid_label_sources.add(track_label_source + "@any")
+    valid_label_sources: set[str] = set()
+    for track_label_source in track_label_sources:
+        # check if specified config label source is versioned
+        if len(track_label_source.split("@", 1)) > 1:
+            # if version is specified by the config, require this specific version for valid label sources
+            valid_label_sources.add(track_label_source)
+        else:
+            # otherwise any version of this label source type is considered valid
+            valid_label_sources.add(track_label_source + "@any")
 
     # Cache evaluated transformations
     @lru_cache(maxsize=(n_expected_poses := 20 * 10 * 60))  # cache up to 20 minutes of poses at 10Hz
@@ -156,25 +151,15 @@ def consolidate_cuboid_tracks(
             ):  # skip observations that are too close to the rig center
                 continue
 
-        # collect observation source (@-concatenation of label source names and optional versions or 'any')
-        all_label_sources_set.add(
-            versioned_label_source := observation.source.name + f"@{unpack_optional(observation.source_version, 'any')}"
+        # filter by label source (@-concatenation of source name + optional version, or 'any')
+        versioned_label_source = (
+            observation.source.name + f"@{unpack_optional(observation.source_version, 'any')}"
         )
-
-        # handle label source filtering, if enabled
-        if valid_label_sources is not None:
-            if not (
-                (
-                    # check versioned source type
-                    versioned_label_source in valid_label_sources
-                )
-                or (
-                    # check unversioned source type
-                    observation.source.name + "@any" in valid_label_sources
-                )
-            ):
-                # skip label if not in enabled set of label sources
-                continue
+        if not (
+            versioned_label_source in valid_label_sources
+            or observation.source.name + "@any" in valid_label_sources
+        ):
+            continue
 
         if observation.track_id not in all_tracks:
             # instantiate new track
@@ -199,14 +184,6 @@ def consolidate_cuboid_tracks(
             ncore_transformations.bbox_pose(
                 ncore_transformations.transform_bbox(observation.bbox3.to_array(), T_reference_world)
             )
-        )
-
-    # Error out if there is more than a single label source in the input datasets and an explicit selection is *not* provided
-    if len(all_label_sources_set) > 1 and (track_label_sources is None):
-        raise ValueError(
-            f"compute_cuboid_tracks: Observed {all_label_sources_set} track label sources in input data but no explicit "
-            "track label source specified - please specify *explicit* list of track sources with "
-            "the dataset.cuboid_tracks_params.track_label_sources config"
         )
 
     return all_tracks
