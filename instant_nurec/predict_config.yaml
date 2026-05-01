@@ -103,8 +103,6 @@ model:
       - 192
       - 384
       - 768
-    depth_offset: false
-    uv_offset: false
     checkpointing: true
     dpt_chunk_size: 4
     time_encoding_dim: 256

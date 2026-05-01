@@ -82,9 +82,6 @@ class KelvinDPTDecoderConfig(BaseConfigSchema):
     dpt_dim: int
     dpt_reassemble_hidden_dims: List[int]
 
-    depth_offset: bool = Field(default=False, description="Whether to predict a depth offset (in world space)")
-    uv_offset: bool = Field(default=False, description="Whether to predict a UV offset (in pixel space)")
-
     checkpointing: bool = Field(default=False, description="Whether to use checkpointing for the DPT decoder")
     dpt_chunk_size: int = Field(
         default=-1, description="Chunk size for the DPT decoder. Used for saving memory. -1 to disable."

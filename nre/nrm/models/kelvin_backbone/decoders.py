@@ -17,7 +17,7 @@ from dataclasses import dataclass
 import torch
 import torch.utils.checkpoint
 
-from einops import einsum, rearrange
+from einops import rearrange
 from torch import nn
 
 from nre.datasets.tracks import CuboidTracks, TrackFlags
@@ -290,13 +290,9 @@ class KelvinDPTDecoder(KelvinDecoderBase):
         if config.motion_depth > 0:
             self.context_motion_head = self.TimeModulatedMotionHead(config, model_config)
 
-        # GS-training heads (scale, world-quaternion, opacity, higher-order SHs, depth-offset, uv-offset)
+        # GS-training heads (scale, world-quaternion, opacity, higher-order SHs)
         self.sh_degree = 0
-        self.depth_offset_dim = 1 if config.depth_offset else 0
-        self.uv_offset_dim = 2 if config.uv_offset else 0
-        gs_output_dim = (
-            3 + 4 + 1 + sh_degree_to_specular_dim(self.sh_degree) + self.depth_offset_dim + self.uv_offset_dim
-        )
+        gs_output_dim = 3 + 4 + 1 + sh_degree_to_specular_dim(self.sh_degree)
         self.gaussians_head = DPTFullHead(
             input_dim=embed_dim,
             reassemble_hidden_dims=tuple(config.dpt_reassemble_hidden_dims),
@@ -313,7 +309,6 @@ class KelvinDPTDecoder(KelvinDecoderBase):
             [float("nan")] * 3
             + [float("nan")] * 4
             + [float("nan")] * (1 + sh_degree_to_specular_dim(self.sh_degree))
-            + [0.0] * (self.depth_offset_dim + self.uv_offset_dim)
         )
 
         self.cuboids_dims_padding = nn.Buffer(torch.tensor(model_config.track_padding_m, dtype=torch.float32))
@@ -465,23 +460,15 @@ class KelvinDPTDecoder(KelvinDecoderBase):
             gs_world_quaternion,
             gs_opacity,
             gs_specular,  # TODO: wire gs_specular through to GaussianParams when sh_degree > 0
-            gs_depth_offset,
-            gs_uv_offset,
         ) = gs_params_tensor.split(
-            [3, 4, 1, sh_degree_to_specular_dim(self.sh_degree), self.depth_offset_dim, self.uv_offset_dim],
+            [3, 4, 1, sh_degree_to_specular_dim(self.sh_degree)],
             dim=-1,
         )
-        gs_depth = pred_depth
-        if self.config.depth_offset:
-            gs_depth_offset = gs_depth_offset / scene_rescale
-            # Linear activation on depth offset
-            gs_depth = gs_depth + gs_depth_offset
-        gs_distance = torch.stack([gs_depth[bidx] / renderings[bidx].distance_to_depth_scale for bidx in range(B)])
+        gs_distance = torch.stack([pred_depth[bidx] / renderings[bidx].distance_to_depth_scale for bidx in range(B)])
 
-        # If scales and the potential UV offsets are predicted in the pixel unit (so that they're resolution-agnostic).
-        # We need to scale them by the pixel scale, defined by footprint(cone) * distance.
-        # Note that if rendered via 2D evaluation, the most accurate definition should be footprint(plane) * depth.
-        # Here we simply assume that 3DGUT is always used.
+        # Scales are predicted in pixel units (resolution-agnostic); rescale by the pixel scale,
+        # defined by footprint(cone) * distance. (If rendered via 2D evaluation, the most accurate
+        # definition would be footprint(plane) * depth -- we assume 3DGUT is always used here.)
         pixel_scale = torch.stack([renderings[bidx].ray_footprints for bidx in range(B)]) * gs_distance
         gs_scale = self.gaussian_activations.scale(gs_scale, scene_rescale=scene_rescale, pixel_scale=pixel_scale)
         gs_valid_mask = KelvinSemanticClass.opacity_mask_from_semantic_probs(
@@ -492,15 +479,6 @@ class KelvinDPTDecoder(KelvinDecoderBase):
         gs_xyz = torch.stack(
             [renderings[bidx].rays[..., :3] + renderings[bidx].rays[..., 3:] * gs_distance[bidx] for bidx in range(B)]
         )
-        if self.config.uv_offset:
-            gs_uv_offset = einsum(
-                torch.stack(
-                    [renderings[bidx].uv_directions_frame_end for bidx in range(B)],
-                ),
-                gs_uv_offset * pixel_scale,
-                "B V UV D, B V H W UV -> B V H W D",
-            )
-            gs_xyz = gs_xyz + gs_uv_offset
 
         gs_params = GaussianParams(
             rgb=context_rgb,

@@ -247,14 +247,6 @@ class RenderingData:
         assert self._rays_footprints is not None, "Rays footprints must be set"
         return self._rays_footprints
 
-    @property
-    @torch.autocast(device_type="cuda", enabled=False)
-    def uv_directions_frame_end(self) -> torch.Tensor:
-        """Compute the UV directions for the pixels in the frame.
-        Shape: (B, 2, 3), here the 2nd dimension is U and V directions, normalized"""
-        frame_end_se3 = tquat_to_se3_matrix(self.poses_tquat_startend[:, 1], unbatch=False)  # (B, 4, 4)
-        return frame_end_se3[:, :3, :2].transpose(1, 2)
-
     @classmethod
     def collate_fn(
         cls,
