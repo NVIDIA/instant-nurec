@@ -8,29 +8,21 @@
 # without an express license agreement from NVIDIA CORPORATION or
 # its affiliates is strictly prohibited.
 
-import logging
-
 from typing import TYPE_CHECKING, Optional
 
 import torch
 
-from nre.nrm.systems.base import BaseNRMSystem
 from nre.nrm.systems.gaussians_nrm import GaussiansNRMSystem
 
 
 if TYPE_CHECKING:
     from nre.nrm.config.nrm import NRMConfig
 
-logger = logging.getLogger(__name__)
 
-
-def make(name: str, config: "NRMConfig", load_from_checkpoint: Optional[str] = None) -> "BaseNRMSystem":
+def make(config: "NRMConfig", load_from_checkpoint: Optional[str] = None) -> GaussiansNRMSystem:
     """Predict-only standalone: NRE handled both Lightning checkpoint loading
     and weights-only loading; the pretrained config always sets
     resume_weights_only=true so we keep just that branch."""
-    if name != "base-nrm-system":
-        raise ValueError(f"Unknown NRM system name: {name}")
-
     system = GaussiansNRMSystem(config)
     if load_from_checkpoint is None:
         return system

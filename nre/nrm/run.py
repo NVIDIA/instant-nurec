@@ -41,7 +41,7 @@ def run_predict(config: NRMConfig) -> None:
     assert config.resume_weights_only and config.resume, (
         "Standalone predict requires resume_weights_only=True with a checkpoint path."
     )
-    system = nre.nrm.systems.make(config.system.name, config, load_from_checkpoint=config.resume)
+    system = nre.nrm.systems.make(config, load_from_checkpoint=config.resume)
     device = torch.device("cuda")
     system.to(device).eval()
 

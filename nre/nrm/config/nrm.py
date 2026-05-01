@@ -12,8 +12,6 @@ from __future__ import annotations
 
 import os
 
-from typing import Literal
-
 import shortuuid
 
 from nre.config.base_schema import BaseConfigSchema, Field
@@ -25,15 +23,11 @@ from nre.nrm.config.predict import PredictConfig
 SENTINEL = "<sentinel>"
 
 
-class BaseNRMSystemConfig(BaseConfigSchema):
+class GaussiansNRMSystemConfig(BaseConfigSchema):
     """Predict-only system config; just dataloader knobs."""
 
     predict_num_workers: int = Field(default=0, description="Number of workers for the predict dataloader per-node.")
     predict_batch_size: int = Field(default=1, description="Batch size for the predict dataloader. Typically set to 1.")
-
-
-class GaussiansNRMSystemConfig(BaseNRMSystemConfig):
-    name: Literal["base-nrm-system"]
 
 
 class NRMConfig(BaseConfigSchema):

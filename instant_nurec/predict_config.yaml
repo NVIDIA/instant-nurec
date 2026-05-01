@@ -13,7 +13,6 @@ resume_weights_only: true
 system:
   predict_num_workers: 4
   predict_batch_size: 8
-  name: base-nrm-system
 dataset:
   predict:
     poses_component_group: default

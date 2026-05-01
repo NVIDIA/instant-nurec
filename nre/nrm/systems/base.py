@@ -16,7 +16,7 @@ import torch
 
 from torch import nn
 
-from nre.nrm.config.nrm import BaseNRMSystemConfig, NRMConfig
+from nre.nrm.config.nrm import GaussiansNRMSystemConfig, NRMConfig
 from nre.nrm.datasets.datamodule import NRMDataModule
 from nre.nrm.models.base import BaseNRM
 
@@ -26,7 +26,7 @@ class BaseNRMSystem(nn.Module, ABC):
     Trainer.fit/validate/test surfaces; we keep just nn.Module since the
     predict driver invokes hooks directly."""
 
-    config: BaseNRMSystemConfig
+    config: GaussiansNRMSystemConfig
     model: BaseNRM
     datamodule: NRMDataModule
 
