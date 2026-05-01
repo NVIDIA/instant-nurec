@@ -1252,32 +1252,6 @@ class CameraFreePoseViewGeometry(torch.nn.Module):
         )
 
 
-# Note(ruilong): temporarily place this class here because NCORETrainDataset depends on it.
-# Should move it to nre.models.view_geometry after migration.
-
-# Collate all attributes, *except* batch.idx.
-# The input batch.idx's must be either be None or be the same index.
-# The resulting batch.idx is this unique index, or None if all input indices are None.
-def batch_collate_fn(
-    item_or_seq: Union[DataBatch, DataAndRenderingBatch, Sequence[DataBatch], Sequence[DataAndRenderingBatch]],
-    device: torch.device = torch.device("cpu"),
-) -> DataBatch | DataAndRenderingBatch:
-    # If it's a single batch, just return it
-    if isinstance(item_or_seq, DataBatch | DataAndRenderingBatch):
-        return item_or_seq
-
-    if len(item_or_seq) == 1:
-        return item_or_seq[0]
-
-    # Short cuts for DataBatch and DataAndRenderingBatch
-    if isinstance(item_or_seq[0], DataBatch):
-        return DataBatch.collate_fn(cast(list[DataBatch], item_or_seq), device)
-    elif isinstance(item_or_seq[0], DataAndRenderingBatch):
-        return DataAndRenderingBatch.collate_fn(cast(list[DataAndRenderingBatch], item_or_seq), device)
-    else:
-        raise ValueError("Unsupported batch type")
-
-
 @dataclass(slots=False, kw_only=True)
 class NRMDataBatch:
     """
