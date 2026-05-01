@@ -10,12 +10,6 @@
 
 from __future__ import annotations
 
-import logging
-import os
-import tempfile
-import zipfile
-
-from pathlib import Path
 from typing import (
     Any,
     Callable,
@@ -44,16 +38,12 @@ except ImportError:
 from collections import defaultdict
 from dataclasses import asdict, dataclass, field, replace
 from enum import IntEnum, IntFlag, auto
-from functools import cached_property
 
 import dataclasses_json
 import lietorch as lt
 import numpy as np
 import numpy.typing as npt
 import torch
-
-from omegaconf import DictConfig, OmegaConf
-from pxr import Usd
 
 from ncore.data import (
     BBox3,
