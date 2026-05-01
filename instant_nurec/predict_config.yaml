@@ -11,7 +11,6 @@
 seed: 38
 mode: predict
 resume_weights_only: true
-call_train_from_scratch_hook_for_validation: false
 verbose: false
 logger:
   enabled: false
@@ -117,9 +116,6 @@ model:
   post_processing:
     enabled: true
     optimization_start_global_step: 1000
-  init_weights_paths:
-    dav3: s3@pdx-team-ncore://nrm-training-data/init-ckpt/dav3/base.safetensors
-    full: /lustre/fsw/portfolios/av/projects/av_alpamayo_cosmos/users/jiahuih/nre_experiments/checkpoints/rc4-front-nos.ckpt
   activations:
     opacity_shift: -2.0
     scale_type: world

@@ -50,28 +50,10 @@ def dump_parsed_config(path: str, config: NRMConfig) -> None:
         yaml.safe_dump(config.model_dump(mode="json"), fp, sort_keys=False)
 
 
-def launch_predict_loop(config: NRMConfig, system: BaseNRMSystem) -> None:
+def launch_predict_loop(system: BaseNRMSystem) -> None:
     device = _select_device()
     system.to(device)
     system.eval()
-
-    ckpt_path = config.resume if (config.resume and not config.resume_weights_only) else None
-    if ckpt_path:
-        ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
-        system.on_load_checkpoint(ckpt)
-        system.to(device)
-
-    has_full_init = bool(getattr(config.model, "init_weights_path", None))
-    init_weights_paths = getattr(config.model, "init_weights_paths", None)
-    if not has_full_init and init_weights_paths is not None:
-        if {"full", "tokengs"} & init_weights_paths.keys():
-            has_full_init = True
-    if config.call_train_from_scratch_hook_for_validation and ckpt_path is None and has_full_init:
-        system.model.on_train_from_scratch_start(system)
-        system.to(device)
-
-    if "predict" not in config.mode:
-        raise ValueError(f"Only predict mode is supported in this standalone; got mode={config.mode}.")
 
     dataloader = system.datamodule.predict_dataloader()
     with torch.inference_mode():
@@ -90,6 +72,6 @@ def run_predict(config: NRMConfig) -> None:
     setup_environment_and_logger(config)
     logger.info("NRM RUN 🆔: %s", config.run_id)
 
-    checkpoint = None if (not config.resume_weights_only or not config.resume) else config.resume
-    system = nre.nrm.systems.make(config.system.name, config, load_from_checkpoint=checkpoint)
-    launch_predict_loop(config, system)
+    assert config.resume_weights_only and config.resume, "Standalone predict requires resume_weights_only=True with a checkpoint path."
+    system = nre.nrm.systems.make(config.system.name, config, load_from_checkpoint=config.resume)
+    launch_predict_loop(system)

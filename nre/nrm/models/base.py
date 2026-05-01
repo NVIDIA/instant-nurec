@@ -27,12 +27,6 @@ class BaseNRM(nn.Module, Generic[NRMPrimitiveType]):
         super().__init__()
         self.config = config
 
-    def update_step_train_batch_start(self, epoch: int, global_step: int, system, **kwargs) -> dict[str, torch.Tensor]:
-        return {}
-
-    def on_train_from_scratch_start(self, system, **kwargs) -> None:
-        pass
-
     @abstractmethod
     def reconstruct(
         self,

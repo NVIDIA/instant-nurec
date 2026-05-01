@@ -65,10 +65,6 @@ class KelvinEncoderBase(nn.Module, ABC):
     def forward(self, *args, **kwargs):
         raise NotImplementedError("Please call encode() method directly.")
 
-    def update_step_train_batch_start(self, epoch: int, global_step: int, system, **kwargs):
-        # Do nothing by default
-        pass
-
 
 class KelvinDAv3Encoder(KelvinEncoderBase):
     def __init__(self, config: KelvinDAv3EncoderConfig, model_config: KelvinModelConfig):

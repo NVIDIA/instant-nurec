@@ -153,15 +153,6 @@ class KelvinModelConfig(BaseModelConfig):
     encoder: KelvinDAv3EncoderConfig = Field(discriminator="name")
     decoder: KelvinDPTDecoderConfig = Field(discriminator="name")
     post_processing: KelvinPostProcessingConfig = Field(default_factory=KelvinPostProcessingConfig)
-    init_weights_paths: dict[str, str] = Field(
-        default_factory=dict,
-        description=(
-            "Paths to initial weights by component or full model. "
-            'Single entry with key "tokengs" or "full" loads a full-model checkpoint. '
-            "Multiple entries are passed to encoder/decoder/sky initialize_weights by name."
-        ),
-    )
-
     activations: GaussiansActivationConfig = Field(
         default_factory=GaussiansActivationConfig, description="Activation functions configuration."
     )

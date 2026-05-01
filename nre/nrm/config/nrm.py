@@ -52,14 +52,6 @@ class NRMConfig(BaseConfigSchema):
 
     resume: str | None
     resume_weights_only: bool
-    call_train_from_scratch_hook_for_validation: bool = Field(
-        default=False,
-        description=(
-            "When True, the model's on_train_from_scratch_start hook is also called when running val/test/predict "
-            "without a checkpoint but with init weights. Set to False if the hook contains train-only logic that "
-            "must not run during eval (e.g. writing training state)."
-        ),
-    )
     verbose: bool = Field(default=False, description="Verbose mode.")
 
     out_dir: str

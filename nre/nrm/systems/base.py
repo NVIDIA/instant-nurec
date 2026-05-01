@@ -48,7 +48,7 @@ class BaseNRMSystem(nn.Module, ABC):
         return next(self.parameters()).device
 
     def on_predict_batch_start(self, batch: NRMDataBatch, batch_local_idx: int, dataloader_idx: int = 0) -> None:
-        self.model.update_step_train_batch_start(0, 0, self)
+        self.model.freeze_post_processing_for_predict()
 
     def on_load_checkpoint(self, checkpoint: Checkpoint) -> None:
         self.load_state_dict(checkpoint["state_dict"], assign=True)

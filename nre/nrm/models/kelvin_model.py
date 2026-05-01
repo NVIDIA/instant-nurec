@@ -10,19 +10,17 @@ from typing import Any, Optional
 import torch
 
 from einops import rearrange
-from safetensors.torch import load_file
 
 from nre.datasets.tracks import CuboidTracks
 from nre.nrm.config.models import KelvinModelConfig
 from nre.nrm.models.base import BaseNRM
-from nre.nrm.models.kelvin_backbone.decoders import KelvinDPTDecoder, make_decoder
+from nre.nrm.models.kelvin_backbone.decoders import make_decoder
 from nre.nrm.models.kelvin_backbone.encoders import make_encoder
 from nre.nrm.models.kelvin_backbone.sky import make_sky
 from nre.nrm.models.post_processing import PerCameraAffinePostProcessing
 from nre.nrm.primitives.kelvin_primitive import KelvinNRMPrimitive
 from nre.nrm.utils.motion import TimeRemapping
 from nre.utils.batch import DataAndRenderingBatch
-from nre.utils.files import local_temp_file, parse_universal_path
 from nre.utils.misc import unpack_optional
 from nre.utils.profiling import ScopedTimer
 from nre.utils.types import RayFlags
@@ -113,61 +111,13 @@ class KelvinNRM(BaseNRM[KelvinNRMPrimitive]):
     ) -> list[DataAndRenderingBatch]:
         return [self._maybe_derive_normals_from_distance(batch) for batch in context]
 
-    def on_train_from_scratch_start(self, system, **kwargs):
-        # Full-model path: init_weights_paths contains a "full" or "tokengs" entry. Any additional
-        # keys are ignored when either is present. Kept in lockstep with the has_full_init gate in
-        # nre/nrm/run.py; "full" wins over "tokengs" if both are provided.
-        full_model_path = None
-        for key in ("full", "tokengs"):
-            if key in self.config.init_weights_paths:
-                full_model_path = self.config.init_weights_paths[key]
-                break
-        if full_model_path is not None:
-            with local_temp_file(parse_universal_path(full_model_path, s3_block_size_mb=256)) as local_path:
-                if str(local_path).endswith(".safetensors"):
-                    init_state_dict = load_file(local_path)
-                else:
-                    ckpt = torch.load(local_path, map_location="cpu", weights_only=False)
-                    init_state_dict = ckpt.get("state_dict", ckpt)
-            init_state_dict = {k.replace("model.", ""): v for k, v in init_state_dict.items()}
-            # Always re-init GS head.
-            if isinstance(self.decoder, KelvinDPTDecoder):
-                init_state_dict = {
-                    k: v for k, v in init_state_dict.items() if not k.startswith("decoder.gaussians_head.")
-                }
-            model_sd = self.state_dict()
-            # Keep only model keys; use converted where present, else current model init (e.g. sky, post_processing).
-            missing_in_ckpt = [k for k in model_sd if k not in init_state_dict]
-            if missing_in_ckpt:
-                logger.info(
-                    "Model parameters not found in checkpoint (using current init): %s",
-                    missing_in_ckpt,
-                )
-            init_state_dict = {k: init_state_dict.get(k, model_sd[k].clone()) for k in model_sd}
-            self.load_state_dict(init_state_dict, strict=True)
-            if self.post_processing is not None:
-                self.post_processing.zero_init()
-            return
-
-        loaded_state_dicts: dict[str, dict[str, torch.Tensor]] = {}
-        for name, weights_path in self.config.init_weights_paths.items():
-            with local_temp_file(parse_universal_path(weights_path, s3_block_size_mb=256)) as local_model_path:
-                loaded_state_dicts[name] = load_file(local_model_path)
-
-        self.encoder.initialize_weights(loaded_state_dicts)
-        self.decoder.initialize_weights(loaded_state_dicts)
-        self.sky.initialize_weights(loaded_state_dicts)
+    def freeze_post_processing_for_predict(self) -> None:
+        """Predict pins global_step=0 < optimization_start_global_step, so the
+        post-processing affine RGB head's linear weights are detached. This
+        replaces the per-batch update_step_train_batch_start hook used during
+        training (`KelvinNRM` no longer drives that hook in predict-only)."""
         if self.post_processing is not None:
-            self.post_processing.zero_init()
-
-    def update_step_train_batch_start(self, epoch: int, global_step: int, system, **kwargs) -> dict[str, torch.Tensor]:
-        if self.post_processing is not None:
-            self.post_processing.set_detach_linear_grad(
-                global_step < self.config.post_processing.optimization_start_global_step
-            )
-        self.encoder.update_step_train_batch_start(epoch, global_step, system, **kwargs)
-        self.decoder.update_step_train_batch_start(epoch, global_step, system, **kwargs)
-        return {}
+            self.post_processing.set_detach_linear_grad(True)
 
     @staticmethod
     def _grab_metainfo(

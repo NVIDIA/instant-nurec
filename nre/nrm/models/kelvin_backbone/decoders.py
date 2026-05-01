@@ -84,10 +84,6 @@ class KelvinDecoderBase(nn.Module, ABC):
     def forward(self, *args, **kwargs):
         raise NotImplementedError("Please call decode() method directly.")
 
-    def update_step_train_batch_start(self, epoch: int, global_step: int, system, **kwargs):
-        # Do nothing by default
-        pass
-
 
 class KelvinDPTDecoder(KelvinDecoderBase):
     """
