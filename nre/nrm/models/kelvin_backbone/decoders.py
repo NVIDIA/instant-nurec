@@ -674,17 +674,6 @@ class KelvinDPTDecoder(KelvinDecoderBase):
                 batches[0],
                 grid_width=V // num_views,
             )
-            # Log unprojected DPT point cloud (validation only; PLY overwritten each time; disabled for now)
-            # media_logger.log_ply_point_cloud(
-            #     "gspcd",
-            #     gs_xyz[0].detach().reshape(-1, 3).cpu().numpy(),
-            #     color=context_rgb[0].detach().reshape(-1, 3).cpu().numpy(),
-            #     other_attributes={
-            #         "confidence": pred_depth_conf[0].detach().reshape(-1).cpu().numpy(),
-            #         "view_index": np.repeat(np.arange(V, dtype=np.uint8), H * W),
-            #     },
-            # )
-
         # Optionally dump meshing data
         # self._dump_meshing_data(gs_params[0], supervision_packs[0], batches[0])
 

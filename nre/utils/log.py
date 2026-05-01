@@ -13,7 +13,6 @@ import weakref
 from typing import Any
 
 import numpy as np
-import point_cloud_utils as pcu
 
 from pytorch_lightning import LightningModule
 from pytorch_lightning.trainer.states import RunningStage
@@ -34,7 +33,6 @@ class BatchMediaLogger:
     def __init__(self, system: LightningModule, config: BatchMediaLoggerConfigMixin) -> None:
         self._system = weakref.ref(system)
         self._image_log_step_cache: dict[str, np.ndarray] = {}
-        self._ply_log_step_cache: dict[str, pcu.TriangleMesh] = {}
         self.log_media_every_n_steps = int(config.log_media_every_n_steps)
         self.log_media_every_n_steps_val = int(config.log_media_every_n_steps_val)
         self.log_media_subsample = int(config.log_media_subsample)
@@ -52,30 +50,6 @@ class BatchMediaLogger:
     def log_image(self, caption: str, data: np.ndarray) -> None:
         if self.should_log_media:
             self._image_log_step_cache[caption] = data
-
-    def log_ply_point_cloud(
-        self,
-        name: str,
-        xyz: np.ndarray,
-        color: np.ndarray | None = None,
-        other_attributes: dict[str, np.ndarray] | None = None,
-    ) -> None:
-        """
-        Cache point cloud as pcu.TriangleMesh for writing as PLY in flush_logged_media.
-        Only during validation and when should_log_media; overwrites any previous cache for this name.
-        """
-        if self.system.trainer.state.stage != RunningStage.VALIDATING:
-            return
-        if not self.should_log_media:
-            return
-        mesh = pcu.TriangleMesh()
-        mesh.vertex_data.positions = np.asarray(xyz, dtype=np.float64)
-        if color is not None:
-            mesh.vertex_data.colors = np.asarray(color)
-        for key, value in (other_attributes or {}).items():
-            arr = np.asarray(value)
-            mesh.vertex_data.custom_attributes[key] = arr.astype(np.float64) if arr.dtype.kind == "f" else arr
-        self._ply_log_step_cache[name] = mesh
 
     @property
     def should_log_media(self) -> bool:
