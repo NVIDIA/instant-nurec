@@ -73,26 +73,16 @@ class RectSubsampled(RectSubsampledSensor):
     - subsample_factor: Optional. The amount of isotropic subsampling. The larger the value is, the smaller the sampled region will be. 1 means no subsampling. Default is 1. [float]
     """
 
-    def to_json(self) -> dict:
-        return {
-            "original_width": self.original_width,
-            "original_height": self.original_height,
-            "width": self.width,
-            "height": self.height,
-            "i": self.i,
-            "j": self.j,
-            "subsample_factor": self.subsample_factor,
-        }
+    def _identity(self) -> tuple:
+        return (self.original_width, self.original_height, self.width, self.height, self.i, self.j, self.subsample_factor)
 
     def __hash__(self) -> int:
-        return hash(
-            (self.original_width, self.original_height, self.width, self.height, self.i, self.j, self.subsample_factor)
-        )
+        return hash(self._identity())
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, RectSubsampled):
             return False
-        return self.to_json() == other.to_json()
+        return self._identity() == other._identity()
 
 
 @torch.autocast(device_type="cuda", enabled=False)
