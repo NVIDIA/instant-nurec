@@ -42,8 +42,6 @@ class NRMDataModule:
         assert dataset_config is not None, "dataset.predict has to be specified in the config to use the predict mode"
 
         self.predict_dataset = cast(BaseNRMDataset, make_dataset(dataset_config.name, dataset_config, "predict"))
-        if self.predict_dataset is not None:
-            self.predict_dataset.set_epoch(0)
 
         return DataLoader(
             unpack_optional(self.predict_dataset),

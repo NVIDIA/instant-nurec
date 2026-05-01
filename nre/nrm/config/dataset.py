@@ -12,9 +12,7 @@ from __future__ import annotations
 
 import logging
 
-from typing import Annotated, Literal, Optional, Self
-
-import numpy as np
+from typing import Annotated, Literal, Optional
 
 from pydantic import model_validator
 
@@ -192,13 +190,6 @@ class BaseNCoreNRMDatasetConfig(BaseConfigSchema):
         assert self.ncore_json_list_path is not None or self.ncore_json_paths is not None, (
             "Either ncore_json_list_path or ncore_json_paths must be provided"
         )
-
-    def concretize(self, epoch: int, rng: np.random.Generator) -> Self:
-        """Predict-only standalone has no augmentations; concretize is a no-op
-        passthrough. Self-invented: NRE used this hook to sample augmentation
-        tiers per epoch."""
-        del epoch, rng
-        return self
 
 
 class NCoreNRMDatasetConfig(BaseNCoreNRMDatasetConfig):

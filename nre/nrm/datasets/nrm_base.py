@@ -71,41 +71,18 @@ class CameraSubsampler:
             new_resolution=(pixel_rect.width, pixel_rect.height),
         )
 
-    def apply_depth_data(
-        self, depth_data: np.ndarray, mode: Literal["bilinear", "nearest-min"] = "bilinear"
-    ) -> np.ndarray:
+    def apply_depth_data(self, depth_data: np.ndarray) -> np.ndarray:
         """
-        Apply reshape where depth_data is (H, W).
-        This handles the case where depth is 0.
-
-        Args:
-            mode: If "nearest-min", use nearest-foreground downsampling via adaptive
-                max-pool on negated depths. Otherwise use masked bilinear interpolation.
+        Apply reshape where depth_data is (H, W). Uses nearest-foreground downsampling
+        via adaptive max-pool on negated depths to avoid sky bleed-in.
         """
         original_height, original_width = depth_data.shape[:2]
         pixel_rect, (scaled_w, scaled_h) = self._compute_pixel_rect(original_width, original_height)
-        depth_data_pth = torch.from_numpy(depth_data).float()
 
-        if mode == "nearest-min":
-            depth_data_pth = depth_data_pth.clone()
-            depth_data_pth[depth_data_pth == 0] = float("inf")
-            depth_data_pth = -F.adaptive_max_pool2d(-depth_data_pth[None, None], (scaled_h, scaled_w))
-            depth_data_pth[depth_data_pth == float("inf")] = 0.0
-        else:
-            depth_data_mask = (depth_data_pth > 0.0).float()
-            depth_data_pth = F.interpolate(
-                depth_data_pth[None, None],
-                size=(scaled_h, scaled_w),
-                mode="bilinear",
-                align_corners=True,
-            )
-            depth_data_mask = F.interpolate(
-                depth_data_mask[None, None],
-                size=(scaled_h, scaled_w),
-                mode="bilinear",
-                align_corners=True,
-            )
-            depth_data_pth = depth_data_pth / (depth_data_mask + 1e-6)
+        depth_data_pth = torch.from_numpy(depth_data).float().clone()
+        depth_data_pth[depth_data_pth == 0] = float("inf")
+        depth_data_pth = -F.adaptive_max_pool2d(-depth_data_pth[None, None], (scaled_h, scaled_w))
+        depth_data_pth[depth_data_pth == float("inf")] = 0.0
 
         depth_data = depth_data_pth[0, 0].numpy()
         return depth_data[
@@ -166,43 +143,16 @@ class NRMDataError(Exception):
 
 
 class BaseNRMDataset(torch.utils.data.Dataset[NRMDataBatch], ABC):
-    """
-    Base class for the NRM dataset where simple random number functions are provided.
-    """
-
-    # -1 (default) indicates a non-specified state.
-    # This is commonly used for validation and testing where we don't want RNG to be dependent on epoch.
-    _rng_epoch: int = -1
-
-    # The actual epoch number, mainly used by augmentations to sub-select augmentation values.
-    _epoch: int = -1
-
-    def set_rng_epoch(self, rng_epoch: int) -> None:
-        self._rng_epoch = rng_epoch
-
-    def set_epoch(self, epoch: int) -> None:
-        self._epoch = epoch
-
-    @property
-    def epoch(self) -> int:
-        return self._epoch
+    """Base class for the NRM dataset; provides per-batch deterministic RNGs."""
 
     def _get_rng(self, batch_idx: int) -> np.random.Generator:
-        """
-        rng is re-initialized for each data, and is uniquely determined by:
-        global seed set via pl.seed_everything, epoch number, and data index.
-        """
+        """Hash (PL_GLOBAL_SEED, batch_idx) to get a per-batch deterministic generator."""
         assert "PL_GLOBAL_SEED" in os.environ, (
-            "PL_GLOBAL_SEED environment variable is not set. Please call pl.seed_everything()."
+            "PL_GLOBAL_SEED environment variable is not set."
         )
         global_seed: int = int(os.environ["PL_GLOBAL_SEED"])
-
-        # nre.utils.misc.compute_process_local_rng_seed requires too many advancements to the RNG.
-        # we use a simpler hashing approach here.
-        # Collision rate: SHA256-64bit << SHA256-32bit ~= CRC32 << ADLER32 (very high collision rate)
-        hased_value = hashlib.sha256(f"{self._rng_epoch}_{batch_idx}_{global_seed}".encode()).digest()
-        hashed_int = int.from_bytes(hased_value[:8], "big")
-        return np.random.default_rng(seed=hashed_int)
+        digest = hashlib.sha256(f"{batch_idx}_{global_seed}".encode()).digest()
+        return np.random.default_rng(seed=int.from_bytes(digest[:8], "big"))
 
 
 class BaseNRMIndexableDataset(BaseNRMDataset, Sized):
@@ -218,7 +168,7 @@ class BaseNRMIndexableDataset(BaseNRMDataset, Sized):
         while len(failed_batch_indices) < 10:
             rng = self._get_rng(current_batch_idx)
             try:
-                return self.getitem_allow_exceptions(current_batch_idx, rng)
+                return self.getitem_allow_exceptions(current_batch_idx)
             except Exception as e:
                 failed_batch_indices.append(current_batch_idx)
                 # Iterate until we find a new valid batch index
@@ -254,4 +204,4 @@ class BaseNRMIndexableDataset(BaseNRMDataset, Sized):
         ...
 
     @abstractmethod
-    def getitem_allow_exceptions(self, batch_idx: int, rng: np.random.Generator) -> NRMDataBatch: ...
+    def getitem_allow_exceptions(self, batch_idx: int) -> NRMDataBatch: ...

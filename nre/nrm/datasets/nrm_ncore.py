@@ -510,7 +510,7 @@ class NCoreNRMDataset(BaseNRMIndexableDataset):
                         # For DS-based data, depth is nan/inf for sky regions, correct them to be 0.
                         # Applied before subsampling to avoid enlarging nan regions.
                         depth[~np.isfinite(depth) | sky_mask] = 0.0
-                        depth = camera_subsampler.apply_depth_data(depth, mode="nearest-min")
+                        depth = camera_subsampler.apply_depth_data(depth)
                         # (H, W) -> (1, H, W, 1)
                         labels.metric_distance = to_torch(depth, device="cpu")[None, ..., None]
                         depth_aux_loaded = True
@@ -938,14 +938,14 @@ class NCoreNRMDataset(BaseNRMIndexableDataset):
             self._loaders_sensors_cache = {str(ncore_json_path): result}
         return result
 
-    def getitem_allow_exceptions(self, batch_idx: int, rng: np.random.Generator) -> NRMDataBatch:
+    def getitem_allow_exceptions(self, batch_idx: int) -> NRMDataBatch:
         # Disable fsspect INFO logs to not spam the logs.
         logging.getLogger("fsspec").setLevel(logging.WARNING)
 
         sequence_idx: int = batch_idx // self.num_samples_per_sequence
         sample_idx: int = batch_idx % self.num_samples_per_sequence
 
-        concrete_config = self.non_concrete_config.concretize(self.epoch, rng)
+        concrete_config = self.non_concrete_config
 
         frame_batch_sampler = AdaptiveSequentialFrameBatchSampler(concrete_config.frame_batch_sampler)
         assert sample_idx < frame_batch_sampler.n_samples_per_sequence, "Sample index out of bounds"
