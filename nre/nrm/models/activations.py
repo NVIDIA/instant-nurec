@@ -87,7 +87,8 @@ class RgbActivation(nn.Module):
 @dataclass(kw_only=True, slots=True)
 class GaussianParams:
     """
-    Parameters for 3D Gaussian primitives. It could be either activated or not.
+    Parameters for 3D Gaussian primitives. The decoder always emits
+    activated parameters in the predict pipeline.
     All the gaussian attributes should have the same prefix shape (if not None),
     and the rest dimension should be matching the corresponding attributes.
     - rgb: (*, 3)
@@ -107,9 +108,6 @@ class GaussianParams:
     opacity: Tensor
     xyz: Tensor
 
-    # Indicates whether this set of parameters has been already activated.
-    activated: bool = False
-
     def __getitem__(self, key: torch.Tensor | slice | int) -> Self:
         return type(self)(
             rgb=self.rgb[key],
@@ -117,7 +115,6 @@ class GaussianParams:
             rotation=self.rotation[key],
             opacity=self.opacity[key],
             xyz=self.xyz[key],
-            activated=self.activated,
         )
 
     def flatten(self) -> Self:
@@ -127,7 +124,6 @@ class GaussianParams:
             rotation=self.rotation.reshape(-1, 4),
             opacity=self.opacity.reshape(-1, 1),
             xyz=self.xyz.reshape(-1, 3),
-            activated=self.activated,
         )
 
     def __post_init__(self):

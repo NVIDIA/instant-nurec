@@ -435,7 +435,6 @@ class KelvinDPTDecoder(nn.Module):
             rotation=gs_world_quaternion,
             opacity=gs_opacity,
             xyz=gs_xyz,
-            activated=True,
         )
 
         # Build up the primitive
