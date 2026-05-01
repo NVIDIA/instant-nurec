@@ -26,7 +26,6 @@ py_library(
     name = "pylib",
     srcs = [
         "__init__.py",
-        "base.py",
         "gaussians_nrm.py",
     ],
     visibility = DEFAULT_VISIBILITY,

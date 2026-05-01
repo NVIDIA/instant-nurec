@@ -18,15 +18,16 @@ from pathlib import Path
 
 import torch
 
+from torch import nn
 from tqdm import tqdm
 
 from nre.datasets.tracks import CuboidTracks
-from nre.nrm.config.nrm import NRMConfig
+from nre.nrm.config.nrm import GaussiansNRMSystemConfig, NRMConfig
+from nre.nrm.datasets.datamodule import NRMDataModule
 from nre.nrm.models.kelvin_model import KelvinNRM
 from nre.nrm.predict.export_ply import export_ply
 from nre.nrm.predict.primitive_merge import KelvinPrimitiveMerge
 from nre.nrm.primitives.base import BaseNRMPrimitive
-from nre.nrm.systems.base import BaseNRMSystem
 from nre.utils.batch import NRMDataBatch
 from nre.utils.types import RigTrajectories
 
@@ -34,10 +35,30 @@ from nre.utils.types import RigTrajectories
 logger = logging.getLogger(__name__)
 
 
-class GaussiansNRMSystem(BaseNRMSystem):
+class GaussiansNRMSystem(nn.Module):
+    """Predict-only system. Self-invented: NRE inherits LightningModule for the
+    Trainer.fit/validate/test surfaces; we keep just nn.Module since the
+    predict driver invokes hooks directly."""
+
+    config: GaussiansNRMSystemConfig
+    model: KelvinNRM
+    datamodule: NRMDataModule
+
     def __init__(self, config: NRMConfig) -> None:
-        super().__init__(config)
+        super().__init__()
+
+        self.out_dir = config.out_dir
+        self.run_id = config.run_id
+        self.config = config.system
+        self.predict_config = config.predict
+        self.export_preprocess = config.model.export_preprocess
+
+        self.datamodule = NRMDataModule(config)
         self.model = KelvinNRM(config.model)
+
+    @property
+    def device(self) -> torch.device:
+        return next(self.parameters()).device
 
     def forward(self, batch: NRMDataBatch) -> list[BaseNRMPrimitive]:
         cuboid_tracks = None
