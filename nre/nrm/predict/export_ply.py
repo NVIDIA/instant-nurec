@@ -44,18 +44,13 @@ class PLYExportGaussians:
         Export the gaussians to the PLY file used in SO, and values are exported as NuRec expects them.
         Colors are exported in SH, while scale and density are exported preactivated.
         """
-        scales = self.scales.float()
-        if config.scale_activation is not None:
-            scale_activation_inv = get_activation(config.scale_activation, inverse=True)
-            scales = scale_activation_inv(scales)
+        scale_activation_inv = get_activation(config.scale_activation, inverse=True)
+        scales = scale_activation_inv(self.scales.float())
 
-        densities = self.densities.float()
-        if config.density_activation is not None:
-            density_activation_inv = get_activation(config.density_activation, inverse=True)
-            densities = density_activation_inv(densities)
+        density_activation_inv = get_activation(config.density_activation, inverse=True)
+        densities = density_activation_inv(self.densities.float())
 
         rgb = self.rgb.float()
-        features_albedo = rgb if config.color_mode == "rgb" else RGB2SH(rgb)
 
         custom_attributes = {}
         if self.road_mask is not None:
@@ -69,52 +64,21 @@ class PLYExportGaussians:
             rotations=self.rotations.float(),
             scales=scales,
             densities=densities,
-            features_albedo=features_albedo,
+            features_albedo=RGB2SH(rgb),
             color=rgb,
             normals=self.normals.float() if self.normals is not None else None,
             custom_attributes=custom_attributes,
         )
 
 
-def get_gaussian_shape_pruning_mask(
-    config: PrimitivePLYExportConfig, densities: torch.Tensor, scales: torch.Tensor
-) -> torch.Tensor:
-    """
-    Get the gaussian pruning mask for the given primitive, based on the shape of the gaussians.
-    Returns [num_gaussians, 1] mask tensor.
-    """
-
-    mask = torch.isfinite(densities)
-    logger.info(f"Removed {(~mask).sum().item():,} non-finite density gaussians.")
-    logger.info(f"Starting to filter {mask.sum().item():,} finite gaussians.")
-
-    if config.minimum_density is not None:
-        logger.info(f"Filter (density) removed {torch.sum(mask & (densities < config.minimum_density))} gaussians")
-        mask = mask & (densities >= config.minimum_density)
-
-    if config.minimum_scale is not None:
-        logger.info(
-            f"Filter (scale) removed {torch.sum(mask & (torch.min(scales, dim=1).values < config.minimum_scale).unsqueeze(1))} gaussians"
-        )
-        mask = mask & (torch.min(scales, dim=1).values >= config.minimum_scale).unsqueeze(1)
-
-    if config.minimum_surface_area is not None:
-        logger.info(
-            f"Filter (surface area) removed {torch.sum(mask & (scales.square().sum(dim=1) < config.minimum_surface_area).unsqueeze(1))} gaussians"
-        )
-        mask = mask & (scales.square().sum(dim=1) >= config.minimum_surface_area).unsqueeze(1)
-
-    return mask
-
-
-def export_kelvin_ply(config: PrimitivePLYExportConfig, primitives: KelvinNRMPrimitive) -> PLYExportGaussians:
+def export_kelvin_ply(primitives: KelvinNRMPrimitive) -> PLYExportGaussians:
     """Export the ply file, static layer only."""
     static_layer = primitives.static_layer
 
-    mask = get_gaussian_shape_pruning_mask(config, static_layer.densities, static_layer.scales).squeeze(-1)
-    logger.info(f"After filtering, {torch.sum(mask)} gaussians remaining.")
-
-    static_layer = static_layer.mask(mask)
+    finite_mask = torch.isfinite(static_layer.densities).squeeze(-1)
+    logger.info(f"Removed {(~finite_mask).sum().item():,} non-finite density gaussians.")
+    static_layer = static_layer.mask(finite_mask)
+    logger.info(f"Exporting {static_layer.densities.numel():,} gaussians.")
 
     # Derive road/sky masks from per-gaussian semantic class
     road_mask: torch.Tensor | None = None
@@ -151,7 +115,7 @@ def export_ply(
 
     # Then compute the gaussians to be exported
     if isinstance(primitives, KelvinNRMPrimitive):
-        gaussians_ply = export_kelvin_ply(config, primitives)
+        gaussians_ply = export_kelvin_ply(primitives)
     else:
         raise ValueError(f"Unsupported primitive type: {type(primitives)}")
 

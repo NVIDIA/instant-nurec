@@ -21,29 +21,13 @@ class PrimitivePLYExportConfig(BaseConfigSchema):
         description="Whether to enable primitive ply export. The exported ply file contains the preactived density "
         "and scale, and colors represented in SH.",
     )
-    density_activation: Literal["sigmoid", "exp"] | None = Field(
+    density_activation: Literal["sigmoid", "exp"] = Field(
         default="sigmoid",
         description="The inv activation function to apply to the densities before exporting.",
     )
-    scale_activation: Literal["sigmoid", "exp"] | None = Field(
+    scale_activation: Literal["sigmoid", "exp"] = Field(
         default="exp",
         description="The inv activation function to apply to the scales before exporting.",
-    )
-    color_mode: Literal["rgb", "sh"] = Field(default="sh", description="The color representation to export.")
-    minimum_density: float | None = Field(
-        ge=0.0,
-        default=0.0,
-        description="Primitives with strictly lower activated density than this will be filtered out.",
-    )
-    minimum_scale: float | None = Field(
-        ge=0.0,
-        default=0.0,
-        description="Primitives with strictly lower activated scale (in any dimension) than this will be filtered out.",
-    )
-    minimum_surface_area: float | None = Field(
-        ge=0.0,
-        default=0.0,
-        description="Primitives with strictly lower surface area (scale x^2 + y^2 + z^2) than this will be filtered out.",
     )
 
 

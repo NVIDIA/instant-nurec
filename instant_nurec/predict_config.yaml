@@ -162,7 +162,3 @@ predict:
     enabled: true
     density_activation: sigmoid
     scale_activation: exp
-    color_mode: sh
-    minimum_density: 0.0
-    minimum_scale: 0.0
-    minimum_surface_area: 0.0
