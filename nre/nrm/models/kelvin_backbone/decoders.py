@@ -19,7 +19,7 @@ import numpy as np
 import torch
 import torch.utils.checkpoint
 
-from einops import einsum, rearrange, repeat
+from einops import einsum, rearrange
 from torch import nn
 
 from nre.datasets.tracks import CuboidTracks, TrackFlags
