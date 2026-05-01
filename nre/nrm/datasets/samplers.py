@@ -14,10 +14,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from nre.nrm.config.dataset import (
-    AdaptiveSequentialFrameBatchSamplerConfig,
-    LidarFrameBatchParamsConfig,
-)
+from nre.nrm.config.dataset import AdaptiveSequentialFrameBatchSamplerConfig
 from nre.nrm.datasets.nrm_base import NRMDataError
 from nre.utils.types import HalfClosedInterval
 
@@ -34,33 +31,6 @@ def get_closest_frame_index(frame_timestamps_us: np.ndarray, target_timestamp_us
         int: Index of the closest frame.
     """
     return int(np.abs(frame_timestamps_us.astype(np.int64) - target_timestamp_us).argmin())
-
-
-def sample_lidar_frame_batch(
-    config: LidarFrameBatchParamsConfig,
-    frame_batch: FrameBatchSamplerReturn,
-    sensor_frame_timestamps_us: dict[str, np.ndarray],
-    lidar_id: str,
-) -> FrameBatchSamplerReturn:
-    """
-    Sample lidar frame indices based on a previously sampled camera frame batch.
-    """
-    if config.gap_from_image_us == 0:
-        return frame_batch
-
-    sampled_lidar_frame_idxs: list[int] = []
-    lidar_frame_timestamps_us = sensor_frame_timestamps_us[lidar_id]
-    for sensor_id, frame_idxs in frame_batch.sampled_sensor_frame_idxs.items():
-        assert sensor_id != lidar_id, "Lidar frame batch cannot be sampled from the same sensor"
-        sensor_timestamps = sensor_frame_timestamps_us[sensor_id]
-        for frame_idx in frame_idxs:
-            timestamps_diff = np.abs(lidar_frame_timestamps_us.astype(np.int64) - sensor_timestamps[frame_idx].item())
-            sampled_lidar_frame_idxs.extend(np.where(timestamps_diff <= config.gap_from_image_us)[0].tolist())
-
-    sampled_lidar_frame_idxs = sorted(list(set(sampled_lidar_frame_idxs)))
-    return FrameBatchSamplerReturn(
-        sampled_sensor_frame_idxs={lidar_id: sampled_lidar_frame_idxs} | frame_batch.sampled_sensor_frame_idxs
-    )
 
 
 @dataclass(kw_only=True)

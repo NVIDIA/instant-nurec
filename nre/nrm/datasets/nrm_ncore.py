@@ -34,7 +34,6 @@ from nre.nrm.datasets.nrm_base import BaseNRMIndexableDataset, CameraSubsampler,
 from nre.nrm.datasets.samplers import (
     AdaptiveSequentialFrameBatchSampler,
     FrameBatchSamplerReturn,
-    sample_lidar_frame_batch,
 )
 from nre.utils.batch import (
     CameraFrameLabels,
@@ -216,7 +215,6 @@ class NCoreNRMDataset(BaseNRMIndexableDataset):
 
         self.aux_data_params = config.aux_data
         self.cuboid_tracks_params = config.cuboid_tracks_params
-        self.lidar_frame_batch_params = config.lidar_frame_batch
 
         # V3 sequence loader parameters
         self.cuboid_loading_max_workers: Optional[int] = config.cuboid_loading_max_workers
@@ -956,14 +954,6 @@ class NCoreNRMDataset(BaseNRMIndexableDataset):
         if len(context_frame_batch.sampled_sensor_frame_idxs) == 0:
             # If nothing is sampled (e.g. out of bounds), return 0-sized batch to be concatenated with other batches.
             return NRMDataBatch(context=[], cuboid_tracks=[], context_rig=[], meta=[])
-
-        if len(self.lidar_ids) > 0:
-            context_frame_batch = sample_lidar_frame_batch(
-                config=self.lidar_frame_batch_params,
-                frame_batch=context_frame_batch,
-                sensor_frame_timestamps_us=context_camera_frame_timestamps_us | lidar_frame_timestamps_us,
-                lidar_id=self.lidar_ids[0],
-            )
 
         # Determine a good reference coordinates (first camera first frame - non-rig)
         ref_camera_id = context_camera_ids[0]

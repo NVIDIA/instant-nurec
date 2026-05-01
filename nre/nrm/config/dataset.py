@@ -45,10 +45,6 @@ class NCoreNRMCuboidTracksParamsConfig(BaseConfigSchema):
     track_label_source: Literal["AUTOLABEL", "EXTERNAL", "GT_SYNTHETIC", "GT_ANNOTATION"]
 
 
-class LidarFrameBatchParamsConfig(BaseConfigSchema):
-    gap_from_image_us: int = Field(description="Max gap from image in microseconds", default=0)
-
-
 class AdaptiveSequentialFrameBatchSamplerConfig(BaseConfigSchema):
     name: Literal["adaptive_sequential"] = "adaptive_sequential"
     n_frames_per_sample: int = Field(
@@ -148,10 +144,6 @@ class BaseNCoreNRMDatasetConfig(BaseConfigSchema):
 
     # Note: this is not the same as the other cuboid tracks params
     cuboid_tracks_params: NCoreNRMCuboidTracksParamsConfig
-
-    lidar_frame_batch: LidarFrameBatchParamsConfig = Field(
-        description="Parameters for the lidar frame batch", default_factory=LidarFrameBatchParamsConfig
-    )
 
     camera_id_mapping: dict[str, str] = Field(
         default_factory=dict,

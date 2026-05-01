@@ -57,8 +57,6 @@ dataset:
       track_min_centroid_rig_dist_m: 3.0
       track_extrapolate_timestamps_us: 1000000
       track_label_source: AUTOLABEL
-    lidar_frame_batch:
-      gap_from_image_us: 0
     camera_id_mapping: {}
     lidar_id_mapping: {}
     name: nrm-ncore
