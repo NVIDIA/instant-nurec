@@ -342,20 +342,6 @@ class FrameMeta:
         if self.unique_sensor_idx_str is None:
             self.unique_sensor_idx_str = str(self.unique_sensor_idx)
 
-    @property
-    def h(self) -> int | None:
-        if self.subsample is None:
-            return None
-        else:
-            return self.subsample.height
-
-    @property
-    def w(self) -> int | None:
-        if self.subsample is None:
-            return None
-        else:
-            return self.subsample.width
-
     @classmethod
     def collate_fn(
         cls,
@@ -409,45 +395,6 @@ class CameraFrameLabels:
                 "Normals must be a 4D tensor (B, height, width, 3)"
             )
             assert self.normals.dtype == torch.float32, "Normals must be a float32 tensor"
-
-    @property
-    def b(self) -> int | None:
-        batch_sizes = [
-            getattr(self, attr).shape[0]
-            for attr in self.__dataclass_fields__
-            if isinstance(getattr(self, attr), torch.Tensor)
-        ]
-        if len(batch_sizes) == 0:
-            return None
-        else:
-            assert all(b == batch_sizes[0] for b in batch_sizes), "All batch sizes must be the same"
-            return batch_sizes[0]
-
-    @property
-    def h(self) -> int | None:
-        heights = [
-            getattr(self, attr).shape[1]
-            for attr in self.__dataclass_fields__
-            if isinstance(getattr(self, attr), torch.Tensor)
-        ]
-        if len(heights) == 0:
-            return None
-        else:
-            assert all(h == heights[0] for h in heights), "All heights must be the same"
-            return heights[0]
-
-    @property
-    def w(self) -> int | None:
-        widths = [
-            getattr(self, attr).shape[2]
-            for attr in self.__dataclass_fields__
-            if isinstance(getattr(self, attr), torch.Tensor)
-        ]
-        if len(widths) == 0:
-            return None
-        else:
-            assert all(w == widths[0] for w in widths), "All widths must be the same"
-            return widths[0]
 
     def get_mask_flags_all(self, flags: RayFlags) -> torch.Tensor:
         """Mask indicating the rays that have *all* flag bits of 'flags' set"""
@@ -527,45 +474,6 @@ class LidarFrameLabels:
             )
             assert self.distance.dtype == torch.float32, "Distance must be a float32 tensor"
 
-    @property
-    def b(self) -> int | None:
-        batch_sizes = [
-            getattr(self, attr).shape[0]
-            for attr in self.__dataclass_fields__
-            if isinstance(getattr(self, attr), torch.Tensor)
-        ]
-        if len(batch_sizes) == 0:
-            return None
-        else:
-            assert all(b == batch_sizes[0] for b in batch_sizes), "All batch sizes must be the same"
-            return batch_sizes[0]
-
-    @property
-    def h(self) -> int | None:
-        heights = [
-            getattr(self, attr).shape[1]
-            for attr in self.__dataclass_fields__
-            if isinstance(getattr(self, attr), torch.Tensor)
-        ]
-        if len(heights) == 0:
-            return None
-        else:
-            assert all(h == heights[0] for h in heights), "All heights must be the same"
-            return heights[0]
-
-    @property
-    def w(self) -> int | None:
-        widths = [
-            getattr(self, attr).shape[2]
-            for attr in self.__dataclass_fields__
-            if isinstance(getattr(self, attr), torch.Tensor)
-        ]
-        if len(widths) == 0:
-            return None
-        else:
-            assert all(w == widths[0] for w in widths), "All widths must be the same"
-            return widths[0]
-
     @classmethod
     def collate_fn(
         cls,
@@ -609,26 +517,6 @@ class DataBatch:
         def b(self) -> int:
             return len(self.meta)
 
-        @property
-        def h(self) -> int | None:
-            heights = [meta.h for meta in self.meta] + [self.labels.h]
-            heights = [h for h in heights if h is not None]
-            if len(heights) == 0:
-                return None
-            else:
-                assert all(h == heights[0] for h in heights), "All heights must be the same"
-                return heights[0]
-
-        @property
-        def w(self) -> int | None:
-            widths = [meta.w for meta in self.meta] + [self.labels.w]
-            widths = [w for w in widths if w is not None]
-            if len(widths) == 0:
-                return None
-            else:
-                assert all(w == widths[0] for w in widths), "All widths must be the same"
-                return widths[0]
-
         @classmethod
         def collate_fn(
             cls,
@@ -663,26 +551,6 @@ class DataBatch:
         @property
         def b(self) -> int:
             return len(self.meta)
-
-        @property
-        def h(self) -> int | None:
-            heights = [meta.h for meta in self.meta] + [self.labels.h]
-            heights = [h for h in heights if h is not None]
-            if len(heights) == 0:
-                return None
-            else:
-                assert all(h == heights[0] for h in heights), "All heights must be the same"
-                return heights[0]
-
-        @property
-        def w(self) -> int | None:
-            widths = [meta.w for meta in self.meta] + [self.labels.w]
-            widths = [w for w in widths if w is not None]
-            if len(widths) == 0:
-                return None
-            else:
-                assert all(w == widths[0] for w in widths), "All widths must be the same"
-                return widths[0]
 
         @classmethod
         def collate_fn(
