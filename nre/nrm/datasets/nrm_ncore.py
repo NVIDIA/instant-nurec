@@ -125,17 +125,9 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
             return self.camera_id
 
         @property
-        def loader_key(self) -> str:
-            return self.main_loader_key()
-
-        @property
         def canonical_order(self) -> str:
             """Canonical order to be in rig trajectory and the data batch."""
             return f"{self.unique_sensor_idx:03d}"
-
-        @staticmethod
-        def main_loader_key() -> str:
-            return "main"
 
     @dataclass
     class LoadersAndSensorsResult:
@@ -365,8 +357,8 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
                 labels.rgb = to_torch(frame_image_array, device="cpu").unsqueeze(0)
 
                 # Load auxiliary information
-                if camera_id.loader_key in aux_loaders:
-                    aux_loader = aux_loaders[camera_id.loader_key]
+                if "main" in aux_loaders:
+                    aux_loader = aux_loaders["main"]
                     data_camera_id = camera_id.camera_id
                     sky_mask: np.ndarray | bool = False
                     if aux_loader.has_semantic_segmentation(data_camera_id):
@@ -567,7 +559,7 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
                 )
                 current_unique_frame_idx += 1
 
-            camera_frame_timestamps_us[camera_id.loader_key][str(camera_id)] = torch.tensor(
+            camera_frame_timestamps_us["main"][str(camera_id)] = torch.tensor(
                 frame_timestamps_us_list, dtype=torch.int64, device="cpu"
             )
 
@@ -599,49 +591,42 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
                 frame_timestamps_us_list, dtype=torch.int64, device="cpu"
             )
 
-        rig_trajectores: list[RigTrajectories.RigTrajectory] = []
-        for loader_key, (T_rig_worlds, T_rig_world_timestamps_us) in T_rig_worlds_with_timestamps_us.items():
-            if loader_key not in camera_frame_timestamps_us.keys():
-                continue
+        # Standalone predict has a single loader keyed `"main"` (no external archives).
+        T_rig_worlds, T_rig_world_timestamps_us = T_rig_worlds_with_timestamps_us["main"]
 
-            # In the new batch design the sensor poses can only obtained by interpolating rig poses.
-            # In cases where rig timestamps do not fully cover the sensor timestamps, we extend the rig using constant padding.
-            # This can happen, e.g., in Gen3C setting where rig timestamps are end-of-frame ones, so start-of-frame of the 1st frame
-            # is not covered.
-            sensor_min_timestamp_us = (
-                int(min((v.min().item() for v in camera_frame_timestamps_us[loader_key].values()))) - 1
+        # In the new batch design the sensor poses can only obtained by interpolating rig poses.
+        # In cases where rig timestamps do not fully cover the sensor timestamps, we extend the rig using constant padding.
+        # This can happen, e.g., in Gen3C setting where rig timestamps are end-of-frame ones, so start-of-frame of the 1st frame
+        # is not covered.
+        sensor_min_timestamp_us = int(min((v.min().item() for v in camera_frame_timestamps_us["main"].values()))) - 1
+        sensor_max_timestamp_us = int(max((v.max().item() for v in camera_frame_timestamps_us["main"].values()))) + 1
+        if sensor_min_timestamp_us < int(T_rig_world_timestamps_us[0].item()):
+            T_rig_worlds = np.concatenate([T_rig_worlds[:1], T_rig_worlds], axis=0)
+            T_rig_world_timestamps_us = np.concatenate(
+                [[sensor_min_timestamp_us], T_rig_world_timestamps_us], axis=0
             )
-            sensor_max_timestamp_us = (
-                int(max((v.max().item() for v in camera_frame_timestamps_us[loader_key].values()))) + 1
+        if sensor_max_timestamp_us > int(T_rig_world_timestamps_us[-1].item()):
+            T_rig_worlds = np.concatenate([T_rig_worlds, T_rig_worlds[-1:]], axis=0)
+            T_rig_world_timestamps_us = np.concatenate(
+                [T_rig_world_timestamps_us, [sensor_max_timestamp_us]], axis=0
             )
-            if sensor_min_timestamp_us < int(T_rig_world_timestamps_us[0].item()):
-                T_rig_worlds = np.concatenate([T_rig_worlds[:1], T_rig_worlds], axis=0)
-                T_rig_world_timestamps_us = np.concatenate(
-                    [[sensor_min_timestamp_us], T_rig_world_timestamps_us], axis=0
-                )
-            if sensor_max_timestamp_us > int(T_rig_world_timestamps_us[-1].item()):
-                T_rig_worlds = np.concatenate([T_rig_worlds, T_rig_worlds[-1:]], axis=0)
-                T_rig_world_timestamps_us = np.concatenate(
-                    [T_rig_world_timestamps_us, [sensor_max_timestamp_us]], axis=0
-                )
 
-            # Convert to proper torch tensors
-            rig_trajectores.append(
-                RigTrajectories.RigTrajectory(
-                    sequence_id=sequence_id_prefix + loader_key,
-                    cameras_frame_timestamps_us=camera_frame_timestamps_us[loader_key],
-                    lidars_frame_timestamps_us=lidar_frame_timestamps_us,
-                    T_rig_worlds=to_torch(T_world_ref @ T_rig_worlds, device="cpu", dtype=torch.float64),
-                    T_rig_world_timestamps_us=to_torch(T_rig_world_timestamps_us, device="cpu", dtype=torch.int64),
-                )
+        rig_trajectores: list[RigTrajectories.RigTrajectory] = [
+            RigTrajectories.RigTrajectory(
+                sequence_id=sequence_id_prefix + "main",
+                cameras_frame_timestamps_us=camera_frame_timestamps_us["main"],
+                lidars_frame_timestamps_us=lidar_frame_timestamps_us,
+                T_rig_worlds=to_torch(T_world_ref @ T_rig_worlds, device="cpu", dtype=torch.float64),
+                T_rig_world_timestamps_us=to_torch(T_rig_world_timestamps_us, device="cpu", dtype=torch.int64),
             )
+        ]
 
         camera_calibrations = OrderedDict(
             [
                 (
                     str(camera_id),
                     RigTrajectories.CameraCalibration(
-                        sequence_id=sequence_id_prefix + camera_id.loader_key,
+                        sequence_id=sequence_id_prefix + "main",
                         unique_sensor_idx=camera_id.unique_sensor_idx,
                         T_sensor_rig=to_torch(unpack_optional(camera_sensors[camera_id].T_sensor_rig), device="cpu"),
                         camera_model_parameters=all_camera_model_parameters[camera_id],
@@ -712,9 +697,9 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
             # Load the ncore files. Predict-only standalone never loads from
             # external ncore archives, so the dataset paths are the same for
             # every camera id.
-            if (sequence_loader := sequence_loaders.get(camera_id.loader_key)) is None:
+            if (sequence_loader := sequence_loaders.get("main")) is None:
                 try:
-                    sequence_loader = sequence_loaders[camera_id.loader_key] = ncore_utils.create_sequence_loader(
+                    sequence_loader = sequence_loaders["main"] = ncore_utils.create_sequence_loader(
                         dataset_paths=dataset_paths,
                         open_consolidated=self.open_consolidated,
                         v4_poses_component_group="default",
@@ -732,13 +717,13 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
                 )
 
                 # all rig poses with timestamps
-                T_rig_worlds_with_timestamps_us[camera_id.loader_key] = (
+                T_rig_worlds_with_timestamps_us["main"] = (
                     rig_world_edge.T_source_target,
                     unpack_optional(rig_world_edge.timestamps_us, msg="Rig-to-world pose requires to be dynamic"),
                 )
 
                 try:
-                    aux_loaders[camera_id.loader_key] = ncore_utils.AuxShardDataLoader(
+                    aux_loaders["main"] = ncore_utils.AuxShardDataLoader(
                         sequence_id=sequence_loader.sequence_id,
                         dataset_paths=dataset_paths,
                         open_consolidated=self.open_consolidated,
@@ -808,13 +793,12 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
         lidar_sensors = loaders_sensors.lidar_sensors
 
         # Determine the timestamps interval to select frames from.
-        main_loader_key: str = NCoreNRMDataset.ExtendedCameraId.main_loader_key()
-        main_sequence_loader = sequence_loaders[main_loader_key]
+        main_sequence_loader = sequence_loaders["main"]
         context_camera_frame_timestamps_us: dict[str, np.ndarray] = {}
 
         # Standalone predict always selects the full sequence range; subranges
         # were a training-time control that the predict YAML never carried.
-        main_timestamps = T_rig_worlds_with_timestamps_us[main_loader_key][1]
+        main_timestamps = T_rig_worlds_with_timestamps_us["main"][1]
         select_intervals = [HalfClosedInterval(int(main_timestamps.min()), int(main_timestamps.max()))]
         # Intersect also with sensor timestamps (with +/- 0.1s tolerance)
         for camera_id in context_camera_ids:
