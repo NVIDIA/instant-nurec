@@ -65,7 +65,6 @@ py_library(
     srcs = [
         "__init__.py",
         "base_schema.py",
-        "checkpoint.py",
         "logger.py",
         "model.py",
         "parse.py",

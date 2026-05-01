@@ -13,7 +13,6 @@ from __future__ import annotations
 from typing import Literal
 
 from nre.config.base_schema import BaseConfigSchema, Field
-from nre.config.checkpoint import ArtifactConfig
 
 
 class PrimitivePLYExportConfig(BaseConfigSchema):
@@ -165,9 +164,6 @@ class PredictConfig(BaseConfigSchema):
     )
     export_ply: PrimitivePLYExportConfig = Field(
         default_factory=PrimitivePLYExportConfig, description="Configuration for primitive ply export"
-    )
-    artifact: ArtifactConfig = Field(
-        default_factory=ArtifactConfig, description="Configuration for artifact (usdz) generation and export"
     )
     render_video: RenderVideoConfig = Field(
         default_factory=RenderVideoConfig, description="Configuration for rendered video export"
