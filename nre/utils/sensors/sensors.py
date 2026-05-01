@@ -148,19 +148,9 @@ class SensorModelComputations:
 
         timestamps_startend_us_gpu = timestamps_startend_us.unsqueeze(0)
 
-        # Compute timestamps entirely on CPU - no GPU sync needed
-        if subsample_rect_points_lb_cpu is not None and subsample_resolution_cpu is not None:
-            # Interpolate timestamps on CPU using the helper
-            timestamps_startend_us_cpu = CameraModelComputations.interpolate_rect_timestamps_cpu(
-                subsample_rect_points_lb_cpu.squeeze(0),  # (1, 2, 2) -> (2, 2)
-                subsample_resolution_cpu.squeeze(0),  # (1, 2) -> (2,)
-                shutter_type,
-                timestamps_startend_us_allviews_cpu[unique_frame_idx],  # (2,)
-            )
-        else:
-            timestamps_startend_us_cpu = timestamps_startend_us_allviews_cpu[unique_frame_idx]
-
-        timestamps_startend_us_cpu = timestamps_startend_us_cpu.unsqueeze(0)
+        # Standalone predict pins `FrameMeta.subsample = None`, so the NRE-side
+        # `interpolate_rect_timestamps_cpu` per-pixel-rect path was unreachable.
+        timestamps_startend_us_cpu = timestamps_startend_us_allviews_cpu[unique_frame_idx].unsqueeze(0)
 
         return SensorModelComputations.PosesAndTimestampsStartendReturn(
             T_sensor_world_startend=T_sensor_world_startend,
