@@ -22,37 +22,21 @@ from nre.utils.types import RigTrajectories
 @torch.autocast(device_type="cuda", enabled=False)
 def transform_rig_trajectories(
     rig_trajectories: RigTrajectories,
-    left_transform: torch.Tensor | None = None,
-    right_transform: torch.Tensor | None = None,
+    *,
+    left_transform: torch.Tensor,
 ) -> RigTrajectories:
-    """
-    Transform a rig trajectory by applying a left (global) or right (local purturbation) transform.
-    Note that when left_transform is applied, the T_world_base is updated inversely so that the geo-positioning is not affected.
-    When right_transform is applied, we don't (and cannot) update T_world_base since this is considered as a local perturbation.
-    """
+    """Apply a left (global) transform to a rig trajectory; T_world_base is updated inversely so
+    geo-positioning is unaffected."""
     rig_trajectories_device = rig_trajectories.T_world_base.device
+    assert (
+        left_transform.shape == (4, 4)
+        and left_transform.dtype in [torch.float32, torch.float64]
+        and left_transform.device == rig_trajectories_device
+    ), f"Left transform must have shape (4, 4), torch.float32/64 and device {rig_trajectories_device}"
 
-    if left_transform is not None:
-        assert (
-            left_transform.shape == (4, 4)
-            and left_transform.dtype in [torch.float32, torch.float64]
-            and left_transform.device == rig_trajectories_device
-        ), f"Left transform must have shape (4, 4), torch.float32/64 and device {rig_trajectories_device}"
-    else:
-        left_transform = torch.eye(4, dtype=torch.float64, device=rig_trajectories_device)
-
-    if right_transform is not None:
-        assert (
-            right_transform.shape == (4, 4)
-            and right_transform.dtype in [torch.float32, torch.float64]
-            and right_transform.device == rig_trajectories_device
-        ), f"Right transform must have shape (4, 4), torch.float32/64 and device {rig_trajectories_device}"
-    else:
-        right_transform = torch.eye(4, dtype=torch.float64, device=rig_trajectories_device)
-
-    left_transform, right_transform = left_transform.double(), right_transform.double()
+    left_transform = left_transform.double()
     new_rig_trajectories_list = [
-        replace(rig_trajectory, T_rig_worlds=left_transform @ rig_trajectory.T_rig_worlds.double() @ right_transform)
+        replace(rig_trajectory, T_rig_worlds=left_transform @ rig_trajectory.T_rig_worlds.double())
         for rig_trajectory in rig_trajectories.rig_trajectories
     ]
     new_T_world_base = rig_trajectories.T_world_base @ se3_matrix_inverse(left_transform)
