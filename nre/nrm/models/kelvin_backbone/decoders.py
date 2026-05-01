@@ -307,7 +307,6 @@ class KelvinDPTDecoder(nn.Module):
         depth_and_dconf = self.depth_head(img_feats, output_shape=(H, W), chunk_size=self.config.dpt_chunk_size)
         depth_and_dconf = rearrange(depth_and_dconf, "(B V) C H W -> B V C H W", B=B, V=V)
         pred_depth = torch.exp(depth_and_dconf[:, :, 0].unsqueeze(-1) - math.log(scene_rescale))  # (B, V, H, W, 1)
-        pred_depth_conf = torch.exp(depth_and_dconf[:, :, 1].unsqueeze(-1)) + 1.0  # (B, V, H, W, 1)
 
         # Forward and activate context
         img_rgb = rearrange(img_rgb, "B V H W C -> (B V) C H W")

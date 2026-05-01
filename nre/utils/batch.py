@@ -763,7 +763,6 @@ class CameraFreePoseViewGeometry(torch.nn.Module):
         pose_and_timestamps_startend_return = self.get_poses_and_timestamps_startend(meta)
 
         T_sensor_world_startend = pose_and_timestamps_startend_return.T_sensor_world_startend
-        timestamps_startend_us = pose_and_timestamps_startend_return.timestamps_startend_us
         timestamps_startend_us_gpu = pose_and_timestamps_startend_return.timestamps_startend_us_gpu
         timestamps_startend_us_cpu = pose_and_timestamps_startend_return.timestamps_startend_us_cpu
 

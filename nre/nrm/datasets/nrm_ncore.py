@@ -787,11 +787,6 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
             )
             context_camera_frame_timestamps_us[str(camera_id)] = timestamps_us
 
-        lidar_frame_timestamps_us: dict[str, np.ndarray] = {
-            lidar_id: lidar_sensors[lidar_id].get_frames_timestamps_us(ncore.data.FrameTimepoint.END)
-            for lidar_id in self.lidar_ids
-        }
-
         context_frame_batch = frame_batch_sampler.sample_frame_batch(
             sample_idx,
             context_camera_frame_timestamps_us,
