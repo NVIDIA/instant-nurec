@@ -11,7 +11,6 @@
 from __future__ import annotations
 
 import logging
-import math
 
 from pathlib import Path
 from typing import List, Optional, TypeAlias, TypeVar
@@ -64,38 +63,6 @@ def RGB2SH(rgb: T) -> T:
 def sh_degree_to_specular_dim(degree: int) -> int:
     """Number of dimensions used by SH of deg [1..degree], inclusive"""
     return 3 * ((degree + 1) ** 2 - 1)
-
-
-def sh_degree_to_num_features(degree: int) -> int:
-    """Number of dimensions used by SH of deg [0..degree], inclusive"""
-    return sh_degree_to_specular_dim(degree) + 3
-
-
-def num_features_to_sh_degree(num_features: int) -> int:
-    """
-    Given num_features from sh_degree_to_num_features(d) = 3 * (d + 1)^2, compute the integer degree d.
-    """
-    # 1) Check that num_features is a multiple of 3
-    assert num_features % 3 == 0, (
-        f"num_features = {num_features} is not a multiple of 3, so it cannot match 3*(d+1)^2 for integer d"
-    )
-
-    # 2) Divide by 3
-    squared_part = num_features // 3
-
-    # 3) Check that squared_part is a perfect square:
-    candidate = math.isqrt(squared_part)
-    assert candidate * candidate == squared_part, (
-        f"num_features = {num_features} implies {squared_part} is not a perfect square, so it cannot match (d+1)^2 for integer d"
-    )
-
-    # 4) Subtract 1 to get the degree
-    degree = candidate - 1
-
-    # 5) Optional: check for negative degree (if candidate == 0, that means no valid degree).
-    assert degree >= 0, f"num_features = {num_features} is too small to represent degree 0 or higher"
-
-    return degree
 
 
 def write_ply_3dgs(
