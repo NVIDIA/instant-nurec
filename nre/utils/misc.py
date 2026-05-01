@@ -13,6 +13,7 @@ from typing import (
     Any,
     Dict,
     Generator,
+    Hashable,
     List,
     Optional,
     Sequence,
