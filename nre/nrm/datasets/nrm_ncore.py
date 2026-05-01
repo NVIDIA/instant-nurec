@@ -32,7 +32,7 @@ from nre.nrm.config.dataset import BaseNCoreNRMDatasetConfig
 from nre.nrm.datasets.nrm_base import CameraSubsampler, NRMDataError
 from nre.nrm.datasets.samplers import (
     AdaptiveSequentialFrameBatchSampler,
-    FrameBatchSamplerReturn,
+    SampledSensorFrameIdxs,
 )
 from nre.utils.batch import (
     CameraFrameLabels,
@@ -237,7 +237,7 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
 
     def _compute_cuboid_tracks(
         self,
-        context_frame_batch: FrameBatchSamplerReturn,
+        context_frame_batch: SampledSensorFrameIdxs,
         sequence_loader: ncore.data.SequenceLoaderProtocol,
         camera_sensors: dict[ExtendedCameraId, ncore.data.CameraSensorProtocol],
         lidar_sensors: dict[str, ncore.data.LidarSensorProtocol],
@@ -254,7 +254,7 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
 
         frame_batch_min_timestamps_us: int = int(1e16)
         frame_batch_max_timestamps_us: int = 0
-        for sensor_id, frame_idxs in context_frame_batch.sampled_sensor_frame_idxs.items():
+        for sensor_id, frame_idxs in context_frame_batch.items():
             sensor = [v for k, v in (camera_sensors | lidar_sensors).items() if str(k) == sensor_id][0]
             sensor_min_timestamp_us = sensor.get_frame_timestamp_us(min(frame_idxs), ncore.data.FrameTimepoint.START)
             sensor_max_timestamp_us = sensor.get_frame_timestamp_us(max(frame_idxs), ncore.data.FrameTimepoint.END)
@@ -350,7 +350,7 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
 
     def _load_data_batch(
         self,
-        frame_batch: FrameBatchSamplerReturn,
+        frame_batch: SampledSensorFrameIdxs,
         camera_idx_mapping: dict[UniqueFrameId, int],
         camera_sensors: dict[ExtendedCameraId, ncore.data.CameraSensorProtocol],
         lidar_idx_mapping: dict[UniqueFrameId, int],
@@ -370,7 +370,7 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
         # As long as network is equivariant to the order of images, this is not important.
         frame_batch_camera_ids = [
             matched_camera_ids[0]
-            for camera_id_name in frame_batch.sampled_sensor_frame_idxs.keys()
+            for camera_id_name in frame_batch.keys()
             if len(matched_camera_ids := [c for c in camera_sensors.keys() if str(c) == camera_id_name]) > 0
         ]
         frame_batch_camera_ids = sorted(frame_batch_camera_ids, key=lambda x: x.canonical_order)
@@ -378,7 +378,7 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
         # Read Camera-based data
         camera_batch_list: list[DataBatch.Camera] = []
         for camera_id in frame_batch_camera_ids:
-            frame_idxs = frame_batch.sampled_sensor_frame_idxs[str(camera_id)]
+            frame_idxs = frame_batch[str(camera_id)]
             if camera_id not in camera_sensors:
                 continue
             camera_sensor = camera_sensors[camera_id]
@@ -486,7 +486,7 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
         ## Load lidars
         lidar_batch_list: list[DataBatch.Lidar] = []
         for unique_sensor_idx, lidar_id in enumerate(self.lidar_ids):
-            if lidar_id not in frame_batch.sampled_sensor_frame_idxs.keys():
+            if lidar_id not in frame_batch.keys():
                 continue
             if lidar_id not in lidar_sensors:
                 continue
@@ -499,7 +499,7 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
 
             height, width = lidar_model_parameters.n_rows, lidar_model_parameters.n_columns
 
-            for frame_idx in frame_batch.sampled_sensor_frame_idxs[lidar_id]:
+            for frame_idx in frame_batch[lidar_id]:
                 pc = lidar_sensor.get_frame_point_cloud(
                     frame_index=frame_idx,
                     motion_compensation=True,
@@ -553,7 +553,7 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
     def _get_rig_trajectory(
         self,
         sequence_id_prefix: str,
-        frame_batch: FrameBatchSamplerReturn,
+        frame_batch: SampledSensorFrameIdxs,
         camera_sensors: dict[ExtendedCameraId, ncore.data.CameraSensorProtocol],
         lidar_sensors: dict[str, ncore.data.LidarSensorProtocol],
         T_world_ref: np.ndarray,
@@ -580,7 +580,7 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
         # Find the matching ExtendedCameraId given the string name from the sampler.
         frame_batch_camera_ids = [
             matched_camera_ids[0]
-            for camera_id_name in frame_batch.sampled_sensor_frame_idxs.keys()
+            for camera_id_name in frame_batch.keys()
             if len(matched_camera_ids := [c for c in camera_sensors.keys() if str(c) == camera_id_name]) > 0
         ]
         # This determines the OrderedDict ordering of cameras in the rig trajectory.
@@ -609,7 +609,7 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
             camera_model_parameters = camera_subsampler.apply_camera_parameters(camera_model_parameters_copy)
             all_camera_model_parameters[camera_id] = camera_model_parameters
             frame_timestamps_us_list = []
-            for frame_idx in frame_batch.sampled_sensor_frame_idxs[str(camera_id)]:
+            for frame_idx in frame_batch[str(camera_id)]:
                 frame_start_timestamp_us = int(
                     camera_sensor.get_frame_timestamp_us(frame_idx, ncore.data.FrameTimepoint.START)
                 )
@@ -633,14 +633,14 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
         lidar_frame_timestamps_us: dict[str, torch.Tensor] = {}
         all_lidar_model_parameters: dict[str, ncore.data.ConcreteLidarModelParametersUnion | None] = {}
         lidar_idx_mapping: dict[NCoreNRMDataset.UniqueFrameId, int] = {}
-        frame_batch_lidar_ids = [l for l in self.lidar_ids if l in frame_batch.sampled_sensor_frame_idxs.keys()]
+        frame_batch_lidar_ids = [l for l in self.lidar_ids if l in frame_batch.keys()]
 
         current_unique_frame_idx = 0
         for lidar_id in frame_batch_lidar_ids:
             lidar_sensor = lidar_sensors[lidar_id]
             all_lidar_model_parameters[lidar_id] = get_lidar_model_parameters(lidar_sensor)
             frame_timestamps_us_list = []
-            for frame_idx in frame_batch.sampled_sensor_frame_idxs[lidar_id]:
+            for frame_idx in frame_batch[lidar_id]:
                 frame_start_timestamp_us = int(
                     lidar_sensor.get_frame_timestamp_us(frame_idx, ncore.data.FrameTimepoint.START)
                 )
@@ -905,7 +905,7 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
             context_camera_frame_timestamps_us,
             select_intervals,
         )
-        if len(context_frame_batch.sampled_sensor_frame_idxs) == 0:
+        if len(context_frame_batch) == 0:
             # If nothing is sampled (e.g. out of bounds), return 0-sized batch to be concatenated with other batches.
             return NRMDataBatch(context=[], cuboid_tracks=[], context_rig=[], meta=[])
 
@@ -913,7 +913,7 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
         ref_camera_id = context_camera_ids[0]
         T_world_ref = camera_sensors[ref_camera_id].get_frames_T_source_sensor(
             source_node="world",
-            frame_indices=min(context_frame_batch.sampled_sensor_frame_idxs[str(ref_camera_id)]),
+            frame_indices=min(context_frame_batch[str(ref_camera_id)]),
             frame_timepoint=ncore.data.FrameTimepoint.END,
         )
 

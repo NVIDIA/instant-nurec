@@ -10,8 +10,6 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 import numpy as np
 
 from nre.nrm.config.dataset import AdaptiveSequentialFrameBatchSamplerConfig
@@ -32,12 +30,8 @@ def get_closest_frame_index(frame_timestamps_us: np.ndarray, target_timestamp_us
     return int(np.abs(frame_timestamps_us.astype(np.int64) - target_timestamp_us).argmin())
 
 
-@dataclass(kw_only=True)
-class FrameBatchSamplerReturn:
-    """Return type of FrameBatchSampler"""
-
-    # Mapping from sensor id to sampled frame indices (could also contain lidar sensors)
-    sampled_sensor_frame_idxs: dict[str, list[int]]
+# `sampled_sensor_frame_idxs` mapping: sensor id (camera or lidar) → frame indices.
+SampledSensorFrameIdxs = dict[str, list[int]]
 
 
 class AdaptiveSequentialFrameBatchSampler:
@@ -61,7 +55,7 @@ class AdaptiveSequentialFrameBatchSampler:
         sample_idx: int,
         camera_frame_timestamps_us: dict[str, np.ndarray],
         time_intervals: list[HalfClosedInterval],
-    ) -> FrameBatchSamplerReturn:
+    ) -> SampledSensorFrameIdxs:
         assert len(camera_frame_timestamps_us) > 0, "No camera timestamps is provided to the frame batch sampler"
         assert 0 <= sample_idx < self.n_samples_per_sequence, "Sample index out of bounds"
         assert len(time_intervals) > 0, "No time intervals to sample from"
@@ -73,7 +67,7 @@ class AdaptiveSequentialFrameBatchSampler:
         n_chunks = max(1, int(np.ceil(sequence_total_timespan / max_chunk_timespan)))
 
         if sample_idx >= n_chunks:
-            return FrameBatchSamplerReturn(sampled_sensor_frame_idxs={})
+            return {}
 
         frame_gap_timestamp_us = sequence_total_timespan / (n_chunks * self.n_frames_per_sample)
         first_frame_idx = sample_idx * self.n_frames_per_sample
@@ -82,7 +76,7 @@ class AdaptiveSequentialFrameBatchSampler:
             for frame_idx in range(self.n_frames_per_sample)
         ]
 
-        sampled_sensor_frame_idxs: dict[str, list[int]] = {}
+        sampled_sensor_frame_idxs: SampledSensorFrameIdxs = {}
         for camera_id, camera_timestamps_us in camera_frame_timestamps_us.items():
             sampled_sensor_frame_idxs[camera_id] = []
             for frame_timestamp_us in ref_frame_timestamps_us:
@@ -90,6 +84,6 @@ class AdaptiveSequentialFrameBatchSampler:
                     get_closest_frame_index(camera_timestamps_us, int(frame_timestamp_us))
                 )
 
-        return FrameBatchSamplerReturn(sampled_sensor_frame_idxs=sampled_sensor_frame_idxs)
+        return sampled_sensor_frame_idxs
 
 
