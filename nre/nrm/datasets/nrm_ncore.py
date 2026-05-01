@@ -28,7 +28,7 @@ import nre.utils.ncore_utils as ncore_utils
 
 from nre.datasets.tracks import CuboidTracks, CuboidTracksDataPack, TrackFlags
 from nre.datasets.utils import compute_cuboid_df, consolidate_cuboid_tracks
-from nre.nrm.config.dataset import BaseNCoreNRMDatasetConfig
+from nre.nrm.config.dataset import NCoreNRMDatasetConfig
 from nre.nrm.datasets.nrm_base import CameraSubsampler, NRMDataError
 from nre.nrm.datasets.samplers import (
     AdaptiveSequentialFrameBatchSampler,
@@ -147,7 +147,7 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
         camera_sensors: dict["NCoreNRMDataset.ExtendedCameraId", ncore.data.CameraSensorProtocol]
         lidar_sensors: dict[str, ncore.data.LidarSensorProtocol]
 
-    def __init__(self, config: BaseNCoreNRMDatasetConfig):
+    def __init__(self, config: NCoreNRMDatasetConfig):
         self.ncore_json_list_path = parse_universal_path(config.ncore_json_list_path)
         self.ncore_json_base_path = parse_universal_path(config.ncore_json_base_path)
         self.open_consolidated = config.open_consolidated

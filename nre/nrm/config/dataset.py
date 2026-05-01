@@ -51,8 +51,8 @@ class CameraSubsamplerConfig(BaseConfigSchema):
     frame_height: int = Field(description="Height of the image to subsample (aspect-preserving center crop)")
 
 
-class BaseNCoreNRMDatasetConfig(BaseConfigSchema):
-    """Base config for NCore-based datasets. Subclasses must define `name`."""
+class NCoreNRMDatasetConfig(BaseConfigSchema):
+    """Predict-side config for the NCorev4 dataset loader."""
 
     ncore_json_list_path: str = Field(
         description="The path to a file that contains the list of sequence meta json files to load.",
@@ -90,4 +90,4 @@ class NRMSplitsConfig(BaseConfigSchema):
     split; pydantic extras="ignore" drops the train/val/test entries that the
     pretrained parsed.yaml still carries."""
 
-    predict: BaseNCoreNRMDatasetConfig | None = Field(default=None, description="Dataset to use in prediction mode")
+    predict: NCoreNRMDatasetConfig | None = Field(default=None, description="Dataset to use in prediction mode")
