@@ -12,8 +12,7 @@ from __future__ import annotations
 
 import logging
 
-from abc import ABC, abstractmethod
-from typing import Sized, Tuple
+from typing import Tuple
 
 import numpy as np
 import torch
@@ -22,7 +21,7 @@ import torch.nn.functional as F
 import ncore.data
 
 from nre.nrm.config.dataset import CameraSubsamplerConfig
-from nre.utils.batch import NRMDataBatch, RectSubsampled
+from nre.utils.batch import RectSubsampled
 
 
 logger = logging.getLogger(__name__)
@@ -138,19 +137,3 @@ class NRMDataError(Exception):
     def __init__(self, message: str = "An error occurred while loading NRM data"):
         super().__init__(message)
         self.message = message
-
-
-class BaseNRMIndexableDataset(torch.utils.data.Dataset[NRMDataBatch], Sized, ABC):
-    """Indexable NRM dataset; predict pipeline calls __getitem__ once per
-    sample and surfaces any failure directly."""
-
-    def __getitem__(self, batch_idx: int) -> NRMDataBatch:
-        return self.getitem_allow_exceptions(batch_idx)
-
-    @abstractmethod
-    def __len__(self) -> int:
-        """Returns number of items in the dataset"""
-        ...
-
-    @abstractmethod
-    def getitem_allow_exceptions(self, batch_idx: int) -> NRMDataBatch: ...

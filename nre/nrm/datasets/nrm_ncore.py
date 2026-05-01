@@ -30,7 +30,7 @@ import nre.utils.ncore_utils as ncore_utils
 from nre.datasets.tracks import CuboidTracks, CuboidTracksDataPack, TrackFlags
 from nre.datasets.utils import compute_cuboid_df, consolidate_cuboid_tracks
 from nre.nrm.config.dataset import BaseNCoreNRMDatasetConfig
-from nre.nrm.datasets.nrm_base import BaseNRMIndexableDataset, CameraSubsampler, NRMDataError
+from nre.nrm.datasets.nrm_base import CameraSubsampler, NRMDataError
 from nre.nrm.datasets.samplers import (
     AdaptiveSequentialFrameBatchSampler,
     FrameBatchSamplerReturn,
@@ -95,7 +95,7 @@ def get_lidar_sensor_from_sequence_loader(
     )
 
 
-class NCoreNRMDataset(BaseNRMIndexableDataset):
+class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
     """
     The native ncore dataset loader
     """
@@ -845,7 +845,7 @@ class NCoreNRMDataset(BaseNRMIndexableDataset):
             lidar_sensors=lidar_sensors,
         )
 
-    def getitem_allow_exceptions(self, batch_idx: int) -> NRMDataBatch:
+    def __getitem__(self, batch_idx: int) -> NRMDataBatch:
         # Disable fsspect INFO logs to not spam the logs.
         logging.getLogger("fsspec").setLevel(logging.WARNING)
 
