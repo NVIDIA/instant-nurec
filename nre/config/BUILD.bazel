@@ -77,7 +77,6 @@ py_library(
         "logger.py",
         "model.py",
         "parse.py",
-        "profiling.py",
         "viewer.py",
     ],
     visibility = DEFAULT_VISIBILITY + [
