@@ -13,7 +13,6 @@ from __future__ import annotations
 from typing import Any, List, Literal, Optional, Tuple
 
 from nre.config.base_schema import BaseConfigSchema, Field
-from nre.config.model import BaseRendererConfig, RendererConfigType
 
 
 class BaseModelConfig(BaseConfigSchema):
@@ -132,7 +131,6 @@ class KelvinModelConfig(BaseModelConfig):
     """
 
     name: Literal["kelvin"]
-    renderer: RendererConfigType
 
     track_padding_m: List[float] = Field(
         default=[1.0, 1.0, 1.0],

@@ -57,7 +57,6 @@ py_library(
         "__init__.py",
         "base_schema.py",
         "logger.py",
-        "model.py",
         "parse.py",
     ],
     visibility = DEFAULT_VISIBILITY + [
