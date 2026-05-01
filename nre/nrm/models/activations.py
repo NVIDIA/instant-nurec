@@ -21,7 +21,6 @@ from torch import Tensor
 
 from nre.models.nn_extensions import module_call_type
 from nre.nrm.config.models import GaussiansActivationConfig
-from nre.utils.misc import unpack_optional
 
 
 class OpacityActivation(nn.Module):
@@ -149,69 +148,6 @@ class RgbActivation(nn.Module):
     def forward(self, x: Tensor) -> Tensor:
         """Apply sigmoid activation to map RGB values to [0, 1] range."""
         return torch.sigmoid(2 * x)
-
-
-class SkyMaskActivation(nn.Module):
-    """Activation function for sky mask values using clamped sigmoid."""
-
-    def __init__(self, config: GaussiansActivationConfig):
-        super().__init__()
-        self.clamp_min = config.sky_mask_clamp_min
-        self.clamp_max = config.sky_mask_clamp_max
-
-    def forward(self, x: Tensor) -> Tensor:
-        """Apply sigmoid activation with input clamping for numerical stability."""
-        return torch.sigmoid(x.clamp(self.clamp_min, self.clamp_max))
-
-
-class ForwardFlowActivation(nn.Module):
-    """Activation function for forward flow values using linear scaling."""
-
-    def __init__(self, config: GaussiansActivationConfig):
-        super().__init__()
-        self.scale = config.forward_flow_scale
-
-    def forward(self, x: Tensor) -> Tensor:
-        """Apply linear scaling to forward flow values."""
-        return x * self.scale
-
-
-class FalloffSigmaActivation(nn.Module):
-    """Activation function for falloff sigma values using sigmoid with min/max bounds."""
-
-    def __init__(self, config: GaussiansActivationConfig):
-        super().__init__()
-        self.sigma_min = config.falloff_sigma_min
-        self.sigma_max = config.falloff_sigma_max
-        self.clamp_min = config.falloff_sigma_clamp_min
-        self.clamp_max = config.falloff_sigma_clamp_max
-
-    def activate(self, x: Tensor) -> Tensor:
-        return torch.sigmoid(x.clamp(self.clamp_min, self.clamp_max))
-
-    def scale(
-        self, unscaled_sigma: Tensor, time_span_s: float, frame_gap_timestamps_us: Tensor | None = None
-    ) -> Tensor:
-        assert len(unscaled_sigma.shape) == 4, "Unscaled sigma must not be flattened"
-        time_min_s: float | torch.Tensor = self.sigma_min * time_span_s
-        time_max_s: float = self.sigma_max * time_span_s
-        if self.sigma_min < 0.0:
-            # Infer from frame gap timestamps
-            time_min_s = torch.max(unpack_optional(frame_gap_timestamps_us), dim=-1).values / 1e6
-            # Divide by 2.0 to be extremely conservative
-            # (so if exp factor is inf then gaussian will fall-off at middle of frame gap)
-            # Now we divide by 1.0 to make the transition less noticeable.
-            time_min_s = rearrange(time_min_s, "B -> B 1 1 1")
-        # Linear scaling for now
-        sigma = time_min_s + (time_max_s - time_min_s) * unscaled_sigma
-        return sigma.flatten(0, 2)
-
-    def forward(self, x: Tensor, time_span_s: float, frame_gap_timestamps_us: Tensor | None = None) -> Tensor:
-        """
-        Apply sigmoid activation to map falloff sigma values to [sigma_min, sigma_max] range.
-        Input is clamped for numerical stability before sigmoid activation.
-        """
-        return self.scale(self.activate(x), time_span_s, frame_gap_timestamps_us)
 
 
 @dataclass(kw_only=True, slots=True)
