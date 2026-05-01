@@ -57,7 +57,3 @@ def enable_colored_exceptions() -> None:
 
     sys.excepthook = handle_exception
 
-
-def disable_colored_exceptions() -> None:
-    """Disable colored exception handling and reset to default."""
-    sys.excepthook = sys.__excepthook__
