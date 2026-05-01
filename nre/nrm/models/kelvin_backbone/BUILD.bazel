@@ -13,8 +13,6 @@ load("@rules_python//python:defs.bzl", "py_library")
 
 DEFAULT_VISIBILITY = [
     "//nre/nrm:__subpackages__",
-    # Loss functions might want to peak into the supervision pack
-    "//libs/losses:__subpackages__",
 ]
 
 filegroup(

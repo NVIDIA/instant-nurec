@@ -25,7 +25,6 @@ from pydantic import model_validator
 # Import from nre.config.parse to introduce OmegaConf resolvers
 import nre.config.parse  # noqa: F401
 
-from libs.losses.orchestration.config import LossConfig
 from nre.config.base_schema import BaseConfigSchema, Field
 from nre.config.logger import BatchMediaLoggerConfigMixin, LoggerConfigType
 from nre.config.trainer import infer_slurm_environment
@@ -124,7 +123,6 @@ class NRMConfig(BaseConfigSchema):
     dataset: NRMSplitsConfig = Field(discriminator="name")
 
     model: KelvinModelConfig = Field(discriminator="name")
-    loss: LossConfig
 
     # Predict configuration
     predict: PredictConfig = Field(

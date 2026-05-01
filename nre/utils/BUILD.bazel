@@ -160,7 +160,6 @@ py_library(
         "__init__.py",
         "lidar_model.py",
         "model_registry.py",
-        "visualize.py",
     ],
     visibility = DEFAULT_VISIBILITY + [
         # Add visibility for //internal/scripts/ncore_vis:ncore_vis

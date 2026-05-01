@@ -35,7 +35,6 @@ py_library(
     ],
     visibility = DEFAULT_VISIBILITY,
     deps = [
-        "//libs/losses:pylib_orchestration_config",
         pip_requirement("pydantic"),
         pip_requirement("omegaconf"),
         pip_requirement("numpy"),

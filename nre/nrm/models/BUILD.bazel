@@ -14,8 +14,6 @@ load("//bazel/pytest:defs.bzl", "pytest_test")
 
 DEFAULT_VISIBILITY = [
     "//nre/nrm:__subpackages__",
-    # Loss functions might want to peak into the supervision pack
-    "//libs/losses:__subpackages__",
 ]
 
 filegroup(

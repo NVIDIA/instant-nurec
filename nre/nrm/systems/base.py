@@ -16,7 +16,6 @@ import torch
 
 from pytorch_lightning import LightningModule
 
-from libs.losses.orchestration.loss_aggregator import LossAggregator
 from nre.config.base_schema import config_to_primitive
 from nre.nrm.config.nrm import BaseNRMSystemConfig, NRMConfig
 from nre.nrm.datasets.datamodule import NRMDataModule
@@ -45,12 +44,6 @@ class BaseNRMSystem(LightningModule, ABC):
         self.predict_config = config.predict
 
         self.datamodule = NRMDataModule(config)
-        assert config.loss is not None
-
-        # Slang could not properly dispatch disabled loss functions, giving empty tensors.
-        self.loss = LossAggregator(config.loss, force_disable_cuda=True)
-
-
 
     # ---- Test loop methods ----
 

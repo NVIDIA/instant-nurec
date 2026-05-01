@@ -128,23 +128,3 @@ def rotate_sky_cubemap(cubemap: torch.Tensor, rotation: torch.Tensor) -> torch.T
     return sky_color
 
 
-def layout_sky_cubemap(cubemap: torch.Tensor) -> torch.Tensor:
-    """
-    Layout the cubemap into a 2x3 grid, suitable for visualization. Grid has the following layout:
-    [
-        [left, front, right],
-        [back, bottom, top],
-    ]
-    Args:
-        cubemap: (6, cubemap_size, cubemap_size, 3)
-    Returns:
-        (2 * cubemap_size, 3 * cubemap_size, 3)
-    """
-    right, left, top, bottom, front, back = cubemap.unbind(0)
-    return torch.cat(
-        [
-            torch.cat([left, front, right], dim=1),
-            torch.cat([back, bottom, top], dim=1),
-        ],
-        dim=0,
-    )
