@@ -145,12 +145,12 @@ class KelvinModelConfig(BaseModelConfig):
         description="If True, freeze encoder parameters (requires_grad=False); train decoder/sky/post-processing only.",
     )
 
-    sky: KelvinSkyCubemapDecoderConfig = Field(discriminator="name")
+    sky: KelvinSkyCubemapDecoderConfig
 
     patch_shape: Tuple[int, int] = Field(default=(8, 8))
 
-    encoder: KelvinDAv3EncoderConfig = Field(discriminator="name")
-    decoder: KelvinDPTDecoderConfig = Field(discriminator="name")
+    encoder: KelvinDAv3EncoderConfig
+    decoder: KelvinDPTDecoderConfig
     post_processing: KelvinPostProcessingConfig = Field(default_factory=KelvinPostProcessingConfig)
     activations: GaussiansActivationConfig = Field(
         default_factory=GaussiansActivationConfig, description="Activation functions configuration."

@@ -55,12 +55,12 @@ class NRMConfig(BaseConfigSchema):
     verbose: bool = Field(default=False, description="Verbose mode.")
 
     out_dir: str
-    logger: LoggerConfigType = Field(discriminator="name")
+    logger: LoggerConfigType
 
-    system: GaussiansNRMSystemConfig = Field(discriminator="name")
-    dataset: NRMSplitsConfig = Field(discriminator="name")
+    system: GaussiansNRMSystemConfig
+    dataset: NRMSplitsConfig
 
-    model: KelvinModelConfig = Field(discriminator="name")
+    model: KelvinModelConfig
 
     # Predict configuration
     predict: PredictConfig = Field(
