@@ -69,10 +69,6 @@ class RectSubsampledSensor(RectSubsampledBase):
     rect_points_lb: torch.Tensor = field(init=False, repr=False)
     resolution: torch.Tensor = field(init=False, repr=False)
 
-    # CPU copies of the rect_points_lb and resolution tensors
-    rect_points_lb_cpu: torch.Tensor = field(init=False, repr=False)
-    resolution_cpu: torch.Tensor = field(init=False, repr=False)
-
     def __post_init__(self):
         RectSubsampledBase.__post_init__(self)
         self.rect_points_lb = 0.5 + self.subsample_factor * torch.tensor(
@@ -86,10 +82,6 @@ class RectSubsampledSensor(RectSubsampledBase):
             dtype=torch.float32,
         )
         self.resolution = torch.tensor([self.original_width, self.original_height], dtype=torch.float32)
-
-        # Keep CPU copies of the rect_points_lb and resolution tensors
-        self.rect_points_lb_cpu = self.rect_points_lb.clone().cpu()
-        self.resolution_cpu = self.resolution.clone().cpu()
 
     def to(self, *args, **kwargs) -> Self:
         obj = replace(self)
@@ -112,8 +104,6 @@ class SensorModelComputations:
     def _get_poses_and_timestamps_startend_slang(
         subsample_rect_points_lb: Optional[torch.Tensor],
         subsample_resolution: Optional[torch.Tensor],
-        subsample_rect_points_lb_cpu: Optional[torch.Tensor],
-        subsample_resolution_cpu: Optional[torch.Tensor],
         T_sensor_world_startend_allviews: torch.Tensor,
         timestamps_startend_us_allviews: torch.Tensor,
         timestamps_startend_us_allviews_cpu: torch.Tensor,
@@ -173,8 +163,6 @@ class SensorModelComputations:
         return SensorModelComputations._get_poses_and_timestamps_startend_slang(
             subsample.rect_points_lb.unsqueeze(0) if subsample is not None else None,
             subsample.resolution.unsqueeze(0) if subsample is not None else None,
-            subsample.rect_points_lb_cpu.unsqueeze(0) if subsample is not None else None,
-            subsample.resolution_cpu.unsqueeze(0) if subsample is not None else None,
             T_sensor_world_startend_allviews,
             timestamps_startend_us_allviews,
             timestamps_startend_us_allviews_cpu,
