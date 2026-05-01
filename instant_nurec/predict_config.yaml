@@ -112,7 +112,6 @@ model:
     motion_depth: 4
   post_processing:
     enabled: true
-    optimization_start_global_step: 1000
   activations:
     opacity_shift: -2.0
     scale_type: world

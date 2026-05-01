@@ -112,10 +112,7 @@ class KelvinNRM(BaseNRM[KelvinNRMPrimitive]):
         return [self._maybe_derive_normals_from_distance(batch) for batch in context]
 
     def freeze_post_processing_for_predict(self) -> None:
-        """Predict pins global_step=0 < optimization_start_global_step, so the
-        post-processing affine RGB head's linear weights are detached. This
-        replaces the per-batch update_step_train_batch_start hook used during
-        training (`KelvinNRM` no longer drives that hook in predict-only)."""
+        """Detach the post-processing affine RGB head's linear weights for predict."""
         if self.post_processing is not None:
             self.post_processing.set_detach_linear_grad(True)
 

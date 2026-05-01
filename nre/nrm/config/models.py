@@ -115,9 +115,6 @@ class KelvinPostProcessingConfig(BaseConfigSchema):
         default=True,
         description="If False, skip the per-camera affine RGB module and use an identity transform at render time.",
     )
-    optimization_start_global_step: int = Field(
-        default=0, description="Start optimizing the post processing module from this global step."
-    )
 
 
 class KelvinModelConfig(BaseModelConfig):
