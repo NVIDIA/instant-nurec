@@ -197,9 +197,6 @@ class RenderingData:
     _rays_footprints: torch.Tensor | None = None  # (B, height, width, 1)
     timestamps_startend_us_cpu: torch.Tensor  # (B, 2) - cpu copy to avoid .item() calls
     _distance_to_depth_scale: torch.Tensor | None = None  # [Tensor[float32]] (B, height, width, 1)
-    _rays_is_sky: torch.Tensor | None = (
-        None  # [Tensor[bool]] (B, height, width, 1) — sky rays mask for gradient detachment
-    )
 
     def __post_init__(self):
         B = self.rays.shape[0]
@@ -289,10 +286,6 @@ class RenderingData:
             _distance_to_depth_scale = None
         else:
             _distance_to_depth_scale = collate_fn([item._distance_to_depth_scale for item in seq], device)
-        if any(item._rays_is_sky is None for item in seq):
-            _rays_is_sky = None
-        else:
-            _rays_is_sky = collate_fn([item._rays_is_sky for item in seq], device)
         return cls(
             rays=collate_fn([item.rays for item in seq], device),
             sensor_model_parameters=[p for item in seq for p in item.sensor_model_parameters],
@@ -302,7 +295,6 @@ class RenderingData:
             _rays_footprints=_rays_footprints,
             timestamps_startend_us_cpu=timestamps_startend_us_cpu,
             _distance_to_depth_scale=_distance_to_depth_scale,
-            _rays_is_sky=_rays_is_sky,
         )
 
     def to(self, *args, **kwargs) -> Self:
@@ -320,7 +312,6 @@ class RenderingData:
             _distance_to_depth_scale=self._distance_to_depth_scale.to(*args, **kwargs)
             if self._distance_to_depth_scale is not None
             else None,
-            _rays_is_sky=self._rays_is_sky.to(*args, **kwargs) if self._rays_is_sky is not None else None,
         )
 
     def __getitem__(self, item: Union[int, slice]) -> Self:
@@ -339,7 +330,6 @@ class RenderingData:
             _distance_to_depth_scale=self._distance_to_depth_scale[item]
             if self._distance_to_depth_scale is not None
             else None,
-            _rays_is_sky=self._rays_is_sky[item] if self._rays_is_sky is not None else None,
         )
 
 
