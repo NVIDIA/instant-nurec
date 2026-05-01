@@ -25,7 +25,7 @@ from nre.nrm.utils.cubemap import unproject_to_sky_cubemap
 from nre.nrm.utils.trajectory import merge_rig_trajectories, transform_rig_trajectories
 from nre.utils.batch import CameraFreePoseViewGeometry, DataAndRenderingBatch, DataBatch, NRMDataBatch, RenderingBatch
 from nre.utils.geometry import se3_matrix_inverse, tquat_to_se3_matrix
-from nre.utils.misc import list_of_dicts_to_dict_of_lists, unpack_optional
+from nre.utils.misc import list_of_dicts_to_singleton_dict, unpack_optional
 from nre.utils.types import RayFlags, RigTrajectories
 
 
@@ -217,7 +217,7 @@ class KelvinPrimitiveMerge:
             merged_context_batch = DataAndRenderingBatch(
                 data=merged_context_data, rendering=RenderingBatch(camera=merged_context_rendering)
             )
-            merged_meta = None if batch.meta is None else list_of_dicts_to_dict_of_lists(batch.meta, singleton=True)
+            merged_meta = None if batch.meta is None else list_of_dicts_to_singleton_dict(batch.meta)
             merged_batch = NRMDataBatch(
                 context=[merged_context_batch],
                 context_rig=[merged_context_rig],

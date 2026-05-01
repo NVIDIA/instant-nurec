@@ -106,19 +106,10 @@ def collate_fn(batch: List[Any], target_device: torch.device | None) -> Any:
         raise NotImplementedError(f"Collating of type {type(elem)} is not supported.")
 
 
-def list_of_dicts_to_dict_of_lists(
-    list_of_dicts: List[Dict[str, Any]], no_duplicates: bool = False, singleton: bool = False
-) -> Dict[str, List[Any]]:
+def list_of_dicts_to_singleton_dict(list_of_dicts: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
-    Convert a list of dictionaries to a dictionary of lists.
-
-    If no_duplicates is True, the lists will only contain unique elements.
-    If singleton is True, it fails if at least one list in the dict_of_lists has more than one unique element. Also, the value of the dictionary is the unique element and not a list of length one.
-
-    If list_of_dicts is empty, returns an empty dictionary.
-
-    Assumes all dictionaries have the same keys, throws assertion error otherwise.
-    Assumes all values are hashable, if no_duplicates or singleton is True.
+    Convert a list of dictionaries (with shared keys and equal hashable values
+    for each key) to a single dictionary mapping each key to its unique value.
     """
     if len(list_of_dicts) == 0:
         return {}
@@ -129,25 +120,15 @@ def list_of_dicts_to_dict_of_lists(
         f"All dictionaries must have the same keys, but got different keys. all keys: {all_keys} and common keys: {common_keys}"
     )
 
-    if no_duplicates or singleton:
-        # Iterate over all keys and collect the unique values into a set.
-        dict_of_lists = {}
-        for ki in common_keys:
-            # Collect the unique values for the current key into a set.
-            values = set()
-            for di in list_of_dicts:
-                if not isinstance(di[ki], Hashable):
-                    raise TypeError(
-                        f"unhashable type: '{type(di[ki])}'. Can not apply set.add(a), where a is of type {type(di[ki])})."
-                    )
-                values.add(di[ki])
-
-            if singleton:
-                assert len(values) == 1, f"List for key {ki} has more than one unique element: {values}"
-                dict_of_lists[ki] = values.pop()
-            else:
-                dict_of_lists[ki] = list(values)
-
-        return dict_of_lists
-    else:
-        return {k: [d[k] for d in list_of_dicts] for k in common_keys}
+    out: Dict[str, Any] = {}
+    for ki in common_keys:
+        values = set()
+        for di in list_of_dicts:
+            if not isinstance(di[ki], Hashable):
+                raise TypeError(
+                    f"unhashable type: '{type(di[ki])}'. Can not apply set.add(a), where a is of type {type(di[ki])})."
+                )
+            values.add(di[ki])
+        assert len(values) == 1, f"List for key {ki} has more than one unique element: {values}"
+        out[ki] = values.pop()
+    return out
