@@ -237,12 +237,10 @@ class FrameMeta:
     The fields are:
     - unique_sensor_idx: Index of the sensor that captured the frame. int32
     - unique_frame_idx: Unique index (among all sensors) for the frame. int32
-    - subsample: Subsampled pixel region (crop and resize info). Default to None.
     """
 
     unique_sensor_idx: int
     unique_frame_idx: int
-    subsample: RectSubsampled | None = None
 
     # Tensor version that will be used for cuda, populated automatically
     unique_frame_idx_tensor: torch.Tensor | None = None
@@ -270,7 +268,6 @@ class FrameMeta:
         return self.__class__(
             unique_sensor_idx=self.unique_sensor_idx,
             unique_frame_idx=self.unique_frame_idx,
-            subsample=self.subsample.to(*args, **kwargs) if self.subsample is not None else None,
             unique_frame_idx_tensor=self.unique_frame_idx_tensor.to(*args, **kwargs)
             if self.unique_frame_idx_tensor is not None
             else None,
@@ -682,21 +679,13 @@ class CameraFreePoseViewGeometry(torch.nn.Module):
         self.sensor_models = torch.nn.ModuleDict(sensor_models)
         self.sensor_ids_to_frame_range = sensor_ids_to_frame_range
 
-        # When `cache_sensor_params` is True, cache per-sensor subsampled data for `to_rendering_data`:
-        # footprints, ncore `parameters`, and `sensorlib_parameters` from `CameraModelConverter`
-        # (world rays use these with `image_points_to_world_rays_shutter_pose`).
-        # `rect_subsampled` is stored to invalidate the cache when subsampling changes.
+        # Cache per-sensor data for `to_rendering_data`: ncore `parameters`
+        # and `sensorlib_parameters` from `CameraModelConverter` (world rays
+        # use these with `image_points_to_world_rays_shutter_pose`).
         self.cached_sensor_params: dict[str, dict] = {
-            k: {
-                "rect_subsampled": None,
-                "footprints": None,
-                "parameters": None,
-                "sensorlib_parameters": None,
-            }
-            for k in sensor_models.keys()
+            k: {"parameters": None, "sensorlib_parameters": None} for k in sensor_models.keys()
         }
-
-        self.cached_sensor_subsample: dict[tuple[Optional[RectSubsampled], int], ConcreteCameraModelsUnion] = {}
+        self.cached_sensor_subsample: dict[int, ConcreteCameraModelsUnion] = {}
 
     @staticmethod
     def from_rig_trajectories(rig_trajectories: RigTrajectories) -> CameraFreePoseViewGeometry:
@@ -783,15 +772,10 @@ class CameraFreePoseViewGeometry(torch.nn.Module):
             frame_meta: The frame metadata. See `FrameMeta` for more details.
 
         Returns:
-            The sensor model in the subsampled domain.
+            The sensor model.
         """
-        subsample = frame_meta.subsample
         unique_sensor_idx = frame_meta.unique_sensor_idx if frame_meta.unique_sensor_idx >= 0 else 0
-        sensor_model = cast(ConcreteCameraModelsUnion, self.sensor_models[str(unique_sensor_idx)])
-        if subsample is not None:
-            return subsample.apply_to_camera_model(sensor_model)
-        else:
-            return sensor_model
+        return cast(ConcreteCameraModelsUnion, self.sensor_models[str(unique_sensor_idx)])
 
     def get_poses_and_timestamps_startend(
         self,
@@ -801,7 +785,6 @@ class CameraFreePoseViewGeometry(torch.nn.Module):
         Get the poses and timestamps for a given frame.
         """
         return SensorModelComputations.get_poses_and_timestamps_startend(
-            subsample=meta.subsample,
             T_sensor_world_startend_allviews=self.T_sensor_world_startend_allviews,
             timestamps_startend_us_allviews=self.timestamps_startend_us_allviews,
             timestamps_startend_us_allviews_cpu=self.timestamps_startend_us_allviews_cpu,
@@ -841,26 +824,21 @@ class CameraFreePoseViewGeometry(torch.nn.Module):
         timestamps_startend_us_gpu = pose_and_timestamps_startend_return.timestamps_startend_us_gpu
         timestamps_startend_us_cpu = pose_and_timestamps_startend_return.timestamps_startend_us_cpu
 
-        subsample_unique_sensor_idx = (meta.subsample, meta.unique_sensor_idx)
-        if subsample_unique_sensor_idx in self.cached_sensor_subsample:
-            sensor_model = self.cached_sensor_subsample[subsample_unique_sensor_idx]
+        if meta.unique_sensor_idx in self.cached_sensor_subsample:
+            sensor_model = self.cached_sensor_subsample[meta.unique_sensor_idx]
         else:
             sensor_model = cast(ConcreteCameraModelsUnion, self.get_sensor_model(meta))
-            self.cached_sensor_subsample[subsample_unique_sensor_idx] = sensor_model
+            self.cached_sensor_subsample[meta.unique_sensor_idx] = sensor_model
 
-        subsample = meta.subsample
         unique_sensor_idx = meta.unique_sensor_idx if meta.unique_sensor_idx >= 0 else 0
         cached_sensor_params = self.cached_sensor_params[str(unique_sensor_idx)]
-        if (cached_sensor_params["rect_subsampled"] == subsample) and (
-            cached_sensor_params["sensorlib_parameters"] is not None
-        ):
+        if cached_sensor_params["sensorlib_parameters"] is not None:
             sensor_model_parameters = cached_sensor_params["parameters"]
             sensorlib_parameters = cached_sensor_params["sensorlib_parameters"]
         else:
             sensor_model_parameters = sensor_model.get_parameters()
             sensorlib_parameters = CameraModelConverter.convert(sensor_model, device=T_sensor_world_startend.device)
             self.cached_sensor_params[str(unique_sensor_idx)] = {
-                "rect_subsampled": subsample,
                 "parameters": sensor_model_parameters,
                 "sensorlib_parameters": sensorlib_parameters,
             }

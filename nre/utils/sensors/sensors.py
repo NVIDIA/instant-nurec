@@ -88,26 +88,33 @@ class SensorModelComputations:
         timestamps_startend_us_cpu: torch.Tensor  # (1, 2)
 
     @staticmethod
-    def _get_poses_and_timestamps_startend_slang(
-        subsample_rect_points_lb: Optional[torch.Tensor],
-        subsample_resolution: Optional[torch.Tensor],
+    def get_poses_and_timestamps_startend(
         T_sensor_world_startend_allviews: torch.Tensor,
         timestamps_startend_us_allviews: torch.Tensor,
         timestamps_startend_us_allviews_cpu: torch.Tensor,
-        shutter_type: ShutterType,
+        sensor_models: torch.nn.ModuleDict,
         unique_frame_idx: int,
         unique_frame_idx_tensor: torch.Tensor,
+        unique_sensor_idx_str: str,
     ) -> SensorModelComputations.PosesAndTimestampsStartendReturn:
+        """GPU rolling-shutter interpolation via the Slang kernel.
+
+        Standalone predict requires CUDA tensors and pins
+        `FrameMeta.subsample = None`; the NRE-side compiled CPU fallback and
+        the per-pixel-rect `interpolate_rect_timestamps_cpu` path were
+        unreachable and dropped in Phase 1 step 4.3.
         """
-        GPU implementation using Slang kernel for rolling shutter interpolation.
-        """
-        # Call Slang kernel
+        assert T_sensor_world_startend_allviews.is_cuda, (
+            "get_poses_and_timestamps_startend requires CUDA tensors in the standalone predict pipeline."
+        )
+        shutter_type = cast(ShutterType, sensor_models[unique_sensor_idx_str].shutter_type)
+
         T_sensor_world_startend_batch, timestamps_startend_us_batch = compute_poses_and_timestamps(
             T_sensor_world_startend_allviews,
             None,  # embed_weights: standalone predict has no per-frame calibration deltas
             unique_frame_idx_tensor,
-            subsample_rect_points_lb,
-            subsample_resolution,
+            None,  # subsample_rect_points_lb: FrameMeta.subsample is always None
+            None,  # subsample_resolution: FrameMeta.subsample is always None
             timestamps_startend_us_allviews,
             shutter_type.value,
             False,  # enable_calib: dead in standalone predict (no calibration learning)
@@ -116,11 +123,7 @@ class SensorModelComputations:
         # Squeeze batch dimension (batch_size=1) to get single frame result
         T_sensor_world_startend = T_sensor_world_startend_batch.squeeze(0)  # (2, 4, 4)
         timestamps_startend_us = timestamps_startend_us_batch.squeeze(0)  # (2,)
-
         timestamps_startend_us_gpu = timestamps_startend_us.unsqueeze(0)
-
-        # Standalone predict pins `FrameMeta.subsample = None`, so the NRE-side
-        # `interpolate_rect_timestamps_cpu` per-pixel-rect path was unreachable.
         timestamps_startend_us_cpu = timestamps_startend_us_allviews_cpu[unique_frame_idx].unsqueeze(0)
 
         return SensorModelComputations.PosesAndTimestampsStartendReturn(
@@ -128,34 +131,6 @@ class SensorModelComputations:
             timestamps_startend_us=timestamps_startend_us,
             timestamps_startend_us_gpu=timestamps_startend_us_gpu,
             timestamps_startend_us_cpu=timestamps_startend_us_cpu,
-        )
-
-    @staticmethod
-    def get_poses_and_timestamps_startend(
-        subsample: Optional[RectSubsampledSensor],
-        T_sensor_world_startend_allviews: torch.Tensor,
-        timestamps_startend_us_allviews: torch.Tensor,
-        timestamps_startend_us_allviews_cpu: torch.Tensor,
-        sensor_models: torch.nn.ModuleDict,
-        unique_frame_idx: int,
-        unique_frame_idx_tensor: torch.Tensor,
-        unique_sensor_idx_str: str,
-    ):
-        # Standalone predict requires CUDA tensors; the compiled CPU fallback
-        # was dropped in Phase 1 step 4.3.
-        assert T_sensor_world_startend_allviews.is_cuda, (
-            "get_poses_and_timestamps_startend requires CUDA tensors in the standalone predict pipeline."
-        )
-        shutter_type = cast(ShutterType, sensor_models[unique_sensor_idx_str].shutter_type)
-        return SensorModelComputations._get_poses_and_timestamps_startend_slang(
-            subsample.rect_points_lb.unsqueeze(0) if subsample is not None else None,
-            subsample.resolution.unsqueeze(0) if subsample is not None else None,
-            T_sensor_world_startend_allviews,
-            timestamps_startend_us_allviews,
-            timestamps_startend_us_allviews_cpu,
-            shutter_type,
-            unique_frame_idx,
-            unique_frame_idx_tensor,
         )
 
 

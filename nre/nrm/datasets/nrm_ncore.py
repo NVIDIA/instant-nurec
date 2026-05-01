@@ -470,9 +470,6 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
                                 unique_frame_idx=camera_idx_mapping[
                                     self.UniqueFrameId(sensor_id=str(camera_id), frame_idx=frame_idx)
                                 ],
-                                # We don't have to pass in subsample here as we already store subsampled intrinsics
-                                # in the rig trajectory.
-                                subsample=None,
                             )
                         ],
                         labels=labels,
