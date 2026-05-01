@@ -8,51 +8,26 @@
 # without an express license agreement from NVIDIA CORPORATION or
 # its affiliates is strictly prohibited.
 
-import functools
-import random
-import traceback
-
-from abc import ABC
-from dataclasses import dataclass, fields, is_dataclass, replace
+from dataclasses import fields, is_dataclass, replace
 from typing import (
     Any,
-    Callable,
-    ClassVar,
     Dict,
     Generator,
     Hashable,
-    Iterable,
     List,
     Optional,
     Sequence,
-    Type,
     TypeVar,
-    Union,
 )
 
-import numpy as np
 import numpy.typing as npt
 import torch
-import torch.nn.functional as F
-
-from torch.utils import data as torchdata
 
 
 T = TypeVar("T")
 U = TypeVar("U")
 KT = TypeVar("KT", bound=Hashable)
 VT = TypeVar("VT")
-
-
-def rank_zero_only(fn):
-    """Predict-only standalone is single-process; rank_zero_only is a no-op
-    decorator. Self-invented: NRE used pytorch_lightning's rank_zero_only."""
-
-    @functools.wraps(fn)
-    def wrapped(*args, **kwargs):
-        return fn(*args, **kwargs)
-
-    return wrapped
 
 
 def get_pack_info_from_n(n_per_pack: torch.Tensor) -> torch.Tensor:
@@ -78,25 +53,6 @@ def unpack_optional(maybe_value: Optional[T], default: Optional[T] = None, msg: 
 
     # If the optional is not empty, return its value
     return maybe_value
-
-
-def map_optional(maybe_value: Optional[T], func: Callable[[T], U]) -> Optional[U]:
-    """Applies a function `func` to an optional value if it's set, otherwise returns None"""
-    if maybe_value is None:
-        # Can't apply function if there is no input value, return None
-        return None
-
-    # If the optional is not empty, apply the function to its value
-    return func(maybe_value)
-
-
-def strip_none_from_config(obj: Any) -> Any:
-    """Recursively remove dict entries whose value is None. For JSON serialization."""
-    if isinstance(obj, dict):
-        return {k: strip_none_from_config(v) for k, v in obj.items() if v is not None}
-    if isinstance(obj, list):
-        return [strip_none_from_config(v) for v in obj]
-    return obj
 
 
 def to_torch(
@@ -167,7 +123,6 @@ def collate_fn(
             raise NotImplementedError(f"Collating of type {type(elem)} is not supported.")
         else:
             return batch
-
 
 
 # https://github.com/nerfstudio-project/gsplat/blob/2323de5905d5e90e035f792fe65bad0fedd413e7/gsplat/distributed.py#L10
