@@ -10,7 +10,7 @@
 
 from __future__ import annotations
 
-from typing import Any, List, Literal, Optional, Tuple
+from typing import List, Literal, Tuple
 
 from nre.config.base_schema import BaseConfigSchema, Field
 
