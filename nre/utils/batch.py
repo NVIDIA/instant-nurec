@@ -15,10 +15,8 @@ import queue
 from dataclasses import dataclass, fields, is_dataclass
 from typing import Any, List, Literal, Optional, Self, Sequence, Tuple, TypeAlias, TypeVar, Union, cast
 
-import cv2
 import numpy as np
 import numpy.typing as npt
-import PIL.Image as PILImage
 import torch
 import torch.nn.functional as F
 
@@ -96,72 +94,6 @@ class RectSubsampled(RectSubsampledSensor):
         if not isinstance(other, RectSubsampled):
             return False
         return self.to_json() == other.to_json()
-
-    def crop_array(self, arr: np.ndarray) -> np.ndarray:
-        """Crop an array to the pixel region.
-
-        Args:
-            arr: The sensor array to crop. Should be a 3D array with shape (H-scaled, W-scaled, C) that is already subsampled.
-
-        Returns:
-            The cropped sensor array.
-        """
-        assert arr.ndim == 3, f"Array must be 3D shape, but got {arr.ndim}D of shape {arr.shape}"
-        height, width, _ = arr.shape
-        assert height * self.subsample_factor == self.original_height, (
-            f"Unscaled height ({height}) does not match the original height ({self.original_height})"
-        )
-        assert width * self.subsample_factor == self.original_width, (
-            f"Unscaled width ({width}) does not match the original width ({self.original_width})"
-        )
-
-        # crop
-        box = (self.i, self.j, self.i + self.width, self.j + self.height)  # (left, top, right, bottom)
-        if width < box[2]:
-            raise ValueError(f"Image width {width} is smaller than the width of the pixel region {box[2]}")
-        if height < box[3]:
-            raise ValueError(f"Image height {height} is smaller than the height of the pixel region {box[3]}")
-        return arr[box[1] : box[3], box[0] : box[2], :]
-
-    def apply_to_array(self, arr: np.ndarray, interpolation: int | None, use_pil_lanczos: bool = False) -> np.ndarray:
-        """Apply the subsampling (resizing and cropping) to a sensor array.
-
-        Args:
-            arr: The sensor array to apply the subsampling to. Should be a 3D array with shape (H, W, C)
-            interpolation: The interpolation method to use. See `cv2.resize` for more details. Can be None if `use_pil_lanczos` is True.
-            use_pil_lanczos: Whether to use PIL's LANCZOS instead of cv2.INTER_LANCZOS4. Default is False. Note enabling
-              this will ignore the interpolation argument.
-
-        Returns:
-            The subsampled sensor array.
-        """
-        assert arr.ndim == 3, f"Array must be 3D shape, but got {arr.ndim}D of shape {arr.shape}"
-        height, width, dim = arr.shape
-        assert height == self.original_height, (
-            f"Image height ({height}) does not match the original height ({self.original_height})"
-        )
-        assert width == self.original_width, (
-            f"Image width ({width}) does not match the original width ({self.original_width})"
-        )
-
-        # resize
-        if self.subsample_factor != 1.0:
-            height = round(height / self.subsample_factor)
-            width = round(width / self.subsample_factor)
-            if use_pil_lanczos:
-                pil_image = PILImage.fromarray(arr)
-                pil_image = pil_image.resize((width, height), PILImage.Resampling.LANCZOS)
-                arr = np.asarray(pil_image)
-            else:
-                assert interpolation is not None, "interpolation is required when use_pil_lanczos is False"
-                arr = cv2.resize(arr, (width, height), interpolation=interpolation)
-            # In the case of arr is (height, width, 1), cv2.resize will return (height, width),
-            # so we need to reshape it back to (height, width, 1)
-            arr = arr.reshape(height, width, dim)
-
-        # crop
-        return self.crop_array(arr)
-
 
 
 @torch.autocast(device_type="cuda", enabled=False)
