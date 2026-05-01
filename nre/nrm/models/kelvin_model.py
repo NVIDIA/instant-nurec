@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 import logging
-import warnings
 
 from dataclasses import replace
 from itertools import chain
-from typing import Any, Iterator, Optional, cast
+from typing import Any, Iterator, Optional
 
 import numpy as np
 import torch
@@ -15,8 +14,7 @@ import torch
 from einops import rearrange
 from safetensors.torch import load_file
 
-from ncore.data import ConcreteCameraModelParametersUnion
-from nre.datasets.tracks import CuboidTracks, TrackFlags
+from nre.datasets.tracks import CuboidTracks
 from nre.models.gaussians.renderers import BaseGaussianRenderer
 from nre.nrm.config.models import KelvinModelConfig
 from nre.nrm.models.base import BaseNRM
@@ -26,11 +24,9 @@ from nre.nrm.models.kelvin_backbone.encoders import make_encoder
 from nre.nrm.models.kelvin_backbone.sky import make_sky
 from nre.nrm.models.post_processing import PerCameraAffinePostProcessing
 from nre.nrm.primitives.kelvin_primitive import KelvinNRMPrimitive
-from nre.nrm.utils.cubemap import unproject_to_sky_cubemap
 from nre.nrm.utils.motion import TimeRemapping
 from nre.utils.batch import DataAndRenderingBatch
 from nre.utils.files import local_temp_file, parse_universal_path
-from nre.utils.geometry import tquat_to_se3_matrix
 from nre.utils.misc import unpack_optional
 from nre.utils.profiling import ScopedTimer
 from nre.utils.types import RayFlags
@@ -122,94 +118,6 @@ class KelvinNRM(BaseNRM[KelvinNRMPrimitive, KelvinNRMSupervisionPack]):
                 camera=replace(camera_data, labels=replace(camera_data.labels, normals=new_normals, flags=new_flags)),
             ),
         )
-
-    @ScopedTimer("KelvinModel.prepare_supervision")
-    def prepare_supervision(
-        self,
-        context: list[DataAndRenderingBatch],
-        supervision: list[DataAndRenderingBatch],
-        cuboid_tracks: list[CuboidTracks] | None,
-        supervision_packs: list[KelvinNRMSupervisionPack],
-    ) -> tuple[list[DataAndRenderingBatch], list[KelvinNRMSupervisionPack]]:
-        """
-        Note we might have to make dynamic objects invalid here.
-        """
-        prepared_supervision: list[DataAndRenderingBatch] = []
-
-        for bidx, batch in enumerate(supervision):
-            assert (camera_data := batch.data.camera) is not None
-            assert (rendering_data := batch.rendering) is not None and (
-                rendering_camera_data := rendering_data.camera
-            ) is not None
-
-            if camera_data.labels.normals is None:
-                batch = self._maybe_derive_normals_from_distance(batch)
-                camera_data = unpack_optional(batch.data.camera)
-            else:
-                warnings.warn(
-                    "Preload normals found (most likely from AUX files). Make sure they are in world space.",
-                    stacklevel=2,
-                )
-
-            # Prepare sky mask for gradient detachment during sky compositing.
-            rays_is_sky = camera_data.labels.get_mask_flags_all(RayFlags.SKY_SEMANTIC)
-            rendering_camera_data = replace(rendering_camera_data, _rays_is_sky=rays_is_sky)
-            batch = replace(batch, rendering=replace(rendering_data, camera=rendering_camera_data))
-
-            prepared_supervision.append(batch)
-
-            # Compute supervision pack (reference cubemap)
-            gt_cubemap, gt_cubemap_mask = unproject_to_sky_cubemap(
-                self.sky_cubemap_size,
-                tquat_to_se3_matrix(rendering_camera_data.poses_tquat_startend[:, 1], unbatch=False)[:, :3, :3],
-                [
-                    cast(ConcreteCameraModelParametersUnion, sensor_model)
-                    for sensor_model in rendering_camera_data.sensor_model_parameters
-                ],
-                unpack_optional(camera_data.labels.rgb),
-                camera_data.labels.get_mask_flags_none(RayFlags.INVALID)
-                & camera_data.labels.get_mask_flags_all(RayFlags.SKY_SEMANTIC),
-            )
-            supervision_packs[bidx].reference_sky_cubemap = gt_cubemap
-            supervision_packs[bidx].reference_sky_cubemap_mask = gt_cubemap_mask
-
-        # Motion supervision: reference displacement from cuboid warp on metric world points (Celsius-style padding).
-        for bidx, batch in enumerate(context):
-            if not supervision_packs[bidx].motion_supervisions:
-                continue
-            # Reference flow requires both cuboid tracks and metric distance (depth).
-            # When either is unavailable, clear motion_supervisions so the loss doesn't
-            # attempt to unpack a None reference_flow.
-            if cuboid_tracks is None:
-                supervision_packs[bidx].motion_supervisions = []
-                continue
-            data_camera = unpack_optional(batch.data.camera)
-            metric_distance = data_camera.labels.metric_distance
-            if metric_distance is None:
-                supervision_packs[bidx].motion_supervisions = []
-                continue
-
-            rendering_camera = unpack_optional(unpack_optional(batch.rendering).camera)
-            cuboid_track_bidx = cuboid_tracks[bidx]
-            dynamic_track = CuboidTracks.Ops.subset_from_mask(
-                cuboid_track_bidx, cuboid_track_bidx.tracks_flags & TrackFlags.DYNAMIC != 0
-            )
-            rays = rendering_camera.rays
-            world_points = rays[..., :3] + metric_distance * rays[..., 3:]
-            for motion_supervision in supervision_packs[bidx].motion_supervisions:
-                if motion_supervision.reference_flow is not None:
-                    continue
-                motion_supervision.reference_flow = (
-                    dynamic_track.warp_world_points_to_timestamps(
-                        world_points,
-                        motion_supervision.source_timestamps_us,
-                        motion_supervision.target_timestamps_us,
-                        self.cuboids_dims_padding,
-                    )
-                    - world_points
-                )
-
-        return prepared_supervision, supervision_packs
 
     @ScopedTimer("KelvinModel.prepare_context")
     def prepare_context(

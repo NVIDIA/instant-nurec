@@ -74,20 +74,6 @@ class BaseNRM(nn.Module, Generic[NRMPrimitiveType, NRMSupervisionPackType]):
         pass
 
     @abstractmethod
-    def prepare_supervision(
-        self,
-        context: list[DataAndRenderingBatch],
-        supervision: list[DataAndRenderingBatch],
-        cuboid_tracks: list[CuboidTracks] | None,
-        supervision_packs: list[NRMSupervisionPackType],
-    ) -> tuple[list[DataAndRenderingBatch], list[NRMSupervisionPackType]]:
-        """
-        Hook function to prepare supervision data for the model.
-        e.g. for the static celsius model we have to use cuboid tracks to generate the supervision valid mask.
-        """
-        pass
-
-    @abstractmethod
     def prepare_context(
         self,
         context: list[DataAndRenderingBatch],
