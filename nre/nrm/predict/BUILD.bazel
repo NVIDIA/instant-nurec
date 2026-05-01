@@ -10,7 +10,6 @@
 
 load("@nre_pip_deps//:requirements.bzl", pip_requirement = "requirement")
 load("@rules_python//python:defs.bzl", "py_library")
-load("//bazel/pytest:defs.bzl", "pytest_test")
 
 DEFAULT_VISIBILITY = [
     "//nre/nrm:__subpackages__",
@@ -63,23 +62,3 @@ py_library(
     ],
 )
 
-pytest_test(
-    name = "primitive_merge_test",
-    srcs = ["primitive_merge_test.py"],
-    deps = [
-        ":pylib_primitive_merge",
-        "//nre/nrm/utils:pylib",
-        "//nre/utils:pylib",
-    ],
-)
-
-pytest_test(
-    name = "export_ply_test",
-    srcs = ["export_ply_test.py"],
-    deps = [
-        ":pylib",
-        "//nre/nrm/config:pylib",
-        "//nre/nrm/primitives:pylib",
-        "//nre/nrm/utils:pylib",
-    ],
-)

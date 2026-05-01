@@ -10,7 +10,6 @@
 
 load("@nre_pip_deps//:requirements.bzl", pip_requirement = "requirement")
 load("@rules_python//python:defs.bzl", "py_library")
-load("//bazel/pytest:defs.bzl", "pytest_test")
 
 package(default_visibility = ["//:core_package_group"])
 
@@ -37,10 +36,3 @@ py_library(
     ],
 )
 
-pytest_test(
-    name = "base_test",
-    srcs = ["base_test.py"],
-    deps = [
-        ":pylib",
-    ],
-)

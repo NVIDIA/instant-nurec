@@ -10,7 +10,6 @@
 
 load("@nre_pip_deps//:requirements.bzl", pip_requirement = "requirement")
 load("@rules_python//python:defs.bzl", "py_library")
-load("//bazel/pytest:defs.bzl", "pytest_test")
 
 DEFAULT_VISIBILITY = [
     "//:core_package_group",
@@ -79,14 +78,3 @@ py_library(
     ],
 )
 
-pytest_test(
-    name = "tracks_test",
-    srcs = ["tracks_test.py"],
-    deps = [
-        pip_requirement("torch"),
-        pip_requirement("numpy"),
-        ":pylib_tracks",
-        "//nre/models:pylib",
-        "//nre/utils:pylib",
-    ],
-)

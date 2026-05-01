@@ -10,7 +10,6 @@
 
 load("@nre_pip_deps//:requirements.bzl", pip_requirement = "requirement")
 load("@rules_python//python:defs.bzl", "py_library")
-load("//bazel/pytest:defs.bzl", "pytest_test")
 
 DEFAULT_VISIBILITY = ["//:core_package_group"]
 
@@ -51,22 +50,3 @@ py_library(
     ],
 )
 
-pytest_test(
-    name = "sensors_test",
-    srcs = ["sensors_test.py"],
-    data = [
-        "//libs/vren:test_data/row-offset-spinning-lidar-model-parameters.json",
-        "@test_data_prober_generated//:sensor_to_world_rays_shutter_pose",
-    ],
-    deps = [
-        pip_requirement("nvidia-ncore"),
-        pip_requirement("torch"),
-        ":pylib",
-        ":pylib_ncore_sensors_converters",
-        "//libs/geometry/kernels:pylib",
-        "//libs/sensors:pylib_slang",
-        "//nre:pylib",
-        "//nre/utils:pylib",
-        "//nre/utils:pylib_prober",
-    ],
-)

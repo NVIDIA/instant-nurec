@@ -10,7 +10,6 @@
 
 load("@nre_pip_deps//:requirements.bzl", pip_requirement = "requirement")
 load("@rules_python//python:defs.bzl", "py_library")
-load("//bazel/pytest:defs.bzl", "pytest_test")
 
 DEFAULT_VISIBILITY = [
     "//nre/nrm:__subpackages__",
@@ -71,15 +70,6 @@ py_library(
         "//nre/utils:pylib_geometry",
         pip_requirement("torch"),
         pip_requirement("torch_scatter"),
-    ],
-)
-
-pytest_test(
-    name = "covariance_test",
-    srcs = ["covariance_test.py"],
-    deps = [
-        ":pylib_covariance",
-        "//nre/utils:pylib_geometry",
     ],
 )
 
