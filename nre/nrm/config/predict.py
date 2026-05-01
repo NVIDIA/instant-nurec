@@ -10,20 +10,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
-
 from nre.config.base_schema import BaseConfigSchema, Field
-
-
-class PrimitivePLYExportConfig(BaseConfigSchema):
-    density_activation: Literal["sigmoid", "exp"] = Field(
-        default="sigmoid",
-        description="The inv activation function to apply to the densities before exporting.",
-    )
-    scale_activation: Literal["sigmoid", "exp"] = Field(
-        default="exp",
-        description="The inv activation function to apply to the scales before exporting.",
-    )
 
 
 class PrimitiveMergeConfig(BaseConfigSchema):
@@ -51,7 +38,4 @@ class PredictConfig(BaseConfigSchema):
     )
     primitive_merge: PrimitiveMergeConfig = Field(
         default_factory=PrimitiveMergeConfig, description="Configuration for primitive merging"
-    )
-    export_ply: PrimitivePLYExportConfig = Field(
-        default_factory=PrimitivePLYExportConfig, description="Configuration for primitive ply export"
     )

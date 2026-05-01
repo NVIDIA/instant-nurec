@@ -129,7 +129,6 @@ class GaussiansNRMSystem(nn.Module):
                 meta["sequence_id"] + chunk_suffix + ".ply",
             )
             export_ply(
-                config=self.predict_config.export_ply,
                 primitives=primitive,
                 rig_trajectories=rig,
                 path=Path(path),

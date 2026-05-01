@@ -94,6 +94,3 @@ predict:
   chunk_size: 1
   primitive_merge:
     frustum_ownership_max_diff_m: 5.0
-  export_ply:
-    density_activation: sigmoid
-    scale_activation: exp

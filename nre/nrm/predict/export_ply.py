@@ -18,9 +18,6 @@ from pathlib import Path
 import torch
 
 from nre.models.gaussians.utils import RGB2SH, write_ply_3dgs
-from nre.models.utils import get_activation
-from nre.nrm.config.predict import PrimitivePLYExportConfig
-from nre.nrm.primitives.base import BaseNRMPrimitive
 from nre.nrm.primitives.kelvin_primitive import KelvinNRMPrimitive, KelvinSemanticClass
 from nre.utils.types import RigTrajectories
 
@@ -39,16 +36,15 @@ class PLYExportGaussians:
     sky_mask: torch.Tensor | None = None
     normals: torch.Tensor | None = None
 
-    def export(self, config: PrimitivePLYExportConfig, output_path: Path):
+    def export(self, output_path: Path):
         """
         Export the gaussians to the PLY file used in SO, and values are exported as NuRec expects them.
         Colors are exported in SH, while scale and density are exported preactivated.
+        Hardcoded inverse activations: scale uses exp (inverse: log), density
+        uses sigmoid (inverse: log(x/(1-x))).
         """
-        scale_activation_inv = get_activation(config.scale_activation, inverse=True)
-        scales = scale_activation_inv(self.scales.float())
-
-        density_activation_inv = get_activation(config.density_activation, inverse=True)
-        densities = density_activation_inv(self.densities.float())
+        scales = torch.log(self.scales.float())
+        densities = torch.log(self.densities.float() / (1.0 - self.densities.float()))
 
         rgb = self.rgb.float()
 
@@ -99,9 +95,7 @@ def export_kelvin_ply(primitives: KelvinNRMPrimitive) -> PLYExportGaussians:
     )
 
 
-def export_ply(
-    config: PrimitivePLYExportConfig, primitives: BaseNRMPrimitive, rig_trajectories: RigTrajectories, path: Path
-) -> None:
+def export_ply(primitives: KelvinNRMPrimitive, rig_trajectories: RigTrajectories, path: Path) -> None:
     """Export the NRM Primitives as a ply file after transforming to world space and applying some filtering.
     This ply export is intended to be used as an initialization for NuRec SO.
     """
@@ -113,11 +107,5 @@ def export_ply(
         rig_trajectories.T_world_base.to(device=primitives.device(), dtype=torch.float32)
     )
 
-    # Then compute the gaussians to be exported
-    if isinstance(primitives, KelvinNRMPrimitive):
-        gaussians_ply = export_kelvin_ply(primitives)
-    else:
-        raise ValueError(f"Unsupported primitive type: {type(primitives)}")
-
-    # Then export the ply
-    gaussians_ply.export(config, path)
+    gaussians_ply = export_kelvin_ply(primitives)
+    gaussians_ply.export(path)
