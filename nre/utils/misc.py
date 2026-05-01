@@ -37,7 +37,7 @@ import numpy.typing as npt
 import torch
 import torch.nn.functional as F
 
-from pytorch_lightning.utilities.rank_zero import rank_zero_info, rank_zero_only
+from pytorch_lightning.utilities.rank_zero import rank_zero_only
 from torch.utils import data as torchdata
 
 

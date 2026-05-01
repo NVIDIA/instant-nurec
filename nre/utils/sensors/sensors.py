@@ -24,7 +24,6 @@ from ncore.sensors import (
     FThetaCameraModel,
     OpenCVFisheyeCameraModel,
     OpenCVPinholeCameraModel,
-    RowOffsetStructuredSpinningLidarModel,
 )
 from nre.utils.geometry import (
     rotation_6d_to_matrix,
