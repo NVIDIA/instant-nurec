@@ -31,10 +31,7 @@ from ncore.sensors import (
     OpenCVPinholeCameraModel,
 )
 from nre.utils.misc import assert_same_type, collate_fn, unpack_optional
-from nre.utils.sensors import (
-    RectSubsampledSensor,
-    SensorModelComputations,
-)
+from nre.utils.sensors import SensorModelComputations
 from nre.utils.sensors.ncore_sensors_converters import (
     CameraModelConverter,
     DynamicPose,
