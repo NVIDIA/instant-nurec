@@ -48,19 +48,11 @@ dataset:
       frame_height: 448
     context_camera_ids:
       - camera_front_wide_120fov
-    frame_batch_samplers:
-      uniform:
-        enabled: false
-        n_frames_per_sample: 4
-        n_samples_per_sequence: 10
-        name: uniform
-        frame_gap_timestamp_us: 500000
-      adaptive_sequential:
-        enabled: true
-        n_frames_per_sample: 18
-        n_samples_per_sequence: 8
-        name: adaptive_sequential
-        max_frame_gap_timestamp_us: 750000
+    frame_batch_sampler:
+      n_frames_per_sample: 18
+      n_samples_per_sequence: 8
+      name: adaptive_sequential
+      max_frame_gap_timestamp_us: 750000
     supervision_camera_ids:
       - camera_front_wide_120fov
     supervision_frame_batch:

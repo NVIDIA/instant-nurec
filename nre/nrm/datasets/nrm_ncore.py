@@ -34,14 +34,11 @@ from nre.nrm.config.dataset import BaseNCoreNRMDatasetConfig
 from nre.nrm.datasets.nrm_base import BaseNRMIndexableDataset, CameraSubsampler, NRMDataError
 from nre.nrm.datasets.registry import register as register_dataset
 from nre.nrm.datasets.samplers import (
-    BaseFrameBatchSampler,
+    AdaptiveSequentialFrameBatchSampler,
     FrameBatchSamplerReturn,
     RigPoses,
     sample_lidar_frame_batch,
     sample_supervision_frame_batch,
-)
-from nre.nrm.datasets.samplers import (
-    make as make_frame_batch_sampler,
 )
 from nre.utils.batch import (
     CameraFrameLabels,
@@ -271,12 +268,7 @@ class NCoreNRMDataset(BaseNRMIndexableDataset):
             f"Loaded {len(self.ncore_json_paths)}/{n_ncore_json_files} samples from {self.ncore_json_list_path}"
         )
 
-        # Multiple frame samplers will be concatenated in the final dataset.
-        # Since these frame samplers are not fully concrete yet, we just gather the number of samples per sequence here.
-        self.num_samples_per_sequence: int = 0
-        for sampler_config in config.frame_batch_samplers.values():
-            if sampler_config.enabled:
-                self.num_samples_per_sequence += sampler_config.n_samples_per_sequence
+        self.num_samples_per_sequence: int = config.frame_batch_sampler.n_samples_per_sequence
 
         # Whether to (or not) consolidate rendering batch to save memory
         self.compute_rendering_data = config.compute_rendering_data
@@ -961,15 +953,8 @@ class NCoreNRMDataset(BaseNRMIndexableDataset):
 
         concrete_config = self.non_concrete_config.concretize(self.epoch, rng)
 
-        frame_batch_sampler: BaseFrameBatchSampler | None = None
-        for sampler_config in concrete_config.frame_batch_samplers.values():
-            if not sampler_config.enabled:
-                continue
-            if sample_idx < sampler_config.n_samples_per_sequence:
-                frame_batch_sampler = make_frame_batch_sampler(sampler_config.name, sampler_config)
-                break
-            sample_idx -= sampler_config.n_samples_per_sequence
-        assert frame_batch_sampler is not None  # This would never happen
+        frame_batch_sampler = AdaptiveSequentialFrameBatchSampler(concrete_config.frame_batch_sampler)
+        assert sample_idx < frame_batch_sampler.n_samples_per_sequence, "Sample index out of bounds"
 
         context_id_lookup = {str(c): c for c in self.all_context_camera_ids}
         supervision_id_lookup = {str(c): c for c in self.all_supervision_camera_ids}

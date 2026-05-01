@@ -12,18 +12,14 @@ from __future__ import annotations
 
 import logging
 
-from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Callable
 
 import numpy as np
 
 from nre.nrm.config.dataset import (
     AdaptiveSequentialFrameBatchSamplerConfig,
-    BaseFrameBatchSamplerConfig,
     LidarFrameBatchParamsConfig,
     SupervisionFrameBatchParamsConfig,
-    UniformFrameBatchSamplerConfig,
 )
 from nre.nrm.datasets.nrm_base import NRMDataError
 from nre.utils.types import HalfClosedInterval
@@ -204,96 +200,7 @@ class FrameBatchSamplerReturn:
     sampled_sensor_frame_idxs: dict[str, list[int]]
 
 
-class BaseFrameBatchSampler(ABC):
-    """Base sensor frame sampler used to sample a batch of frames from which a given batch is formed.
-    These can be either sampled according to timestamps or trajectories"""
-
-    @property
-    @abstractmethod
-    def num_samples_per_sequence(self) -> int: ...
-
-    @abstractmethod
-    def sample_frame_batch(
-        self,
-        rng: np.random.Generator,
-        sample_idx: int,
-        camera_frame_timestamps_us: dict[str, np.ndarray],
-        time_intervals: list[HalfClosedInterval],
-        rig_poses: RigPoses | None,
-    ) -> FrameBatchSamplerReturn:
-        """The return value only contains camera sensors."""
-        ...
-
-
-frame_batch_samplers: dict[str, Callable[..., BaseFrameBatchSampler]] = {}
-
-
-def register(name):
-    def decorator(cls):
-        frame_batch_samplers[name] = cls
-        return cls
-
-    return decorator
-
-
-def make(name: str, config: BaseFrameBatchSamplerConfig) -> BaseFrameBatchSampler:
-    return frame_batch_samplers[name](config)
-
-
-@register("uniform")
-class UniformFrameBatchSampler(BaseFrameBatchSampler):
-    """
-    Randomly first select a frame, and then sample n_frames_per_sample frames with a fixed time gap.
-    For each sequence this will spawn n_samples_per_sequence samples.
-
-    +--------+--------+--------+
-    | 0      | 1      | 2      |3
-    +---C---------C--------C---+
-    where C = frame_gap_timestamp_us
-    """
-
-    def __init__(self, config: UniformFrameBatchSamplerConfig):
-        self.n_frames_per_sample: int = config.n_frames_per_sample
-        self.n_samples_per_sequence: int = config.n_samples_per_sequence
-        self.frame_gap_timestamp_us: int = config.frame_gap_timestamp_us
-
-    @property
-    def num_samples_per_sequence(self) -> int:
-        return self.n_samples_per_sequence
-
-    def sample_frame_batch(
-        self,
-        rng: np.random.Generator,
-        sample_idx: int,
-        camera_frame_timestamps_us: dict[str, np.ndarray],
-        time_intervals: list[HalfClosedInterval],
-        rig_poses: RigPoses | None,
-    ) -> FrameBatchSamplerReturn:
-        assert len(camera_frame_timestamps_us) > 0, "No camera timestamps is provided to the frame batch sampler"
-        assert 0 <= sample_idx < self.n_samples_per_sequence, "Sample index out of bounds"
-
-        # Calculate total time gap based on timestamp gap directly
-        total_time_gap = self.frame_gap_timestamp_us * (self.n_frames_per_sample - 1)
-        first_frame_timestamp = random_valid_start_time_from_intervals(rng, time_intervals, total_time_gap)
-
-        # Generate timestamps with fixed time gap
-        ref_frame_timestamps_us = [
-            first_frame_timestamp + i * self.frame_gap_timestamp_us for i in range(self.n_frames_per_sample)
-        ]
-
-        sampled_sensor_frame_idxs: dict[str, list[int]] = {}
-        for camera_id, camera_timestamps_us in camera_frame_timestamps_us.items():
-            sampled_sensor_frame_idxs[camera_id] = []
-            for frame_timestamp_us in ref_frame_timestamps_us:
-                sampled_sensor_frame_idxs[camera_id].append(
-                    get_closest_frame_index(camera_timestamps_us, int(frame_timestamp_us))
-                )
-
-        return FrameBatchSamplerReturn(sampled_sensor_frame_idxs=sampled_sensor_frame_idxs)
-
-
-@register("adaptive_sequential")
-class AdaptiveSequentialFrameBatchSampler(BaseFrameBatchSampler):
+class AdaptiveSequentialFrameBatchSampler:
     """
     Sequentially samples enough chunks to cover the sequence while keeping frame gaps below a configured maximum.
 

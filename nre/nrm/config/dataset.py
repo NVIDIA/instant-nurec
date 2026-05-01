@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import logging
 
-from typing import Annotated, Any, Dict, List, Literal, Optional, Self, Union
+from typing import Annotated, Literal, Optional, Self
 
 import numpy as np
 
@@ -58,36 +58,17 @@ class LidarFrameBatchParamsConfig(BaseConfigSchema):
     gap_from_image_us: int = Field(description="Max gap from image in microseconds", default=0)
 
 
-class BaseFrameBatchSamplerConfig(BaseConfigSchema):
-    enabled: bool = Field(default=True, description="Whether to enable this frame batch sampler")
+class AdaptiveSequentialFrameBatchSamplerConfig(BaseConfigSchema):
+    name: Literal["adaptive_sequential"] = "adaptive_sequential"
     n_frames_per_sample: int = Field(
         description="Number of frames in each dataset sample (i.e. one return from get_item of the dataset)"
     )
     n_samples_per_sequence: int = Field(
         description="Number of samples to return for each sequence (i.e. one recording from the full dataset)"
     )
-
-
-class UniformFrameBatchSamplerConfig(BaseFrameBatchSamplerConfig):
-    name: Literal["uniform"] = "uniform"
-
-    frame_gap_timestamp_us: int = Field(description="Gap between frames in the batch, in microseconds.")
-
-
-class AdaptiveSequentialFrameBatchSamplerConfig(BaseFrameBatchSamplerConfig):
-    name: Literal["adaptive_sequential"] = "adaptive_sequential"
     max_frame_gap_timestamp_us: int = Field(
         description="Maximum gap between adjacent sampled frames in the batch, in microseconds."
     )
-
-
-BatchSamplerConfigType = Annotated[
-    Union[
-        UniformFrameBatchSamplerConfig,
-        AdaptiveSequentialFrameBatchSamplerConfig,
-    ],
-    Field(discriminator="name"),
-]
 
 
 class CameraSubsamplerConfig(BaseConfigSchema):
@@ -190,7 +171,7 @@ class BaseNCoreNRMDatasetConfig(BaseConfigSchema):
         description="A list of camera ids, such as `camera_front_wide_120fov`",
     )
 
-    frame_batch_samplers: Dict[str, BatchSamplerConfigType]
+    frame_batch_sampler: AdaptiveSequentialFrameBatchSamplerConfig
     supervision_camera_ids: list[str | ExternalSupervisionCameraIdConfig] = Field(
         description="A list of camera ids, such as `camera_front_wide_120fov`. This is also used to determine the canonical order of cameras in unique sensor idx",
     )
