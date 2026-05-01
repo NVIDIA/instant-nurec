@@ -42,12 +42,3 @@ def make(name: str, config: "NRMConfig", load_from_checkpoint: Optional[str] = N
     state_dict = checkpoint["state_dict"] if "state_dict" in checkpoint else checkpoint
     system.load_state_dict(state_dict, strict=True)
     return system
-
-
-# These imports in __all__ are only used for documentation and shouldn't
-# be used for relative imports. This is a temporary solution until
-# we can make the autodiscovery of the modules work with sphinx
-__all__ = [
-    "BaseNRMSystem",
-    "GaussiansNRMSystem",
-]
