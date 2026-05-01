@@ -15,49 +15,22 @@ from nre.models.gaussians.renderers import BaseGaussianRenderer
 from nre.nrm.config.models import PrimitiveExportPreprocessConfig
 from nre.nrm.primitives.base import BaseGaussiansNRMPrimitive
 from nre.nrm.utils.cubemap import rotate_sky_cubemap
-from nre.utils.batch import CameraFrameLabels, DataAndRenderingBatch, LidarFrameLabels, RenderingData
+from nre.utils.batch import DataAndRenderingBatch, RenderingData
 from nre.utils.geometry import quat_mult_xyzw, so3_matrix_to_quat
-from nre.utils.types import RayFlags, RigTrajectories
+from nre.utils.types import RigTrajectories
 
 
 logger = logging.getLogger(__name__)
 
 
 class KelvinSemanticClass(IntEnum):
-    """Per-Gaussian semantic class IDs for Kelvin primitives.
-
-    Channel index equals enum value. Targets come from ray flags via
-    ``get_target_from_frame_labels``; predicted classes use argmax over logits in the decoder.
-    """
+    """Per-Gaussian semantic class IDs for Kelvin primitives. Channel index equals enum value."""
 
     OTHERS = 0
     EGO = 1
     SKY = 2
     ROAD = 3
     MOVABLE = 4
-
-    @classmethod
-    def get_target_from_frame_labels(cls, rays_meta: CameraFrameLabels | LidarFrameLabels) -> torch.Tensor:
-        """Compute per-pixel semantic class from frame label flags.
-
-        Args:
-            rays_meta: Labels with mask flags of shape (..., 1).
-
-        Returns:
-            Tensor of shape (..., 1) with dtype uint8 containing class IDs.
-            Priority (last write wins): ROAD < SKY < MOVABLE < EGO.
-        """
-        mask_ego = rays_meta.get_mask_flags_all(RayFlags.EGO_SEMANTIC)
-        mask_sky = rays_meta.get_mask_flags_all(RayFlags.SKY_SEMANTIC)
-        mask_road = rays_meta.get_mask_flags_all(RayFlags.ROAD_SEMANTIC)
-        mask_movable = rays_meta.get_mask_flags_all(RayFlags.VEHICLE_SEMANTIC)
-        # (B, H, W, 1) uint8 class index; later overwrites take precedence
-        out = torch.zeros((*mask_ego.shape[:-1], 1), dtype=torch.uint8, device=mask_ego.device)
-        out[mask_road] = cls.ROAD
-        out[mask_sky] = cls.SKY
-        out[mask_movable] = cls.MOVABLE
-        out[mask_ego] = cls.EGO
-        return out
 
     @classmethod
     def opacity_mask_from_semantic_probs(cls, semantic_probs: torch.Tensor) -> torch.Tensor:
@@ -69,27 +42,6 @@ class KelvinSemanticClass(IntEnum):
         ego = semantic_probs[..., cls.EGO : cls.EGO + 1]
         sky = semantic_probs[..., cls.SKY : cls.SKY + 1]
         return 1.0 - ego - sky
-
-    @classmethod
-    def semantics_to_rgb(cls, semantics: torch.Tensor) -> torch.Tensor:
-        """
-        Convert semantics (..., 1) uint8 class indices to RGB (..., 3). Colors from _VIS_COLORS.
-        """
-        assert semantics.shape[-1] == 1, f"semantics must have last dim 1, got shape {semantics.shape}"
-        assert semantics.dtype == torch.uint8, f"semantics must be uint8, got {semantics.dtype}"
-        colors = torch.tensor(_VIS_COLORS, dtype=torch.uint8, device=semantics.device)
-        idx = semantics.squeeze(-1).long().clamp(0, len(colors) - 1)
-        return colors[idx]
-
-
-# RGB colors for KelvinSemanticClass.semantics_to_rgb (R, G, B) in [0, 255]; index = enum value
-_VIS_COLORS: tuple[tuple[int, int, int], ...] = (
-    (0, 0, 0),  # OTHERS: black
-    (255, 0, 0),  # EGO: red
-    (0, 0, 255),  # SKY: blue
-    (128, 128, 128),  # ROAD: gray
-    (0, 255, 0),  # MOVABLE: green
-)
 
 
 @dataclass(kw_only=True)
