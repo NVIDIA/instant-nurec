@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 class NCoreNRMCuboidTracksParamsConfig(BaseConfigSchema):
-    lidar_id: Optional[str]
+    lidar_id: str
     track_min_travel_distance_m: float = Field(ge=0.0)
     track_min_centroid_rig_dist_m: float = Field(
         ge=0.0,

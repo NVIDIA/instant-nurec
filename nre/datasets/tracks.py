@@ -182,20 +182,6 @@ class CuboidTracks(Tracks):
 
     class Factory:
         @staticmethod
-        def empty(device: torch.device = torch.device("cuda")) -> CuboidTracks:
-            """
-            Constructs an empty cuboid tracks container
-            """
-            return CuboidTracks.Factory.from_numpy(
-                tracks_id=[],
-                tracks_poses=[],
-                tracks_timestamps_us=[],
-                tracks_flags=[],
-                cuboids_dims=[],
-                device=device,
-            )
-
-        @staticmethod
         def from_numpy(
             tracks_id: list[str],
             tracks_poses: list[np.ndarray],

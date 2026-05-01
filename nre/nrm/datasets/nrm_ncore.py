@@ -196,12 +196,9 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
         # V4 sequence loader parameters
 
         # camera_ids and lidar_ids determine the unique sensor indices within this dataset.
-        # [Note that when co-training on multiple datasets, it is currently fine to share index space since it's only used for distinguishing sensors.]
-        self.lidar_ids: list[str] = []
-        if self.cuboid_tracks_params.lidar_id:
-            self.lidar_ids.append(self.cuboid_tracks_params.lidar_id)
-        self.lidar_ids = sorted(list(set(self.lidar_ids)))
-        assert len(self.lidar_ids) < 2, "Only one LiDAR sensor is supported for now"
+        # The standalone predict pipeline pins exactly one lidar (the one used
+        # for cuboid-track sourcing).
+        self.lidar_ids: list[str] = [self.cuboid_tracks_params.lidar_id]
 
         self.ncore_json_paths: list[UPath] = []
         with self.ncore_json_list_path.open("r") as f:
@@ -239,13 +236,6 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
         lidar_sensors: dict[str, ncore.data.LidarSensorProtocol],
         T_world_ref: np.ndarray,
     ) -> CuboidTracksDataPack:
-        if self.cuboid_tracks_params.lidar_id is None:
-            cuboid_tracks = CuboidTracks.Factory.empty(device=torch.device("cpu"))
-            return CuboidTracksDataPack(
-                tracks_data=cuboid_tracks.tracks_data,
-                cuboidtracks_data=cuboid_tracks.cuboidtracks_data,
-            )
-
         assert self.cuboid_tracks_params.lidar_id in lidar_sensors, "Required LiDAR sensor not found in the dataset"
 
         frame_batch_min_timestamps_us: int = int(1e16)
