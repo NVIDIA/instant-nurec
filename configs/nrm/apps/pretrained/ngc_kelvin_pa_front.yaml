@@ -1,5 +1,0 @@
-model_url: https://api.ngc.nvidia.com/v2/org/nvstaging/team/nre/models/nrm-kelvin-pa/versions/1.0.0-front/files/nrm-kelvin-pa_1.0.0-front.ckpt
-model_config: https://api.ngc.nvidia.com/v2/org/nvstaging/team/nre/models/nrm-kelvin-pa/versions/1.0.0-front/files/nrm-kelvin-pa_1.0.0-front.yaml
-model_config_overrides: []
-  
-model_cache_dir: ${oc.env:HOME}/.cache/nrm/pretrained_models/kelvin_pa_front

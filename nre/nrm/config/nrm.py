@@ -12,28 +12,16 @@ from __future__ import annotations
 
 import os
 
-from pathlib import Path
 from typing import Literal
-
-import hydra
-
-from omegaconf import DictConfig, OmegaConf
-
-# Import from nre.config.parse to introduce OmegaConf resolvers
-import nre.config.parse  # noqa: F401
 
 from nre.config.base_schema import BaseConfigSchema, Field
 from nre.config.logger import LoggerConfigType
 from nre.nrm.config.dataset import NRMSplitsConfig
 from nre.nrm.config.models import KelvinModelConfig
 from nre.nrm.config.predict import PredictConfig
-from nre.repo_root import __reporoot__
-from nre.utils.model_registry import create_model_registry
 
 
 SENTINEL = "<sentinel>"
-
-
 
 
 class BaseNRMSystemConfig(BaseConfigSchema):
@@ -117,8 +105,8 @@ class NRMConfig(BaseConfigSchema):
     )
 
     def _setup_resume_path(self) -> None:
-        """Predict-only standalone: resume is set by parse_pretrained_nrm_config to
-        the absolute path of the downloaded NGC checkpoint; just validate it exists."""
+        """Predict-only standalone: resume is set by load_predict_config to the
+        absolute path of the downloaded NGC checkpoint; just validate it exists."""
         if self.resume is None:
             return
         if not self.resume.endswith(".ckpt"):
@@ -137,98 +125,3 @@ class NRMConfig(BaseConfigSchema):
     def model_post_init(self, __context) -> None:
         self._setup_resume_path()
         self._setup_run_id()  # modifies self.ckpt_dir so needs to be called AFTER _setup_resume_path
-
-
-def parse_untyped_config(
-    config_name: str, hydra_args: list[str], config_dir: str = "./configs"
-) -> tuple[DictConfig, str]:
-    """Utility to parse a hydra base config (with overwrites) without type checking"""
-
-    config_name_path = Path(config_name)
-
-    # Adding repo config path to hydra search path so we can refer to those in overrides
-    # Example override: +nrm/dataset/concrete@dataset.predict=ncore_local_low_res
-    search_path_config: str = f"hydra.searchpath=['{(__reporoot__) / Path(config_dir)}']"
-
-    # Use hydra context for clean-up.
-    # We always assume that the main config dir is the one containing config_name, and rest configs are found via search paths.
-    with hydra.initialize_config_dir(config_dir=str(config_name_path.parent.resolve()), version_base=None):
-        config = hydra.compose(config_name=str(config_name_path.name), overrides=hydra_args + [search_path_config])
-
-    return config, search_path_config
-
-
-def parse_pretrained_nrm_config(
-    config_name: str, hydra_args: list[str], config_dir: str = "./configs"
-) -> tuple[str, list[str]]:
-    """Utility function to download a pretrained model checkpoint and associated config from registry, if the config is a pretrained NRM config.
-
-    Returns *updated* config_name and hydra_args with `resume` overrides to the pretrained model"""
-
-    # load basic config without overwrites
-    config, _ = parse_untyped_config(config_name, [], config_dir=config_dir)
-
-    # check if the basic config is a pretrained model config - if so, obtain the model checkpoint and config from the registry - patch up the config_name and hydra_args accordingly
-    if (model_url := config.get("model_url", None)) is not None and (
-        model_config := config.get("model_config", None)
-    ) is not None:
-        assert not any([param.startswith("resume=") for param in hydra_args]), (
-            "resume cannot be used with pretrained model configs"
-        )
-
-        model_path = create_model_registry(model_url, Path(config["model_cache_dir"])).get_model()
-
-        # Models stored in the registry often only have the state dict kept.
-        hydra_args.insert(0, "++resume_weights_only=true")
-
-        if model_config.startswith("http"):
-            # if 'model_config' is a http URL, download the corresponding config file, otherwise assume string points to local config
-            model_config = create_model_registry(model_config, Path(config["model_cache_dir"])).get_model()
-
-        # Allow for overrides to the downloaded model config
-        model_config_overrides: list[str] = config.get("model_config_overrides", [])
-        hydra_args = model_config_overrides + hydra_args
-
-        # use the downloaded checkpoint as the main entrypoint for the downstream config
-        hydra_args.append(f"++resume={model_path}")  # points to the absolute path of the downloaded checkpoint
-        config_name = (
-            model_config  # points to the absolute path of the checkpoint-associated config to load, or a local config
-        )
-
-    return config_name, hydra_args
-
-
-def parse_untyped_nrm_config(
-    config_name: str,
-    hydra_args: list[str],
-    config_dir: str = "./configs",
-) -> DictConfig:
-    """
-    Parse NRM config without type checking. This is made specifically for the NRM config where we want to
-    refer to other NRM configs in the overrides, potentially relative to the nrm config directory.
-    """
-
-    # Load pretrained config/checkpoint if specified
-    config_name, hydra_args = parse_pretrained_nrm_config(config_name, hydra_args, config_dir=config_dir)
-
-    # Load the config
-    config, _ = parse_untyped_config(config_name, hydra_args, config_dir=config_dir)
-
-    OmegaConf.resolve(config)
-
-    return config
-
-
-def parse_typed_nrm_config(
-    config_name: str,
-    hydra_args: list[str] | tuple[str],
-    config_dir: str = "./configs",
-) -> NRMConfig:
-    untyped_config = parse_untyped_nrm_config(
-        config_name,
-        # convert to list in case we have a tuple
-        list(hydra_args),
-        config_dir=config_dir,
-    )
-    typed_config = NRMConfig.model_validate(untyped_config, context={"config_name": config_name})
-    return typed_config

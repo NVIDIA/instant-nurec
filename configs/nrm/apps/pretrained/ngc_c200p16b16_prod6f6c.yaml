@@ -1,8 +1,0 @@
-# NRM Celsius-p16b16_2.0.0-prod6f6c pretrained model living at NGC
-
-model_url: https://api.ngc.nvidia.com/v2/org/nvstaging/team/nre/models/nrm-celsius/versions/c200p16b16_prod6f6c/files/c200p16b16_prod6f6c.ckpt
-model_config: https://api.ngc.nvidia.com/v2/org/nvstaging/team/nre/models/nrm-celsius/versions/c200p16b16_prod6f6c/files/c200p16b16_prod6f6c.yaml
-model_config_overrides: 
-  - +model.activations.xyz_type=none
-  
-model_cache_dir: ${oc.env:HOME}/.cache/nrm/pretrained_models/c200p16b16_prod6f6c

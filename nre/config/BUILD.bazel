@@ -37,7 +37,6 @@ py_library(
         "__init__.py",
         "base_schema.py",
         "logger.py",
-        "parse.py",
     ],
     visibility = DEFAULT_VISIBILITY + [
         # add visibility to //internal/scripts/experimental:ncore_to_ngp
@@ -45,9 +44,7 @@ py_library(
     ],
     deps = [
         pip_requirement("pydantic"),
-        pip_requirement("omegaconf"),
         pip_requirement("shortuuid"),
-        pip_requirement("hydra-core"),
         pip_requirement("nvidia-ncore"),
         ":pylib_base_schema",
         "//nre:pylib_reporoot",

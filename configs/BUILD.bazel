@@ -1,8 +1,0 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
-
-filegroup(
-    name = "configs",
-    srcs = glob(["**/*.yaml"]),
-    visibility = ["//visibility:public"],
-)

@@ -36,22 +36,8 @@ py_library(
     visibility = DEFAULT_VISIBILITY,
     deps = [
         pip_requirement("pydantic"),
-        pip_requirement("omegaconf"),
         pip_requirement("numpy"),
         "//nre/config:pylib",
         "//nre/utils:pylib",
-    ],
-)
-
-pytest_test(
-    name = "schema_test",
-    timeout = "long",
-    srcs = ["schema_test.py"],
-    data = [
-        "//configs",
-    ],
-    shard_count = 8,
-    deps = [
-        ":pylib",
     ],
 )
