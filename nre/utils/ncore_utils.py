@@ -16,9 +16,8 @@ import json
 import logging
 
 from collections import defaultdict
-from dataclasses import dataclass
 from pathlib import Path
-from typing import DefaultDict, Protocol, Tuple
+from typing import DefaultDict, Tuple
 
 import numpy as np
 import PIL.Image as PILImage

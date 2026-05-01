@@ -20,7 +20,6 @@ import torch
 from libs.sensors.kernels.pose_calib import compute_poses_and_timestamps
 from ncore.data import ShutterType
 from ncore.sensors import (
-    CameraModel,
     FThetaCameraModel,
     OpenCVFisheyeCameraModel,
     OpenCVPinholeCameraModel,
