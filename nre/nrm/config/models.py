@@ -66,20 +66,6 @@ class GaussiansActivationConfig(BaseConfigSchema):
     xyz_type: Literal["exp", "none"] = Field(default="exp", description="Type of XYZ activation")
     z_offset: float = Field(default=1.0, description="Offset for XYZ activation")
 
-    # Sky mask activation parameters
-    sky_mask_clamp_min: float = Field(default=-10.0, description="Minimum clamp value for sky mask")
-    sky_mask_clamp_max: float = Field(default=10.0, description="Maximum clamp value for sky mask")
-
-    # Forward flow activation parameters
-    forward_flow_scale: float = Field(default=30.0, description="Scale factor for forward flow")
-
-    # Falloff sigma activation parameters
-    falloff_sigma_min: float = Field(
-        default=0.25, description="Minimum falloff sigma value. If set to -1, it will be inferred from frame gap."
-    )
-    falloff_sigma_max: float = Field(default=2.0, description="Maximum falloff sigma value")
-    falloff_sigma_clamp_min: float = Field(default=-5.0, description="Minimum clamp value for falloff sigma")
-    falloff_sigma_clamp_max: float = Field(default=5.0, description="Maximum clamp value for falloff sigma")
 
 
 
