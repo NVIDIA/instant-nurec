@@ -6,9 +6,8 @@ import logging
 
 from dataclasses import asdict, dataclass, replace
 from enum import IntEnum
-from typing import Any, Callable, Self, Sequence, cast
+from typing import Any, Self, Sequence
 
-import nvdiffrast.torch as dr
 import torch
 import torch_scatter
 
@@ -21,7 +20,7 @@ from nre.nrm.utils.covariance import merge_covariances_kl_optimal
 from nre.nrm.utils.cubemap import rotate_sky_cubemap
 from nre.utils.batch import CameraFrameLabels, DataAndRenderingBatch, LidarFrameLabels, RenderingData
 from nre.utils.geometry import quat_mult_xyzw, so3_matrix_to_quat
-from nre.utils.types import Checkpoint, GaussiansRenderReturn, RayFlags, RigTrajectories
+from nre.utils.types import Checkpoint, RayFlags, RigTrajectories
 
 
 logger = logging.getLogger(__name__)
@@ -653,70 +652,6 @@ class KelvinNRMPrimitive(BaseGaussiansNRMPrimitive):
             use_2dgs=self.use_2dgs,
             gaussians_renderer=self.gaussians_renderer,
         )
-
-    def get_gaussian_parameters(self, timestamps_us: torch.Tensor | None) -> dict[str, torch.Tensor]:
-        interpolate_timestamp_us: int = -1
-        if len(self.dynamic_layers) > 0:
-            assert timestamps_us is not None, "Timestamp must be provided for dynamic primitives"
-            assert timestamps_us.shape == (1, 2), "Timestamps must have shape (1, 2)"
-            # Convert to CPU if on GPU to avoid GPU->CPU sync when calling .item()
-            timestamps_us = timestamps_us.cpu()
-            start_timestamp_us, end_timestamp_us = timestamps_us[0, 0].item(), timestamps_us[0, 1].item()
-            interpolate_timestamp_us = cast(int, (start_timestamp_us + end_timestamp_us) // 2)
-
-        # Gather gaussian parameters from all layers
-        all_layers: list[KelvinStaticLayer] = [self.static_layer] + [
-            layer.interpolate(interpolate_timestamp_us) for layer in self.dynamic_layers
-        ]
-        positions = torch.cat([layer.positions for layer in all_layers], dim=0)
-        rotations = torch.cat([layer.rotations for layer in all_layers], dim=0)
-        scales = torch.cat([layer.scales for layer in all_layers], dim=0)
-        densities = torch.cat([layer.densities for layer in all_layers], dim=0)
-        rgb = torch.cat([layer.rgb for layer in all_layers], dim=0)
-        n_gaussians = positions.shape[0]
-        return {
-            "positions": positions.float(),
-            "rotations": rotations.float(),
-            # The renderer will not take the z-axis into account since its' planar.
-            "scales": scales.float(),
-            "densities": densities.float(),
-            "features": rgb.float(),  # [n_gaussians, 3]
-            "extra_signal": torch.zeros(n_gaussians, 0, device=self.device()),
-            "camera_extra_signal": torch.zeros(n_gaussians, 0, device=self.device()),
-            "lidar_extra_signal": torch.zeros(n_gaussians, 0, device=self.device()),
-        }
-
-    def get_extra_ray_signal_infos(self) -> tuple[list[str], list[int], list[Callable]]:
-        return ([], [], [])
-
-    def postprocess_rendering(
-        self, out: GaussiansRenderReturn, rendering_data: RenderingData, unique_sensor_idx: int | None
-    ) -> GaussiansRenderReturn:
-        rays = rendering_data.rays.reshape(-1, 6)
-
-        # Compose with sky
-        opengl_rays_d = torch.stack([rays[:, 3], -rays[:, 4], rays[:, 5]], dim=-1)
-        sky_color = dr.texture(
-            self.sky_cubemap[None],  # [1, 6, height, width, 3]
-            opengl_rays_d[None, None],  # [1, 1, n_rays, 3]
-            filter_mode="linear",
-            boundary_mode="cube",
-        )  # [1, 1, n_rays, 3]
-        sky_color = sky_color.squeeze(0).squeeze(0)
-        if rendering_data._rays_is_sky is not None:
-            # Detach sky_color for non-sky rays so foreground rendering doesn't affect the sky cubemap.
-            detach_mask = rendering_data._rays_is_sky.reshape(-1, 1).float()
-            sky_color = sky_color * detach_mask + sky_color.detach() * (1 - detach_mask)
-        out.rgb = out.rgb + (1 - out.opacity[..., None]) * sky_color
-
-        # Apply affine transform
-        assert unique_sensor_idx is not None and 0 <= unique_sensor_idx < self.affine_matrix.shape[0], (
-            "Invalid sensor index"
-        )
-        out.rgb = torch.einsum("n p, q p -> n q", out.rgb, self.affine_matrix[unique_sensor_idx, :, :3])
-        out.rgb = torch.clamp(out.rgb + self.affine_matrix[unique_sensor_idx, :, 3], min=0.0, max=1.0)
-
-        return out
 
     @torch.autocast(device_type="cuda", enabled=False)
     def color_transform(self, y: torch.Tensor) -> None:
