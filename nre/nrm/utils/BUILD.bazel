@@ -87,7 +87,6 @@ py_library(
     name = "pylib",
     srcs = [
         "__init__.py",
-        "optim.py",
         "sensor.py",
     ],
     visibility = DEFAULT_VISIBILITY,
