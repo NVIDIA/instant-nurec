@@ -37,11 +37,7 @@ logger = logging.getLogger(__name__)
 class GaussiansNRMSystem(BaseNRMSystem):
     def __init__(self, config: NRMConfig) -> None:
         super().__init__(config)
-
-        if config.model.name == "kelvin":
-            self.model = KelvinNRM(config.model)
-        else:
-            raise ValueError(f"Unknown config name {config.model.name}.")
+        self.model = KelvinNRM(config.model)
 
     def forward(self, batch: NRMDataBatch) -> list[BaseNRMPrimitive]:
         cuboid_tracks = None

@@ -48,7 +48,6 @@ dataset:
     camera_id_mapping: {}
     lidar_id_mapping: {}
 model:
-  name: kelvin
   track_padding_m:
     - 1.0
     - 1.0

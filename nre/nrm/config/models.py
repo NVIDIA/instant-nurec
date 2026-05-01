@@ -104,8 +104,6 @@ class KelvinModelConfig(BaseModelConfig):
     Configuration for the Kelvin model.
     """
 
-    name: Literal["kelvin"]
-
     track_padding_m: List[float] = Field(
         default=[1.0, 1.0, 1.0],
         description=(
