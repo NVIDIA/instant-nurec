@@ -162,12 +162,8 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
         lidar_sensors: dict[str, ncore.data.LidarSensorProtocol]
 
     def __init__(self, config: BaseNCoreNRMDatasetConfig):
-        self.ncore_json_list_path = parse_universal_path(unpack_optional(config.ncore_json_list_path))
-        self.ncore_json_base_path = (
-            parse_universal_path(config.ncore_json_base_path)
-            if config.ncore_json_base_path is not None
-            else None
-        )
+        self.ncore_json_list_path = parse_universal_path(config.ncore_json_list_path)
+        self.ncore_json_base_path = parse_universal_path(config.ncore_json_base_path)
         self.open_consolidated = config.open_consolidated
         self.camera_max_fov_deg = config.camera_max_fov_deg
         self.n_camera_mask_dilation_iterations = config.n_camera_mask_dilation_iterations
@@ -203,12 +199,7 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
         self.ncore_json_paths: list[UPath] = []
         with self.ncore_json_list_path.open("r") as f:
             for line in f.readlines():
-                line = line.strip()
-                if self.ncore_json_base_path is not None:
-                    ncore_path = self.ncore_json_base_path / line
-                else:
-                    ncore_path = parse_universal_path(line)
-                self.ncore_json_paths.append(ncore_path)
+                self.ncore_json_paths.append(self.ncore_json_base_path / line.strip())
         n_ncore_json_files = len(self.ncore_json_paths)
         self.sequence_subranges: dict[str, list[tuple[float, float]]] = {
             path.stem: [(0.0, 1.0)] for path in self.ncore_json_paths

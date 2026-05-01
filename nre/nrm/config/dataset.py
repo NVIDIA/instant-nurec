@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import logging
 
-from typing import Literal, Optional
+from typing import Literal
 
 from nre.config.base_schema import BaseConfigSchema, Field
 
@@ -54,13 +54,11 @@ class CameraSubsamplerConfig(BaseConfigSchema):
 class BaseNCoreNRMDatasetConfig(BaseConfigSchema):
     """Base config for NCore-based datasets. Subclasses must define `name`."""
 
-    # Deprecated support for old configs -- TODO [JH]: to be removed in the future.
     ncore_json_list_path: str = Field(
         description="The path to a file that contains the list of sequence meta json files to load.",
     )
-    ncore_json_base_path: Optional[str] = Field(
-        default=None,
-        description="If specified, will be used as a base path to resolve relative paths in the ncore_json_list_path",
+    ncore_json_base_path: str = Field(
+        description="Base path used to resolve relative paths in the ncore_json_list_path.",
     )
     open_consolidated: bool = Field(default=True)
     camera_max_fov_deg: float = Field(
