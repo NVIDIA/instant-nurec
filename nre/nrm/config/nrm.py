@@ -10,7 +10,6 @@
 
 from __future__ import annotations
 
-import logging
 import os
 
 from pathlib import Path
@@ -35,7 +34,6 @@ from nre.utils.model_registry import create_model_registry
 SENTINEL = "<sentinel>"
 
 
-cmd_logger = logging.getLogger(__name__)
 
 
 class BaseNRMSystemConfig(BaseConfigSchema):
@@ -119,38 +117,14 @@ class NRMConfig(BaseConfigSchema):
     )
 
     def _setup_resume_path(self) -> None:
+        """Predict-only standalone: resume is set by parse_pretrained_nrm_config to
+        the absolute path of the downloaded NGC checkpoint; just validate it exists."""
         if self.resume is None:
             return
-
-        # When user use resume=auto, we will try to resume from the last checkpoint with the same run_id.
-        # If the checkpoint does not exist, we will train from scratch.
-        # This is useful for long-running training jobs on clusters where the job is constantly interrupted & restarted.
-        if self.resume == "auto":
-            is_auto_resume = True
-            self.resume = "last"
-        else:
-            is_auto_resume = False
-
-        # Add .ckpt if config.resume doesn't include it. Useful to run resume=last or resume=best
         if not self.resume.endswith(".ckpt"):
             self.resume += ".ckpt"
         if not os.path.exists(self.resume):
-            if self.ckpt_dir == SENTINEL:
-                if is_auto_resume:
-                    # Automatically find out the checkpoint directory
-                    self.ckpt_dir = os.path.join(self.out_dir, self.logger.run_id, "checkpoints")
-                    cmd_logger.info(f"Automatically resuming from {self.ckpt_dir}")
-                else:
-                    raise FileNotFoundError("config.ckpt_dir is not provided, can't guess the resume path.")
-
-            self.resume = os.path.join(self.ckpt_dir, self.resume)
-            if not os.path.exists(self.resume):
-                if is_auto_resume:
-                    # If checkpoint not found, training from scratch!
-                    self.resume = None
-                    cmd_logger.info("Checkpoint not found, training from scratch.")
-                else:
-                    raise FileNotFoundError(f"Checkpoint {self.resume=} does not exist")
+            raise FileNotFoundError(f"Checkpoint {self.resume!r} does not exist")
 
     def _setup_run_id(self) -> None:
         """propagate run_id set in self.logger to other fields"""
