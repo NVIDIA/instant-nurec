@@ -628,11 +628,6 @@ class CameraFrameLabels:
         assert self.flags is not None, "flags are required"
         return torch.bitwise_and(self.flags, flags.value).eq(flags.value)
 
-    def get_mask_flags_any(self, flags: RayFlags) -> torch.Tensor:
-        """Mask indicating the rays that have *any* flag bits of 'flags' set"""
-        assert self.flags is not None, "flags are required"
-        return torch.bitwise_and(self.flags, flags.value).ne(0)
-
     def get_mask_flags_none(self, flags: RayFlags) -> torch.Tensor:
         """Mask indicating the rays that have *none* of the flag bits of 'flags' set"""
         assert self.flags is not None, "flags are required"
@@ -820,11 +815,6 @@ class LidarFrameLabels:
         """Mask indicating the rays that have *all* flag bits of 'flags' set"""
         assert self.flags is not None, "flags are required"
         return torch.bitwise_and(self.flags, flags.value).eq(flags.value)
-
-    def get_mask_flags_any(self, flags: RayFlags) -> torch.Tensor:
-        """Mask indicating the rays that have *any* flag bits of 'flags' set"""
-        assert self.flags is not None, "flags are required"
-        return torch.bitwise_and(self.flags, flags.value).ne(0)
 
     def get_mask_flags_none(self, flags: RayFlags) -> torch.Tensor:
         """Mask indicating the rays that have *none* of the flag bits of 'flags' set"""
