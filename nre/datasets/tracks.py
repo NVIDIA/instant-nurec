@@ -11,7 +11,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable, Literal, Optional, Self, Tuple, cast
+from typing import Iterable, Literal, Optional, Self, cast
 
 import lietorch as lt
 import numpy as np
@@ -465,26 +465,17 @@ class CuboidTracks(Tracks):
         timestamps_us: torch.Tensor,
         tracks_idx: torch.Tensor,
     ) -> lt.SE3:
-        return self.interpolate_tracks_poses_ex(timestamps_us, tracks_idx)[0]
-
-    def interpolate_tracks_poses_ex(
-        self,
-        timestamps_us: torch.Tensor,
-        tracks_idx: torch.Tensor,
-    ) -> Tuple[lt.SE3, torch.Tensor]:
-        """
-        Compute the interpolated pose of the tracks at the given timestamps.
+        """Compute the interpolated pose of the tracks at the given timestamps.
         This will not check if the timestamps are within the range of the tracks!
+
+        Predict-only standalone never consumed the auxiliary `interpolated_mask`
+        return that the NRE-side `_ex` variant produced; collapsed to a single
+        function (Phase 1 step 4.3).
 
         Inputs:
         - timestamps_us: timestamps to interpolate the pose at, N_data [int64]
         - tracks_idx: indices of the tracks to interpolate the pose for, N_data [int]
-
-        Returns:
-        - interpolated_pose: interpolated pose of the tracks at the given timestamps, N_data [SE3]
-        - interpolated_mask: mask of the tracks that are valid interpolations, N_data [bool]
         """
-
         tidx_right = packed_ops.packed_searchsorted_indexed_vals(
             self.tracks_timestamps_us,
             self.tracks_packinfo,
@@ -515,8 +506,6 @@ class CuboidTracks(Tracks):
         R_alpha = R_start * lt.SO3.exp(alpha[:, None] * (R_start.inv() * R_end).log())
         t_alpha = t_start + alpha[:, None] * (t_end - t_start)
 
-        interpolated_pose = lt.SE3.InitFromVec(torch.cat([t_alpha[:, :3], R_alpha.vec()], dim=1))
-
-        return (interpolated_pose, interpolated_mask)
+        return lt.SE3.InitFromVec(torch.cat([t_alpha[:, :3], R_alpha.vec()], dim=1))
 
 
