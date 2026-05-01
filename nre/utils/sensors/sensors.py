@@ -12,7 +12,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TypeAlias, Union, cast
 
 import torch
@@ -33,42 +33,17 @@ ConcreteCameraModelsUnion: TypeAlias = Union[FThetaCameraModel, OpenCVFisheyeCam
 class RectSubsampledSensor:
     """
     Subsampled rectangular pixel region with offset i/j and dimension
-    height/width, plus the GPU-side `rect_points_lb` / `resolution` tensors
-    needed for slang-kernel pose interpolation.
+    height/width.
 
     Note that the offset i/j and dimension height/width are relative to the
     scaled pixel domain. I.e., subsampling is applied first, then cropping.
     """
 
-    original_width: int
-    original_height: int
     width: int
     height: int
     i: int = 0
     j: int = 0
     subsample_factor: float = 1.0
-
-    # Subsample-related attributes to be computed after initialization.
-    rect_points_lb: torch.Tensor = field(init=False, repr=False)
-    resolution: torch.Tensor = field(init=False, repr=False)
-
-    def __post_init__(self):
-        assert self.subsample_factor > 0.0, "Invalid subsample_factor value"
-        assert self.i >= 0, "Invalid i value"
-        assert self.j >= 0, "Invalid j value"
-        assert self.width > 0, "Invalid width value"
-        assert self.height > 0, "Invalid height value"
-        self.rect_points_lb = 0.5 + self.subsample_factor * torch.tensor(
-            [
-                [self.i, self.j],
-                [
-                    self.i + (self.width - 1.0 / self.subsample_factor),
-                    self.j + (self.height - 1.0 / self.subsample_factor),
-                ],
-            ],
-            dtype=torch.float32,
-        )
-        self.resolution = torch.tensor([self.original_width, self.original_height], dtype=torch.float32)
 
 
 class SensorModelComputations:

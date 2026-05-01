@@ -51,8 +51,6 @@ class CameraSubsampler:
             j=offset_h,
             width=self.frame_width,
             height=self.frame_height,
-            original_width=original_width,
-            original_height=original_height,
         ), (scaled_w, scaled_h)
 
     def apply_camera_parameters(
