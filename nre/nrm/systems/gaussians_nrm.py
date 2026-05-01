@@ -121,20 +121,19 @@ class GaussiansNRMSystem(nn.Module):
         # USDZ artifacts and does not render videos (those code paths were
         # removed in Phase 1 step 4.3).
         def export_chunk(primitive: BaseNRMPrimitive, rig: RigTrajectories, meta: dict, chunk_suffix: str) -> None:
-            if self.predict_config.export_ply.enabled:
-                path = os.path.join(
-                    self.out_dir,
-                    self.run_id,
-                    "ply",
-                    meta["sequence_id"],
-                    meta["sequence_id"] + chunk_suffix + ".ply",
-                )
-                export_ply(
-                    config=self.predict_config.export_ply,
-                    primitives=primitive,
-                    rig_trajectories=rig,
-                    path=Path(path),
-                )
+            path = os.path.join(
+                self.out_dir,
+                self.run_id,
+                "ply",
+                meta["sequence_id"],
+                meta["sequence_id"] + chunk_suffix + ".ply",
+            )
+            export_ply(
+                config=self.predict_config.export_ply,
+                primitives=primitive,
+                rig_trajectories=rig,
+                path=Path(path),
+            )
 
         for chunk_idx in range(n_chunks):
             meta = out_batch.meta[chunk_idx]

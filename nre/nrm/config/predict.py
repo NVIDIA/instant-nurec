@@ -16,11 +16,6 @@ from nre.config.base_schema import BaseConfigSchema, Field
 
 
 class PrimitivePLYExportConfig(BaseConfigSchema):
-    enabled: bool = Field(
-        default=False,
-        description="Whether to enable primitive ply export. The exported ply file contains the preactived density "
-        "and scale, and colors represented in SH.",
-    )
     density_activation: Literal["sigmoid", "exp"] = Field(
         default="sigmoid",
         description="The inv activation function to apply to the densities before exporting.",
