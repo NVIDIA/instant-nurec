@@ -47,7 +47,7 @@ def run_predict(config: NRMConfig) -> None:
 
     dataloader = system.datamodule.predict_dataloader()
     with torch.inference_mode():
-        for batch_idx, batch in enumerate(dataloader):
+        for batch in dataloader:
             batch = batch.to(device)
-            outputs = system.predict_step(batch, batch_idx)
-            system.on_predict_batch_end(outputs, batch, batch_idx)
+            outputs = system.predict_step(batch)
+            system.on_predict_batch_end(outputs, batch)

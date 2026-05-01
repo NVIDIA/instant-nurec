@@ -68,9 +68,7 @@ class GaussiansNRMSystem(nn.Module):
         batch.context = self.model.prepare_context(batch.context, cuboid_tracks)
         return self.model.reconstruct(batch.context, cuboid_tracks)
 
-    def predict_step(
-        self, batch: NRMDataBatch, batch_local_idx: int
-    ) -> dict[str, list[BaseNRMPrimitive] | NRMDataBatch]:
+    def predict_step(self, batch: NRMDataBatch) -> dict[str, list[BaseNRMPrimitive] | NRMDataBatch]:
         # In the future maybe rendering data is not required any more for model forwarding.
         batch.maybe_compute_rendering_data(device=self.device)
 
@@ -105,7 +103,7 @@ class GaussiansNRMSystem(nn.Module):
 
         return {"primitives": primitives_list, "batch": batch}
 
-    def on_predict_batch_end(self, outputs, batch, batch_idx, dataloader_idx=0) -> None:
+    def on_predict_batch_end(self, outputs, batch) -> None:
         # Ensure outputs are not None and contain the required keys
         assert outputs is not None and "primitives" in outputs and "batch" in outputs
 
