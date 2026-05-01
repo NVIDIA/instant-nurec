@@ -13,7 +13,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Callable, Iterable, Literal, Optional, Self, Tuple, Union, cast
 
-import dataclasses_json
 import lietorch as lt
 import numpy as np
 import torch
@@ -22,72 +21,20 @@ from torch.autograd.function import once_differentiable
 
 from libs.packed_ops.interface import packed_ops  # type: ignore
 from libs.vren.interface import vren  # type: ignore
-from nre.utils.fields import field_enum
 from nre.utils.geometry import se3_matrix_to_tquat, tquat_to_se3_matrix
 from nre.utils.misc import get_pack_info_from_n
 from nre.utils.packed_ops import linstep_interleave
-from nre.utils.types import CuboidTracksData, CuboidTracksDataPack, FrameConversion, TrackFlags, TracksData
+from nre.utils.types import CuboidTracksData, CuboidTracksDataPack, TrackFlags, TracksData
 
 
 @dataclass(kw_only=True, slots=True)
-class Tracks(dataclasses_json.DataClassJsonMixin):
+class Tracks:
     """Manages time-dependent poses and related interpolation / intersection GPU operations for tracks
 
     This class uses the :class:`nre.utils.types.TracksData` class for storing data.
     """
 
-    @dataclass(slots=True)
-    class Unpacked(dataclasses_json.DataClassJsonMixin):
-        """'Unpacked' serialization format of the internal packed representation that is easier for human / external modification"""
-
-        tracks_id: list[str] = field(default_factory=list)
-        tracks_poses: list[list] = field(default_factory=list)
-        tracks_timestamps_us: list[list] = field(default_factory=list)
-        tracks_label_class: list[str] = field(default_factory=list)
-        tracks_flags: list[TrackFlags] = field_enum(TrackFlags, default_factory=list)
-
-        @staticmethod
-        def from_data(data: TracksData) -> Tracks.Unpacked:
-            tracks_id = []
-            tracks_poses = []
-            tracks_timestamps_us = []
-            tracks_label_class = []
-            tracks_flags = []
-
-            # Unpack data for each track
-            for track_idx, track_id in enumerate(data.tracks_id):
-                tracks_id.append(track_id)
-                start_idx, n_poses = data.tracks_packinfo[track_idx].tolist()
-                tracks_poses.append(data.tracks_poses[start_idx : start_idx + n_poses].data.tolist())
-                tracks_timestamps_us.append(data.tracks_timestamps_us[start_idx : start_idx + n_poses].data.tolist())
-                tracks_label_class.append(data.tracks_label_class[track_idx])
-                tracks_flags.append(TrackFlags(int(data.tracks_flags[track_idx].item())))
-
-            return Tracks.Unpacked(
-                tracks_id,
-                tracks_poses,
-                tracks_timestamps_us,
-                tracks_label_class,
-                tracks_flags,
-            )
-
-    @staticmethod
-    def encoder_tracks(input: TracksData) -> dict:
-        return Tracks.Unpacked.from_data(input).to_dict()
-
-    @staticmethod
-    def decoder_tracks(input: dict) -> TracksData:
-        unpacked = Tracks.Unpacked.from_dict(input)
-        return Tracks.Factory.from_numpy(
-            unpacked.tracks_id,
-            [np.array(track_poses, dtype=np.float32) for track_poses in unpacked.tracks_poses],
-            [np.array(track_timestamps_us, dtype=np.int64) for track_timestamps_us in unpacked.tracks_timestamps_us],
-            unpacked.tracks_label_class,
-            unpacked.tracks_flags,
-            "tquat",
-        ).tracks_data
-
-    tracks_data: TracksData = field(metadata=dataclasses_json.config(encoder=encoder_tracks, decoder=decoder_tracks))
+    tracks_data: TracksData
 
     @property
     def tracks_id(self) -> list[str]:
@@ -245,30 +192,7 @@ class CuboidTracks(Tracks):
 
     """
 
-    @dataclass(slots=True)
-    class Unpacked(dataclasses_json.DataClassJsonMixin):
-        """'Unpacked' serialization format of the internal packed representation that is easier for human / external modification"""
-
-        cuboids_dims: list[list] = field(default_factory=list)
-
-    @staticmethod
-    def encoder_cuboidtracks(input: CuboidTracksData) -> dict:
-        # combine both the base part and local part
-        return CuboidTracks.Unpacked(input.cuboids_dims.tolist()).to_dict()
-
-    @staticmethod
-    def decoder_cuboidtracks(input: dict) -> CuboidTracksData:
-        return CuboidTracksData(
-            cuboids_dims=torch.tensor(
-                CuboidTracks.Unpacked.from_dict(input).cuboids_dims,
-                dtype=torch.float32,
-                device=torch.device("cuda"),
-            ).reshape(-1, 3)
-        )
-
-    cuboidtracks_data: CuboidTracksData = field(
-        metadata=dataclasses_json.config(encoder=encoder_cuboidtracks, decoder=decoder_cuboidtracks)
-    )
+    cuboidtracks_data: CuboidTracksData
 
     @property
     def cuboids_dims(self) -> torch.Tensor:
