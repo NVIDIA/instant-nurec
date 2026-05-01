@@ -387,7 +387,7 @@ class KelvinDPTDecoder(KelvinDecoderBase):
             context_prev_flow, context_next_flow = self.context_motion_head.forward(
                 encoded_latent,
                 output_shape=(H, W),
-                fusion_features=rgb_fusion_features if self.config.fusion_for_gs_motion else None,
+                fusion_features=None,
                 chunk_size=self.config.dpt_chunk_size,
                 time_remappings=time_remappings,
                 source_timestamps_us=source_timestamps_us,
@@ -456,7 +456,7 @@ class KelvinDPTDecoder(KelvinDecoderBase):
         gs_params_tensor = self.gaussians_head(
             img_feats,
             output_shape=(H, W),
-            fusion_features=rgb_fusion_features if self.config.fusion_for_gs_motion else None,
+            fusion_features=None,
             chunk_size=self.config.dpt_chunk_size,
         )
         gs_params_tensor = rearrange(gs_params_tensor, "(B V) C H W -> B V H W C", B=B, V=V)

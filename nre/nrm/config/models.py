@@ -90,10 +90,6 @@ class KelvinDPTDecoderConfig(BaseConfigSchema):
         default=-1, description="Chunk size for the DPT decoder. Used for saving memory. -1 to disable."
     )
 
-    fusion_for_gs_motion: bool = Field(
-        default=False, description="Whether to use fusion for the GS head and the motion head"
-    )
-
     # Motion-related:
     time_encoding_dim: int = Field(default=256, description="Dimension of the time sinusoidal encoding")
     motion_depth: int = Field(default=4, description="Depth of the motion head (V-DPM setup is equivalent to 8)")

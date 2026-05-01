@@ -107,7 +107,6 @@ model:
     uv_offset: false
     checkpointing: true
     dpt_chunk_size: 4
-    fusion_for_gs_motion: false
     time_encoding_dim: 256
     motion_depth: 4
   post_processing:
