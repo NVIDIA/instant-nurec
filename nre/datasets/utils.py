@@ -43,19 +43,13 @@ from nre.utils.types import CuboidTracksData, HalfClosedInterval, TracksData
 def compute_cuboid_df(
     sequence_loader: ncore.data.SequenceLoaderProtocol,
     time_range_us: HalfClosedInterval,
-    tqdm_disabled: bool = True,
-    serialize_observation: bool = True,
 ) -> pd.DataFrame:
-    """Extracts cuboid observations from the dataset in a given time range
+    """Extracts cuboid observations from the dataset in a given time range.
 
-    Args:
-        sequence_loader (ncore.data.SequenceLoaderProtocol): The sequence loader to load the data from
-        time_range_us (HalfClosedInterval): The time range in which to compute the tracks for
-        tqdm_disabled (bool): When true, no progress bars are showed
-        serialize_observation (bool): When true, serialize the cuboid observation into json dicts (very slow)
-
-    Returns:
-        pd.DataFrame: Dataframe of all cuboid observations in the given time range
+    Predict-only standalone always uses `vars(observation)` directly; the
+    NRE-side `serialize_observation=True` path that produced JSON dicts via
+    `observation.to_dict()` was unused at predict time and significantly
+    slower (Phase 1 step 4.3). The progress bar is also always disabled.
     """
 
     cuboid_observations = sequence_loader.get_cuboid_track_observations(
@@ -69,13 +63,7 @@ def compute_cuboid_df(
     )
 
     # Load all cuboid observations into dataframe for easy querying
-    cuboid_dicts = []
-    for observation in tqdm.tqdm(
-        cuboid_observations,
-        desc="Load all Cuboid Labels",
-        disable=tqdm_disabled,
-    ):
-        cuboid_dicts.append(observation.to_dict() if serialize_observation else vars(observation))
+    cuboid_dicts = [vars(observation) for observation in cuboid_observations]
 
     if len(cuboid_dicts):
         # load all observations into dataframe, deducing dynamic types from structure

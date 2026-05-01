@@ -270,7 +270,7 @@ class NCoreNRMDataset(BaseNRMIndexableDataset):
             frame_batch_min_timestamps_us - self.cuboid_tracks_params.track_extrapolate_timestamps_us,
             frame_batch_max_timestamps_us + self.cuboid_tracks_params.track_extrapolate_timestamps_us,
         )
-        cuboids_df = compute_cuboid_df(sequence_loader, time_range_us, serialize_observation=False)
+        cuboids_df = compute_cuboid_df(sequence_loader, time_range_us)
 
         # First associate all tracks within the batch
         all_batch_tracks = consolidate_cuboid_tracks(
