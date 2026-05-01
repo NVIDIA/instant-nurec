@@ -328,8 +328,6 @@ class FrameMeta:
     unique_sensor_idx: int
     unique_frame_idx: int
     subsample: RectSubsampled | None = None
-    # [TODO]: temporary solution to align with the current design, should be improved in the future
-    T_offset_nre_startend: torch.Tensor | None = None  # (2, 4, 4) offset in the NRE frame or None
 
     # Tensor version that will be used for cuda, populated automatically
     unique_frame_idx_tensor: torch.Tensor | None = None
@@ -344,9 +342,6 @@ class FrameMeta:
             )
         if self.unique_sensor_idx_str is None:
             self.unique_sensor_idx_str = str(self.unique_sensor_idx)
-        if self.T_offset_nre_startend is not None:
-            assert self.T_offset_nre_startend.shape == (2, 4, 4), "T_offset_nre_startend must be a 3D tensor (2, 4, 4)"
-            assert self.T_offset_nre_startend.dtype == torch.float32, "T_offset_nre_startend must be a float32 tensor"
 
     @property
     def h(self) -> int | None:
@@ -375,9 +370,6 @@ class FrameMeta:
             unique_sensor_idx=self.unique_sensor_idx,
             unique_frame_idx=self.unique_frame_idx,
             subsample=self.subsample.to(*args, **kwargs) if self.subsample is not None else None,
-            T_offset_nre_startend=self.T_offset_nre_startend.to(*args, **kwargs)
-            if self.T_offset_nre_startend is not None
-            else None,
             unique_frame_idx_tensor=self.unique_frame_idx_tensor.to(*args, **kwargs)
             if self.unique_frame_idx_tensor is not None
             else None,
@@ -1051,7 +1043,6 @@ class CameraFreePoseViewGeometry(torch.nn.Module):
         """
         return SensorModelComputations.get_poses_and_timestamps_startend(
             subsample=meta.subsample,
-            T_offset_nre_startend=meta.T_offset_nre_startend,
             T_sensor_world_startend_allviews=self.T_sensor_world_startend_allviews,
             timestamps_startend_us_allviews=self.timestamps_startend_us_allviews,
             timestamps_startend_us_allviews_cpu=self.timestamps_startend_us_allviews_cpu,

@@ -114,7 +114,6 @@ class SensorModelComputations:
         subsample_resolution: Optional[torch.Tensor],
         subsample_rect_points_lb_cpu: Optional[torch.Tensor],
         subsample_resolution_cpu: Optional[torch.Tensor],
-        T_offset_nre_startend: Optional[torch.Tensor],
         T_sensor_world_startend_allviews: torch.Tensor,
         timestamps_startend_us_allviews: torch.Tensor,
         timestamps_startend_us_allviews_cpu: torch.Tensor,
@@ -152,10 +151,6 @@ class SensorModelComputations:
         T_sensor_world_startend = T_sensor_world_startend_batch.squeeze(0)  # (2, 4, 4)
         timestamps_startend_us = timestamps_startend_us_batch.squeeze(0)  # (2,)
 
-        # Apply T_offset if present
-        if T_offset_nre_startend is not None:
-            T_sensor_world_startend = T_offset_nre_startend @ T_sensor_world_startend
-
         timestamps_startend_us_gpu = timestamps_startend_us.unsqueeze(0)
 
         # Compute timestamps entirely on CPU - no GPU sync needed
@@ -182,7 +177,6 @@ class SensorModelComputations:
     @staticmethod
     def get_poses_and_timestamps_startend(
         subsample: Optional[RectSubsampledSensor],
-        T_offset_nre_startend: Optional[torch.Tensor],
         T_sensor_world_startend_allviews: torch.Tensor,
         timestamps_startend_us_allviews: torch.Tensor,
         timestamps_startend_us_allviews_cpu: torch.Tensor,
@@ -205,7 +199,6 @@ class SensorModelComputations:
             subsample.resolution.unsqueeze(0) if subsample is not None else None,
             subsample.rect_points_lb_cpu.unsqueeze(0) if subsample is not None else None,
             subsample.resolution_cpu.unsqueeze(0) if subsample is not None else None,
-            T_offset_nre_startend,
             T_sensor_world_startend_allviews,
             timestamps_startend_us_allviews,
             timestamps_startend_us_allviews_cpu,
