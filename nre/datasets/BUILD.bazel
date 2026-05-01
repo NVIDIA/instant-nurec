@@ -51,7 +51,6 @@ py_library(
         pip_requirement("pillow"),
         pip_requirement("pandas"),
         pip_requirement("universal-pathlib"),
-        pip_requirement("dataclasses-json"),
         pip_requirement("simplejpeg"),
         pip_requirement("cuml-cu12"),
         ":pylib_tracks",
