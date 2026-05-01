@@ -152,31 +152,25 @@ def compute_pixel_footprint(camera_rays: torch.Tensor | np.ndarray, pixel_offset
 
 
 def generate_grid_2d_indices(
-    resolution: Tuple[int, int], order: Literal["xy", "yx"] = "xy", device: torch.device | str = "cpu"
+    resolution: Tuple[int, int], device: torch.device | str = "cpu"
 ) -> torch.Tensor:
-    """Computes pixel coordinates for all pixels in the sensor frame. [Applicable to both camera and lidar]
+    """Computes (x, y) pixel coordinates for all pixels in the sensor frame.
 
     Args:
-        resolution: (w, h) A tuple containing the width and height of the sensor frame.
-        order: The order of the returned coordinates. "xy" means (x, y) and "yx" means (y, x). Default is "xy".
+        resolution: (w, h) sensor width and height.
 
     Returns:
-        torch.Tensor: A 2D tensor of shape (N, 2) where N = width * height, containing
-            (x, y) / (y, x) pixel coordinates for every pixel in the sensor frame. The coordinates
-            are zero-based indices with x in [0, width-1] and y in [0, height-1].
+        torch.Tensor: A (N, 2) tensor with N = width * height, zero-based
+            indices x in [0, w-1], y in [0, h-1]. Predict only ever needs
+            "xy" order; the "yx" branch was dropped.
     """
     w, h = resolution
     sensor_pixels_x, sensor_pixels_y = torch.meshgrid(
         torch.arange(w, dtype=torch.int16, device=device),
         torch.arange(h, dtype=torch.int16, device=device),
         indexing="xy",
-    )  # [0, w-1] x [0, h-1]
-    if order == "xy":
-        return torch.stack([sensor_pixels_x.flatten(), sensor_pixels_y.flatten()], dim=1)
-    elif order == "yx":
-        return torch.stack([sensor_pixels_y.flatten(), sensor_pixels_x.flatten()], dim=1)
-    else:
-        raise ValueError(f"Invalid order: {order}")
+    )
+    return torch.stack([sensor_pixels_x.flatten(), sensor_pixels_y.flatten()], dim=1)
 
 
 @dataclass(kw_only=True, slots=True)
