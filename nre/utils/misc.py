@@ -194,22 +194,6 @@ def to_torch(
     return torch.from_numpy(data).to(device=device, dtype=dtype, non_blocking=non_blocking)
 
 
-def to_numpy(data: torch.Tensor) -> npt.NDArray:
-    """Convert a PyTorch tensor to a NumPy array.
-
-    Handles the common pattern of detaching from the computation graph,
-    moving to CPU, and converting to NumPy. Safe to use with tensors
-    that require gradients or are on GPU.
-
-    Args:
-        data: The PyTorch tensor to convert.
-
-    Returns:
-        NumPy array with the same data as the input tensor.
-    """
-    return data.detach().cpu().numpy()
-
-
 def dataclass_keys(dataclass_: Any) -> Generator[str, Any, None]:
     assert is_dataclass(dataclass_), "Only applicable to dataclasses"
     for field in fields(dataclass_):
@@ -308,34 +292,11 @@ def get_union_types(union_type: Any) -> Tuple[Type, ...]:
 
 
 # https://github.com/nerfstudio-project/gsplat/blob/2323de5905d5e90e035f792fe65bad0fedd413e7/gsplat/distributed.py#L10
-class SetZeroFunction(torch.autograd.Function):
-    @staticmethod
-    def forward(ctx, input: torch.Tensor) -> torch.Tensor:
-        return torch.zeros_like(input)
-
-    @staticmethod
-    def backward(ctx, grad_output):
-        if grad_output is None:
-            return None
-        return torch.zeros_like(grad_output)
-
-
-def set_zero(input: torch.Tensor) -> torch.Tensor:
-    """
-    Set the given tensor to zero, but still keep the computation graph.
-    i.e. set_zero(x) -> x * 0
-    This is useful e.g. in DDP setting where we still want to keep the gradient flow to the leaf parameters,
-    so that we no longer need find_unused_parameters=True.
-    """
-    return SetZeroFunction.apply(input)
-
-
-
 def stop_gradient(input: torch.Tensor) -> torch.Tensor:
     """
     Stop the gradient from flowing through the given tensor, but still keep the computation graph.
     """
-    return set_zero(input) + input.detach()
+    return input * 0 + input.detach()
 
 
 def list_of_dicts_to_dict_of_lists(
