@@ -13,7 +13,7 @@ from __future__ import annotations
 from typing import Optional, OrderedDict, Self
 
 from dataclasses import dataclass
-from enum import IntEnum, IntFlag, auto
+from enum import IntFlag, auto
 
 import lietorch as lt
 import numpy as np
@@ -24,7 +24,6 @@ from ncore.data import (
     ConcreteCameraModelParametersUnion,
     ConcreteLidarModelParametersUnion,
 )
-from nre.utils.misc import unpack_optional
 
 
 

@@ -13,7 +13,7 @@ from __future__ import annotations
 import queue
 
 from dataclasses import dataclass, fields, is_dataclass
-from typing import Any, List, Literal, Optional, Self, Sequence, Tuple, TypeAlias, TypeVar, Union, cast
+from typing import Any, List, Optional, Self, Sequence, Tuple, TypeAlias, TypeVar, Union, cast
 
 import numpy as np
 import numpy.typing as npt
@@ -33,7 +33,6 @@ from ncore.sensors import (
     OpenCVFisheyeCameraModel,
     OpenCVPinholeCameraModel,
 )
-from nre.utils.geometry import tquat_to_se3_matrix
 from nre.utils.misc import assert_same_type, collate_fn, to_torch, unpack_optional
 from nre.utils.profiling import ScopedTimer
 from nre.utils.sensors import (
