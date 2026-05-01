@@ -11,7 +11,7 @@
 import dataclasses
 import logging
 
-from collections import OrderedDict, defaultdict
+from collections import OrderedDict
 from dataclasses import dataclass
 from typing import cast
 
@@ -504,9 +504,9 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
         """
         ## Load cameras
 
-        # loader_key -> camera_id_name -> timestamps_us
+        # camera_id_name -> timestamps_us
         frame_timestamps_us_list: list[tuple[int, int]] = []
-        camera_frame_timestamps_us: dict[str, dict[str, torch.Tensor]] = defaultdict(dict)
+        camera_frame_timestamps_us: dict[str, torch.Tensor] = {}
         all_camera_model_parameters: dict[
             NCoreNRMDataset.ExtendedCameraId, ncore.data.ConcreteCameraModelParametersUnion
         ] = {}
@@ -559,7 +559,7 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
                 )
                 current_unique_frame_idx += 1
 
-            camera_frame_timestamps_us["main"][str(camera_id)] = torch.tensor(
+            camera_frame_timestamps_us[str(camera_id)] = torch.tensor(
                 frame_timestamps_us_list, dtype=torch.int64, device="cpu"
             )
 
@@ -598,8 +598,8 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
         # In cases where rig timestamps do not fully cover the sensor timestamps, we extend the rig using constant padding.
         # This can happen, e.g., in Gen3C setting where rig timestamps are end-of-frame ones, so start-of-frame of the 1st frame
         # is not covered.
-        sensor_min_timestamp_us = int(min((v.min().item() for v in camera_frame_timestamps_us["main"].values()))) - 1
-        sensor_max_timestamp_us = int(max((v.max().item() for v in camera_frame_timestamps_us["main"].values()))) + 1
+        sensor_min_timestamp_us = int(min((v.min().item() for v in camera_frame_timestamps_us.values()))) - 1
+        sensor_max_timestamp_us = int(max((v.max().item() for v in camera_frame_timestamps_us.values()))) + 1
         if sensor_min_timestamp_us < int(T_rig_world_timestamps_us[0].item()):
             T_rig_worlds = np.concatenate([T_rig_worlds[:1], T_rig_worlds], axis=0)
             T_rig_world_timestamps_us = np.concatenate(
@@ -614,7 +614,7 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
         rig_trajectores: list[RigTrajectories.RigTrajectory] = [
             RigTrajectories.RigTrajectory(
                 sequence_id=sequence_id_prefix + "main",
-                cameras_frame_timestamps_us=camera_frame_timestamps_us["main"],
+                cameras_frame_timestamps_us=camera_frame_timestamps_us,
                 lidars_frame_timestamps_us=lidar_frame_timestamps_us,
                 T_rig_worlds=to_torch(T_world_ref @ T_rig_worlds, device="cpu", dtype=torch.float64),
                 T_rig_world_timestamps_us=to_torch(T_rig_world_timestamps_us, device="cpu", dtype=torch.int64),
