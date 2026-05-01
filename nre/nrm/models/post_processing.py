@@ -14,7 +14,6 @@ import torch.nn as nn
 from einops import rearrange, repeat
 
 from nre.nrm.models.blocks.attention import CrossAttention, CrossAttentionWithKVProjector
-from nre.utils.misc import stop_gradient
 
 
 class PerCameraAffinePostProcessing(nn.Module):
@@ -48,8 +47,6 @@ class PerCameraAffinePostProcessing(nn.Module):
             allow_legacy_state_dict=True,
         )
         self.affine_token = nn.Parameter(torch.randn(self.embed_dim) * self.init_token_scale)
-
-        self._detach_linear_grad: bool = False
 
     def _transform_tokens_cross_attention(
         self, x: torch.Tensor, camera_idxs: torch.Tensor
@@ -100,17 +97,12 @@ class PerCameraAffinePostProcessing(nn.Module):
             affine_bias: (B, n_affine_tokens, 3)
         """
         affine: torch.Tensor = self.affine_linear(x.float())  # (B, n_affine_tokens, 3 * 4)
-        if self._detach_linear_grad:
-            affine = stop_gradient(affine)
         affine_matrix, affine_bias = affine.split([3 * 3, 3], dim=-1)
         affine_matrix = (
             rearrange(affine_matrix, "B n (a b) -> B n a b", a=3, b=3)
             + torch.eye(3, device=x.device, dtype=x.dtype)[None, None]
         )
         return affine_matrix, affine_bias
-
-    def set_detach_linear_grad(self, detach: bool):
-        self._detach_linear_grad = detach
 
     def forward(self, *args, **kwargs):
         raise NotImplementedError("Please use transform_tokens or decode_affine instead.")

@@ -125,14 +125,6 @@ def collate_fn(
             return batch
 
 
-# https://github.com/nerfstudio-project/gsplat/blob/2323de5905d5e90e035f792fe65bad0fedd413e7/gsplat/distributed.py#L10
-def stop_gradient(input: torch.Tensor) -> torch.Tensor:
-    """
-    Stop the gradient from flowing through the given tensor, but still keep the computation graph.
-    """
-    return input * 0 + input.detach()
-
-
 def list_of_dicts_to_dict_of_lists(
     list_of_dicts: List[Dict[str, Any]], no_duplicates: bool = False, singleton: bool = False
 ) -> Dict[str, List[Any]]:

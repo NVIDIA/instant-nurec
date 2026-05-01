@@ -19,7 +19,6 @@ from torch import nn
 from nre.nrm.config.nrm import BaseNRMSystemConfig, NRMConfig
 from nre.nrm.datasets.datamodule import NRMDataModule
 from nre.nrm.models.base import BaseNRM
-from nre.utils.batch import NRMDataBatch
 
 
 class BaseNRMSystem(nn.Module, ABC):
@@ -45,6 +44,3 @@ class BaseNRMSystem(nn.Module, ABC):
     @property
     def device(self) -> torch.device:
         return next(self.parameters()).device
-
-    def on_predict_batch_start(self, batch: NRMDataBatch, batch_local_idx: int, dataloader_idx: int = 0) -> None:
-        self.model.freeze_post_processing_for_predict()

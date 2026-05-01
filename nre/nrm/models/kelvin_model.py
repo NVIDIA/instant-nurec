@@ -107,11 +107,6 @@ class KelvinNRM(BaseNRM[KelvinNRMPrimitive]):
     ) -> list[DataAndRenderingBatch]:
         return [self._maybe_derive_normals_from_distance(batch) for batch in context]
 
-    def freeze_post_processing_for_predict(self) -> None:
-        """Detach the post-processing affine RGB head's linear weights for predict."""
-        if self.post_processing is not None:
-            self.post_processing.set_detach_linear_grad(True)
-
     @staticmethod
     def _grab_metainfo(
         context: list[DataAndRenderingBatch],
