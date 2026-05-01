@@ -114,7 +114,6 @@ class SensorModelComputations:
         subsample_resolution: Optional[torch.Tensor],
         subsample_rect_points_lb_cpu: Optional[torch.Tensor],
         subsample_resolution_cpu: Optional[torch.Tensor],
-        embeds: Optional[torch.nn.Embedding],  # None if enable_calib is False
         T_offset_nre_startend: Optional[torch.Tensor],
         T_sensor_world_startend_allviews: torch.Tensor,
         timestamps_startend_us_allviews: torch.Tensor,
@@ -122,11 +121,10 @@ class SensorModelComputations:
         shutter_type: ShutterType,
         unique_frame_idx: int,
         unique_frame_idx_tensor: Optional[torch.Tensor],
-        enable_calib: bool = True,
         is_lidar: bool = False,
     ) -> SensorModelComputations.PosesAndTimestampsStartendReturn:
         """
-        GPU implementation using Slang kernel for pose calibration and rolling shutter interpolation.
+        GPU implementation using Slang kernel for rolling shutter interpolation.
         """
         device = T_sensor_world_startend_allviews.device
 
@@ -141,13 +139,13 @@ class SensorModelComputations:
         # Call Slang kernel
         T_sensor_world_startend_batch, timestamps_startend_us_batch = compute_poses_and_timestamps(
             T_sensor_world_startend_allviews,
-            embeds.weight if embeds is not None else None,
+            None,  # embed_weights: standalone predict has no per-frame calibration deltas
             unique_frame_idx_tensor,
             subsample_rect_points_lb,
             subsample_resolution,
             timestamps_startend_us_allviews,
             shutter_type.value,
-            enable_calib,
+            False,  # enable_calib: dead in standalone predict (no calibration learning)
         )
 
         # Squeeze batch dimension (batch_size=1) to get single frame result
@@ -184,7 +182,6 @@ class SensorModelComputations:
     @staticmethod
     def get_poses_and_timestamps_startend(
         subsample: Optional[RectSubsampledSensor],
-        embeds: Optional[torch.nn.Embedding],
         T_offset_nre_startend: Optional[torch.Tensor],
         T_sensor_world_startend_allviews: torch.Tensor,
         timestamps_startend_us_allviews: torch.Tensor,
@@ -193,7 +190,6 @@ class SensorModelComputations:
         unique_frame_idx: int,
         unique_frame_idx_tensor: Optional[torch.Tensor],
         unique_sensor_idx_str: str,
-        enable_calib: bool = True,
         is_lidar: bool = False,
     ):
         # Standalone predict requires CUDA tensors; the compiled CPU fallback
@@ -209,7 +205,6 @@ class SensorModelComputations:
             subsample.resolution.unsqueeze(0) if subsample is not None else None,
             subsample.rect_points_lb_cpu.unsqueeze(0) if subsample is not None else None,
             subsample.resolution_cpu.unsqueeze(0) if subsample is not None else None,
-            embeds,
             T_offset_nre_startend,
             T_sensor_world_startend_allviews,
             timestamps_startend_us_allviews,
@@ -217,7 +212,6 @@ class SensorModelComputations:
             shutter_type,
             unique_frame_idx,
             unique_frame_idx_tensor,
-            enable_calib,
             is_lidar,
         )
 

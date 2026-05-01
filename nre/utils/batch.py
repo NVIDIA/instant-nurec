@@ -979,7 +979,6 @@ class CameraFreePoseViewGeometry(torch.nn.Module):
         # Maps a sensor id to a range of unique frame indices that can be used to recover the slices of
         # T_sensor_world_startend_allviews and timestamps_startend_us_allviews belonging to a specific sensor.
         sensor_ids_to_frame_range: dict[str, range],
-        enable_calib: bool = False,
     ):
         super().__init__()
         assert T_sensor_world_startend_allviews.shape[0] == timestamps_startend_us_allviews.shape[0], (
@@ -1005,22 +1004,10 @@ class CameraFreePoseViewGeometry(torch.nn.Module):
             for k in sensor_models.keys()
         }
 
-        self.enable_calib = enable_calib
-        self.embeds: torch.nn.Embedding | None = None
-        if enable_calib:
-            # Delta positions (3D) + Delta rotations (6D) = 9-D embedding space.
-            # Setup a single delta transformation per camera frame to be optimized in 9-D space.
-            # Any 9-D vector in the embedding space corresponds to an SE(3) transformation.
-            # Each SE(3) transformation will be applied to both the frame start and end poses of the same frame.
-            self.embeds = torch.nn.Embedding(T_sensor_world_startend_allviews.shape[0], 9)
-            torch.nn.init.zeros_(self.embeds.weight)
-
         self.cached_sensor_subsample: dict[tuple[Optional[RectSubsampled], int], ConcreteCameraModelsUnion] = {}
 
     @staticmethod
-    def from_rig_trajectories(
-        rig_trajectories: RigTrajectories, enable_calib: bool = False
-    ) -> CameraFreePoseViewGeometry:
+    def from_rig_trajectories(rig_trajectories: RigTrajectories) -> CameraFreePoseViewGeometry:
         """
         Initialize a `CameraFreePoseViewGeometry` from a `NCOREDataSource`.
         """
@@ -1079,7 +1066,6 @@ class CameraFreePoseViewGeometry(torch.nn.Module):
             timestamps_startend_us_allviews=torch.cat(timestamps_startend_us_allviews, dim=0),
             sensor_models=sensor_models,
             sensor_ids_to_frame_range=sensor_ids_to_frame_range,
-            enable_calib=enable_calib,
         )
 
     def get_timestamps(self, unique_frame_idx: int | None = None) -> torch.Tensor:
@@ -1131,14 +1117,12 @@ class CameraFreePoseViewGeometry(torch.nn.Module):
     def get_poses_and_timestamps_startend(
         self,
         meta: FrameMeta,
-        enable_calib: Optional[bool] = None,
     ) -> SensorModelComputations.PosesAndTimestampsStartendReturn:
         """
         Get the poses and timestamps for a given frame.
         """
         return SensorModelComputations.get_poses_and_timestamps_startend(
             subsample=meta.subsample,
-            embeds=self.embeds,
             T_offset_nre_startend=meta.T_offset_nre_startend,
             T_sensor_world_startend_allviews=self.T_sensor_world_startend_allviews,
             timestamps_startend_us_allviews=self.timestamps_startend_us_allviews,
@@ -1147,7 +1131,6 @@ class CameraFreePoseViewGeometry(torch.nn.Module):
             unique_frame_idx=meta.unique_frame_idx,
             unique_frame_idx_tensor=meta.unique_frame_idx_tensor,
             unique_sensor_idx_str=unpack_optional(meta.unique_sensor_idx_str),
-            enable_calib=enable_calib if enable_calib is not None else self.enable_calib,
             is_lidar=False,
         )
 
@@ -1156,7 +1139,6 @@ class CameraFreePoseViewGeometry(torch.nn.Module):
         self,
         data_batch: DataBatch.Camera,
         cache_sensor_params: bool = False,
-        skip_calib: bool = False,
     ) -> RenderingData:
         """
         Convert a `DataBatch.Camera` to a `RenderingData`.
@@ -1167,19 +1149,11 @@ class CameraFreePoseViewGeometry(torch.nn.Module):
         * sensor model in the subsampled domain.
         """
         if data_batch.b == 1:
-            return self._to_rendering_data_single_batch(
-                data_batch,
-                cache_sensor_params=cache_sensor_params,
-                skip_calib=skip_calib,
-            )
+            return self._to_rendering_data_single_batch(data_batch, cache_sensor_params=cache_sensor_params)
         rendering_data_list: list[RenderingData] = []
         for bidx in range(data_batch.b):
             rendering_data_list.append(
-                self._to_rendering_data_single_batch(
-                    data_batch[bidx],
-                    cache_sensor_params=cache_sensor_params,
-                    skip_calib=skip_calib,
-                )
+                self._to_rendering_data_single_batch(data_batch[bidx], cache_sensor_params=cache_sensor_params)
             )
         return RenderingData.collate_fn(rendering_data_list, device=rendering_data_list[0].rays.device)
 
@@ -1187,7 +1161,6 @@ class CameraFreePoseViewGeometry(torch.nn.Module):
         self,
         data_batch: DataBatch.Camera,
         cache_sensor_params: bool = False,
-        skip_calib: bool = False,
     ) -> RenderingData:
         """
         Internal single batch version of `to_rendering_data`.
@@ -1196,10 +1169,7 @@ class CameraFreePoseViewGeometry(torch.nn.Module):
         meta = data_batch.meta[0]
 
         with ScopedTimer("CameraFreePoseViewGeometry/to_rendering_data/get_poses_and_timestamps_startend"):
-            enable_calib = self.enable_calib and not skip_calib
-
-            # Mimic querying data stored in the rig module.
-            pose_and_timestamps_startend_return = self.get_poses_and_timestamps_startend(meta, enable_calib)
+            pose_and_timestamps_startend_return = self.get_poses_and_timestamps_startend(meta)
 
             T_sensor_world_startend = pose_and_timestamps_startend_return.T_sensor_world_startend
             timestamps_startend_us = pose_and_timestamps_startend_return.timestamps_startend_us
