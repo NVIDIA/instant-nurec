@@ -31,20 +31,14 @@ ConcreteCameraModelsUnion: TypeAlias = Union[FThetaCameraModel, OpenCVFisheyeCam
 
 
 @dataclass(kw_only=True, slots=True)
-class RectSubsampledBase:
+class RectSubsampledSensor:
     """
-    Subsampled rectangular pixel region with offset i/j and dimension height/width.
+    Subsampled rectangular pixel region with offset i/j and dimension
+    height/width, plus the GPU-side `rect_points_lb` / `resolution` tensors
+    needed for slang-kernel pose interpolation.
 
-    Note that the offset i/j and dimension height/width are relative to the scaled pixel domain. I.e., subsampling is applied first, then cropping.
-
-    The fields are:
-    - original_width: The original width of the sensor. [int]
-    - original_height: The original height of the sensor. [int]
-    - width: The width of the pixel region. [int]
-    - height: The height of the pixel region. [int]
-    - i: Optional. The offset in the x-direction. Default is 0. [int]
-    - j: Optional. The offset in the y-direction. Default is 0. [int]
-    - subsample_factor: Optional. The amount of isotropic subsampling. The larger the value is, the smaller the sampled region will be. 1 means no subsampling. Default is 1. [float]
+    Note that the offset i/j and dimension height/width are relative to the
+    scaled pixel domain. I.e., subsampling is applied first, then cropping.
     """
 
     original_width: int
@@ -55,22 +49,16 @@ class RectSubsampledBase:
     j: int = 0
     subsample_factor: float = 1.0
 
+    # Subsample-related attributes to be computed after initialization.
+    rect_points_lb: torch.Tensor = field(init=False, repr=False)
+    resolution: torch.Tensor = field(init=False, repr=False)
+
     def __post_init__(self):
         assert self.subsample_factor > 0.0, "Invalid subsample_factor value"
         assert self.i >= 0, "Invalid i value"
         assert self.j >= 0, "Invalid j value"
         assert self.width > 0, "Invalid width value"
         assert self.height > 0, "Invalid height value"
-
-
-@dataclass(kw_only=True, slots=True)
-class RectSubsampledSensor(RectSubsampledBase):
-    # Subsample-related attributes to be computed after initialization.
-    rect_points_lb: torch.Tensor = field(init=False, repr=False)
-    resolution: torch.Tensor = field(init=False, repr=False)
-
-    def __post_init__(self):
-        RectSubsampledBase.__post_init__(self)
         self.rect_points_lb = 0.5 + self.subsample_factor * torch.tensor(
             [
                 [self.i, self.j],
