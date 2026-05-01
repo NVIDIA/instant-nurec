@@ -27,7 +27,6 @@ import nre.config.parse  # noqa: F401
 
 from nre.config.base_schema import BaseConfigSchema, Field
 from nre.config.logger import LoggerConfigType
-from nre.config.trainer import infer_slurm_environment
 from nre.config.version import Version, get_version
 from nre.nrm.config.dataset import NRMSplitsConfig
 from nre.nrm.config.models import KelvinModelConfig
@@ -45,39 +44,12 @@ cmd_logger = logging.getLogger(__name__)
 
 class BaseNRMSystemConfig(BaseConfigSchema):
     """
-    Currently we only have one NRM system, and this is the base class for it.
-    In the future we might want to have different subclasses for this.
-
-    Note that this is a merge of NRE's system config, trainer config, and datamodule config for the ease of use.
+    Predict-only system config. NRE merged in trainer/datamodule config too;
+    the standalone keeps just the dataloader knobs.
     """
-
-    device_count: int = Field(
-        default=0,
-        description="Number of devices per node. If set to 0, will be inferred automatically.",
-    )
-
-    num_nodes: int = Field(
-        default=0,
-        description="Number of nodes to use for distributed training. If set to 0, will be inferred automatically.",
-    )
-
-    precision: int | str = Field(
-        description="https://lightning.ai/docs/pytorch/stable/common/trainer.html#precision",
-    )
 
     predict_num_workers: int = Field(default=0, description="Number of workers for the predict dataloader per-node.")
     predict_batch_size: int = Field(default=1, description="Batch size for the predict dataloader. Typically set to 1.")
-
-    def model_post_init(self, __context) -> None:
-        super().model_post_init(__context)
-
-        slurm_environment = infer_slurm_environment()
-
-        if self.device_count == 0:
-            self.device_count = slurm_environment.num_tasks_per_node if slurm_environment else 1
-
-        if self.num_nodes == 0:
-            self.num_nodes = slurm_environment.num_nodes if slurm_environment else 1
 
 
 class GaussiansNRMSystemConfig(BaseNRMSystemConfig):

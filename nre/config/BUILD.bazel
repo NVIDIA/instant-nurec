@@ -44,15 +44,6 @@ py_library(
 )
 
 py_library(
-    name = "pylib_trainer_config",
-    srcs = ["trainer.py"],
-    deps = [
-        pip_requirement("pydantic"),
-        ":pylib_base_schema",
-    ],
-)
-
-py_library(
     name = "pylib_base_schema",
     srcs = ["base_schema.py"],
     deps = [
@@ -80,7 +71,6 @@ py_library(
         pip_requirement("hydra-core"),
         pip_requirement("nvidia-ncore"),
         ":pylib_base_schema",
-        ":pylib_trainer_config",
         ":pylib_version",
         "//nre:pylib_reporoot",
         "//nre/utils:pylib_misc",
