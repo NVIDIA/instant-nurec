@@ -131,11 +131,11 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
 
     @dataclass
     class LoadersAndSensorsResult:
-        """Result of loading sequence loaders, aux loaders, and camera/lidar sensors for an ncore sequence."""
+        """Result of loading sequence loader, aux loader, and camera/lidar sensors for an ncore sequence."""
 
-        T_rig_worlds_with_timestamps_us: dict[str, tuple[np.ndarray, np.ndarray]]
-        sequence_loaders: dict[str, ncore.data.SequenceLoaderProtocol]
-        aux_loaders: dict[str, ncore_utils.AuxShardDataLoader]
+        T_rig_worlds_with_timestamps_us: tuple[np.ndarray, np.ndarray]
+        sequence_loader: ncore.data.SequenceLoaderProtocol
+        aux_loader: ncore_utils.AuxShardDataLoader
         camera_sensors: dict["NCoreNRMDataset.ExtendedCameraId", ncore.data.CameraSensorProtocol]
         lidar_sensors: dict[str, ncore.data.LidarSensorProtocol]
 
@@ -293,7 +293,7 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
         camera_sensors: dict[ExtendedCameraId, ncore.data.CameraSensorProtocol],
         lidar_idx_mapping: dict[UniqueFrameId, int],
         lidar_sensors: dict[str, ncore.data.LidarSensorProtocol],
-        aux_loaders: dict[str, ncore_utils.AuxShardDataLoader],
+        aux_loader: ncore_utils.AuxShardDataLoader,
         camera_subsampler: CameraSubsampler,
     ) -> DataBatch:
         """
@@ -357,47 +357,42 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
                 labels.rgb = to_torch(frame_image_array, device="cpu").unsqueeze(0)
 
                 # Load auxiliary information
-                if "main" in aux_loaders:
-                    aux_loader = aux_loaders["main"]
-                    data_camera_id = camera_id.camera_id
-                    sky_mask: np.ndarray | bool = False
-                    if aux_loader.has_semantic_segmentation(data_camera_id):
-                        semantics = np.asarray(
-                            aux_loader.get_semantic_segmentation(data_camera_id, frame_end_timestamp_us)
-                        )
-                        stuff_classes = aux_loader.get_semantic_segmentation_meta(data_camera_id)["stuff_classes"]
-                        sky_mask = semantics == stuff_classes.index("sky")
+                data_camera_id = camera_id.camera_id
+                sky_mask: np.ndarray | bool = False
+                if aux_loader.has_semantic_segmentation(data_camera_id):
+                    semantics = np.asarray(
+                        aux_loader.get_semantic_segmentation(data_camera_id, frame_end_timestamp_us)
+                    )
+                    stuff_classes = aux_loader.get_semantic_segmentation_meta(data_camera_id)["stuff_classes"]
+                    sky_mask = semantics == stuff_classes.index("sky")
 
-                        # classify sampled rays for sky and road
-                        flags |= RayFlags.VALID_SEMANTIC.value
-                        semantics = camera_subsampler.apply_frame_data(semantics)
-                        flags[semantics == stuff_classes.index("sky")] |= RayFlags.SKY_SEMANTIC.value
-                        flags[semantics == stuff_classes.index("road")] |= RayFlags.ROAD_SEMANTIC.value
-                        for vehicle_class in ["car", "truck", "bus", "train", "motorcycle", "bicycle"]:
-                            flags[semantics == stuff_classes.index(vehicle_class)] |= RayFlags.VEHICLE_SEMANTIC.value
-                        # Some egocar regions are detected in semantic segmentations.
-                        if "egocar" in stuff_classes:
-                            invalid_ego_mask |= semantics == stuff_classes.index("egocar")
-                        # (H, W) -> (1, H, W, 1)
-                        # We rely fully on flags to store semantic information, so no need to pass on labels.semantic
-                        # labels.semantic = to_torch(semantics, device="cpu")[None, ..., None]
+                    # classify sampled rays for sky and road
+                    flags |= RayFlags.VALID_SEMANTIC.value
+                    semantics = camera_subsampler.apply_frame_data(semantics)
+                    flags[semantics == stuff_classes.index("sky")] |= RayFlags.SKY_SEMANTIC.value
+                    flags[semantics == stuff_classes.index("road")] |= RayFlags.ROAD_SEMANTIC.value
+                    for vehicle_class in ["car", "truck", "bus", "train", "motorcycle", "bicycle"]:
+                        flags[semantics == stuff_classes.index(vehicle_class)] |= RayFlags.VEHICLE_SEMANTIC.value
+                    # Some egocar regions are detected in semantic segmentations.
+                    if "egocar" in stuff_classes:
+                        invalid_ego_mask |= semantics == stuff_classes.index("egocar")
 
-                    if aux_loader.has_depth(data_camera_id):
-                        # Distance map already processed by the data pre-processing stage
-                        depth = aux_loader.get_depth(data_camera_id, frame_end_timestamp_us)
-                        # For DS-based data, depth is nan/inf for sky regions, correct them to be 0.
-                        # Applied before subsampling to avoid enlarging nan regions.
-                        depth[~np.isfinite(depth) | sky_mask] = 0.0
-                        depth = camera_subsampler.apply_depth_data(depth)
-                        # (H, W) -> (1, H, W, 1)
-                        labels.metric_distance = to_torch(depth, device="cpu")[None, ..., None]
-                        depth_aux_loaded = True
+                if aux_loader.has_depth(data_camera_id):
+                    # Distance map already processed by the data pre-processing stage
+                    depth = aux_loader.get_depth(data_camera_id, frame_end_timestamp_us)
+                    # For DS-based data, depth is nan/inf for sky regions, correct them to be 0.
+                    # Applied before subsampling to avoid enlarging nan regions.
+                    depth[~np.isfinite(depth) | sky_mask] = 0.0
+                    depth = camera_subsampler.apply_depth_data(depth)
+                    # (H, W) -> (1, H, W, 1)
+                    labels.metric_distance = to_torch(depth, device="cpu")[None, ..., None]
+                    depth_aux_loaded = True
 
-                    if aux_loader.has_egomask(data_camera_id):
-                        egomask = aux_loader.get_egomask(data_camera_id, 0)
-                        egomask = camera_subsampler.apply_frame_data(egomask)
-                        egomask = ndimage.binary_dilation(egomask, iterations=self.n_camera_mask_dilation_iterations)
-                        invalid_ego_mask |= cast(np.ndarray, egomask)
+                if aux_loader.has_egomask(data_camera_id):
+                    egomask = aux_loader.get_egomask(data_camera_id, 0)
+                    egomask = camera_subsampler.apply_frame_data(egomask)
+                    egomask = ndimage.binary_dilation(egomask, iterations=self.n_camera_mask_dilation_iterations)
+                    invalid_ego_mask |= cast(np.ndarray, egomask)
 
                 # store invalid flag of pixels (usually only required in validation mode)
                 flags[invalid_ego_mask] |= RayFlags.INVALID
@@ -492,7 +487,7 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
         camera_sensors: dict[ExtendedCameraId, ncore.data.CameraSensorProtocol],
         lidar_sensors: dict[str, ncore.data.LidarSensorProtocol],
         T_world_ref: np.ndarray,
-        T_rig_worlds_with_timestamps_us: dict[str, tuple[np.ndarray, np.ndarray]],
+        T_rig_worlds_with_timestamps_us: tuple[np.ndarray, np.ndarray],
         camera_subsampler: CameraSubsampler,
     ) -> tuple[RigTrajectories, dict[UniqueFrameId, int], dict[UniqueFrameId, int]]:
         """
@@ -592,7 +587,7 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
             )
 
         # Standalone predict has a single loader keyed `"main"` (no external archives).
-        T_rig_worlds, T_rig_world_timestamps_us = T_rig_worlds_with_timestamps_us["main"]
+        T_rig_worlds, T_rig_world_timestamps_us = T_rig_worlds_with_timestamps_us
 
         # In the new batch design the sensor poses can only obtained by interpolating rig poses.
         # In cases where rig timestamps do not fully cover the sensor timestamps, we extend the rig using constant padding.
@@ -682,74 +677,58 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
             dataset_paths,
         ) = ncore_utils.parse_sequence_meta_file(ncore_json_path)
 
-        # Here poses and loaders are indexed by the sensor_id.loader_key (ncore file name), while sensors are indexed by sensor_id.
-        # NB [JH]: We should be very careful about the poses' timestamps_us -- it can be a large superset of sensor timestamps (e.g. 36s vs 10s)
-        # Poses dict contains T_rig_worlds and T_rig_worlds_timestamps_us
-        T_rig_worlds_with_timestamps_us: dict[str, tuple[np.ndarray, np.ndarray]] = {}
-        sequence_loaders: dict[str, ncore.data.SequenceLoaderProtocol] = {}
-        aux_loaders: dict[str, ncore_utils.AuxShardDataLoader] = {}
-        camera_sensors: dict[NCoreNRMDataset.ExtendedCameraId, ncore.data.CameraSensorProtocol] = {}
-        lidar_sensors: dict[str, ncore.data.LidarSensorProtocol] = {}
-
         # ShardDataLoader is logging using root. Let's suppress this information.
         (root_logger := logging.getLogger()).setLevel(logging.WARNING)
-        for camera_id in all_camera_ids:
-            # Load the ncore files. Predict-only standalone never loads from
-            # external ncore archives, so the dataset paths are the same for
-            # every camera id.
-            if (sequence_loader := sequence_loaders.get("main")) is None:
-                try:
-                    sequence_loader = sequence_loaders["main"] = ncore_utils.create_sequence_loader(
-                        dataset_paths=dataset_paths,
-                        open_consolidated=self.open_consolidated,
-                        v4_poses_component_group="default",
-                        v4_intrinsics_component_group="default",
-                        v4_masks_component_group="default",
-                        v4_cuboids_component_group="default",
-                    )
-                except FileNotFoundError as e:
-                    raise NRMDataError(f"Ncore files not found for dataset_paths {dataset_paths}.") from e
+        try:
+            sequence_loader = ncore_utils.create_sequence_loader(
+                dataset_paths=dataset_paths,
+                open_consolidated=self.open_consolidated,
+                v4_poses_component_group="default",
+                v4_intrinsics_component_group="default",
+                v4_masks_component_group="default",
+                v4_cuboids_component_group="default",
+            )
+        except FileNotFoundError as e:
+            raise NRMDataError(f"Ncore files not found for dataset_paths {dataset_paths}.") from e
 
-                # TODO: frame-pose only data might fail here as there are no rig poses and might require refined logic
-                rig_world_edge: ncore_transformations.PoseGraphInterpolator.Edge = unpack_optional(
-                    sequence_loader.pose_graph.get_edge("rig", "world"),
-                    msg="Rig-to-world poses required for rig-trajectories",
-                )
+        # NB [JH]: We should be very careful about the poses' timestamps_us -- it can be a large
+        # superset of sensor timestamps (e.g. 36s vs 10s).
+        # TODO: frame-pose-only data might fail here as there are no rig poses and might require refined logic.
+        rig_world_edge: ncore_transformations.PoseGraphInterpolator.Edge = unpack_optional(
+            sequence_loader.pose_graph.get_edge("rig", "world"),
+            msg="Rig-to-world poses required for rig-trajectories",
+        )
+        T_rig_worlds_with_timestamps_us = (
+            rig_world_edge.T_source_target,
+            unpack_optional(rig_world_edge.timestamps_us, msg="Rig-to-world pose requires to be dynamic"),
+        )
 
-                # all rig poses with timestamps
-                T_rig_worlds_with_timestamps_us["main"] = (
-                    rig_world_edge.T_source_target,
-                    unpack_optional(rig_world_edge.timestamps_us, msg="Rig-to-world pose requires to be dynamic"),
-                )
+        try:
+            aux_loader = ncore_utils.AuxShardDataLoader(
+                sequence_id=sequence_loader.sequence_id,
+                dataset_paths=dataset_paths,
+                open_consolidated=self.open_consolidated,
+            )
+        except ValueError as e:
+            raise NRMDataError(f"Failed to load auxiliary data for sequence {ncore_json_path.stem}.") from e
 
-                try:
-                    aux_loaders["main"] = ncore_utils.AuxShardDataLoader(
-                        sequence_id=sequence_loader.sequence_id,
-                        dataset_paths=dataset_paths,
-                        open_consolidated=self.open_consolidated,
-                    )
-                except ValueError as e:
-                    raise NRMDataError(f"Failed to load auxiliary data for sequence {ncore_json_path.stem}.") from e
-
-            # Load the camera sensors
-            camera_sensors[camera_id] = sequence_loader.get_camera_sensor(camera_id.camera_id)
-
-            # Load all the lidar sensors for the first time meeting a main loader.
-            # Allow multiple possibilities of lidar ids separated by semicolon.
-            if len(lidar_sensors) == 0:
-                lidar_sensors = {
-                    lidar_id: get_lidar_sensor_from_sequence_loader(
-                        sequence_loader,
-                        lidar_id_candidates=lidar_id.split(";"),
-                    )
-                    for lidar_id in self.lidar_ids
-                }
+        camera_sensors = {
+            camera_id: sequence_loader.get_camera_sensor(camera_id.camera_id) for camera_id in all_camera_ids
+        }
+        # Allow multiple possibilities of lidar ids separated by semicolon.
+        lidar_sensors = {
+            lidar_id: get_lidar_sensor_from_sequence_loader(
+                sequence_loader,
+                lidar_id_candidates=lidar_id.split(";"),
+            )
+            for lidar_id in self.lidar_ids
+        }
 
         root_logger.setLevel(logging.INFO)
         return NCoreNRMDataset.LoadersAndSensorsResult(
             T_rig_worlds_with_timestamps_us=T_rig_worlds_with_timestamps_us,
-            sequence_loaders=sequence_loaders,
-            aux_loaders=aux_loaders,
+            sequence_loader=sequence_loader,
+            aux_loader=aux_loader,
             camera_sensors=camera_sensors,
             lidar_sensors=lidar_sensors,
         )
@@ -787,18 +766,17 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
 
         loaders_sensors = self._get_loaders_and_sensors(ncore_json_path, supervision_camera_ids)
         T_rig_worlds_with_timestamps_us = loaders_sensors.T_rig_worlds_with_timestamps_us
-        sequence_loaders = loaders_sensors.sequence_loaders
-        aux_loaders = loaders_sensors.aux_loaders
+        sequence_loader = loaders_sensors.sequence_loader
+        aux_loader = loaders_sensors.aux_loader
         camera_sensors = loaders_sensors.camera_sensors
         lidar_sensors = loaders_sensors.lidar_sensors
 
         # Determine the timestamps interval to select frames from.
-        main_sequence_loader = sequence_loaders["main"]
         context_camera_frame_timestamps_us: dict[str, np.ndarray] = {}
 
         # Standalone predict always selects the full sequence range; subranges
         # were a training-time control that the predict YAML never carried.
-        main_timestamps = T_rig_worlds_with_timestamps_us["main"][1]
+        main_timestamps = T_rig_worlds_with_timestamps_us[1]
         select_intervals = [HalfClosedInterval(int(main_timestamps.min()), int(main_timestamps.max()))]
         # Intersect also with sensor timestamps (with +/- 0.1s tolerance)
         for camera_id in context_camera_ids:
@@ -849,14 +827,14 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
                 camera_sensors,
                 context_lidar_mapping,
                 lidar_sensors,
-                aux_loaders,
+                aux_loader,
                 context_camera_subsampler,
             )
         )
 
         cuboid_tracks = self._compute_cuboid_tracks(
             context_frame_batch,
-            main_sequence_loader,
+            sequence_loader,
             camera_sensors,
             lidar_sensors,
             T_world_ref,
@@ -864,7 +842,7 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
 
         meta = {
             "ncore_json_path": ncore_json_path,
-            "sequence_id": main_sequence_loader.sequence_id,
+            "sequence_id": sequence_loader.sequence_id,
         }
 
         nrm_data_batch = NRMDataBatch(
