@@ -12,10 +12,8 @@ from __future__ import annotations
 
 import inspect
 
-from typing import Any, Iterable, Iterator
+from typing import Any, Iterable
 
-import numpy as np
-import numpy.typing as npt
 import torch
 import torch.nn as nn
 
@@ -23,7 +21,6 @@ from omegaconf import DictConfig, OmegaConf
 
 from nre import __version__
 from nre.config import BaseConfigSchema
-from nre.utils.batch import DataAndRenderingBatch
 from nre.utils.misc import map_optional, strip_none_from_config
 
 
@@ -51,14 +48,6 @@ class BaseModel(nn.Module):
         """
         return {}
 
-    def update_step_train_batch_end(
-        self, epoch: int, global_step: int, batch: DataAndRenderingBatch, system, **kwargs
-    ) -> None:
-        """
-        Hook function for system, invoked at system.on_train_batch_end(), i.e. the very end of each train step.
-        """
-        pass
-
     def on_train_from_scratch_start(self, system, **kwargs) -> None:
         """
         Hook function for system, invoked at system.on_train_start() only when system.resume is False.
@@ -71,11 +60,6 @@ class BaseModel(nn.Module):
 
     def eval(self) -> BaseModel:
         return super().eval()
-
-    def serialize_to_legacy_nrend_dict(
-        self, scale: float = 1.0, offset: npt.NDArray[np.float32] = np.array([0.0, 0.0, 0.0])
-    ) -> dict[str, Any]:
-        raise NotImplementedError
 
     @torch.no_grad()
     def serialize_to_json_dict(self, with_state_dict: bool = True) -> dict[str, Any]:
@@ -137,20 +121,3 @@ class BaseModel(nn.Module):
 
         return json_dict
 
-    def get_base_model_children(self) -> Iterator[BaseModel]:
-        """Yields all children that are instances of BaseModel"""
-        for child in self.children():
-            if isinstance(child, BaseModel):
-                yield child
-
-    def configure_sharded_params_and_buffers(self) -> list[str]:
-        """Set the "sharded" flag for the parameters and buffers that are distributed across ranks, and then return the names of the parameters and buffers that are sharded."""
-        return []
-
-    @staticmethod
-    def mark_as_sharded(param: torch.Tensor) -> None:
-        setattr(param, "_sharded", True)
-
-    @staticmethod
-    def is_sharded(param: torch.Tensor) -> bool:
-        return hasattr(param, "_sharded") and param._sharded
