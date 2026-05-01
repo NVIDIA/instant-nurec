@@ -9,7 +9,6 @@
 # its affiliates is strictly prohibited.
 
 from abc import ABC, abstractmethod
-from typing import cast
 
 import torch
 import torchvision.transforms as transforms
@@ -17,7 +16,6 @@ import torchvision.transforms as transforms
 from einops import rearrange, repeat
 from torch import nn
 
-from ncore.impl.data.types import CameraModelParameters
 from nre.models.nn_extensions import TypedModuleList
 from nre.nrm.config.models import (
     KelvinModelConfig,
@@ -26,11 +24,9 @@ from nre.nrm.config.models import (
 from nre.nrm.models.blocks.attention import CrossAttentionBlock, KVProjector
 from nre.nrm.models.blocks.dpt import DPTFusionHead, DPTReassembleBlock
 from nre.nrm.models.blocks.embeds import PatchEmbed, PositionalEmbed
-from nre.nrm.models.blocks.layers import LayerNorm2d
 from nre.nrm.models.kelvin_backbone.base import KelvinLatent
-from nre.nrm.utils.cubemap import cubemap_ray_directions, unproject_to_sky_cubemap
+from nre.nrm.utils.cubemap import cubemap_ray_directions
 from nre.utils.batch import DataAndRenderingBatch
-from nre.utils.geometry import tquat_to_se3_matrix
 from nre.utils.misc import unpack_optional
 
 
@@ -50,9 +46,9 @@ class CubemapDecoderSky(KelvinSkyBase):
     """
 
     class DPTFusionUpsampler(nn.Module):
-        """Upsampler from patches to RGB values, optionally taking in skipped features (DPT-style)."""
+        """Upsampler from patches to RGB values."""
 
-        def __init__(self, embed_dim: int, dpt_dim: int, sky_cubemap_size: int, fusion_dim: int | None):
+        def __init__(self, embed_dim: int, dpt_dim: int, sky_cubemap_size: int):
             super().__init__()
             self.reassemble = DPTReassembleBlock(
                 input_dim=embed_dim,
@@ -63,7 +59,7 @@ class CubemapDecoderSky(KelvinSkyBase):
             )
             self.decode_head = DPTFusionHead(
                 input_dim=dpt_dim,
-                output_dim=fusion_dim or 3,
+                output_dim=3,
                 n_blocks=4,
                 before_conv="1-layer",
                 after_conv="2-layers",
@@ -72,28 +68,9 @@ class CubemapDecoderSky(KelvinSkyBase):
             )
             self.sky_cubemap_size = sky_cubemap_size
 
-            self.fusion_dim = fusion_dim
-            if fusion_dim is not None:
-                self.unproject = nn.Sequential(
-                    nn.Conv2d(3, fusion_dim, kernel_size=3, stride=1, padding=1),
-                    nn.ReLU(inplace=True),
-                    nn.Conv2d(fusion_dim, fusion_dim, kernel_size=3, stride=1, padding=1),
-                    LayerNorm2d(fusion_dim, eps=1e-5),
-                )
-                self.fusion_head = nn.Sequential(
-                    nn.Conv2d(2 * fusion_dim, fusion_dim, kernel_size=3, stride=1, padding=1),
-                    nn.ReLU(inplace=True),
-                    nn.Conv2d(fusion_dim, 3, kernel_size=1, stride=1, padding=0),
-                )
-
-        def forward(self, x: torch.Tensor, skip: torch.Tensor | None = None) -> torch.Tensor:
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
             x_list = self.reassemble([x] * self.reassemble.n_blocks)
-            x = self.decode_head(x_list, output_shape=(self.sky_cubemap_size, self.sky_cubemap_size))
-            if skip is not None:
-                assert self.fusion_dim is not None, "Fusion dimension must be provided if skip is provided."
-                skip = unpack_optional(self.unproject(skip))
-                x = self.fusion_head(torch.cat([x, skip], dim=1))
-            return x
+            return self.decode_head(x_list, output_shape=(self.sky_cubemap_size, self.sky_cubemap_size))
 
     class RayPatchEmbed(nn.Module):
         def __init__(self, embed_dim: int, pe_dim: int, patch_shape: tuple[int, int]):
@@ -172,8 +149,7 @@ class CubemapDecoderSky(KelvinSkyBase):
             k_norm=True,
         )
 
-        self.fusion_dim = config.fusion_dim
-        self.upsample = self.DPTFusionUpsampler(self.embed_dim, 128, self.sky_cubemap_size, self.fusion_dim)
+        self.upsample = self.DPTFusionUpsampler(self.embed_dim, 128, self.sky_cubemap_size)
 
     def decode(self, encoded_latent: KelvinLatent, batches: list[DataAndRenderingBatch]) -> torch.Tensor:
         """
@@ -188,27 +164,12 @@ class CubemapDecoderSky(KelvinSkyBase):
 
         batch_rgbs: list[torch.Tensor] = []
         batch_rays: list[torch.Tensor] = []
-        batch_skips: list[torch.Tensor] = []
         for batch in batches:
             data = unpack_optional(batch.data.camera)
             rendering = unpack_optional(unpack_optional(batch.rendering).camera)
             rgb = unpack_optional(data.labels.rgb)
-
             batch_rgbs.append(rgb)
             batch_rays.append(rendering.rays[..., 3:])
-            if self.fusion_dim is not None:
-                batch_skips.append(
-                    unproject_to_sky_cubemap(
-                        self.sky_cubemap_size,
-                        tquat_to_se3_matrix(rendering.poses_tquat_startend[:, 1])[:, :3, :3],
-                        [
-                            cast(CameraModelParameters, sensor_model)
-                            for sensor_model in rendering.sensor_model_parameters
-                        ],
-                        rgb,
-                        None,
-                    )[0]
-                )
 
         # KV = backbone + RGB + Ray
         rgbs_in = torch.stack(batch_rgbs, dim=0)
@@ -229,17 +190,12 @@ class CubemapDecoderSky(KelvinSkyBase):
         for block in self.blocks:
             queries = block(queries, k, v)
 
-        # Upsample with optional skip connection
-        skip: torch.Tensor | None = None
         with torch.autocast("cuda", enabled=False):
             queries = rearrange(queries.float(), "B (F h w) C -> (B F) h w C", F=6, h=s, w=s)
-            if self.fusion_dim is not None:
-                skip = torch.stack(batch_skips, dim=0)
-                skip = rearrange(skip.float(), "B F h w C -> (B F) C h w")
             if self.config.checkpointing:
-                queries = torch.utils.checkpoint.checkpoint(self.upsample, queries, skip=skip, use_reentrant=False)
+                queries = torch.utils.checkpoint.checkpoint(self.upsample, queries, use_reentrant=False)
             else:
-                queries = self.upsample(queries, skip=skip)
+                queries = self.upsample(queries)
             queries = rearrange(queries, "(B F) C H W -> B F H W C", F=6)
             queries = torch.clamp(queries, min=-1.0, max=1.0) * 0.5 + 0.5
 

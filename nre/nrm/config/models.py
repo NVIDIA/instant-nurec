@@ -107,7 +107,6 @@ class KelvinSkyCubemapDecoderConfig(BaseConfigSchema):
     cubemap_size: int
     embed_dim: int
     depth: int
-    fusion_dim: int | None = Field(default=None, description="Dimension of the fusion layer")
     checkpointing: bool = Field(default=False, description="Whether to use checkpointing for the cubemap decoder")
 
 

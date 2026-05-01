@@ -80,7 +80,6 @@ model:
     cubemap_size: 448
     embed_dim: 384
     depth: 1
-    fusion_dim: null
     checkpointing: true
   patch_shape:
     - 14
