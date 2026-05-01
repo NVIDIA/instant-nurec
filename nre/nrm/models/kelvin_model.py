@@ -8,7 +8,6 @@ from dataclasses import replace
 from itertools import chain
 from typing import Any, Iterator, Optional
 
-import numpy as np
 import torch
 
 from einops import rearrange
