@@ -54,24 +54,6 @@ class CameraSubsamplerConfig(BaseConfigSchema):
 class BaseNCoreNRMDatasetConfig(BaseConfigSchema):
     """Base config for NCore-based datasets. Subclasses must define `name`."""
 
-    # V4 component group names
-    poses_component_group: str = Field(
-        description="Name of the V4 component group for poses",
-        default="default",
-    )
-    intrinsics_component_group: str = Field(
-        description="Name of the V4 component group for intrinsics",
-        default="default",
-    )
-    masks_component_group: str = Field(
-        description="Name of the V4 component group for masks",
-        default="default",
-    )
-    cuboids_component_group: str = Field(
-        description="Name of the V4 component group for cuboids",
-        default="default",
-    )
-
     # Deprecated support for old configs -- TODO [JH]: to be removed in the future.
     ncore_json_list_path: str = Field(
         description="The path to a file that contains the list of sequence meta json files to load.",

@@ -194,10 +194,6 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
         # V3 sequence loader parameters
 
         # V4 sequence loader parameters
-        self.poses_component_group: str = config.poses_component_group
-        self.intrinsics_component_group: str = config.intrinsics_component_group
-        self.masks_component_group: str = config.masks_component_group
-        self.cuboids_component_group: str = config.cuboids_component_group
 
         # camera_ids and lidar_ids determine the unique sensor indices within this dataset.
         # [Note that when co-training on multiple datasets, it is currently fine to share index space since it's only used for distinguishing sensors.]
@@ -777,10 +773,10 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
                     sequence_loader = sequence_loaders[camera_id.loader_key] = ncore_utils.create_sequence_loader(
                         dataset_paths=current_dataset_paths,
                         open_consolidated=self.open_consolidated,
-                        v4_poses_component_group=self.poses_component_group,
-                        v4_intrinsics_component_group=self.intrinsics_component_group,
-                        v4_masks_component_group=self.masks_component_group,
-                        v4_cuboids_component_group=self.cuboids_component_group,
+                        v4_poses_component_group="default",
+                        v4_intrinsics_component_group="default",
+                        v4_masks_component_group="default",
+                        v4_cuboids_component_group="default",
                     )
                 except FileNotFoundError as e:
                     raise NRMDataError(
