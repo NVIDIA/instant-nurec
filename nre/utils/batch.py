@@ -524,25 +524,18 @@ class CameraFrameLabels:
 class LidarFrameLabels:
     """Labels for a lidar frame.
 
+    Predict-only standalone keeps just `flags` and `distance`; the NRE-side
+    `intensity`, `raydrop`, `sparse_rays`, `sparse_timestamps`,
+    `sparse_elements` fields were defaulted to None by the dataset and never
+    read elsewhere (Phase 1 step 4.3).
+
     The fields are:
     - flags: Optional. Bitmask integer value (see RayFlags). Default is None. [Tensor[int32]]. (B, height, width, 1).
     - distance: Optional. Metric ray-depth in NRE scale (not z-depth). Default is None. [Tensor[float32]]. (B, height, width, 1).
-    - intensity: Optional. Intensity of the lidar response. Default is None. [Tensor[float32]]. (B, height, width, 1).
-    - raydrop: Optional. The possiblity that the ray should be dropped. Default is None. [Tensor[float32]]. (B, height, width, 1).
-    - sparse_rays: Optional. The rays from the lidar points. Default is None. [Tensor[float32]]. (B, n_sparse_rays, 6).
-    - sparse_timestamps: Optional. The timestamps of the lidar points. Default is None. [Tensor[int64]]. (B, n_sparse_rays, 1).
-    - sparse_elements: Optional. The elements (row, col) of the lidar points. Default is None. [Tensor[int64]]. (B, n_sparse_rays, 2).
     """
 
     flags: torch.Tensor | None = None
     distance: torch.Tensor | None = None
-    intensity: torch.Tensor | None = None
-    raydrop: torch.Tensor | None = None
-
-    # To support cases where rays are computed from the lidar points.
-    sparse_rays: torch.Tensor | None = None
-    sparse_timestamps: torch.Tensor | None = None
-    sparse_elements: torch.Tensor | None = None
 
     def __post_init__(self):
         if self.flags is not None:
@@ -553,31 +546,6 @@ class LidarFrameLabels:
                 "Distance must be a 4D tensor (B, height, width, 1)"
             )
             assert self.distance.dtype == torch.float32, "Distance must be a float32 tensor"
-        if self.intensity is not None:
-            assert self.intensity.ndim == 4 and self.intensity.shape[3] == 1, (
-                "Intensity must be a 4D tensor (B, height, width, 1)"
-            )
-            assert self.intensity.dtype == torch.float32, "Intensity must be a float32 tensor"
-        if self.raydrop is not None:
-            assert self.raydrop.ndim == 4 and self.raydrop.shape[3] == 1, (
-                "Raydrop must be a 4D tensor (B, height, width, 1)"
-            )
-            assert self.raydrop.dtype == torch.float32, "Raydrop must be a float32 tensor"
-        if self.sparse_rays is not None:
-            assert self.sparse_rays.ndim == 3 and self.sparse_rays.shape[2] == 6, (
-                "Rays must be a 4D tensor (B, n_sparse_rays, 6)"
-            )
-            assert self.sparse_rays.dtype == torch.float32, "Rays must be a float32 tensor"
-        if self.sparse_timestamps is not None:
-            assert self.sparse_timestamps.ndim == 3 and self.sparse_timestamps.shape[2] == 1, (
-                "Timestamps must be a 4D tensor (B, n_sparse_rays, 1)"
-            )
-            assert self.sparse_timestamps.dtype == torch.int64, "Timestamps must be a int64 tensor"
-        if self.sparse_elements is not None:
-            assert self.sparse_elements.ndim == 3 and self.sparse_elements.shape[2] == 2, (
-                "Elements must be a 4D tensor (B, n_sparse_rays, 2)"
-            )
-            assert self.sparse_elements.dtype == torch.int64, "Elements must be a int64 tensor"
 
     @property
     def b(self) -> int | None:
@@ -627,24 +595,12 @@ class LidarFrameLabels:
         return cls(
             flags=collate_fn([item.flags for item in seq], device),
             distance=collate_fn([item.distance for item in seq], device),
-            intensity=collate_fn([item.intensity for item in seq], device),
-            raydrop=collate_fn([item.raydrop for item in seq], device),
-            sparse_rays=collate_fn([item.sparse_rays for item in seq], device),
-            sparse_timestamps=collate_fn([item.sparse_timestamps for item in seq], device),
-            sparse_elements=collate_fn([item.sparse_elements for item in seq], device),
         )
 
     def to(self, *args, **kwargs) -> Self:
         return self.__class__(
             flags=self.flags.to(*args, **kwargs) if self.flags is not None else None,
             distance=self.distance.to(*args, **kwargs) if self.distance is not None else None,
-            intensity=self.intensity.to(*args, **kwargs) if self.intensity is not None else None,
-            raydrop=self.raydrop.to(*args, **kwargs) if self.raydrop is not None else None,
-            sparse_rays=self.sparse_rays.to(*args, **kwargs) if self.sparse_rays is not None else None,
-            sparse_timestamps=self.sparse_timestamps.to(*args, **kwargs)
-            if self.sparse_timestamps is not None
-            else None,
-            sparse_elements=self.sparse_elements.to(*args, **kwargs) if self.sparse_elements is not None else None,
         )
 
     def __getitem__(self, item: Union[int, slice, torch.Tensor]) -> Self:
@@ -655,11 +611,6 @@ class LidarFrameLabels:
         return self.__class__(
             flags=self.flags[item] if self.flags is not None else None,
             distance=self.distance[item] if self.distance is not None else None,
-            intensity=self.intensity[item] if self.intensity is not None else None,
-            raydrop=self.raydrop[item] if self.raydrop is not None else None,
-            sparse_rays=self.sparse_rays[item] if self.sparse_rays is not None else None,
-            sparse_timestamps=self.sparse_timestamps[item] if self.sparse_timestamps is not None else None,
-            sparse_elements=self.sparse_elements[item] if self.sparse_elements is not None else None,
         )
 
 
