@@ -820,7 +820,6 @@ class NCoreNRMDataset(BaseNRMIndexableDataset):
                             sequence_id=sequence_loader.sequence_id,
                             dataset_paths=current_dataset_paths,
                             open_consolidated=self.open_consolidated,
-                            signal_override_paths={},
                         )
                 except ValueError as e:
                     raise NRMDataError(f"Failed to load auxiliary data for sequence {ncore_json_path.stem}.") from e

@@ -58,12 +58,9 @@ class AuxShardDataLoader:
         sequence_id: str,
         dataset_paths: list[Path] | list[UPath],
         open_consolidated=True,
-        signal_override_paths: dict[str, UPath] | None = None,
     ) -> None:
         ## collect store candidate paths for a given sequence
         store_paths: set[UPath] = set()
-        signal_override_paths = signal_override_paths or {}
-        matched_override_keys: set[str] = set()
 
         # inferred store paths from data shard paths
         for dataset_path in dataset_paths:
@@ -75,7 +72,6 @@ class AuxShardDataLoader:
 
             # find matching stores paths
             for path in dataset_path.parent.iterdir():
-                path_signal_name: str | None = None
                 if path.is_file():
                     if not path.name.endswith(".zarr.itar"):
                         # not a supported file-based store format
@@ -89,7 +85,6 @@ class AuxShardDataLoader:
                         # backwards-compatibility <session-shard>-annotations.zarr.itar
                         path.name.startswith(dataset_base_name + "-annotations")
                     ):
-                        path_signal_name = path.name.split(".")[-3] if path.name.endswith(".zarr.itar") else None
                         store_paths.add(path)
                 elif path.is_dir():
                     if not path.name.endswith(".zarr"):
@@ -99,26 +94,7 @@ class AuxShardDataLoader:
                     if path.name.startswith(
                         dataset_base_name + ".aux."
                     ):  # new-style aux data <session-shard>.aux.<signal>.zarr
-                        path_signal_name = path.name.split(".")[-2]
                         store_paths.add(path)
-
-                # Replace store path with the overridden path if it exists
-                if path_signal_name is not None and path_signal_name in signal_override_paths:
-                    if path in store_paths:
-                        store_paths.remove(path)
-                    store_paths.add(signal_override_paths[path_signal_name])
-                    matched_override_keys.add(path_signal_name)
-
-        # Warn about any signal_override_paths entries that did not match a native aux store.
-        # These overrides are silently dropped (they have no effect), so surface them to the user
-        # without promoting the silent drop into a hard failure.
-        for unmatched_key in sorted(set(signal_override_paths.keys()) - matched_override_keys):
-            logging.warning(
-                "signal_override_paths entry %r -> %s had no effect: no native aux store matches this signal name for sequence %r.",
-                unmatched_key,
-                signal_override_paths[unmatched_key],
-                sequence_id,
-            )
 
         ## load stores concurrently
         self.aux_shard_stores: list[zarr.storage.Store] = []
