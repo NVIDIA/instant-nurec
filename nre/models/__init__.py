@@ -8,11 +8,9 @@
 # from instant_nurec.cli; dropping them brings the codebase closer to the
 # 15K-LOC target.
 
-from nre.models.nn_extensions import LieGroupParameter
 from nre.models.nrenderable import NRenderableModel
 
 
 __all__ = [
-    "LieGroupParameter",
     "NRenderableModel",
 ]
