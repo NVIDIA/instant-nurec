@@ -1151,7 +1151,6 @@ class CameraFreePoseViewGeometry(torch.nn.Module):
         self,
         meta: FrameMeta,
         enable_calib: Optional[bool] = None,
-        enable_torch_compile: bool = False,
     ) -> SensorModelComputations.PosesAndTimestampsStartendReturn:
         """
         Get the poses and timestamps for a given frame.
@@ -1169,7 +1168,6 @@ class CameraFreePoseViewGeometry(torch.nn.Module):
             unique_sensor_idx_str=unpack_optional(meta.unique_sensor_idx_str),
             enable_calib=enable_calib if enable_calib is not None else self.enable_calib,
             is_lidar=False,
-            enable_torch_compile=enable_torch_compile,
         )
 
     @ScopedTimer("CameraFreePoseViewGeometry/to_rendering_data")
@@ -1178,7 +1176,6 @@ class CameraFreePoseViewGeometry(torch.nn.Module):
         data_batch: DataBatch.Camera,
         cache_sensor_params: bool = False,
         skip_calib: bool = False,
-        enable_torch_compile: bool = False,
     ) -> RenderingData:
         """
         Convert a `DataBatch.Camera` to a `RenderingData`.
@@ -1193,27 +1190,23 @@ class CameraFreePoseViewGeometry(torch.nn.Module):
                 data_batch,
                 cache_sensor_params=cache_sensor_params,
                 skip_calib=skip_calib,
-                enable_torch_compile=enable_torch_compile,
             )
-        else:
-            rendering_data_list: list[RenderingData] = []
-            for bidx in range(data_batch.b):
-                rendering_data_list.append(
-                    self._to_rendering_data_single_batch(
-                        data_batch[bidx],
-                        cache_sensor_params=cache_sensor_params,
-                        skip_calib=skip_calib,
-                        enable_torch_compile=enable_torch_compile,
-                    )
+        rendering_data_list: list[RenderingData] = []
+        for bidx in range(data_batch.b):
+            rendering_data_list.append(
+                self._to_rendering_data_single_batch(
+                    data_batch[bidx],
+                    cache_sensor_params=cache_sensor_params,
+                    skip_calib=skip_calib,
                 )
-            return RenderingData.collate_fn(rendering_data_list, device=rendering_data_list[0].rays.device)
+            )
+        return RenderingData.collate_fn(rendering_data_list, device=rendering_data_list[0].rays.device)
 
     def _to_rendering_data_single_batch(
         self,
         data_batch: DataBatch.Camera,
         cache_sensor_params: bool = False,
         skip_calib: bool = False,
-        enable_torch_compile: bool = False,
     ) -> RenderingData:
         """
         Internal single batch version of `to_rendering_data`.
@@ -1225,9 +1218,7 @@ class CameraFreePoseViewGeometry(torch.nn.Module):
             enable_calib = self.enable_calib and not skip_calib
 
             # Mimic querying data stored in the rig module.
-            pose_and_timestamps_startend_return = self.get_poses_and_timestamps_startend(
-                meta, enable_calib, enable_torch_compile=enable_torch_compile
-            )
+            pose_and_timestamps_startend_return = self.get_poses_and_timestamps_startend(meta, enable_calib)
 
             T_sensor_world_startend = pose_and_timestamps_startend_return.T_sensor_world_startend
             timestamps_startend_us = pose_and_timestamps_startend_return.timestamps_startend_us
@@ -1437,14 +1428,14 @@ class NRMDataBatch:
                 camera_rendering_data = (
                     CameraFreePoseViewGeometry.from_rig_trajectories(rig)
                     .to(device=device)
-                    .to_rendering_data(data.data.camera.to(device), cache_sensor_params=True, enable_torch_compile=True)
+                    .to_rendering_data(data.data.camera.to(device), cache_sensor_params=True)
                     if data.data.camera is not None
                     else None
                 )
                 lidar_rendering_data = (
                     LidarFreePoseViewGeometry.from_rig_trajectories(rig)
                     .to(device=device)
-                    .to_rendering_data(data.data.lidar.to(device), cache_sensor_params=True, enable_torch_compile=True)
+                    .to_rendering_data(data.data.lidar.to(device), cache_sensor_params=True)
                     if data.data.lidar is not None
                     else None
                 )

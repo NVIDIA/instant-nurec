@@ -45,7 +45,6 @@ py_library(
         pip_requirement("nvidia-ncore"),
         "//libs/sensors:pose_calib_kernels",
         "//nre/utils:pylib_geometry",
-        "//nre/utils:pylib_torch_compile",
     ],
 )
 

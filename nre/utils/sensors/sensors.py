@@ -25,11 +25,6 @@ from ncore.sensors import (
     OpenCVFisheyeCameraModel,
     OpenCVPinholeCameraModel,
 )
-from nre.utils.geometry import (
-    rotation_6d_to_matrix,
-)
-from nre.utils.misc import unpack_optional
-from nre.utils.torch_compile import TorchCompile
 
 
 ConcreteCameraModelsUnion: TypeAlias = Union[FThetaCameraModel, OpenCVFisheyeCameraModel, OpenCVPinholeCameraModel]
@@ -106,135 +101,12 @@ class RectSubsampledSensor(RectSubsampledBase):
 
 
 class SensorModelComputations:
-    @staticmethod
-    @TorchCompile.conditional(fullgraph=True, dynamic=True)
-    def compute_poses_calib(T_sensor_world_startend: torch.Tensor, pose_deltas: torch.Tensor) -> torch.Tensor:
-        dx, drot = torch.split(pose_deltas, [3, 6], dim=-1)
-        rot = rotation_6d_to_matrix(drot)  # (* 3, 3)
-
-        # The single per-frame pose delta needs to be broadcasted to both start and end poses.
-        # If unique_frame_idx is not provided, T_sensor_world_startend is (N, 2, 4, 4)) and rot is (N, 3, 3),
-        # so this requires adding a dimension for start-end pairs to broadcast rot and dx to start/end poses.
-        if T_sensor_world_startend.ndim == 4:
-            rot = rot.unsqueeze(1)  # (N, 3, 3) -> (N, 1, 3, 3), to be broadcasted to (N, 2, 3, 3) below
-            dx = dx.unsqueeze(1)  # (N, 3) -> (N, 1, 3), to be broadcasted to (N, 2, 3) below
-
-        transform = torch.broadcast_to(
-            torch.eye(4, device=pose_deltas.device, dtype=pose_deltas.dtype), T_sensor_world_startend.shape
-        ).clone()  # (*, 4, 4)
-        transform[..., :3, :3] = rot  # rot is broadcasted (N,1,3,3) -> (N,2,3,3) when 4-dimensional
-        transform[..., :3, 3] = dx  # dx is broadcasted (N,1,3) -> (N,2,3) when 4-dimensional
-
-        # There is only one delta transformation per frame, applied to both the frame start and end poses here.
-        # The order T_sensor_world_startend @ transform implies that the transformation is applied in camera space.
-        return torch.matmul(T_sensor_world_startend, transform)  # (*, 4, 4)
-
-    @staticmethod
-    def get_poses_calib(
-        embeds: Optional[torch.nn.Embedding],
-        T_sensor_world_startend_allviews: torch.Tensor,
-        unique_frame_idx: Optional[int] = None,
-        unique_frame_idx_tensor: Optional[torch.Tensor] = None,
-        enable_calib: bool = True,
-        enable_torch_compile: bool = False,
-    ) -> torch.Tensor:
-        """
-        Get the calibrated pose for a given frame index.
-
-        If enable_calib is False, return the raw pose.
-
-        If unique_frame_idx is None, return all poses.
-        """
-        device = T_sensor_world_startend_allviews.device
-        has_unique_frame_idx = unique_frame_idx is not None and unique_frame_idx != -1
-
-        T_sensor_world_startend = (
-            T_sensor_world_startend_allviews[unique_frame_idx]
-            if has_unique_frame_idx
-            else T_sensor_world_startend_allviews
-        )
-
-        if enable_calib:
-            assert embeds is not None
-            frame_idx = (
-                unique_frame_idx_tensor
-                if has_unique_frame_idx
-                else torch.arange(len(T_sensor_world_startend_allviews), device=device)
-            )
-            poses_deltas = embeds(frame_idx)  # (N, 9)
-            T_sensor_world_startend = SensorModelComputations.compute_poses_calib(
-                T_sensor_world_startend, poses_deltas, enable_torch_compile=enable_torch_compile
-            )
-        else:
-            # To make torch autograd happy, we still hook the embeds into the autograd graph
-            if embeds is not None:
-                zero = embeds(torch.tensor(0, device=device)).sum() * 0.0
-                T_sensor_world_startend = T_sensor_world_startend + zero
-
-        return T_sensor_world_startend
-
     @dataclass
     class PosesAndTimestampsStartendReturn:
         T_sensor_world_startend: torch.Tensor
         timestamps_startend_us: torch.Tensor  # (2,)
         timestamps_startend_us_gpu: torch.Tensor  # (1, 2)
         timestamps_startend_us_cpu: torch.Tensor  # (1, 2)
-
-    @staticmethod
-    # Torch compiled function at this level is suspected to provoke errors in multi-gpu
-    # @TorchCompile.conditional(fullgraph=True, dynamic=True)
-    def _get_poses_and_timestamps_startend_compiled(
-        subsample_rect_points_lb: Optional[torch.Tensor],
-        subsample_resolution: Optional[torch.Tensor],
-        embeds: Optional[torch.nn.Embedding],
-        T_offset_nre_startend: Optional[torch.Tensor],
-        T_sensor_world_startend_allviews: torch.Tensor,
-        timestamps_startend_us_allviews: torch.Tensor,
-        sensor_model_shutter_type_if_not_lidar: Optional[ShutterType],
-        unique_frame_idx: int,
-        unique_frame_idx_tensor: Optional[torch.Tensor],
-        enable_calib: bool = True,
-        is_lidar: bool = False,
-        enable_torch_compile: bool = False,
-    ) -> SensorModelComputations.PosesAndTimestampsStartendReturn:
-        """
-        Getter to request startend sensor poses and timestamps for a given frame index and sensor index.
-        """
-        T_sensor_world_startend = SensorModelComputations.get_poses_calib(
-            embeds,
-            T_sensor_world_startend_allviews,
-            unique_frame_idx,
-            unique_frame_idx_tensor,
-            enable_calib,
-            enable_torch_compile=enable_torch_compile,
-        )
-        timestamps_startend_us = timestamps_startend_us_allviews[unique_frame_idx]
-        if subsample_rect_points_lb is not None and subsample_resolution is not None:
-            if is_lidar:
-                raise NotImplementedError("subsample on poses and timestamps is not supported for Lidar")
-            else:
-                sensor_model_shutter_type = unpack_optional(sensor_model_shutter_type_if_not_lidar)
-                T_sensor_world_startend, timestamps_startend_us = (
-                    CameraModelComputations.apply_rect_subsampled_to_camera_rolling_shutter(
-                        subsample_rect_points_lb,
-                        subsample_resolution,
-                        sensor_model_shutter_type,
-                        T_sensor_world_startend,
-                        timestamps_startend_us,
-                        enable_torch_compile=enable_torch_compile,
-                    )
-                )
-
-        timestamps_startend_us_cpu = timestamps_startend_us.unsqueeze(0).clone().cpu()
-
-        return SensorModelComputations.PosesAndTimestampsStartendReturn(
-            T_sensor_world_startend=T_sensor_world_startend
-            if T_offset_nre_startend is None
-            else T_offset_nre_startend @ T_sensor_world_startend,
-            timestamps_startend_us=timestamps_startend_us,
-            timestamps_startend_us_gpu=timestamps_startend_us.unsqueeze(0),
-            timestamps_startend_us_cpu=timestamps_startend_us_cpu,
-        )
 
     @staticmethod
     def _get_poses_and_timestamps_startend_slang(
@@ -323,45 +195,30 @@ class SensorModelComputations:
         unique_sensor_idx_str: str,
         enable_calib: bool = True,
         is_lidar: bool = False,
-        enable_torch_compile: bool = False,
     ):
+        # Standalone predict requires CUDA tensors; the compiled CPU fallback
+        # was dropped in Phase 1 step 4.3.
+        assert T_sensor_world_startend_allviews.is_cuda, (
+            "get_poses_and_timestamps_startend requires CUDA tensors in the standalone predict pipeline."
+        )
         shutter_type = (
             ShutterType.GLOBAL if is_lidar else cast(ShutterType, sensor_models[unique_sensor_idx_str].shutter_type)
         )
-
-        # GPU path: use Slang kernel for CUDA tensors
-        if T_sensor_world_startend_allviews.is_cuda:
-            return SensorModelComputations._get_poses_and_timestamps_startend_slang(
-                subsample.rect_points_lb.unsqueeze(0) if subsample is not None else None,
-                subsample.resolution.unsqueeze(0) if subsample is not None else None,
-                subsample.rect_points_lb_cpu.unsqueeze(0) if subsample is not None else None,
-                subsample.resolution_cpu.unsqueeze(0) if subsample is not None else None,
-                embeds,
-                T_offset_nre_startend,
-                T_sensor_world_startend_allviews,
-                timestamps_startend_us_allviews,
-                timestamps_startend_us_allviews_cpu,
-                shutter_type,
-                unique_frame_idx,
-                unique_frame_idx_tensor,
-                enable_calib,
-                is_lidar,
-            )
-
-        # CPU fallback: use PyTorch reference implementation
-        return SensorModelComputations._get_poses_and_timestamps_startend_compiled(
-            subsample.rect_points_lb if subsample is not None else None,
-            subsample.resolution if subsample is not None else None,
+        return SensorModelComputations._get_poses_and_timestamps_startend_slang(
+            subsample.rect_points_lb.unsqueeze(0) if subsample is not None else None,
+            subsample.resolution.unsqueeze(0) if subsample is not None else None,
+            subsample.rect_points_lb_cpu.unsqueeze(0) if subsample is not None else None,
+            subsample.resolution_cpu.unsqueeze(0) if subsample is not None else None,
             embeds,
             T_offset_nre_startend,
             T_sensor_world_startend_allviews,
             timestamps_startend_us_allviews,
-            shutter_type if not is_lidar else None,
+            timestamps_startend_us_allviews_cpu,
+            shutter_type,
             unique_frame_idx,
             unique_frame_idx_tensor,
             enable_calib,
             is_lidar,
-            enable_torch_compile=enable_torch_compile,
         )
 
 
