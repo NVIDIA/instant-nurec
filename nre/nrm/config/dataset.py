@@ -110,97 +110,6 @@ class SupervisionFrameBatchParamsConfig(BaseConfigSchema):
     )
 
 
-class AugmentationItemConfig(BaseConfigSchema):
-    values: list[Any] = Field(description="List of values to sample from")
-    weights: list[float] = Field(description="Weights for the values")
-    start_epoch: int = Field(description="Epoch from which this augmentation tier is active (inclusive).")
-
-    @model_validator(mode="after")
-    def _validate_values_weights_lengths(self) -> Self:
-        if len(self.values) != len(self.weights):
-            raise ValueError(
-                f"AugmentationItemConfig requires len(values) == len(weights), "
-                f"got len(values)={len(self.values)} and len(weights)={len(self.weights)}."
-            )
-        return self
-
-    def sample_value(self, rng: np.random.Generator) -> Any:
-        """Sample one value from this item according to its weights."""
-        # Avoid advancing RNG state if there's only one value.
-        if len(self.values) == 1:
-            return self.values[0]
-        weights = np.asarray(self.weights, dtype=np.float64)
-        weights = weights / weights.sum()
-        idx = rng.choice(len(self.values), p=weights)
-        return self.values[idx]
-
-
-class AugmentationsConfig(BaseConfigSchema):
-    """Only includes implemented augmentation features: camera_subsampler and supervision_frame_resolution."""
-
-    camera_subsampler: Dict[str, AugmentationItemConfig] | None = Field(
-        default=None,
-        description="Tier name (e.g. 'low_res', 'high_res') -> augmentation item for the camera subsampler.",
-    )
-    context_sensor_idxs: Dict[str, AugmentationItemConfig] | None = Field(
-        default=None,
-        description="Tier name -> unique sensor index to be sub-selected from the context cameras.",
-    )
-    context_n_frames_per_sample: Dict[str, AugmentationItemConfig] | None = Field(
-        default=None,
-        description="Tier name -> number of frames to sample from the context cameras.",
-    )
-    supervision_frame_resolution: Dict[str, AugmentationItemConfig] | None = Field(
-        default=None,
-        description="Tier name -> augmentation item for the supervision frame resolution.",
-    )
-    max_context_pixels: int | None = Field(
-        default=None,
-        description="Maximum number of context pixels to sample from the context cameras. This is checked during the concretization step, and if "
-        "the total number of pixels exceeds this value, will re-sample another configuration from the tier.",
-    )
-
-    @model_validator(mode="after")
-    def _validate_tiers_cover_epoch_zero(self) -> Self:
-        """Every tier group must include at least one tier with start_epoch <= 0, so
-        `pick_active_tier` has a defined result at the beginning of training."""
-        for field_name, tiers in (
-            ("camera_subsampler", self.camera_subsampler),
-            ("supervision_frame_resolution", self.supervision_frame_resolution),
-        ):
-            if tiers is None or not tiers:
-                continue
-            min_start = min(tier.start_epoch for tier in tiers.values())
-            if min_start > 0:
-                raise ValueError(
-                    f"AugmentationsConfig.{field_name} must contain a tier with start_epoch <= 0 "
-                    f"(so it is active at epoch 0), but the minimum start_epoch among the "
-                    f"provided tiers is {min_start}. Lower the start_epoch of one tier (typically "
-                    f"the 'baseline' tier) to 0 or a negative value."
-                )
-        return self
-
-    @property
-    def is_empty(self) -> bool:
-        return (
-            self.camera_subsampler is None
-            and self.supervision_frame_resolution is None
-            and self.context_sensor_idxs is None
-            and self.context_n_frames_per_sample is None
-        )
-
-    def pick_active_tier(
-        self, tiers: Dict[str, AugmentationItemConfig] | None, epoch: int
-    ) -> tuple[str, AugmentationItemConfig] | None:
-        """Pick the tier active at this epoch: max(start_epoch) among tiers with start_epoch <= epoch. Returns None if tiers is None or no tier is active."""
-        if tiers is None:
-            return None
-        active = [(k, v) for k, v in tiers.items() if v.start_epoch <= epoch]
-        if not active:
-            return None
-        return max(active, key=lambda kv: kv[1].start_epoch)
-
-
 class BaseNCoreNRMDatasetConfig(BaseConfigSchema):
     """Base config for NCore-based datasets. Subclasses must define `name`."""
 
@@ -302,10 +211,6 @@ class BaseNCoreNRMDatasetConfig(BaseConfigSchema):
         description="Whether to pre-compute the rendering data (e.g. rays) in the dataloader (CPU). Turning this off will significantly reduce data loader memory consumption.",
     )
 
-    augmentations: AugmentationsConfig | None = Field(
-        default=None, description="Augmentations to apply to the dataset."
-    )
-
     cache_loaders_and_sensors: bool = Field(
         default=False,
         description="If True, cache the result of _get_loaders_and_sensors (one entry keyed by ncore_json_path). "
@@ -328,87 +233,12 @@ class BaseNCoreNRMDatasetConfig(BaseConfigSchema):
         if self.supervision_frame_batch.camera_subsampler is None:
             self.supervision_frame_batch.camera_subsampler = self.camera_subsampler
 
-    @property
-    def is_concrete(self) -> bool:
-        return self.augmentations is None or self.augmentations.is_empty
-
     def concretize(self, epoch: int, rng: np.random.Generator) -> Self:
-        if self.is_concrete:
-            return self
-        aug = unpack_optional(self.augmentations)
-
-        max_retries = 16
-        for _ in range(max_retries):
-            updates: dict[str, Any] = {"augmentations": None}
-
-            tier_result = aug.pick_active_tier(aug.camera_subsampler, epoch)
-            if tier_result is not None:
-                _tier_name, tier = tier_result
-                updates["camera_subsampler"] = CameraSubsamplerConfig.model_validate(tier.sample_value(rng))
-
-            tier_result = aug.pick_active_tier(aug.supervision_frame_resolution, epoch)
-            if tier_result is not None:
-                _tier_name, tier = tier_result
-                subsampler = CameraSubsamplerConfig.model_validate(tier.sample_value(rng))
-                updates["supervision_frame_batch"] = self.supervision_frame_batch.model_copy(
-                    update={"camera_subsampler": subsampler}
-                )
-
-            tier_result = aug.pick_active_tier(aug.context_sensor_idxs, epoch)
-            if tier_result is not None:
-                _tier_name, tier = tier_result
-                selected_idxs: list[int] = tier.sample_value(rng)
-
-                def _unique_sensor_idx(cam: str | BaseNCoreNRMDatasetConfig.ExternalSupervisionCameraIdConfig) -> int:
-                    if isinstance(cam, BaseNCoreNRMDatasetConfig.ExternalSupervisionCameraIdConfig):
-                        return cam.unique_sensor_idx
-                    return self.supervision_camera_ids.index(cam)
-
-                updates["context_camera_ids"] = [
-                    c for c in self.context_camera_ids if _unique_sensor_idx(c) in selected_idxs
-                ]
-                updates["supervision_camera_ids"] = [
-                    c for c in self.supervision_camera_ids if _unique_sensor_idx(c) in selected_idxs
-                ]
-
-            tier_result = aug.pick_active_tier(aug.context_n_frames_per_sample, epoch)
-            if tier_result is not None:
-                _tier_name, tier = tier_result
-                n_frames = int(tier.sample_value(rng))
-                updates["frame_batch_samplers"] = {
-                    name: sampler.model_copy(update={"n_frames_per_sample": n_frames})
-                    for name, sampler in self.frame_batch_samplers.items()
-                }
-
-            updated = self.model_copy(update=updates)
-
-            if aug.max_context_pixels is not None:
-                # height x width x num_cameras x num_frames
-                n_pixels = (
-                    len(updated.context_camera_ids)
-                    * updated.camera_subsampler.frame_height
-                    * updated.camera_subsampler.frame_width
-                )
-                samplers = list(updated.frame_batch_samplers.values())
-                assert samplers, "frame_batch_samplers must be non-empty"
-                n_frames_set = {bs.n_frames_per_sample for bs in samplers}
-                if len(n_frames_set) != 1:
-                    raise ValueError(
-                        f"All frame_batch_samplers must share the same n_frames_per_sample; got {n_frames_set}"
-                    )
-                n_pixels *= n_frames_set.pop()
-                if n_pixels > aug.max_context_pixels:
-                    logger.warning(
-                        f"Max context pixels exceeded, re-sampling. Current: {n_pixels / 1e6:.2f}M, Max: {aug.max_context_pixels / 1e6:.2f}M"
-                    )
-                    continue
-
-            return updated
-
-        raise RuntimeError(
-            f"concretize: exhausted {max_retries} retries finding a sample within "
-            f"max_context_pixels={aug.max_context_pixels}"
-        )
+        """Predict-only standalone has no augmentations; concretize is a no-op
+        passthrough. Self-invented: NRE used this hook to sample augmentation
+        tiers per epoch."""
+        del epoch, rng
+        return self
 
 
 class NCoreNRMDatasetConfig(BaseNCoreNRMDatasetConfig):
