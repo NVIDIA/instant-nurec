@@ -178,7 +178,7 @@ class NCoreNRMDataset(BaseNRMIndexableDataset):
         camera_sensors: dict["NCoreNRMDataset.ExtendedCameraId", ncore.data.CameraSensorProtocol]
         lidar_sensors: dict[str, ncore.data.LidarSensorProtocol]
 
-    def __init__(self, config: BaseNCoreNRMDatasetConfig, split: str = "train"):
+    def __init__(self, config: BaseNCoreNRMDatasetConfig):
         self.ncore_json_list_path = parse_universal_path(unpack_optional(config.ncore_json_list_path))
         self.ncore_json_base_path = (
             parse_universal_path(config.ncore_json_base_path)
@@ -188,7 +188,6 @@ class NCoreNRMDataset(BaseNRMIndexableDataset):
         self.open_consolidated = config.open_consolidated
         self.camera_max_fov_deg = config.camera_max_fov_deg
         self.n_camera_mask_dilation_iterations = config.n_camera_mask_dilation_iterations
-        self.split = split
 
         self.all_supervision_camera_ids: list[NCoreNRMDataset.ExtendedCameraId] = []
         for camera_idx, camera_id_config in enumerate(config.supervision_camera_ids):

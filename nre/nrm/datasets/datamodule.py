@@ -24,7 +24,7 @@ class NRMDataModule:
         dataset_config = self.nrm_config.dataset.predict
         assert dataset_config is not None, "dataset.predict has to be specified in the config to use the predict mode"
 
-        self.predict_dataset = NCoreNRMDataset(dataset_config, split="predict")
+        self.predict_dataset = NCoreNRMDataset(dataset_config)
         return DataLoader(
             self.predict_dataset,
             num_workers=self.nrm_config.system.predict_num_workers,
