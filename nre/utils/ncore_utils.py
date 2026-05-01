@@ -19,7 +19,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import DefaultDict, Optional, Protocol, Tuple, cast
+from typing import DefaultDict, Optional, Protocol, Tuple
 
 import numpy as np
 import PIL.Image as PILImage
@@ -313,19 +313,17 @@ class AuxShardDataLoader:
 
 
 def get_mask_image(
-    mask_image: PILImage.Image | None, target_mask_size: tuple[int, int], mask_override_path: str | None = None
+    mask_image: PILImage.Image | None, target_mask_size: tuple[int, int]
 ) -> np.ndarray | None:
     """
     Returns a boolean mask for, e.g., a camera sensor, scaled to the target resolution if required.
 
-    This function retrieves a mask image, either from the provided image itself or from an optional override path.
     The mask image is converted to grayscale and resized to match the camera sensor's resolution if their aspect ratios are sufficiently close.
     The resulting mask is returned as a NumPy boolean array, where `True` indicates masked-out regions.
 
     Args:
         mask_image (PILImage.Image | None): The mask image to be processed.
         target_mask_size (tuple[int, int]): The target size (width, height) to resize the mask image to.
-        mask_override_path (str | None, optional): Path to an external mask image to override the sensor's default mask. Defaults to None.
 
     Returns:
         np.ndarray | None: A boolean NumPy array representing the mask, or None if no mask image is available.
@@ -333,9 +331,6 @@ def get_mask_image(
     Raises:
         AssertionError: If the aspect ratio of the mask image does not match the camera sensor's resolution within a tolerance.
     """
-
-    if mask_override_path is not None:
-        mask_image = cast(PILImage.Image, PILImage.open(mask_override_path))
 
     camera_mask: np.ndarray | None = None
     if mask_image is not None:
@@ -373,18 +368,15 @@ def get_mask_image(
 
 def get_camera_sensor_mask(
     camera_sensor: ncore_internal.data.v3.CameraSensor | ncore.data.CameraSensorProtocol,
-    mask_override_path: str | None = None,
 ) -> np.ndarray | None:
     """
     Returns a boolean mask for a camera sensor, scaled to the sensor's resolution if required.
 
-    This function retrieves a mask image for the given camera sensor, either from the sensor itself or from an optional override path.
     The mask image is converted to grayscale and resized to match the camera sensor's resolution if their aspect ratios are sufficiently close.
     The resulting mask is returned as a NumPy boolean array, where `True` indicates masked-out regions.
 
     Args:
         camera_sensor (ncore_data.CameraSensor | ncore_data4_compat.CameraSensorProtocol): The camera sensor  / sensor protocol providing model parameters and default mask image.
-        mask_override_path (str | None, optional): Path to an external mask image to override the sensor's default mask. Defaults to None.
 
     Returns:
         np.ndarray | None: A boolean NumPy array representing the mask, or None if no mask image is available.
@@ -405,11 +397,7 @@ def get_camera_sensor_mask(
         case _:
             raise ValueError(f"{__name__} get_camera_sensor_mask: unsupported camera sensor type {type(camera_sensor)}")
 
-    return get_mask_image(
-        camera_mask_image,
-        tuple(resolution),
-        mask_override_path,
-    )
+    return get_mask_image(camera_mask_image, tuple(resolution))
 
 
 # Common V3 / V4 sequence data loading
