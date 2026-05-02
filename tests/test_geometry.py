@@ -251,11 +251,10 @@ def test_quat_to_so3_normalize_branch():
 
 
 def test_quat_to_so3_no_normalize_branch_takes_input_as_is():
-    # Doubling the quaternion without renormalizing scales R by 4x.
+    """The normalize=False branch is the path under test — verify the
+    function returns a (3, 3) tensor without raising."""
     q = torch.tensor([0.0, 0.0, 0.0, 2.0])
     R = quat_to_so3_matrix(q, normalize=False)
-    expected = torch.diag(torch.tensor([4.0, 4.0, 4.0])) - 3 * torch.eye(3)  # 1
-    # Easier: compute directly from the formula with x=y=z=0, w=2 → diag(4-1=...). Just check shape/contents quickly.
     assert R.shape == (3, 3)
 
 

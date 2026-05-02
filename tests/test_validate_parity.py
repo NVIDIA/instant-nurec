@@ -175,7 +175,8 @@ def test_merge_uchar_diff_respects_tolerance(tmp_path: Path) -> None:
 
 def test_no_merge_two_pairs_pass(tmp_path: Path) -> None:
     base, prop = tmp_path / "base", tmp_path / "prop"
-    base.mkdir(); prop.mkdir()
+    base.mkdir()
+    prop.mkdir()
     _make_ply(base / "chunk0.ply", 8, seed=10)
     _make_ply(base / "chunk1.ply", 9, seed=11)
     _make_ply(prop / "chunk0.ply", 8, seed=10)
@@ -188,7 +189,8 @@ def test_no_merge_pairs_by_sorted_name_across_naming_schemes(tmp_path: Path) -> 
     """Baseline uses chunk0/1.ply, proposed uses chunk_0000/0001.ply: sorted pairing
     must align them positionally."""
     base, prop = tmp_path / "base", tmp_path / "prop"
-    base.mkdir(); prop.mkdir()
+    base.mkdir()
+    prop.mkdir()
     _make_ply(base / "pai_uuid_chunk0.ply", 12, seed=20)
     _make_ply(base / "pai_uuid_chunk1.ply", 13, seed=21)
     _make_ply(prop / "chunk_0000.ply", 12, seed=20)
@@ -199,7 +201,8 @@ def test_no_merge_pairs_by_sorted_name_across_naming_schemes(tmp_path: Path) -> 
 
 def test_no_merge_file_count_mismatch_fail(tmp_path: Path) -> None:
     base, prop = tmp_path / "base", tmp_path / "prop"
-    base.mkdir(); prop.mkdir()
+    base.mkdir()
+    prop.mkdir()
     _make_ply(base / "0.ply", 4)
     _make_ply(base / "1.ply", 4)
     _make_ply(prop / "0.ply", 4)
@@ -210,21 +213,24 @@ def test_no_merge_file_count_mismatch_fail(tmp_path: Path) -> None:
 
 def test_no_merge_empty_dirs_fail(tmp_path: Path) -> None:
     base, prop = tmp_path / "base", tmp_path / "prop"
-    base.mkdir(); prop.mkdir()
+    base.mkdir()
+    prop.mkdir()
     proc = _run("--tolerance-json", _empty_tol(tmp_path), "no_merge", base, prop)
     assert proc.returncode == 1
     assert "no PLY files" in proc.stderr or "no ply files" in proc.stderr
 
 
 def test_no_merge_missing_baseline_dir_fail(tmp_path: Path) -> None:
-    prop = tmp_path / "prop"; prop.mkdir()
+    prop = tmp_path / "prop"
+    prop.mkdir()
     proc = _run("--tolerance-json", _empty_tol(tmp_path), "no_merge", tmp_path / "nope", prop)
     assert proc.returncode == 1
     assert "does not exist" in proc.stderr
 
 
 def test_no_merge_missing_proposed_dir_fail(tmp_path: Path) -> None:
-    base = tmp_path / "base"; base.mkdir()
+    base = tmp_path / "base"
+    base.mkdir()
     proc = _run("--tolerance-json", _empty_tol(tmp_path), "no_merge", base, tmp_path / "nope")
     assert proc.returncode == 1
     assert "does not exist" in proc.stderr
@@ -232,7 +238,8 @@ def test_no_merge_missing_proposed_dir_fail(tmp_path: Path) -> None:
 
 def test_no_merge_per_pair_diff_above_tolerance_fail(tmp_path: Path) -> None:
     base, prop = tmp_path / "base", tmp_path / "prop"
-    base.mkdir(); prop.mkdir()
+    base.mkdir()
+    prop.mkdir()
     _make_ply(base / "0.ply", 8, seed=30)
     _make_ply(prop / "0.ply", 8, seed=30, perturb={"x": 1.0})
     tol = tmp_path / "tol.json"
