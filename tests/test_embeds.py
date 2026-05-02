@@ -5,7 +5,6 @@ Pure torch.nn / torch.nn.functional / einops — no compiled-lib stubs needed.
 
 from __future__ import annotations
 
-import math
 import sys
 from pathlib import Path
 

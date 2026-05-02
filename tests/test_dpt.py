@@ -266,7 +266,6 @@ def test_fusion_head_zero_init_nan_skips_that_index():
     )
     last_conv = head.after_conv[-1]
     assert isinstance(last_conv, nn.Conv2d)
-    init_bias_before = last_conv.bias.data.clone()  # type: ignore[union-attr]
     head.zero_init([math.nan, 1.0, math.nan])
     # Channels 0 and 2 are reset_parameters output (no manual override),
     # channel 1 has bias=1.0 and weight zero.

@@ -7,11 +7,9 @@ imports from nre.utils.geometry which is already cpu-importable
 
 from __future__ import annotations
 
-import math
 import sys
 from pathlib import Path
 
-import pytest
 import torch
 
 

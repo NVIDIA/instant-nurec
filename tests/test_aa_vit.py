@@ -136,28 +136,28 @@ def test_get_interpolated_img_pos_embed_preserves_dtype():
 
 def test_get_rope_positions_shapes():
     m = _make_aa_vit(n_cls_tokens=2)
-    g, l = m.get_rope_positions(height=4, width=4, device=torch.device("cpu"))
+    g, loc = m.get_rope_positions(height=4, width=4, device=torch.device("cpu"))
     # Both have (n_cls_tokens_aa + h*w, 2) shape
     assert g.shape == (2 + 16, 2)
-    assert l.shape == (2 + 16, 2)
+    assert loc.shape == (2 + 16, 2)
 
 
 def test_get_rope_positions_global_and_local_differ():
     """The global path zeros the spatial part; the local path is a cartesian
     product. They must differ for h*w >= 1 with h*w > 1 (any non-zero spatial coord)."""
     m = _make_aa_vit(n_cls_tokens=1)
-    g, l = m.get_rope_positions(height=4, width=4, device=torch.device("cpu"))
-    assert not torch.equal(g, l)
+    g, loc = m.get_rope_positions(height=4, width=4, device=torch.device("cpu"))
+    assert not torch.equal(g, loc)
 
 
 def test_get_rope_positions_n_cls_tokens_aa_branch_value():
     """The first n_cls_tokens_aa entries are the cls position arange,
     repeated across the trailing dim 2."""
     m = _make_aa_vit(n_cls_tokens=3)
-    g, l = m.get_rope_positions(height=2, width=2, device=torch.device("cpu"))
+    g, loc = m.get_rope_positions(height=2, width=2, device=torch.device("cpu"))
     expected_cls = torch.arange(3).reshape(3, 1).expand(3, 2)
     assert torch.equal(g[:3], expected_cls)
-    assert torch.equal(l[:3], expected_cls)
+    assert torch.equal(loc[:3], expected_cls)
 
 
 # ---------------------------------------------------------------------------
