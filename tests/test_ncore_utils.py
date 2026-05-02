@@ -646,3 +646,359 @@ def test_aux_loader_get_depth_raises_when_camera_or_timestamp_missing(
     loader.get_depth_meta = lambda _camera_id: {"store_depth_as_png": False}
     with pytest.raises(KeyError, match="depth not found"):
         loader.get_depth("cam", 50)
+
+
+# ---------------------------------------------------------------------------
+# AuxShardDataLoader.__init__ — real filesystem walk + stubbed zarr open
+# ---------------------------------------------------------------------------
+
+
+class _FakeRootGroup:
+    """Stand-in for an opened zarr root with `.attrs` and item iteration."""
+
+    def __init__(self, attrs, root_subgroups):
+        # attrs supports `.get(key, default)` via dict.
+        self.attrs = attrs
+        # The SUT does ``aux_shard_root[aux_root_group_name].items()``; we
+        # expose only the top-level subgroup name.
+        self._root_subgroups = root_subgroups
+
+    def __getitem__(self, name):
+        return self._root_subgroups[name]
+
+
+class _FakeRootSubgroup:
+    """Stand-in for ``aux_shard_root[<aux_root_group_name>]`` — has .items()."""
+
+    def __init__(self, mapping):
+        self._mapping = mapping
+
+    def items(self):
+        return self._mapping.items()
+
+
+@pytest.fixture
+def stubbed_zarr_open(monkeypatch, stubbed_ncore_utils):
+    """Patch zarr.open / zarr.storage.DirectoryStore /
+    ncore_data_stores.IndexedTarStore on the SUT module to return our fake
+    root groups, keyed by the store path basename."""
+    mod, _ = stubbed_ncore_utils
+
+    # Mapping `Path → FakeRootGroup` filled in per-test.
+    registry: dict = {}
+
+    class _FakeStore:
+        def __init__(self, path):
+            self.path = path
+
+    def _fake_directory_store(path):
+        return _FakeStore(path)
+
+    def _fake_indexed_tar_store(path, *, mode):
+        return _FakeStore(path)
+
+    def _fake_zarr_open(*, store, mode):
+        # Look up the prebuilt root group by store.path.name.
+        return registry[Path(str(store.path)).name]
+
+    # Patch on the SUT module — the SUT references zarr.storage.DirectoryStore
+    # and zarr.open via the imported ``zarr`` name.
+    monkeypatch.setattr(mod.zarr.storage, "DirectoryStore", _fake_directory_store, raising=False)
+    monkeypatch.setattr(mod.zarr, "open", _fake_zarr_open, raising=False)
+    monkeypatch.setattr(
+        mod.ncore_data_stores, "IndexedTarStore", _fake_indexed_tar_store, raising=False
+    )
+    # Also redirect open_compressed_consolidated so the True-flag branch works.
+    monkeypatch.setattr(
+        mod.ncore_data_stores,
+        "open_compressed_consolidated",
+        lambda *, store, mode: registry[Path(str(store.path)).name],
+        raising=False,
+    )
+    # Make the SUT's `isinstance(base_group, zarr.Group)` accept our fakes.
+    monkeypatch.setattr(mod.zarr, "Group", _FakeRootSubgroup, raising=False)
+
+    return mod, registry
+
+
+def _seed_aux_dir(tmp_path: Path, *, dataset_basename: str, aux_signal_dirnames=()):
+    """Create a synthetic dataset shard layout so the SUT's iterdir() walk has
+    something to find."""
+    parent = tmp_path / "shards"
+    parent.mkdir(parents=True, exist_ok=True)
+    # The dataset shard itself; the SUT's stem.split('.')[0] gives the basename.
+    (parent / f"{dataset_basename}.something.zarr").mkdir()
+    # Add aux .zarr directories the SUT should pick up.
+    for name in aux_signal_dirnames:
+        (parent / name).mkdir()
+    # Also add a non-matching directory (must be ignored).
+    (parent / "unrelated.dir").mkdir()
+    # Also add a non-matching file (must be ignored).
+    (parent / "junk.txt").write_text("x")
+    return parent / f"{dataset_basename}.something.zarr"
+
+
+def test_aux_loader_init_picks_up_directory_stores(stubbed_zarr_open, tmp_path):
+    """A *.zarr directory matching ``<base>.aux.*`` is registered."""
+    mod, registry = stubbed_zarr_open
+
+    dataset_path = _seed_aux_dir(
+        tmp_path,
+        dataset_basename="seqA-shard0",
+        aux_signal_dirnames=["seqA-shard0.aux.semseg.zarr"],
+    )
+    registry["seqA-shard0.aux.semseg.zarr"] = _FakeRootGroup(
+        attrs={
+            "sequence_id": "seqA",
+            "shard_id": 0,
+            "shard_count": 1,
+            "aux_root_group_name": "annotations",
+        },
+        root_subgroups={"annotations": _FakeRootSubgroup({"depth": _FakeRootSubgroup({})})},
+    )
+
+    loader = mod.AuxShardDataLoader(sequence_id="seqA", dataset_paths=[dataset_path])
+    assert "depth" in loader.base_groups
+    assert loader._sequence_id == "seqA"
+    assert loader._shard_count == 1
+
+
+def test_aux_loader_init_picks_up_itar_files(stubbed_zarr_open, tmp_path):
+    """A ``<base>.aux.<signal>.zarr.itar`` file is registered (file branch)."""
+    mod, registry = stubbed_zarr_open
+
+    parent = tmp_path / "shards"
+    parent.mkdir()
+    (parent / "seqB-shard0.something.zarr").mkdir()  # the dataset itself
+    itar = parent / "seqB-shard0.aux.depth.zarr.itar"
+    itar.write_bytes(b"")
+    registry["seqB-shard0.aux.depth.zarr.itar"] = _FakeRootGroup(
+        attrs={"sequence_id": "seqB", "shard_id": 0, "shard_count": 1},
+        root_subgroups={"annotations": _FakeRootSubgroup({"depth": _FakeRootSubgroup({})})},
+    )
+
+    loader = mod.AuxShardDataLoader(
+        sequence_id="seqB", dataset_paths=[parent / "seqB-shard0.something.zarr"]
+    )
+    assert "depth" in loader.base_groups
+
+
+def test_aux_loader_init_picks_up_legacy_annotations_files(
+    stubbed_zarr_open, tmp_path
+):
+    """The backwards-compatibility ``<base>-annotations*.zarr.itar`` pattern
+    is recognised (the SUT's ``or`` branch)."""
+    mod, registry = stubbed_zarr_open
+
+    parent = tmp_path / "shards"
+    parent.mkdir()
+    (parent / "seqC-shard0.something.zarr").mkdir()
+    legacy = parent / "seqC-shard0-annotations.zarr.itar"
+    legacy.write_bytes(b"")
+    registry["seqC-shard0-annotations.zarr.itar"] = _FakeRootGroup(
+        attrs={"sequence_id": "seqC", "shard_id": 0, "shard_count": 1},
+        root_subgroups={"annotations": _FakeRootSubgroup({"egomask": _FakeRootSubgroup({})})},
+    )
+
+    loader = mod.AuxShardDataLoader(
+        sequence_id="seqC", dataset_paths=[parent / "seqC-shard0.something.zarr"]
+    )
+    assert "egomask" in loader.base_groups
+
+
+def test_aux_loader_init_skips_non_matching_files_and_dirs(stubbed_zarr_open, tmp_path):
+    """Files without ``.zarr.itar`` / dirs without ``.zarr`` / mismatched
+    base names are silently ignored."""
+    mod, registry = stubbed_zarr_open
+
+    parent = tmp_path / "shards"
+    parent.mkdir()
+    (parent / "seqD-shard0.something.zarr").mkdir()
+    # Non-matching bits to skip.
+    (parent / "seqD-shard0.txt").write_text("x")  # not .zarr.itar
+    (parent / "OTHER-shard0.aux.depth.zarr.itar").write_bytes(b"")  # base mismatch
+    (parent / "seqD-shard0.aux.depth.bin").write_bytes(b"")  # extension mismatch
+    (parent / "OTHER-shard0.aux.depth.zarr").mkdir()  # base mismatch
+    (parent / "seqD-shard0.aux.depth.zarr").mkdir()  # this one matches
+
+    registry["seqD-shard0.aux.depth.zarr"] = _FakeRootGroup(
+        attrs={"sequence_id": "seqD", "shard_id": 0, "shard_count": 1},
+        root_subgroups={"annotations": _FakeRootSubgroup({"depth": _FakeRootSubgroup({})})},
+    )
+
+    loader = mod.AuxShardDataLoader(
+        sequence_id="seqD", dataset_paths=[parent / "seqD-shard0.something.zarr"]
+    )
+    assert "depth" in loader.base_groups
+    # Only the one matching store should have been loaded.
+    assert len(loader.aux_shard_stores) == 1
+
+
+def test_aux_loader_init_uses_default_aux_root_group_name(stubbed_zarr_open, tmp_path):
+    """If ``aux_root_group_name`` attr is absent, the SUT falls back to
+    ``"annotations"``."""
+    mod, registry = stubbed_zarr_open
+
+    dp = _seed_aux_dir(
+        tmp_path,
+        dataset_basename="seqE-shard0",
+        aux_signal_dirnames=["seqE-shard0.aux.semseg.zarr"],
+    )
+    registry["seqE-shard0.aux.semseg.zarr"] = _FakeRootGroup(
+        # NO `aux_root_group_name` attr → must fall back to 'annotations'.
+        attrs={"sequence_id": "seqE", "shard_id": 0, "shard_count": 1},
+        root_subgroups={"annotations": _FakeRootSubgroup({"semseg": _FakeRootSubgroup({})})},
+    )
+
+    loader = mod.AuxShardDataLoader(sequence_id="seqE", dataset_paths=[dp])
+    assert "semseg" in loader.base_groups
+
+
+def test_aux_loader_init_open_consolidated_branch(stubbed_zarr_open, tmp_path):
+    """When ``open_consolidated=True`` (default), the SUT uses
+    ``ncore_data_stores.open_compressed_consolidated`` instead of zarr.open."""
+    mod, registry = stubbed_zarr_open
+
+    dp = _seed_aux_dir(
+        tmp_path,
+        dataset_basename="seqF-shard0",
+        aux_signal_dirnames=["seqF-shard0.aux.depth.zarr"],
+    )
+    registry["seqF-shard0.aux.depth.zarr"] = _FakeRootGroup(
+        attrs={"sequence_id": "seqF", "shard_id": 0, "shard_count": 1},
+        root_subgroups={"annotations": _FakeRootSubgroup({"depth": _FakeRootSubgroup({})})},
+    )
+
+    loader = mod.AuxShardDataLoader(
+        sequence_id="seqF", dataset_paths=[dp], open_consolidated=True
+    )
+    assert "depth" in loader.base_groups
+
+
+def test_aux_loader_init_skips_non_group_entries(stubbed_zarr_open, tmp_path):
+    """Items in the root group that aren't `zarr.Group` instances (i.e. raw
+    datasets) are skipped, not registered as base_groups."""
+    mod, registry = stubbed_zarr_open
+
+    dp = _seed_aux_dir(
+        tmp_path,
+        dataset_basename="seqG-shard0",
+        aux_signal_dirnames=["seqG-shard0.aux.semseg.zarr"],
+    )
+    # Provide one Group (proper subgroup) and one non-Group (a plain dict).
+    not_a_group = object()
+    registry["seqG-shard0.aux.semseg.zarr"] = _FakeRootGroup(
+        attrs={"sequence_id": "seqG", "shard_id": 0, "shard_count": 1},
+        root_subgroups={
+            "annotations": _FakeRootSubgroup({
+                "semseg": _FakeRootSubgroup({}),
+                "raw_dataset": not_a_group,
+            })
+        },
+    )
+
+    loader = mod.AuxShardDataLoader(sequence_id="seqG", dataset_paths=[dp])
+    assert "semseg" in loader.base_groups
+    assert "raw_dataset" not in loader.base_groups
+
+
+def test_aux_loader_init_rejects_mismatched_sequence_id_constructor_arg(
+    stubbed_zarr_open, tmp_path
+):
+    """If the constructor's ``sequence_id`` doesn't match the loaded store's
+    sequence_id attr, a ValueError is raised."""
+    mod, registry = stubbed_zarr_open
+
+    dp = _seed_aux_dir(
+        tmp_path,
+        dataset_basename="seqH-shard0",
+        aux_signal_dirnames=["seqH-shard0.aux.depth.zarr"],
+    )
+    registry["seqH-shard0.aux.depth.zarr"] = _FakeRootGroup(
+        attrs={"sequence_id": "WRONG", "shard_id": 0, "shard_count": 1},
+        root_subgroups={"annotations": _FakeRootSubgroup({"depth": _FakeRootSubgroup({})})},
+    )
+
+    with pytest.raises(ValueError, match="not compatible with source sequence"):
+        mod.AuxShardDataLoader(sequence_id="seqH", dataset_paths=[dp])
+
+
+def test_aux_loader_init_rejects_mismatched_sequence_across_stores(
+    stubbed_zarr_open, tmp_path
+):
+    """Two stores with different sequence_id attrs → ValueError."""
+    mod, registry = stubbed_zarr_open
+
+    dp = _seed_aux_dir(
+        tmp_path,
+        dataset_basename="seqI-shard0",
+        aux_signal_dirnames=[
+            "seqI-shard0.aux.depth.zarr",
+            "seqI-shard0.aux.semseg.zarr",
+        ],
+    )
+    registry["seqI-shard0.aux.depth.zarr"] = _FakeRootGroup(
+        attrs={"sequence_id": "seqI", "shard_id": 0, "shard_count": 1},
+        root_subgroups={"annotations": _FakeRootSubgroup({"depth": _FakeRootSubgroup({})})},
+    )
+    registry["seqI-shard0.aux.semseg.zarr"] = _FakeRootGroup(
+        attrs={"sequence_id": "OTHER_SEQ", "shard_id": 0, "shard_count": 1},
+        root_subgroups={"annotations": _FakeRootSubgroup({"semseg": _FakeRootSubgroup({})})},
+    )
+
+    with pytest.raises(ValueError, match="different sequences|not compatible"):
+        mod.AuxShardDataLoader(sequence_id="seqI", dataset_paths=[dp])
+
+
+def test_aux_loader_init_rejects_mismatched_shard_count(stubbed_zarr_open, tmp_path):
+    mod, registry = stubbed_zarr_open
+
+    dp = _seed_aux_dir(
+        tmp_path,
+        dataset_basename="seqJ-shard0",
+        aux_signal_dirnames=[
+            "seqJ-shard0.aux.depth.zarr",
+            "seqJ-shard0.aux.semseg.zarr",
+        ],
+    )
+    registry["seqJ-shard0.aux.depth.zarr"] = _FakeRootGroup(
+        attrs={"sequence_id": "seqJ", "shard_id": 0, "shard_count": 2},
+        root_subgroups={"annotations": _FakeRootSubgroup({"depth": _FakeRootSubgroup({})})},
+    )
+    registry["seqJ-shard0.aux.semseg.zarr"] = _FakeRootGroup(
+        attrs={"sequence_id": "seqJ", "shard_id": 0, "shard_count": 5},
+        root_subgroups={"annotations": _FakeRootSubgroup({"semseg": _FakeRootSubgroup({})})},
+    )
+
+    with pytest.raises(ValueError, match="different sequence subdivisions"):
+        mod.AuxShardDataLoader(sequence_id="seqJ", dataset_paths=[dp])
+
+
+def test_aux_loader_init_rejects_duplicate_base_group_for_shard(
+    stubbed_zarr_open, tmp_path
+):
+    """A given base_group_name+shard_id pair must appear at most once across
+    stores (the loaded_base_groups sanity check)."""
+    mod, registry = stubbed_zarr_open
+
+    dp = _seed_aux_dir(
+        tmp_path,
+        dataset_basename="seqK-shard0",
+        aux_signal_dirnames=[
+            "seqK-shard0.aux.depth.zarr",
+            "seqK-shard0.aux.depth-second.zarr",
+        ],
+    )
+    # Two stores, same shard_id, both expose a "depth" base group.
+    common_attrs = {"sequence_id": "seqK", "shard_id": 0, "shard_count": 1}
+    registry["seqK-shard0.aux.depth.zarr"] = _FakeRootGroup(
+        attrs=common_attrs,
+        root_subgroups={"annotations": _FakeRootSubgroup({"depth": _FakeRootSubgroup({})})},
+    )
+    registry["seqK-shard0.aux.depth-second.zarr"] = _FakeRootGroup(
+        attrs=common_attrs,
+        root_subgroups={"annotations": _FakeRootSubgroup({"depth": _FakeRootSubgroup({})})},
+    )
+
+    with pytest.raises(ValueError, match="loaded multiple times for shard ID"):
+        mod.AuxShardDataLoader(sequence_id="seqK", dataset_paths=[dp])
