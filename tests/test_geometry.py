@@ -138,6 +138,15 @@ def test_se3_to_tquat_unbatch_branches():
     assert se3_matrix_to_tquat(M, unbatch=False).shape == (1, 7)
 
 
+def test_se3_to_tquat_accepts_numpy_input():
+    """The implementation auto-converts np.ndarray to torch.Tensor."""
+    M = np.eye(4, dtype=np.float32)
+    tquat = se3_matrix_to_tquat(M, unbatch=True)
+    assert tquat.shape == (7,)
+    # Identity → translation [0,0,0] and quaternion [0,0,0,1] (xyzw last)
+    assert torch.allclose(tquat[:3], torch.zeros(3))
+
+
 def test_tquat_to_se3_unbatch_branches():
     tquat = torch.tensor([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0])
     assert tquat_to_se3_matrix(tquat, unbatch=True).shape == (4, 4)
