@@ -142,3 +142,146 @@ def test_timestamps_us_to_continuous_times_outside_range_extrapolates():
     )
     out = tr.timestamps_us_to_continuous_times(torch.tensor([-50.0, 150.0]))
     assert torch.allclose(out, torch.tensor([-0.5, 1.5]))
+
+
+# ---------------------------------------------------------------------------
+# warp_points_with_cuboid_tracks
+# ---------------------------------------------------------------------------
+
+
+class _FakePose:
+    """Stand-in for an SE3 pose object — supports .inv() and __mul__ returning
+    self-or-other in such a way that the warp formula leaves points unchanged.
+
+    We construct two flavors:
+      - identity-like (any * pose == pose, pose * point == point)
+      - shifting (pose * point == point + offset)
+    """
+
+    def __init__(self, offset: torch.Tensor | None = None):
+        self.offset = offset if offset is not None else torch.zeros(3)
+
+    def inv(self) -> _FakePose:
+        return _FakePose(offset=-self.offset)
+
+    def __mul__(self, other):
+        if isinstance(other, _FakePose):
+            return _FakePose(offset=self.offset + other.offset)
+        # apply to points (broadcast)
+        return other + self.offset
+
+
+class _FakeCuboidTracks:
+    """Duck-typed stand-in for CuboidTracks with the methods used by
+    ``warp_points_with_cuboid_tracks``."""
+
+    def __init__(self, tracks_idx: torch.Tensor, target_offsets: list[torch.Tensor] | None = None):
+        self._tracks_idx = tracks_idx
+        # Per-target offset vectors used in interpolate_tracks_poses for target ts.
+        # Source poses are always identity.
+        self._target_offsets = target_offsets or []
+        self._call_count = 0
+
+    def point_intersection_interpolate_pose(self, points, src_ts, padding):
+        # ignore points/src_ts; return precanned tracks_idx
+        return None, self._tracks_idx.clone()
+
+    def interpolate_tracks_poses(self, timestamps_us, tracks_idx):
+        if self._call_count == 0:
+            # First call is the source (inv called outside) — return identity
+            self._call_count += 1
+            return _FakePose(offset=torch.zeros(3))
+        # Subsequent calls are target poses — return offset
+        offset = self._target_offsets[(self._call_count - 1) % max(1, len(self._target_offsets))]
+        self._call_count += 1
+        return _FakePose(offset=offset)
+
+
+def test_warp_points_no_dynamic_short_circuits_with_clones():
+    """When tracks_idx is all -1 (no associations), the warp should just
+    return identical clones of the input for every target."""
+    from nre.nrm.utils.motion import warp_points_with_cuboid_tracks
+
+    points = torch.zeros(4, 3)
+    src_ts = torch.zeros(4, dtype=torch.int64)
+    tgt_ts = [torch.zeros(4, dtype=torch.int64), torch.zeros(4, dtype=torch.int64)]
+    aux = torch.full((4,), -1, dtype=torch.int64)  # no fallback
+
+    fake_tracks = _FakeCuboidTracks(tracks_idx=torch.full((4,), -1, dtype=torch.int64))
+    cuboids_dims_padding = torch.zeros(1, 3)
+
+    dynamic_mask, warped = warp_points_with_cuboid_tracks(
+        points, src_ts, tgt_ts, fake_tracks, aux, cuboids_dims_padding
+    )
+    assert dynamic_mask.shape == (4,)
+    assert not dynamic_mask.any()
+    assert len(warped) == 2
+    for w, ts in zip(warped, tgt_ts):
+        # Identical to the input for unassociated points
+        assert torch.equal(w, points)
+
+
+def test_warp_points_falls_back_to_aux_when_main_returns_minus_one():
+    """If point_intersection_interpolate_pose returns -1 for an entry,
+    the function should fall back to aux_tracks_idx (and only -1 there
+    means no association)."""
+    from nre.nrm.utils.motion import warp_points_with_cuboid_tracks
+
+    points = torch.tensor([[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]])
+    src_ts = torch.zeros(2, dtype=torch.int64)
+    tgt_ts = [torch.zeros(2, dtype=torch.int64)]
+    aux = torch.tensor([0, -1], dtype=torch.int64)  # first falls back, second stays unassociated
+
+    fake_tracks = _FakeCuboidTracks(
+        tracks_idx=torch.tensor([-1, -1], dtype=torch.int64),
+        target_offsets=[torch.tensor([10.0, 0.0, 0.0])],
+    )
+    cuboids_dims_padding = torch.zeros(1, 3)
+
+    dynamic_mask, warped = warp_points_with_cuboid_tracks(
+        points, src_ts, tgt_ts, fake_tracks, aux, cuboids_dims_padding
+    )
+    # First point gets associated (via aux), second stays unassociated.
+    assert dynamic_mask.tolist() == [True, False]
+    # The warped points: first point was at origin, gets pose (target * inv(source)) applied.
+    # source pose = identity (offset=0); target pose offset=10 → net offset = 10
+    # So warped[0] should be (10, 0, 0); warped[1] should still be (1, 1, 1).
+    assert torch.allclose(warped[0][0], torch.tensor([10.0, 0.0, 0.0]))
+    assert torch.equal(warped[0][1], points[1])
+
+
+def test_warp_points_squeeze_trailing_one_branch():
+    """Source/target timestamps with shape [..., 1] are squeezed to [...]."""
+    from nre.nrm.utils.motion import warp_points_with_cuboid_tracks
+
+    points = torch.zeros(3, 3)
+    # Squeezable timestamp shapes (..., 1)
+    src_ts = torch.zeros(3, 1, dtype=torch.int64)
+    tgt_ts = [torch.zeros(3, 1, dtype=torch.int64)]
+    aux = torch.full((3,), -1, dtype=torch.int64)
+
+    fake_tracks = _FakeCuboidTracks(tracks_idx=torch.full((3,), -1, dtype=torch.int64))
+    cuboids_dims_padding = torch.zeros(1, 3)
+
+    dynamic_mask, warped = warp_points_with_cuboid_tracks(
+        points, src_ts, tgt_ts, fake_tracks, aux, cuboids_dims_padding
+    )
+    assert dynamic_mask.shape == (3,)
+
+
+def test_warp_points_already_squeezed_timestamps_path():
+    """Plain (...) shape (no trailing 1) goes through the no-squeeze branch."""
+    from nre.nrm.utils.motion import warp_points_with_cuboid_tracks
+
+    points = torch.zeros(3, 3)
+    src_ts = torch.zeros(3, dtype=torch.int64)
+    tgt_ts = [torch.zeros(3, dtype=torch.int64)]
+    aux = torch.full((3,), -1, dtype=torch.int64)
+
+    fake_tracks = _FakeCuboidTracks(tracks_idx=torch.full((3,), -1, dtype=torch.int64))
+    cuboids_dims_padding = torch.zeros(1, 3)
+
+    dynamic_mask, warped = warp_points_with_cuboid_tracks(
+        points, src_ts, tgt_ts, fake_tracks, aux, cuboids_dims_padding
+    )
+    assert dynamic_mask.shape == (3,)
