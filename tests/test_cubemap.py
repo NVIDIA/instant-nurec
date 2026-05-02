@@ -189,3 +189,131 @@ def test_rotate_sky_cubemap_supports_arbitrary_channel_count():
     rot = torch.eye(3)
     out = rotate_sky_cubemap(cube, rot)
     assert out.shape == (6, 8, 8, 5)
+
+
+# ---------------------------------------------------------------------------
+# unproject_to_sky_cubemap
+# ---------------------------------------------------------------------------
+
+
+class _FakeImagePointsReturn:
+    """Stand-in for the namedtuple returned by libs.vren camera_rays_to_image_points."""
+
+    def __init__(self, n_rays: int, n_valid: int, image_w: int, image_h: int):
+        # All-True valid_flag for the first n_valid; rest invalid.
+        import torch
+
+        valid = torch.zeros(n_rays, dtype=torch.bool)
+        valid[:n_valid] = True
+        self.valid_flag = valid
+        # image_points: 2D coords inside the image
+        pts = torch.zeros(n_rays, 2)
+        pts[:, 0] = image_w / 2  # center x
+        pts[:, 1] = image_h / 2  # center y
+        self.image_points = pts
+
+
+class _FakeCameraModelParameters:
+    def __init__(self, w: int = 16, h: int = 16):
+        import numpy as np
+
+        self.resolution = np.array([w, h], dtype=np.float32)
+
+
+@pytest.fixture
+def _vren_with_fake_camera_rays(monkeypatch: pytest.MonkeyPatch):
+    """Replace the no-op ``camera_rays_to_image_points`` stub with one that
+    returns a ``_FakeImagePointsReturn`` for any input rays."""
+    import sys
+
+    def fake_camera_rays_to_image_points(camera_params, rays):
+        n = rays.shape[0]
+        # Mark the first half valid
+        return _FakeImagePointsReturn(n_rays=n, n_valid=n // 2, image_w=16, image_h=16)
+
+    sys.modules["libs.vren.interface"].camera_rays_to_image_points = (  # type: ignore[attr-defined]
+        fake_camera_rays_to_image_points
+    )
+    yield
+
+
+def test_unproject_to_sky_cubemap_returns_correct_shapes(_vren_with_fake_camera_rays):
+    """With a fake camera_rays_to_image_points, verify the output shape
+    matches the contract: feature (6, S, S, C) and mask (6, S, S, 1)."""
+    import torch
+
+    from nre.nrm.utils.cubemap import unproject_to_sky_cubemap
+
+    sky_size = 4
+    N, H, W, C = 1, 8, 8, 3
+    R_camera_world = torch.eye(3)[None].repeat(N, 1, 1)
+    feature = torch.randn(N, H, W, C)
+    feature_mask = torch.ones(N, H, W, 1)
+    cam_params = [_FakeCameraModelParameters(w=W, h=H) for _ in range(N)]
+
+    feat_out, mask_out = unproject_to_sky_cubemap(
+        sky_cubemap_size=sky_size,
+        R_camera_world=R_camera_world,
+        camera_model_parameters=cam_params,
+        feature=feature,
+        feature_mask=feature_mask,
+    )
+    assert feat_out.shape == (6, sky_size, sky_size, C)
+    assert mask_out.shape == (6, sky_size, sky_size, 1)
+
+
+def test_unproject_to_sky_cubemap_zero_valid_rays_yields_empty_mask(monkeypatch):
+    """If camera_rays_to_image_points marks nothing valid, the output mask
+    is all False and the feature is all zero."""
+    import sys
+    import torch
+
+    def fake_camera_rays_to_image_points(camera_params, rays):
+        return _FakeImagePointsReturn(n_rays=rays.shape[0], n_valid=0, image_w=16, image_h=16)
+
+    sys.modules["libs.vren.interface"].camera_rays_to_image_points = (  # type: ignore[attr-defined]
+        fake_camera_rays_to_image_points
+    )
+
+    from nre.nrm.utils.cubemap import unproject_to_sky_cubemap
+
+    sky_size = 4
+    R_camera_world = torch.eye(3)[None]
+    feature = torch.randn(1, 8, 8, 3)
+    feature_mask = torch.ones(1, 8, 8, 1)
+    cam_params = [_FakeCameraModelParameters(w=8, h=8)]
+
+    feat_out, mask_out = unproject_to_sky_cubemap(
+        sky_cubemap_size=sky_size,
+        R_camera_world=R_camera_world,
+        camera_model_parameters=cam_params,
+        feature=feature,
+        feature_mask=feature_mask,
+    )
+    # All-zero feature, all-False mask
+    assert torch.allclose(feat_out, torch.zeros_like(feat_out))
+    assert not mask_out.any()
+
+
+def test_unproject_to_sky_cubemap_multiple_views(_vren_with_fake_camera_rays):
+    """Multi-view input flows through the per-view loop without error."""
+    import torch
+
+    from nre.nrm.utils.cubemap import unproject_to_sky_cubemap
+
+    sky_size = 4
+    N, H, W, C = 3, 8, 8, 3
+    R_camera_world = torch.eye(3)[None].repeat(N, 1, 1)
+    feature = torch.randn(N, H, W, C)
+    feature_mask = torch.ones(N, H, W, 1)
+    cam_params = [_FakeCameraModelParameters(w=W, h=H) for _ in range(N)]
+
+    feat_out, mask_out = unproject_to_sky_cubemap(
+        sky_cubemap_size=sky_size,
+        R_camera_world=R_camera_world,
+        camera_model_parameters=cam_params,
+        feature=feature,
+        feature_mask=feature_mask,
+    )
+    assert feat_out.shape == (6, sky_size, sky_size, C)
+    assert mask_out.shape == (6, sky_size, sky_size, 1)
