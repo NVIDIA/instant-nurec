@@ -17,7 +17,7 @@ import torch.nn as nn
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from instant_nurec.nre.nrm.models.blocks.dpt import (
+from instant_nurec._pkg.nrm.models.blocks.dpt import (
     DPTFullHead,
     DPTFusionBlock,
     DPTFusionHead,

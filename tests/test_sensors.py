@@ -88,12 +88,12 @@ def stubbed_sensors(monkeypatch):
     ]:
         monkeypatch.setitem(sys.modules, name, mod)
 
-    monkeypatch.delitem(sys.modules, "instant_nurec.nre.utils.sensors", raising=False)
-    monkeypatch.delitem(sys.modules, "instant_nurec.nre.utils.sensors.sensors", raising=False)
+    monkeypatch.delitem(sys.modules, "instant_nurec._pkg.utils.sensors", raising=False)
+    monkeypatch.delitem(sys.modules, "instant_nurec._pkg.utils.sensors.sensors", raising=False)
 
     import importlib
 
-    sensors_pkg_loaded = importlib.import_module("instant_nurec.nre.utils.sensors")
+    sensors_pkg_loaded = importlib.import_module("instant_nurec._pkg.utils.sensors")
     return sensors_pkg_loaded, captured, _ShutterType
 
 

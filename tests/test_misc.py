@@ -18,7 +18,7 @@ import torch
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from instant_nurec.nre.utils.misc import (
+from instant_nurec._pkg.utils.misc import (
     assert_same_type,
     collate_fn,
     dataclass_keys,

@@ -22,7 +22,7 @@ import torch
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from instant_nurec.nre.utils.geometry import (
+from instant_nurec._pkg.utils.geometry import (
     quat_mult_xyzw,
     quat_to_so3_matrix,
     se3_matrix_inverse,

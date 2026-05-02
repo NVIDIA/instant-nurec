@@ -38,7 +38,7 @@ def _stub_pcu(monkeypatch: pytest.MonkeyPatch):
     fake_pcu = _typesmod.ModuleType("point_cloud_utils")
     fake_pcu.TriangleMesh = _FakeMesh  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "point_cloud_utils", fake_pcu)
-    sys.modules.pop("instant_nurec.nre.models.gaussians.utils", None)
+    sys.modules.pop("instant_nurec._pkg.models.gaussians.utils", None)
 
 
 # ---------------------------------------------------------------------------
@@ -48,21 +48,21 @@ def _stub_pcu(monkeypatch: pytest.MonkeyPatch):
 
 def test_rgb2sh_torch_at_half_yields_zero():
     """RGB=0.5 is the SH zero point: (0.5 - 0.5) / C0 = 0."""
-    from instant_nurec.nre.models.gaussians.utils import RGB2SH
+    from instant_nurec._pkg.models.gaussians.utils import RGB2SH
 
     out = RGB2SH(torch.tensor([0.5, 0.5, 0.5]))
     assert torch.allclose(out, torch.zeros(3))
 
 
 def test_rgb2sh_numpy_path():
-    from instant_nurec.nre.models.gaussians.utils import RGB2SH
+    from instant_nurec._pkg.models.gaussians.utils import RGB2SH
 
     out = RGB2SH(np.array([0.5, 0.5, 0.5]))
     assert np.allclose(out, np.zeros(3))
 
 
 def test_rgb2sh_torch_known_value():
-    from instant_nurec.nre.models.gaussians.utils import C0, RGB2SH
+    from instant_nurec._pkg.models.gaussians.utils import C0, RGB2SH
 
     out = RGB2SH(torch.tensor([1.0]))
     expected = (1.0 - 0.5) / C0
@@ -70,7 +70,7 @@ def test_rgb2sh_torch_known_value():
 
 
 def test_rgb2sh_numpy_dtype_preserved():
-    from instant_nurec.nre.models.gaussians.utils import RGB2SH
+    from instant_nurec._pkg.models.gaussians.utils import RGB2SH
 
     rgb = np.array([0.7], dtype=np.float32)
     out = RGB2SH(rgb)
@@ -96,7 +96,7 @@ def _minimal_kwargs(tmp_path):
 
 
 def test_write_ply_3dgs_minimal_required_attrs(tmp_path):
-    from instant_nurec.nre.models.gaussians.utils import write_ply_3dgs
+    from instant_nurec._pkg.models.gaussians.utils import write_ply_3dgs
 
     write_ply_3dgs(**_minimal_kwargs(tmp_path))
     # Parent dir was created
@@ -104,8 +104,8 @@ def test_write_ply_3dgs_minimal_required_attrs(tmp_path):
 
 
 def test_write_ply_3dgs_writes_rotation_attrs(tmp_path):
-    from instant_nurec.nre.models.gaussians.utils import write_ply_3dgs
-    import instant_nurec.nre.models.gaussians.utils as mod
+    from instant_nurec._pkg.models.gaussians.utils import write_ply_3dgs
+    import instant_nurec._pkg.models.gaussians.utils as mod
 
     seen_meshes: list[_FakeMesh] = []
 
@@ -129,8 +129,8 @@ def test_write_ply_3dgs_writes_rotation_attrs(tmp_path):
 
 
 def test_write_ply_3dgs_color_branch(tmp_path):
-    from instant_nurec.nre.models.gaussians.utils import write_ply_3dgs
-    import instant_nurec.nre.models.gaussians.utils as mod
+    from instant_nurec._pkg.models.gaussians.utils import write_ply_3dgs
+    import instant_nurec._pkg.models.gaussians.utils as mod
 
     seen: list[_FakeMesh] = []
 
@@ -150,8 +150,8 @@ def test_write_ply_3dgs_color_branch(tmp_path):
 
 
 def test_write_ply_3dgs_normals_branch(tmp_path):
-    from instant_nurec.nre.models.gaussians.utils import write_ply_3dgs
-    import instant_nurec.nre.models.gaussians.utils as mod
+    from instant_nurec._pkg.models.gaussians.utils import write_ply_3dgs
+    import instant_nurec._pkg.models.gaussians.utils as mod
 
     seen: list[_FakeMesh] = []
 
@@ -169,7 +169,7 @@ def test_write_ply_3dgs_normals_branch(tmp_path):
 
 
 def test_write_ply_3dgs_normals_shape_mismatch_assertion(tmp_path):
-    from instant_nurec.nre.models.gaussians.utils import write_ply_3dgs
+    from instant_nurec._pkg.models.gaussians.utils import write_ply_3dgs
 
     kwargs = _minimal_kwargs(tmp_path)
     # Wrong shape: positions is (3,3) but we hand normals (3,4)
@@ -179,8 +179,8 @@ def test_write_ply_3dgs_normals_shape_mismatch_assertion(tmp_path):
 
 
 def test_write_ply_3dgs_custom_attributes(tmp_path):
-    from instant_nurec.nre.models.gaussians.utils import write_ply_3dgs
-    import instant_nurec.nre.models.gaussians.utils as mod
+    from instant_nurec._pkg.models.gaussians.utils import write_ply_3dgs
+    import instant_nurec._pkg.models.gaussians.utils as mod
 
     seen: list[_FakeMesh] = []
 
@@ -203,7 +203,7 @@ def test_write_ply_3dgs_custom_attributes(tmp_path):
 
 
 def test_write_ply_3dgs_creates_parent_dir(tmp_path):
-    from instant_nurec.nre.models.gaussians.utils import write_ply_3dgs
+    from instant_nurec._pkg.models.gaussians.utils import write_ply_3dgs
 
     nested = tmp_path / "a" / "b" / "c"
     kwargs = _minimal_kwargs(nested)

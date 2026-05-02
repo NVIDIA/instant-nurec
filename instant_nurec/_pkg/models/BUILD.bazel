@@ -1,0 +1,38 @@
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# Phase 1 step 4.3: predict-only standalone keeps __init__.py + nn_extensions.py.
+# The full nre/models/ tree (background, calib, feature_volume,
+# input_embedding, object_feature_volume, tracks_calib, composite,
+# custom_modules, post_processing, post_processings/, utils.py for activation
+# classes) was for training/eval and has been removed.
+
+load("@nre_pip_deps//:requirements.bzl", pip_requirement = "requirement")
+load("@rules_python//python:defs.bzl", "py_library")
+
+package(default_visibility = ["//:core_package_group"])
+
+filegroup(
+    name = "py_files",
+    srcs = glob(["**/*.py"]),
+    visibility = [],
+)
+
+py_library(
+    name = "pylib_nn_extensions",
+    srcs = ["nn_extensions.py"],
+    deps = [
+        pip_requirement("torch"),
+        pip_requirement("lietorch"),
+        "//instant_nurec/_pkg/utils:pylib_geometry",
+    ],
+)
+
+py_library(
+    name = "pylib",
+    srcs = ["__init__.py"],
+    deps = [
+        ":pylib_nn_extensions",
+        pip_requirement("torch"),
+    ],
+)

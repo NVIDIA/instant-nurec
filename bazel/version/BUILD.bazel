@@ -173,11 +173,11 @@ genrule(
 
         # Add visibility for //internal/scripts/pycena/runtime:pycena_run_test
 
-        # Add visibility for //instant_nurec/nre/grpc:pylib
-        "//instant_nurec/nre/grpc:__pkg__",
+        # Add visibility for //instant_nurec/_pkg/grpc:pylib
+        "//instant_nurec/_pkg/grpc:__pkg__",
 
-        # Add visibility for //instant_nurec/nre/render:pylib
-        "//instant_nurec/nre/render:__pkg__",
+        # Add visibility for //instant_nurec/_pkg/render:pylib
+        "//instant_nurec/_pkg/render:__pkg__",
 
         # Add visibility for //apps:nre_tools
 
@@ -207,7 +207,7 @@ pkg_tar(
         # Add visibility for tools image
 
         # Add visibility for NRM image
-        "//instant_nurec/nre/nrm:__pkg__",
+        "//instant_nurec/_pkg/nrm:__pkg__",
     ],
 )
 

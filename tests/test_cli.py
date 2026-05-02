@@ -33,15 +33,15 @@ def _install_runtime_stubs(monkeypatch: pytest.MonkeyPatch) -> tuple[MagicMock, 
     config_mod.load_predict_config = fake_load
 
     nre_mod = types.ModuleType("nre")
-    nrm_mod = types.ModuleType("instant_nurec.nre.nrm")
-    run_mod = types.ModuleType("instant_nurec.nre.nrm.run")
+    nrm_mod = types.ModuleType("instant_nurec._pkg.nrm")
+    run_mod = types.ModuleType("instant_nurec._pkg.nrm.run")
     fake_run_predict = MagicMock(return_value=None)
     run_mod.run_predict = fake_run_predict
 
     monkeypatch.setitem(sys.modules, "instant_nurec.config", config_mod)
     monkeypatch.setitem(sys.modules, "nre", nre_mod)
-    monkeypatch.setitem(sys.modules, "instant_nurec.nre.nrm", nrm_mod)
-    monkeypatch.setitem(sys.modules, "instant_nurec.nre.nrm.run", run_mod)
+    monkeypatch.setitem(sys.modules, "instant_nurec._pkg.nrm", nrm_mod)
+    monkeypatch.setitem(sys.modules, "instant_nurec._pkg.nrm.run", run_mod)
     return fake_load, fake_run_predict
 
 

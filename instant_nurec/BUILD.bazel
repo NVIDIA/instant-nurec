@@ -7,10 +7,10 @@
 #   bazel run //instant_nurec:run -- --ncore-path ... --output-dir ... --merge {none,frustum-ownership}
 #
 # Internally this delegates to nre.nrm.run.main with the appropriate Hydra
-# overrides; the //instant_nurec/nre/nrm:pylib dep brings in everything the underlying
+# overrides; the //instant_nurec/_pkg/nrm:pylib dep brings in everything the underlying
 # pipeline needs.
 
-# nre:allow-py-venv-binary - py_venv_binary used for parity with //instant_nurec/nre/nrm:run
+# nre:allow-py-venv-binary - py_venv_binary used for parity with //instant_nurec/_pkg/nrm:run
 load("@aspect_rules_py//py/unstable:defs.bzl", "py_venv_binary")
 load("@aspect_rules_py//py:defs.bzl", "py_library")
 
@@ -23,7 +23,7 @@ py_library(
     ],
     visibility = ["//visibility:public"],
     deps = [
-        "//instant_nurec/nre/nrm:pylib",
+        "//instant_nurec/_pkg/nrm:pylib",
     ],
 )
 

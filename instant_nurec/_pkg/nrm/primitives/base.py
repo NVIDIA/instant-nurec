@@ -1,0 +1,48 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+from __future__ import annotations
+
+from abc import abstractmethod
+from typing import Self
+
+import torch
+
+from instant_nurec._pkg.nrm.config.models import PrimitiveExportPreprocessConfig
+from instant_nurec._pkg.utils.batch import DataAndRenderingBatch
+from instant_nurec._pkg.utils.types import RigTrajectories
+
+
+class BaseNRMPrimitive:
+    """
+    Base class for all renderable primitives reconstructed by an NRM.
+    """
+
+    @abstractmethod
+    def device(self) -> torch.device: ...
+
+    @abstractmethod
+    def rigid_transform(self, T_new: torch.Tensor) -> Self: ...
+
+    @abstractmethod
+    def preprocess_for_export(
+        self,
+        context_batch: DataAndRenderingBatch,
+        config: PrimitiveExportPreprocessConfig,
+        context_rig: RigTrajectories | None = None,
+    ) -> Self:
+        """
+        Filter and preprocess the primitive for export (e.g. density/sky/road masking).
+        Called per chunk after forward; when merging is enabled, merge will then apply
+        rigid_transform to align chunks. Implementations must not apply rigid_transform.
+        """
+
+    @abstractmethod
+    def __len__(self) -> int: ...

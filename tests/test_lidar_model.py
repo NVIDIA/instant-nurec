@@ -52,11 +52,11 @@ def stubbed_ncore(monkeypatch):
     monkeypatch.setitem(sys.modules, "ncore.data.v4", v4_mod)
 
     # Drop any previously-cached lidar_model so the import picks up our stubs.
-    monkeypatch.delitem(sys.modules, "instant_nurec.nre.utils.lidar_model", raising=False)
+    monkeypatch.delitem(sys.modules, "instant_nurec._pkg.utils.lidar_model", raising=False)
 
     import importlib
 
-    return importlib.import_module("instant_nurec.nre.utils.lidar_model"), _LidarSensor
+    return importlib.import_module("instant_nurec._pkg.utils.lidar_model"), _LidarSensor
 
 
 def test_get_lidar_model_parameters_returns_attribute(stubbed_ncore):

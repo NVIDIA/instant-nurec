@@ -1,0 +1,79 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+load("@nre_pip_deps//:requirements.bzl", pip_requirement = "requirement")
+load("@rules_python//python:defs.bzl", "py_library")
+
+DEFAULT_VISIBILITY = [
+    "//instant_nurec/_pkg/nrm:__subpackages__",
+]
+
+filegroup(
+    name = "py_files",
+    srcs = glob(["**/*.py"]),
+    visibility = [
+    ],
+)
+
+py_library(
+    name = "pylib_trajectory",
+    srcs = ["trajectory.py"],
+    visibility = DEFAULT_VISIBILITY,
+    deps = [
+        "//instant_nurec/_pkg/nrm/config:pylib",
+        "//instant_nurec/_pkg/utils:pylib_geometry",
+        "//instant_nurec/_pkg/utils:pylib_types",
+        pip_requirement("nvidia-ncore"),
+        pip_requirement("torch"),
+    ],
+)
+
+py_library(
+    name = "pylib_motion",
+    srcs = ["motion.py"],
+    visibility = DEFAULT_VISIBILITY,
+    deps = [
+        # Type-check-time only: motion.py guards `from nre.datasets.tracks import CuboidTracks`
+        # behind `if TYPE_CHECKING`, but mypy still resolves it. Without this dep edge, narrow
+        # mypy_test targets (e.g. blocks_test_mypy) raise [import-untyped].
+        "//instant_nurec/_pkg/datasets:pylib_tracks",
+        pip_requirement("torch"),
+    ],
+)
+
+py_library(
+    name = "pylib_cubemap",
+    srcs = ["cubemap.py"],
+    visibility = DEFAULT_VISIBILITY,
+    deps = [
+        "//libs/vren:pylib",
+        pip_requirement("torch"),
+        pip_requirement("einops"),
+        pip_requirement("nvidia-ncore"),
+    ],
+)
+
+py_library(
+    name = "pylib",
+    srcs = [
+        "__init__.py",
+        "sensor.py",
+    ],
+    visibility = DEFAULT_VISIBILITY,
+    deps = [
+        ":pylib_cubemap",
+        ":pylib_motion",
+        ":pylib_trajectory",
+        pip_requirement("torch"),
+        pip_requirement("omegaconf"),
+        pip_requirement("nvidia-ncore"),
+        pip_requirement("numpy"),
+    ],
+)

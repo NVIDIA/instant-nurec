@@ -9,7 +9,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from instant_nurec.nre.utils.files import parse_universal_path
+from instant_nurec._pkg.utils.files import parse_universal_path
 
 
 def test_local_absolute_path_gets_file_protocol_prefix():

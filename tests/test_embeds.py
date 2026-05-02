@@ -15,7 +15,7 @@ import torch
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from instant_nurec.nre.nrm.models.blocks.embeds import (
+from instant_nurec._pkg.nrm.models.blocks.embeds import (
     ContinuousTimeEmbed,
     NormalizedPositionalEmbed,
     PatchEmbed,

@@ -43,6 +43,6 @@ py_binary(
         pip_requirement("pandas-stubs"),
 
         # Bazel-built external libraries with type annotations
-        "//instant_nurec/nre/models/gaussians:pylib_cc_gsplat",
+        "//instant_nurec/_pkg/models/gaussians:pylib_cc_gsplat",
     ],
 )
