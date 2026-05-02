@@ -230,3 +230,344 @@ def test_frameconversion_transform_poses_casts_to_declared_dtype():
     p = np.eye(4, dtype=np.float64)
     out = fc.transform_poses(p)
     assert out.dtype == np.float32
+
+
+# ---------------------------------------------------------------------------
+# RigTrajectories.RigTrajectory.__post_init__
+# ---------------------------------------------------------------------------
+
+
+def test_rigtrajectory_post_init_accepts_valid_inputs():
+    import torch
+    from nre.utils.types import RigTrajectories
+
+    rt = RigTrajectories.RigTrajectory(
+        sequence_id="seq",
+        cameras_frame_timestamps_us={"cam_a": torch.tensor([[0, 100], [200, 300]])},
+        lidars_frame_timestamps_us={"lid_a": torch.tensor([[0, 1]])},
+        T_rig_worlds=torch.eye(4)[None].repeat(2, 1, 1).double(),
+        T_rig_world_timestamps_us=torch.tensor([0, 100]),
+    )
+    assert rt.sequence_id == "seq"
+
+
+def test_rigtrajectory_post_init_rejects_2d_timestamps():
+    import torch
+    from nre.utils.types import RigTrajectories
+
+    with pytest.raises(AssertionError, match="must be 1D"):
+        RigTrajectories.RigTrajectory(
+            sequence_id="s",
+            cameras_frame_timestamps_us={},
+            lidars_frame_timestamps_us={},
+            T_rig_worlds=torch.eye(4)[None].double(),
+            T_rig_world_timestamps_us=torch.tensor([[0]]),  # 2D
+        )
+
+
+def test_rigtrajectory_post_init_rejects_pose_count_mismatch():
+    import torch
+    from nre.utils.types import RigTrajectories
+
+    with pytest.raises(AssertionError):
+        RigTrajectories.RigTrajectory(
+            sequence_id="s",
+            cameras_frame_timestamps_us={},
+            lidars_frame_timestamps_us={},
+            T_rig_worlds=torch.eye(4)[None].repeat(2, 1, 1).double(),  # 2 poses
+            T_rig_world_timestamps_us=torch.tensor([0]),  # 1 timestamp
+        )
+
+
+def test_rigtrajectory_post_init_rejects_wrong_camera_ts_shape():
+    import torch
+    from nre.utils.types import RigTrajectories
+
+    with pytest.raises(AssertionError):
+        RigTrajectories.RigTrajectory(
+            sequence_id="s",
+            cameras_frame_timestamps_us={"cam": torch.tensor([[0, 1, 2]])},  # 3 not 2
+            lidars_frame_timestamps_us={},
+            T_rig_worlds=torch.eye(4)[None].double(),
+            T_rig_world_timestamps_us=torch.tensor([0]),
+        )
+
+
+def test_rigtrajectory_post_init_rejects_wrong_lidar_ts_shape():
+    import torch
+    from nre.utils.types import RigTrajectories
+
+    with pytest.raises(AssertionError):
+        RigTrajectories.RigTrajectory(
+            sequence_id="s",
+            cameras_frame_timestamps_us={},
+            lidars_frame_timestamps_us={"lid": torch.tensor([[0, 1, 2]])},
+            T_rig_worlds=torch.eye(4)[None].double(),
+            T_rig_world_timestamps_us=torch.tensor([0]),
+        )
+
+
+# ---------------------------------------------------------------------------
+# RigTrajectories.__post_init__
+# ---------------------------------------------------------------------------
+
+
+def _make_rig_trajectories(camera_ids, lidar_ids, traj_camera_ids=None, traj_lidar_ids=None):
+    """Helper to build a minimal RigTrajectories instance for the post_init checks."""
+    from collections import OrderedDict
+    import torch
+    from nre.utils.types import FrameConversion, RigTrajectories
+
+    traj_camera_ids = traj_camera_ids if traj_camera_ids is not None else camera_ids
+    traj_lidar_ids = traj_lidar_ids if traj_lidar_ids is not None else lidar_ids
+
+    rt = RigTrajectories.RigTrajectory(
+        sequence_id="s",
+        cameras_frame_timestamps_us={cid: torch.tensor([[0, 1]]) for cid in traj_camera_ids},
+        lidars_frame_timestamps_us={lid: torch.tensor([[0, 1]]) for lid in traj_lidar_ids},
+        T_rig_worlds=torch.eye(4)[None].double(),
+        T_rig_world_timestamps_us=torch.tensor([0]),
+    )
+
+    cam_calibs = OrderedDict(
+        (cid, RigTrajectories.CameraCalibration(
+            sequence_id="s",
+            unique_sensor_idx=i,
+            T_sensor_rig=torch.eye(4),
+            camera_model_parameters=object(),  # placeholder
+        ))
+        for i, cid in enumerate(camera_ids)
+    )
+    lid_calibs = OrderedDict(
+        (lid, RigTrajectories.LidarCalibration(
+            sequence_id="s",
+            unique_sensor_idx=i,
+            T_sensor_rig=torch.eye(4),
+        ))
+        for i, lid in enumerate(lidar_ids)
+    )
+
+    return RigTrajectories(
+        T_world_base=torch.eye(4),
+        world_to_nre=FrameConversion(matrix=np.eye(4, dtype=np.float64)),
+        rig_trajectories=[rt],
+        camera_calibrations=cam_calibs,
+        lidar_calibrations=lid_calibs,
+    )
+
+
+def test_rig_trajectories_post_init_accepts_consistent_calibrations():
+    rt = _make_rig_trajectories(["cam_a"], ["lid_a"])
+    assert "cam_a" in rt.camera_calibrations
+    assert "lid_a" in rt.lidar_calibrations
+
+
+def test_rig_trajectories_post_init_rejects_missing_camera():
+    """Trajectory references a camera_id that's not in camera_calibrations."""
+    with pytest.raises(AssertionError, match="Missing camera"):
+        _make_rig_trajectories(
+            camera_ids=["cam_a"],
+            lidar_ids=["lid_a"],
+            traj_camera_ids=["cam_X"],  # not in calibrations
+        )
+
+
+def test_rig_trajectories_post_init_rejects_missing_lidar():
+    with pytest.raises(AssertionError, match="Missing lidar"):
+        _make_rig_trajectories(
+            camera_ids=["cam_a"],
+            lidar_ids=["lid_a"],
+            traj_lidar_ids=["lid_X"],
+        )
+
+
+# ---------------------------------------------------------------------------
+# TracksData.__post_init__
+# ---------------------------------------------------------------------------
+
+
+class _FakePose:
+    """Fake lt.SE3 stand-in providing only the .shape used by __post_init__ +
+    a ``.to(device)`` for to_device."""
+
+    def __init__(self, n_poses):
+        self._n = n_poses
+
+    @property
+    def shape(self):
+        return (self._n,)
+
+    def to(self, device):
+        return self
+
+
+def _make_tracks_data(n_tracks=2, n_poses_per_track=3, **overrides):
+    import torch
+    from nre.utils.types import TracksData
+
+    n_total = n_tracks * n_poses_per_track
+    base = dict(
+        tracks_id=[f"t{i}" for i in range(n_tracks)],
+        max_track_n_poses=n_poses_per_track,
+        tracks_packinfo=torch.tensor(
+            [[i * n_poses_per_track, n_poses_per_track] for i in range(n_tracks)],
+            dtype=torch.int64,
+        ),
+        tracks_poses=_FakePose(n_total),
+        tracks_timestamps_us=torch.zeros(n_total, dtype=torch.int64),
+        tracks_flags=torch.zeros(n_tracks, dtype=torch.int32),
+    )
+    base.update(overrides)
+    return TracksData(**base)
+
+
+def test_tracks_data_post_init_accepts_valid_inputs():
+    td = _make_tracks_data()
+    assert td.n_tracks == 2
+
+
+def test_tracks_data_post_init_rejects_packinfo_wrong_ndim():
+    import torch
+    with pytest.raises(ValueError, match="N_tracks, 2"):
+        _make_tracks_data(tracks_packinfo=torch.zeros(2, dtype=torch.int64))
+
+
+def test_tracks_data_post_init_rejects_packinfo_wrong_n_tracks():
+    import torch
+    with pytest.raises(ValueError, match="number of track packinfo"):
+        _make_tracks_data(tracks_packinfo=torch.zeros((3, 2), dtype=torch.int64))
+
+
+def test_tracks_data_post_init_rejects_packinfo_trailing_3():
+    import torch
+    with pytest.raises(ValueError, match="N_tracks, 2"):
+        _make_tracks_data(tracks_packinfo=torch.zeros((2, 3), dtype=torch.int64))
+
+
+def test_tracks_data_post_init_rejects_timestamp_count_mismatch():
+    import torch
+    with pytest.raises(ValueError, match="track timestamps"):
+        _make_tracks_data(tracks_timestamps_us=torch.zeros(99, dtype=torch.int64))
+
+
+def test_tracks_data_post_init_rejects_flags_count_mismatch():
+    import torch
+    with pytest.raises(ValueError, match="track flags"):
+        _make_tracks_data(tracks_flags=torch.zeros(7, dtype=torch.int32))
+
+
+def test_tracks_data_post_init_rejects_flags_wrong_dtype():
+    import torch
+    with pytest.raises(ValueError, match="torch.int32"):
+        _make_tracks_data(tracks_flags=torch.zeros(2, dtype=torch.int64))
+
+
+def test_tracks_data_to_device_returns_new_instance():
+    import torch
+    td = _make_tracks_data()
+    td2 = td.to_device(torch.device("cpu"))
+    assert td2 is not td
+    assert td2.n_tracks == td.n_tracks
+
+
+# ---------------------------------------------------------------------------
+# CuboidTracksData
+# ---------------------------------------------------------------------------
+
+
+def test_cuboid_tracks_data_post_init_accepts_valid_inputs():
+    import torch
+    from nre.utils.types import CuboidTracksData
+
+    cd = CuboidTracksData(cuboids_dims=torch.zeros(3, 3, dtype=torch.float32))
+    assert cd.n_tracks == 3
+
+
+def test_cuboid_tracks_data_post_init_rejects_wrong_ndim():
+    import torch
+    from nre.utils.types import CuboidTracksData
+
+    with pytest.raises(ValueError, match="N_tracks, 3"):
+        CuboidTracksData(cuboids_dims=torch.zeros(3, dtype=torch.float32))
+
+
+def test_cuboid_tracks_data_post_init_rejects_wrong_trailing_dim():
+    import torch
+    from nre.utils.types import CuboidTracksData
+
+    with pytest.raises(ValueError, match="N_tracks, 3"):
+        CuboidTracksData(cuboids_dims=torch.zeros(3, 4, dtype=torch.float32))
+
+
+def test_cuboid_tracks_data_post_init_rejects_wrong_dtype():
+    import torch
+    from nre.utils.types import CuboidTracksData
+
+    with pytest.raises(ValueError, match="torch.float32"):
+        CuboidTracksData(cuboids_dims=torch.zeros(3, 3, dtype=torch.float64))
+
+
+def test_cuboid_tracks_data_to_device():
+    import torch
+    from nre.utils.types import CuboidTracksData
+
+    cd = CuboidTracksData(cuboids_dims=torch.zeros(2, 3, dtype=torch.float32))
+    cd2 = cd.to_device(torch.device("cpu"))
+    assert cd2 is not cd
+
+
+# ---------------------------------------------------------------------------
+# CuboidTracksDataPack
+# ---------------------------------------------------------------------------
+
+
+def test_cuboid_tracks_data_pack_post_init_accepts_matching_n_tracks():
+    import torch
+    from nre.utils.types import CuboidTracksData, CuboidTracksDataPack
+
+    td = _make_tracks_data(n_tracks=3, n_poses_per_track=2)
+    cd = CuboidTracksData(cuboids_dims=torch.zeros(3, 3, dtype=torch.float32))
+    pack = CuboidTracksDataPack(tracks_data=td, cuboidtracks_data=cd)
+    assert pack.tracks_data.n_tracks == pack.cuboidtracks_data.n_tracks
+
+
+def test_cuboid_tracks_data_pack_post_init_rejects_n_tracks_mismatch():
+    import torch
+    from nre.utils.types import CuboidTracksData, CuboidTracksDataPack
+
+    td = _make_tracks_data(n_tracks=3, n_poses_per_track=2)
+    cd = CuboidTracksData(cuboids_dims=torch.zeros(7, 3, dtype=torch.float32))
+    with pytest.raises(ValueError, match="cuboid tracks"):
+        CuboidTracksDataPack(tracks_data=td, cuboidtracks_data=cd)
+
+
+def test_cuboid_tracks_data_pack_to_device():
+    import torch
+    from nre.utils.types import CuboidTracksData, CuboidTracksDataPack
+
+    td = _make_tracks_data(n_tracks=2, n_poses_per_track=2)
+    cd = CuboidTracksData(cuboids_dims=torch.zeros(2, 3, dtype=torch.float32))
+    pack = CuboidTracksDataPack(tracks_data=td, cuboidtracks_data=cd)
+    pack2 = pack.to_device(torch.device("cpu"))
+    assert pack2 is not pack
+
+
+# ---------------------------------------------------------------------------
+# RayFlags / TrackFlags enums
+# ---------------------------------------------------------------------------
+
+
+def test_ray_flags_enum_values_distinct():
+    from nre.utils.types import RayFlags
+
+    seen = set()
+    for f in RayFlags:
+        assert f.value not in seen
+        seen.add(f.value)
+
+
+def test_track_flags_none_is_zero():
+    from nre.utils.types import TrackFlags
+
+    assert TrackFlags.NONE.value == 0
+    assert TrackFlags.DYNAMIC.value > 0
