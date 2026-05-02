@@ -2,7 +2,7 @@
 
 The loader is a thin shim that:
 
-  1. reads ``predict_config.yaml`` (the static portion of NRMConfig),
+  1. holds the static portion of NRMConfig inline as a Python dict,
   2. resolves the pretrained checkpoint via the NGC registry,
   3. patches the CLI-derived fields (out_dir, ncore paths, merge toggle),
   4. validates the dict against ``NRMConfig``.

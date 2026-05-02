@@ -1,10 +1,9 @@
 """Standalone argparse CLI for the NRM Kelvin predict pipeline.
 
-Phase 1 step 3 introduced the user-facing flag surface; step 4.4 swaps the
-Hydra/OmegaConf composition path for a yaml.safe_load + pydantic validation
-loop (``instant_nurec.config.load_predict_config``). The CLI now constructs
-the typed :class:`NRMConfig` directly and hands it to the predict driver,
-which keeps `nre/` purely as a runtime library (no hydra imports needed).
+Phase 1 step 3 introduced the user-facing flag surface; step 4.4 dropped the
+Hydra/OmegaConf composition path entirely — ``instant_nurec.config`` now
+holds the static config inline as a Python dict and validates against
+:class:`NRMConfig` at load time. No yaml/hydra/omegaconf imports.
 
 Until Phase 3 swaps the build system, this module is launched via
 ``bazel run //instant_nurec:run -- ...`` so that bazel-compiled slang/CUDA

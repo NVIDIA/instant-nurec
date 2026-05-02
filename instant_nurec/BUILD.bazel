@@ -21,7 +21,6 @@ py_library(
         "cli.py",
         "config.py",
     ],
-    data = ["predict_config.yaml"],
     visibility = ["//visibility:public"],
     deps = [
         "//nre/nrm:pylib",
