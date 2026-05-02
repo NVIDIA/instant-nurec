@@ -19,7 +19,7 @@ import torch
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from nre.nrm.models.kelvin_backbone.base import (
+from instant_nurec.nre.nrm.models.kelvin_backbone.base import (
     KelvinLatent,
     KelvinMultiscaleFeaturesLatent,
 )

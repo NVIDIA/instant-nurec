@@ -151,12 +151,12 @@ def stubbed_datasets_utils(monkeypatch):
     ]:
         monkeypatch.setitem(sys.modules, name, mod)
     # Drop cached imports so the new stubs take effect.
-    for cached in ("nre.datasets.utils", "nre.utils.types"):
+    for cached in ("instant_nurec.nre.datasets.utils", "instant_nurec.nre.utils.types"):
         monkeypatch.delitem(sys.modules, cached, raising=False)
 
     import importlib
 
-    mod = importlib.import_module("nre.datasets.utils")
+    mod = importlib.import_module("instant_nurec.nre.datasets.utils")
     return mod, _CuboidTrackObservation, _BBox3, _Source, transformations_mod
 
 
@@ -215,7 +215,7 @@ def _make_obs(track_id="t1", ts=100, **overrides):
 
 def test_compute_cuboid_df_returns_sorted_dataframe(stubbed_datasets_utils):
     mod, *_ = stubbed_datasets_utils
-    from nre.utils.types import HalfClosedInterval
+    from instant_nurec.nre.utils.types import HalfClosedInterval
 
     obs = [
         _make_obs(track_id="b", ts=2),
@@ -234,7 +234,7 @@ def test_compute_cuboid_df_empty_observations_returns_typed_empty_frame(
     """The empty-list branch must initialise an empty DataFrame whose columns
     match the dataclass fields of CuboidTrackObservation."""
     mod, _Obs, *_ = stubbed_datasets_utils
-    from nre.utils.types import HalfClosedInterval
+    from instant_nurec.nre.utils.types import HalfClosedInterval
 
     loader = _FakeSequenceLoader([])
     df = mod.compute_cuboid_df(loader, HalfClosedInterval(start=0, end=10))
@@ -250,7 +250,7 @@ def test_compute_cuboid_df_empty_observations_returns_typed_empty_frame(
 
 def test_consolidate_creates_new_track_and_records_pose(stubbed_datasets_utils):
     mod, *_ = stubbed_datasets_utils
-    from nre.utils.types import HalfClosedInterval
+    from instant_nurec.nre.utils.types import HalfClosedInterval
 
     obs = [_make_obs(track_id="A", ts=10)]
     loader = _FakeSequenceLoader(obs)
@@ -276,7 +276,7 @@ def test_consolidate_filters_observations_too_close_to_rig(stubbed_datasets_util
     """Observations within `track_min_centroid_rig_dist_m` from the rig
     centre are dropped (self-classification filter)."""
     mod, *_ = stubbed_datasets_utils
-    from nre.utils.types import HalfClosedInterval
+    from instant_nurec.nre.utils.types import HalfClosedInterval
 
     # bbox_rig = T_reference_rig @ bbox; with eye(4), bbox_rig[:3] == centroid.
     # Centroid (0.5, 0, 0) → norm 0.5, threshold 1.0 → drop.
@@ -301,7 +301,7 @@ def test_consolidate_skips_observations_with_unmatched_label_source(
 ):
     """Label-source mismatch (versioned filter doesn't include the obs) → skip."""
     mod, *_ = stubbed_datasets_utils
-    from nre.utils.types import HalfClosedInterval
+    from instant_nurec.nre.utils.types import HalfClosedInterval
 
     matching = _make_obs(track_id="ok", source=_Source(name="manual"), source_version="v1")
     nonmatching = _make_obs(track_id="bad", source=_Source(name="manual"), source_version="v2")
@@ -322,7 +322,7 @@ def test_consolidate_unversioned_label_source_matches_any_version(stubbed_datase
     """A track_label_source string without `@version` matches any version
     (i.e. gets the `@any` synthetic appended)."""
     mod, *_ = stubbed_datasets_utils
-    from nre.utils.types import HalfClosedInterval
+    from instant_nurec.nre.utils.types import HalfClosedInterval
 
     o1 = _make_obs(track_id="t1", source=_Source(name="auto"), source_version="v1")
     o2 = _make_obs(track_id="t2", source=_Source(name="auto"), source_version="v9")
@@ -343,7 +343,7 @@ def test_consolidate_skips_duplicate_timestamp_within_track(stubbed_datasets_uti
     """Two observations of the same track at the same timestamp → second is
     dropped by the dedup check on `track['timestamps_us'][-2:]`."""
     mod, *_ = stubbed_datasets_utils
-    from nre.utils.types import HalfClosedInterval
+    from instant_nurec.nre.utils.types import HalfClosedInterval
 
     o1 = _make_obs(track_id="A", ts=10)
     o2 = _make_obs(track_id="A", ts=10)
@@ -364,7 +364,7 @@ def test_consolidate_handles_missing_rig_pose(stubbed_datasets_utils):
     """When pose_graph.evaluate_poses(..., 'rig', ...) raises KeyError, the
     rig-distance filter is skipped (T_reference_rig is None branch)."""
     mod, *_ = stubbed_datasets_utils
-    from nre.utils.types import HalfClosedInterval
+    from instant_nurec.nre.utils.types import HalfClosedInterval
 
     loader = _FakeSequenceLoader(
         [_make_obs(track_id="A", ts=10, bbox3=_BBox3(cx=0.0, cy=0.0, cz=0.0))],
@@ -390,7 +390,7 @@ def test_consolidate_serialized_bbox3_is_reconstructed_via_from_dict(
     """If the row's `bbox3` is already a dict (serialized form), the SUT goes
     through the `from_dict` reconstruction branch instead of plain init."""
     mod, *_ = stubbed_datasets_utils
-    from nre.utils.types import HalfClosedInterval
+    from instant_nurec.nre.utils.types import HalfClosedInterval
 
     # Build the DataFrame with serialized bbox3 (dict instead of _BBox3).
     obs = _make_obs(track_id="A", ts=10)

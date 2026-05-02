@@ -182,17 +182,17 @@ def stubbed_batch(monkeypatch):
         monkeypatch.setitem(sys.modules, name, mod)
 
     for cached in (
-        "nre.utils.batch",
-        "nre.utils.types",
-        "nre.utils.sensors",
-        "nre.utils.sensors.sensors",
-        "nre.utils.sensors.ncore_sensors_converters",
+        "instant_nurec.nre.utils.batch",
+        "instant_nurec.nre.utils.types",
+        "instant_nurec.nre.utils.sensors",
+        "instant_nurec.nre.utils.sensors.sensors",
+        "instant_nurec.nre.utils.sensors.ncore_sensors_converters",
     ):
         monkeypatch.delitem(sys.modules, cached, raising=False)
 
     import importlib
 
-    mod = importlib.import_module("nre.utils.batch")
+    mod = importlib.import_module("instant_nurec.nre.utils.batch")
     return mod
 
 

@@ -13,7 +13,7 @@ config_setting(
     flag_values = {"//bazel/flags:internal": "True"},
     visibility = [
         "//deps/docker:__pkg__",
-        "//nre:__pkg__",
+        "//instant_nurec/nre:__pkg__",
     ],
 )
 
@@ -22,7 +22,7 @@ config_setting(
     name = "mamba",
     flag_values = {"//bazel/flags:mamba": "True"},
     visibility = [
-        "//nre/nrm:__subpackages__",
+        "//instant_nurec/nre/nrm:__subpackages__",
     ],
 )
 

@@ -28,7 +28,7 @@ package_group(
     name = "core_package_group",
     packages = [
         "//libs/...",
-        "//nre/...",
+        "//instant_nurec/nre/...",
     ],
 )
 

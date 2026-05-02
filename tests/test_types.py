@@ -45,7 +45,7 @@ def _stub_compiled_imports(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setitem(sys.modules, "ncore.data", ncore_data_mod)
 
     # Force a fresh import (drop any prior cached version).
-    sys.modules.pop("nre.utils.types", None)
+    sys.modules.pop("instant_nurec.nre.utils.types", None)
 
 
 # ---------------------------------------------------------------------------
@@ -54,7 +54,7 @@ def _stub_compiled_imports(monkeypatch: pytest.MonkeyPatch):
 
 
 def test_halfclosed_post_init_accepts_valid_interval():
-    from nre.utils.types import HalfClosedInterval
+    from instant_nurec.nre.utils.types import HalfClosedInterval
 
     h = HalfClosedInterval(0, 10)
     assert h.start == 0
@@ -63,21 +63,21 @@ def test_halfclosed_post_init_accepts_valid_interval():
 
 def test_halfclosed_post_init_accepts_empty_interval():
     """start == end is valid (the interval is just empty)."""
-    from nre.utils.types import HalfClosedInterval
+    from instant_nurec.nre.utils.types import HalfClosedInterval
 
     h = HalfClosedInterval(5, 5)
     assert h.start == 5 and h.end == 5
 
 
 def test_halfclosed_post_init_rejects_inverted_interval():
-    from nre.utils.types import HalfClosedInterval
+    from instant_nurec.nre.utils.types import HalfClosedInterval
 
     with pytest.raises(AssertionError):
         HalfClosedInterval(10, 5)
 
 
 def test_halfclosed_intersection_overlapping():
-    from nre.utils.types import HalfClosedInterval
+    from instant_nurec.nre.utils.types import HalfClosedInterval
 
     a = HalfClosedInterval(0, 10)
     b = HalfClosedInterval(5, 15)
@@ -88,7 +88,7 @@ def test_halfclosed_intersection_overlapping():
 
 
 def test_halfclosed_intersection_subset():
-    from nre.utils.types import HalfClosedInterval
+    from instant_nurec.nre.utils.types import HalfClosedInterval
 
     a = HalfClosedInterval(0, 100)
     b = HalfClosedInterval(20, 30)
@@ -99,7 +99,7 @@ def test_halfclosed_intersection_subset():
 
 def test_halfclosed_intersection_disjoint_other_to_the_right():
     """First branch: other.start >= self.end."""
-    from nre.utils.types import HalfClosedInterval
+    from instant_nurec.nre.utils.types import HalfClosedInterval
 
     a = HalfClosedInterval(0, 10)
     b = HalfClosedInterval(10, 20)
@@ -108,7 +108,7 @@ def test_halfclosed_intersection_disjoint_other_to_the_right():
 
 def test_halfclosed_intersection_disjoint_other_to_the_left():
     """Second branch: other.end <= self.start."""
-    from nre.utils.types import HalfClosedInterval
+    from instant_nurec.nre.utils.types import HalfClosedInterval
 
     a = HalfClosedInterval(10, 20)
     b = HalfClosedInterval(0, 10)
@@ -121,7 +121,7 @@ def test_halfclosed_intersection_disjoint_other_to_the_left():
 
 
 def test_frameconversion_post_init_accepts_identity():
-    from nre.utils.types import FrameConversion
+    from instant_nurec.nre.utils.types import FrameConversion
 
     fc = FrameConversion(matrix=np.eye(4, dtype=np.float64))
     assert fc.target_scale == 1.0
@@ -129,21 +129,21 @@ def test_frameconversion_post_init_accepts_identity():
 
 
 def test_frameconversion_post_init_rejects_wrong_shape():
-    from nre.utils.types import FrameConversion
+    from instant_nurec.nre.utils.types import FrameConversion
 
     with pytest.raises(AssertionError):
         FrameConversion(matrix=np.eye(3, dtype=np.float64))
 
 
 def test_frameconversion_post_init_rejects_non_floating_dtype():
-    from nre.utils.types import FrameConversion
+    from instant_nurec.nre.utils.types import FrameConversion
 
     with pytest.raises(TypeError, match="floating point"):
         FrameConversion(matrix=np.eye(4, dtype=np.int32))
 
 
 def test_frameconversion_post_init_rejects_non_positive_scale_entry():
-    from nre.utils.types import FrameConversion
+    from instant_nurec.nre.utils.types import FrameConversion
 
     bad = np.eye(4, dtype=np.float64)
     bad[3, 3] = 0.0
@@ -153,7 +153,7 @@ def test_frameconversion_post_init_rejects_non_positive_scale_entry():
 
 def test_frameconversion_post_init_rejects_non_rotation_3x3():
     """The (3,3) block must be a rotation (det == 1)."""
-    from nre.utils.types import FrameConversion
+    from instant_nurec.nre.utils.types import FrameConversion
 
     bad = np.eye(4, dtype=np.float64)
     bad[0, 0] = 2.0  # det = 2
@@ -163,7 +163,7 @@ def test_frameconversion_post_init_rejects_non_rotation_3x3():
 
 def test_frameconversion_target_scale_inverse_of_bottomright():
     """target_scale = 1 / matrix[3,3]."""
-    from nre.utils.types import FrameConversion
+    from instant_nurec.nre.utils.types import FrameConversion
 
     m = np.eye(4, dtype=np.float64)
     m[3, 3] = 0.5  # i.e. source -> target scale = 2.0
@@ -172,7 +172,7 @@ def test_frameconversion_target_scale_inverse_of_bottomright():
 
 
 def test_frameconversion_get_transformation_matrices_identity():
-    from nre.utils.types import FrameConversion
+    from instant_nurec.nre.utils.types import FrameConversion
 
     fc = FrameConversion(matrix=np.eye(4, dtype=np.float32))
     T, S = fc.get_transformation_matrices()
@@ -185,7 +185,7 @@ def test_frameconversion_get_transformation_matrices_identity():
 def test_frameconversion_get_transformation_matrices_with_scale():
     """target_scale=2 means T scales the rotation block by 2 and S has 0.5
     on the diagonal of the leading 3x3 (1/s with s=2)."""
-    from nre.utils.types import FrameConversion
+    from instant_nurec.nre.utils.types import FrameConversion
 
     m = np.eye(4, dtype=np.float64)
     m[3, 3] = 0.5  # target_scale = 2
@@ -202,7 +202,7 @@ def test_frameconversion_get_transformation_matrices_with_scale():
 
 def test_frameconversion_transform_poses_singular_input():
     """Input is a single (4,4) pose; output is also (4,4)."""
-    from nre.utils.types import FrameConversion
+    from instant_nurec.nre.utils.types import FrameConversion
 
     fc = FrameConversion(matrix=np.eye(4, dtype=np.float64))
     p = np.eye(4, dtype=np.float64)
@@ -213,7 +213,7 @@ def test_frameconversion_transform_poses_singular_input():
 
 def test_frameconversion_transform_poses_batched_input():
     """Input is (N,4,4); output is (N,4,4)."""
-    from nre.utils.types import FrameConversion
+    from instant_nurec.nre.utils.types import FrameConversion
 
     fc = FrameConversion(matrix=np.eye(4, dtype=np.float64))
     p = np.tile(np.eye(4, dtype=np.float64)[None], (3, 1, 1))
@@ -224,7 +224,7 @@ def test_frameconversion_transform_poses_batched_input():
 
 def test_frameconversion_transform_poses_casts_to_declared_dtype():
     """If conversion dtype is float32 and input is float64, output is float32."""
-    from nre.utils.types import FrameConversion
+    from instant_nurec.nre.utils.types import FrameConversion
 
     fc = FrameConversion(matrix=np.eye(4, dtype=np.float32))
     p = np.eye(4, dtype=np.float64)
@@ -239,7 +239,7 @@ def test_frameconversion_transform_poses_casts_to_declared_dtype():
 
 def test_rigtrajectory_post_init_accepts_valid_inputs():
     import torch
-    from nre.utils.types import RigTrajectories
+    from instant_nurec.nre.utils.types import RigTrajectories
 
     rt = RigTrajectories.RigTrajectory(
         sequence_id="seq",
@@ -253,7 +253,7 @@ def test_rigtrajectory_post_init_accepts_valid_inputs():
 
 def test_rigtrajectory_post_init_rejects_2d_timestamps():
     import torch
-    from nre.utils.types import RigTrajectories
+    from instant_nurec.nre.utils.types import RigTrajectories
 
     with pytest.raises(AssertionError, match="must be 1D"):
         RigTrajectories.RigTrajectory(
@@ -267,7 +267,7 @@ def test_rigtrajectory_post_init_rejects_2d_timestamps():
 
 def test_rigtrajectory_post_init_rejects_pose_count_mismatch():
     import torch
-    from nre.utils.types import RigTrajectories
+    from instant_nurec.nre.utils.types import RigTrajectories
 
     with pytest.raises(AssertionError):
         RigTrajectories.RigTrajectory(
@@ -281,7 +281,7 @@ def test_rigtrajectory_post_init_rejects_pose_count_mismatch():
 
 def test_rigtrajectory_post_init_rejects_wrong_camera_ts_shape():
     import torch
-    from nre.utils.types import RigTrajectories
+    from instant_nurec.nre.utils.types import RigTrajectories
 
     with pytest.raises(AssertionError):
         RigTrajectories.RigTrajectory(
@@ -295,7 +295,7 @@ def test_rigtrajectory_post_init_rejects_wrong_camera_ts_shape():
 
 def test_rigtrajectory_post_init_rejects_wrong_lidar_ts_shape():
     import torch
-    from nre.utils.types import RigTrajectories
+    from instant_nurec.nre.utils.types import RigTrajectories
 
     with pytest.raises(AssertionError):
         RigTrajectories.RigTrajectory(
@@ -316,7 +316,7 @@ def _make_rig_trajectories(camera_ids, lidar_ids, traj_camera_ids=None, traj_lid
     """Helper to build a minimal RigTrajectories instance for the post_init checks."""
     from collections import OrderedDict
     import torch
-    from nre.utils.types import FrameConversion, RigTrajectories
+    from instant_nurec.nre.utils.types import FrameConversion, RigTrajectories
 
     traj_camera_ids = traj_camera_ids if traj_camera_ids is not None else camera_ids
     traj_lidar_ids = traj_lidar_ids if traj_lidar_ids is not None else lidar_ids
@@ -403,7 +403,7 @@ class _FakePose:
 
 def _make_tracks_data(n_tracks=2, n_poses_per_track=3, **overrides):
     import torch
-    from nre.utils.types import TracksData
+    from instant_nurec.nre.utils.types import TracksData
 
     n_total = n_tracks * n_poses_per_track
     base = dict(
@@ -477,7 +477,7 @@ def test_tracks_data_to_device_returns_new_instance():
 
 def test_cuboid_tracks_data_post_init_accepts_valid_inputs():
     import torch
-    from nre.utils.types import CuboidTracksData
+    from instant_nurec.nre.utils.types import CuboidTracksData
 
     cd = CuboidTracksData(cuboids_dims=torch.zeros(3, 3, dtype=torch.float32))
     assert cd.n_tracks == 3
@@ -485,7 +485,7 @@ def test_cuboid_tracks_data_post_init_accepts_valid_inputs():
 
 def test_cuboid_tracks_data_post_init_rejects_wrong_ndim():
     import torch
-    from nre.utils.types import CuboidTracksData
+    from instant_nurec.nre.utils.types import CuboidTracksData
 
     with pytest.raises(ValueError, match="N_tracks, 3"):
         CuboidTracksData(cuboids_dims=torch.zeros(3, dtype=torch.float32))
@@ -493,7 +493,7 @@ def test_cuboid_tracks_data_post_init_rejects_wrong_ndim():
 
 def test_cuboid_tracks_data_post_init_rejects_wrong_trailing_dim():
     import torch
-    from nre.utils.types import CuboidTracksData
+    from instant_nurec.nre.utils.types import CuboidTracksData
 
     with pytest.raises(ValueError, match="N_tracks, 3"):
         CuboidTracksData(cuboids_dims=torch.zeros(3, 4, dtype=torch.float32))
@@ -501,7 +501,7 @@ def test_cuboid_tracks_data_post_init_rejects_wrong_trailing_dim():
 
 def test_cuboid_tracks_data_post_init_rejects_wrong_dtype():
     import torch
-    from nre.utils.types import CuboidTracksData
+    from instant_nurec.nre.utils.types import CuboidTracksData
 
     with pytest.raises(ValueError, match="torch.float32"):
         CuboidTracksData(cuboids_dims=torch.zeros(3, 3, dtype=torch.float64))
@@ -509,7 +509,7 @@ def test_cuboid_tracks_data_post_init_rejects_wrong_dtype():
 
 def test_cuboid_tracks_data_to_device():
     import torch
-    from nre.utils.types import CuboidTracksData
+    from instant_nurec.nre.utils.types import CuboidTracksData
 
     cd = CuboidTracksData(cuboids_dims=torch.zeros(2, 3, dtype=torch.float32))
     cd2 = cd.to_device(torch.device("cpu"))
@@ -523,7 +523,7 @@ def test_cuboid_tracks_data_to_device():
 
 def test_cuboid_tracks_data_pack_post_init_accepts_matching_n_tracks():
     import torch
-    from nre.utils.types import CuboidTracksData, CuboidTracksDataPack
+    from instant_nurec.nre.utils.types import CuboidTracksData, CuboidTracksDataPack
 
     td = _make_tracks_data(n_tracks=3, n_poses_per_track=2)
     cd = CuboidTracksData(cuboids_dims=torch.zeros(3, 3, dtype=torch.float32))
@@ -533,7 +533,7 @@ def test_cuboid_tracks_data_pack_post_init_accepts_matching_n_tracks():
 
 def test_cuboid_tracks_data_pack_post_init_rejects_n_tracks_mismatch():
     import torch
-    from nre.utils.types import CuboidTracksData, CuboidTracksDataPack
+    from instant_nurec.nre.utils.types import CuboidTracksData, CuboidTracksDataPack
 
     td = _make_tracks_data(n_tracks=3, n_poses_per_track=2)
     cd = CuboidTracksData(cuboids_dims=torch.zeros(7, 3, dtype=torch.float32))
@@ -543,7 +543,7 @@ def test_cuboid_tracks_data_pack_post_init_rejects_n_tracks_mismatch():
 
 def test_cuboid_tracks_data_pack_to_device():
     import torch
-    from nre.utils.types import CuboidTracksData, CuboidTracksDataPack
+    from instant_nurec.nre.utils.types import CuboidTracksData, CuboidTracksDataPack
 
     td = _make_tracks_data(n_tracks=2, n_poses_per_track=2)
     cd = CuboidTracksData(cuboids_dims=torch.zeros(2, 3, dtype=torch.float32))
@@ -558,7 +558,7 @@ def test_cuboid_tracks_data_pack_to_device():
 
 
 def test_ray_flags_enum_values_distinct():
-    from nre.utils.types import RayFlags
+    from instant_nurec.nre.utils.types import RayFlags
 
     seen = set()
     for f in RayFlags:
@@ -567,7 +567,7 @@ def test_ray_flags_enum_values_distinct():
 
 
 def test_track_flags_none_is_zero():
-    from nre.utils.types import TrackFlags
+    from instant_nurec.nre.utils.types import TrackFlags
 
     assert TrackFlags.NONE.value == 0
     assert TrackFlags.DYNAMIC.value > 0

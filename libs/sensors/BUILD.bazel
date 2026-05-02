@@ -312,7 +312,7 @@ pytest_test(
         ":pylib_slang",
         "//libs/geometry/kernels:pylib",
         "//libs/slang_utils:pylib_utils",
-        "//nre/utils/sensors:pylib",
+        "//instant_nurec/nre/utils/sensors:pylib",
         pip_requirement("numpy"),
         pip_requirement("torch"),
     ],

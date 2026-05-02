@@ -17,8 +17,8 @@ import torch
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from nre.nrm.config.models import GaussiansActivationConfig
-from nre.nrm.models.activations import (
+from instant_nurec.nre.nrm.config.models import GaussiansActivationConfig
+from instant_nurec.nre.nrm.models.activations import (
     GaussianActivations,
     GaussianParams,
     OpacityActivation,

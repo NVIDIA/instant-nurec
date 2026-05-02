@@ -183,16 +183,16 @@ def stubbed_tracks(monkeypatch):
 
     # Drop cached modules so the new stubs take effect.
     for cached in (
-        "nre.datasets.tracks",
-        "nre.utils.types",
-        "nre.utils.packed_ops",
+        "instant_nurec.nre.datasets.tracks",
+        "instant_nurec.nre.utils.types",
+        "instant_nurec.nre.utils.packed_ops",
     ):
         monkeypatch.delitem(sys.modules, cached, raising=False)
 
     import importlib
 
-    mod = importlib.import_module("nre.datasets.tracks")
-    types_mod = importlib.import_module("nre.utils.types")
+    mod = importlib.import_module("instant_nurec.nre.datasets.tracks")
+    types_mod = importlib.import_module("instant_nurec.nre.utils.types")
     return mod, types_mod
 
 

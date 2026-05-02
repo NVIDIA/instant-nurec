@@ -95,7 +95,7 @@ pytest_test(
         pip_requirement("torch"),
         pip_requirement("numpy"),
         "//libs:pylib",
-        "//nre/utils:pylib_misc",
-        "//nre/utils:pylib_packed_ops",
+        "//instant_nurec/nre/utils:pylib_misc",
+        "//instant_nurec/nre/utils:pylib_packed_ops",
     ],
 )

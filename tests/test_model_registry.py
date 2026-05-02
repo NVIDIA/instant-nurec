@@ -27,7 +27,7 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from nre.utils.model_registry import (
+from instant_nurec.nre.utils.model_registry import (
     ModelRegistry,
     ModelRegistryError,
     NgcModelRegistry,
@@ -71,14 +71,14 @@ def test_partial_api_key_zero_clear_view_masks_everything():
 
 
 def test_log_and_raise_with_format_args(caplog):
-    with caplog.at_level(logging.ERROR, logger="nre.utils.model_registry"):
+    with caplog.at_level(logging.ERROR, logger="instant_nurec.nre.utils.model_registry"):
         with pytest.raises(ValueError, match="bad: 42"):
             log_and_raise(ValueError, "bad: %s", 42)
     assert "bad: 42" in caplog.text
 
 
 def test_log_and_raise_without_format_args(caplog):
-    with caplog.at_level(logging.ERROR, logger="nre.utils.model_registry"):
+    with caplog.at_level(logging.ERROR, logger="instant_nurec.nre.utils.model_registry"):
         with pytest.raises(RuntimeError, match="plain message"):
             log_and_raise(RuntimeError, "plain message")
     assert "plain message" in caplog.text
@@ -138,7 +138,7 @@ def test_validate_url_accepts_matching_domain(tmp_path):
 
 def test_validate_url_rejects_mismatched_domain(tmp_path, caplog):
     reg = _StubRegistry("https://example.com/foo", tmp_path)
-    with caplog.at_level(logging.WARNING, logger="nre.utils.model_registry"):
+    with caplog.at_level(logging.WARNING, logger="instant_nurec.nre.utils.model_registry"):
         assert reg._validate_url("https://other.com/foo") is False
     assert "Invalid URL domain" in caplog.text
 
@@ -147,7 +147,7 @@ def test_validate_url_returns_false_on_unparseable_url(tmp_path, monkeypatch):
     """Force urlparse to raise; the except branch should swallow and return False."""
     reg = _StubRegistry("https://example.com/foo", tmp_path)
 
-    import nre.utils.model_registry as mr
+    import instant_nurec.nre.utils.model_registry as mr
 
     def _boom(_url):
         raise RuntimeError("synthetic urlparse failure")
@@ -390,7 +390,7 @@ def test_ngc_get_api_key_warns_on_legacy_prefix(tmp_path, monkeypatch, caplog):
 
     monkeypatch.setattr(netrc, "netrc", lambda: _FakeNetrc({}))
     reg = NgcModelRegistry(_ngc_url(), tmp_path, api_key="nvapi-init")
-    with caplog.at_level(logging.WARNING, logger="nre.utils.model_registry"):
+    with caplog.at_level(logging.WARNING, logger="instant_nurec.nre.utils.model_registry"):
         out = reg._get_api_key("legacy-token-no-prefix")
     assert out == "legacy-token-no-prefix"
     assert "does not appear to be a valid NGC Personal Key" in caplog.text
@@ -399,7 +399,7 @@ def test_ngc_get_api_key_warns_on_legacy_prefix(tmp_path, monkeypatch, caplog):
 def test_ngc_get_api_key_silent_on_nvapi_prefix(tmp_path, monkeypatch, caplog):
     monkeypatch.delenv("NGC_API_KEY", raising=False)
     reg = NgcModelRegistry(_ngc_url(), tmp_path, api_key="nvapi-init")
-    with caplog.at_level(logging.WARNING, logger="nre.utils.model_registry"):
+    with caplog.at_level(logging.WARNING, logger="instant_nurec.nre.utils.model_registry"):
         out = reg._get_api_key("nvapi-good")
     assert out == "nvapi-good"
     assert "does not appear" not in caplog.text
@@ -565,7 +565,7 @@ class _FakeResponse:
 
 
 def test_legacy_api_key_exchange_returns_session_token_on_success(tmp_path, monkeypatch):
-    import nre.utils.model_registry as mr
+    import instant_nurec.nre.utils.model_registry as mr
 
     reg = NgcModelRegistry(_ngc_url(), tmp_path, api_key="nvapi-init")
 
@@ -586,7 +586,7 @@ def test_legacy_api_key_exchange_returns_session_token_on_success(tmp_path, monk
 
 
 def test_legacy_api_key_exchange_raises_when_no_token_in_response(tmp_path, monkeypatch):
-    import nre.utils.model_registry as mr
+    import instant_nurec.nre.utils.model_registry as mr
 
     reg = NgcModelRegistry(_ngc_url(), tmp_path, api_key="nvapi-init")
     monkeypatch.setattr(
@@ -597,7 +597,7 @@ def test_legacy_api_key_exchange_raises_when_no_token_in_response(tmp_path, monk
 
 
 def test_legacy_api_key_exchange_wraps_request_exception(tmp_path, monkeypatch):
-    import nre.utils.model_registry as mr
+    import instant_nurec.nre.utils.model_registry as mr
     import requests
 
     reg = NgcModelRegistry(_ngc_url(), tmp_path, api_key="nvapi-init")
@@ -611,7 +611,7 @@ def test_legacy_api_key_exchange_wraps_request_exception(tmp_path, monkeypatch):
 
 
 def test_legacy_api_key_exchange_wraps_invalid_response_format(tmp_path, monkeypatch):
-    import nre.utils.model_registry as mr
+    import instant_nurec.nre.utils.model_registry as mr
 
     reg = NgcModelRegistry(_ngc_url(), tmp_path, api_key="nvapi-init")
     monkeypatch.setattr(
@@ -625,7 +625,7 @@ def test_legacy_api_key_exchange_wraps_invalid_response_format(tmp_path, monkeyp
 
 def test_legacy_api_key_exchange_propagates_http_error(tmp_path, monkeypatch):
     """A 5xx from raise_for_status() flows through the requests-exception branch."""
-    import nre.utils.model_registry as mr
+    import instant_nurec.nre.utils.model_registry as mr
 
     reg = NgcModelRegistry(_ngc_url(), tmp_path, api_key="nvapi-init")
     monkeypatch.setattr(

@@ -133,12 +133,12 @@ def stubbed_ncore_utils(monkeypatch):
         ("ncore.impl.data.stores", stores_mod),
     ]:
         monkeypatch.setitem(sys.modules, name, mod)
-    for cached in ("nre.utils.ncore_utils", "nre.utils.types"):
+    for cached in ("instant_nurec.nre.utils.ncore_utils", "instant_nurec.nre.utils.types"):
         monkeypatch.delitem(sys.modules, cached, raising=False)
 
     import importlib
 
-    mod = importlib.import_module("nre.utils.ncore_utils")
+    mod = importlib.import_module("instant_nurec.nre.utils.ncore_utils")
     return mod, captured_loader_args
 
 

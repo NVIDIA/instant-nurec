@@ -21,8 +21,8 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from nre.nrm.config.nrm import NRMConfig
-from nre.utils.model_registry import create_model_registry
+from instant_nurec.nre.nrm.config.nrm import NRMConfig
+from instant_nurec.nre.utils.model_registry import create_model_registry
 
 
 _PRETRAINED_MODEL_URL = (

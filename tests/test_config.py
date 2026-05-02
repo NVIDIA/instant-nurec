@@ -20,12 +20,12 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from pydantic import ValidationError
 
-from nre.nrm.config.dataset import (
+from instant_nurec.nre.nrm.config.dataset import (
     AdaptiveSequentialFrameBatchSamplerConfig,
     CameraSubsamplerConfig,
     NCoreNRMCuboidTracksParamsConfig,
 )
-from nre.nrm.config.models import (
+from instant_nurec.nre.nrm.config.models import (
     GaussiansActivationConfig,
     KelvinDAv3EncoderConfig,
     KelvinDPTDecoderConfig,
@@ -33,8 +33,8 @@ from nre.nrm.config.models import (
     KelvinSkyCubemapDecoderConfig,
     PrimitiveExportPreprocessConfig,
 )
-from nre.nrm.config.nrm import GaussiansNRMSystemConfig, NRMConfig
-from nre.nrm.config.predict import PredictConfig, PrimitiveMergeConfig
+from instant_nurec.nre.nrm.config.nrm import GaussiansNRMSystemConfig, NRMConfig
+from instant_nurec.nre.nrm.config.predict import PredictConfig, PrimitiveMergeConfig
 
 
 # ---------------------------------------------------------------------------

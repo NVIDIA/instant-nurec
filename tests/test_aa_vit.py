@@ -18,8 +18,8 @@ import torch
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from nre.nrm.models.blocks.aa_vit import AlternateAttentionVisionTransformer
-from nre.nrm.models.blocks.attention import (
+from instant_nurec.nre.nrm.models.blocks.aa_vit import AlternateAttentionVisionTransformer
+from instant_nurec.nre.nrm.models.blocks.attention import (
     AttentionBlock,
     ModulatedAttentionBlock,
 )

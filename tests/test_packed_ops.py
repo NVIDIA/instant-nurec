@@ -50,11 +50,11 @@ def stubbed_module(monkeypatch):
     monkeypatch.setitem(sys.modules, "libs", libs_mod)
     monkeypatch.setitem(sys.modules, "libs.packed_ops", packed_pkg)
     monkeypatch.setitem(sys.modules, "libs.packed_ops.interface", interface_mod)
-    monkeypatch.delitem(sys.modules, "nre.utils.packed_ops", raising=False)
+    monkeypatch.delitem(sys.modules, "instant_nurec.nre.utils.packed_ops", raising=False)
 
     import importlib
 
-    mod = importlib.import_module("nre.utils.packed_ops")
+    mod = importlib.import_module("instant_nurec.nre.utils.packed_ops")
     return mod, captured
 
 
@@ -111,9 +111,9 @@ def test_values_and_pidx_dataclass_is_frozen_and_slotted():
     import sys as _sys
 
     # Need the module imported with stubs at least once; reuse from any earlier test.
-    if "nre.utils.packed_ops" not in _sys.modules:
+    if "instant_nurec.nre.utils.packed_ops" not in _sys.modules:
         pytest.skip("nre.utils.packed_ops not loaded yet (no prior stub run)")
-    mod = _sys.modules["nre.utils.packed_ops"]
+    mod = _sys.modules["instant_nurec.nre.utils.packed_ops"]
 
     inst = mod.ValuesAndPidx(values=torch.zeros(1), pidx=torch.zeros(1, dtype=torch.long))
     with pytest.raises((AttributeError, Exception)):

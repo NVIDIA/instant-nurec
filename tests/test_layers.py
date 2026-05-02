@@ -14,7 +14,7 @@ import torch
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from nre.nrm.models.blocks.layers import FeedForwardMLP, LayerNorm2d, LayerScale
+from instant_nurec.nre.nrm.models.blocks.layers import FeedForwardMLP, LayerNorm2d, LayerScale
 
 
 # ---------------------------------------------------------------------------
