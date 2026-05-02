@@ -1,0 +1,308 @@
+"""Branch-coverage tests for the predict-only NRM pydantic config schemas.
+
+Covers ``nre.nrm.config.predict`` (``PrimitiveMergeConfig`` + ``PredictConfig``),
+``nre.nrm.config.models`` (``KelvinDPTDecoderConfig.model_post_init`` +
+default-fields paths), and ``nre.nrm.config.nrm.NRMConfig.model_post_init``
+(resume / .ckpt suffix / NRE_ENV_RUN_ID env override / config_dir derivation).
+"""
+
+from __future__ import annotations
+
+import os
+import sys
+from pathlib import Path
+
+import pytest
+
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT))
+
+from pydantic import ValidationError
+
+from nre.nrm.config.dataset import (
+    AdaptiveSequentialFrameBatchSamplerConfig,
+    CameraSubsamplerConfig,
+    NCoreNRMCuboidTracksParamsConfig,
+)
+from nre.nrm.config.models import (
+    GaussiansActivationConfig,
+    KelvinDAv3EncoderConfig,
+    KelvinDPTDecoderConfig,
+    KelvinModelConfig,
+    KelvinSkyCubemapDecoderConfig,
+    PrimitiveExportPreprocessConfig,
+)
+from nre.nrm.config.nrm import GaussiansNRMSystemConfig, NRMConfig
+from nre.nrm.config.predict import PredictConfig, PrimitiveMergeConfig
+
+
+# ---------------------------------------------------------------------------
+# PrimitiveMergeConfig
+# ---------------------------------------------------------------------------
+
+
+def test_primitive_merge_default_disabled():
+    cfg = PrimitiveMergeConfig()
+    assert cfg.enabled is False
+    assert cfg.frustum_ownership_max_diff_m == 0.0
+
+
+def test_primitive_merge_enabled_with_positive_diff():
+    cfg = PrimitiveMergeConfig(enabled=True, frustum_ownership_max_diff_m=2.5)
+    assert cfg.enabled is True
+    assert cfg.frustum_ownership_max_diff_m == 2.5
+
+
+def test_primitive_merge_rejects_negative_diff():
+    with pytest.raises(ValidationError):
+        PrimitiveMergeConfig(frustum_ownership_max_diff_m=-0.1)
+
+
+# ---------------------------------------------------------------------------
+# PredictConfig
+# ---------------------------------------------------------------------------
+
+
+def test_predict_config_defaults():
+    cfg = PredictConfig()
+    assert cfg.chunk_size == 1
+    assert isinstance(cfg.primitive_merge, PrimitiveMergeConfig)
+    assert cfg.primitive_merge.enabled is False
+
+
+def test_predict_config_custom_chunk_size():
+    cfg = PredictConfig(chunk_size=4)
+    assert cfg.chunk_size == 4
+
+
+# ---------------------------------------------------------------------------
+# KelvinDPTDecoderConfig
+# ---------------------------------------------------------------------------
+
+
+def test_kelvin_dpt_decoder_post_init_accepts_positive_dpt_dim():
+    cfg = KelvinDPTDecoderConfig(dpt_dim=128, dpt_reassemble_hidden_dims=[8, 16, 32, 64])
+    assert cfg.dpt_dim == 128
+    # defaults
+    assert cfg.checkpointing is False
+    assert cfg.dpt_chunk_size == -1
+    assert cfg.time_encoding_dim == 256
+    assert cfg.motion_depth == 4
+
+
+def test_kelvin_dpt_decoder_post_init_rejects_zero_dpt_dim():
+    """pydantic wraps the AssertionError into a ValidationError."""
+    with pytest.raises(ValidationError, match="must be positive"):
+        KelvinDPTDecoderConfig(dpt_dim=0, dpt_reassemble_hidden_dims=[8, 16, 32, 64])
+
+
+def test_kelvin_dpt_decoder_post_init_rejects_negative_dpt_dim():
+    with pytest.raises(ValidationError, match="must be positive"):
+        KelvinDPTDecoderConfig(dpt_dim=-1, dpt_reassemble_hidden_dims=[8, 16, 32, 64])
+
+
+# ---------------------------------------------------------------------------
+# GaussiansActivationConfig defaults
+# ---------------------------------------------------------------------------
+
+
+def test_activation_config_defaults():
+    cfg = GaussiansActivationConfig()
+    assert cfg.opacity_shift == -2.0
+    assert cfg.scale_shift_log_ratio == -1.0
+    assert cfg.scale_max == 0.3
+    assert cfg.scale_min == 0.0
+
+
+def test_activation_config_custom_values():
+    cfg = GaussiansActivationConfig(
+        opacity_shift=1.0, scale_shift_log_ratio=0.0, scale_max=0.5, scale_min=0.01
+    )
+    assert cfg.opacity_shift == 1.0
+    assert cfg.scale_shift_log_ratio == 0.0
+    assert cfg.scale_max == 0.5
+    assert cfg.scale_min == 0.01
+
+
+# ---------------------------------------------------------------------------
+# PrimitiveExportPreprocessConfig
+# ---------------------------------------------------------------------------
+
+
+def test_primitive_export_preprocess_default():
+    cfg = PrimitiveExportPreprocessConfig()
+    assert cfg.density_prune_threshold == 0.01
+
+
+# ---------------------------------------------------------------------------
+# KelvinModelConfig (defaults + composed)
+# ---------------------------------------------------------------------------
+
+
+def _make_model_cfg(**overrides):
+    return KelvinModelConfig(
+        sky=KelvinSkyCubemapDecoderConfig(cubemap_size=256, embed_dim=64, depth=2),
+        encoder=KelvinDAv3EncoderConfig(
+            depth=4,
+            n_heads=8,
+            embed_dim=128,
+            take_block_indices=[0, 1, 2, 3],
+            aa_start_block_idx=0,
+        ),
+        decoder=KelvinDPTDecoderConfig(
+            dpt_dim=128, dpt_reassemble_hidden_dims=[8, 16, 32, 64]
+        ),
+        **overrides,
+    )
+
+
+def test_kelvin_model_default_track_padding_and_scene_rescale():
+    cfg = _make_model_cfg()
+    assert cfg.track_padding_m == [1.0, 1.0, 1.0]
+    assert cfg.scene_rescale == 1.0
+    assert cfg.patch_shape == (8, 8)
+    assert isinstance(cfg.activations, GaussiansActivationConfig)
+    assert isinstance(cfg.export_preprocess, PrimitiveExportPreprocessConfig)
+
+
+def test_kelvin_model_rejects_track_padding_not_3_long():
+    with pytest.raises(ValidationError):
+        _make_model_cfg(track_padding_m=[1.0, 1.0])
+
+
+def test_kelvin_model_rejects_track_padding_too_long():
+    with pytest.raises(ValidationError):
+        _make_model_cfg(track_padding_m=[1.0, 1.0, 1.0, 1.0])
+
+
+# ---------------------------------------------------------------------------
+# NCoreNRMCuboidTracksParamsConfig
+# ---------------------------------------------------------------------------
+
+
+def test_cuboid_tracks_params_rejects_negative_travel_distance():
+    with pytest.raises(ValidationError):
+        NCoreNRMCuboidTracksParamsConfig(
+            lidar_id="lidar_top",
+            track_min_travel_distance_m=-1.0,
+            track_min_centroid_rig_dist_m=0.5,
+            track_label_source="AUTOLABEL",
+        )
+
+
+def test_cuboid_tracks_params_rejects_negative_centroid_dist():
+    with pytest.raises(ValidationError):
+        NCoreNRMCuboidTracksParamsConfig(
+            lidar_id="lidar_top",
+            track_min_travel_distance_m=0.5,
+            track_min_centroid_rig_dist_m=-0.1,
+            track_label_source="AUTOLABEL",
+        )
+
+
+def test_cuboid_tracks_params_rejects_invalid_label_source():
+    with pytest.raises(ValidationError):
+        NCoreNRMCuboidTracksParamsConfig(
+            lidar_id="lidar_top",
+            track_min_travel_distance_m=0.5,
+            track_min_centroid_rig_dist_m=0.5,
+            track_label_source="MADE_UP_SOURCE",  # type: ignore[arg-type]
+        )
+
+
+def test_cuboid_tracks_params_default_extrapolate_us():
+    cfg = NCoreNRMCuboidTracksParamsConfig(
+        lidar_id="lidar_top",
+        track_min_travel_distance_m=0.5,
+        track_min_centroid_rig_dist_m=0.5,
+        track_label_source="AUTOLABEL",
+    )
+    assert cfg.track_extrapolate_timestamps_us == 1_000_000
+
+
+# ---------------------------------------------------------------------------
+# Sub-config simple defaults
+# ---------------------------------------------------------------------------
+
+
+def test_camera_subsampler_basic():
+    cfg = CameraSubsamplerConfig(frame_width=1920, frame_height=1080)
+    assert cfg.frame_width == 1920
+    assert cfg.frame_height == 1080
+
+
+def test_adaptive_sequential_frame_batch_sampler_basic():
+    cfg = AdaptiveSequentialFrameBatchSamplerConfig(
+        n_frames_per_sample=4, n_samples_per_sequence=2, max_frame_gap_timestamp_us=200000
+    )
+    assert cfg.n_frames_per_sample == 4
+    assert cfg.n_samples_per_sequence == 2
+
+
+# ---------------------------------------------------------------------------
+# GaussiansNRMSystemConfig
+# ---------------------------------------------------------------------------
+
+
+def test_system_config_defaults():
+    cfg = GaussiansNRMSystemConfig()
+    assert cfg.predict_num_workers == 0
+    assert cfg.predict_batch_size == 1
+
+
+# ---------------------------------------------------------------------------
+# NRMConfig.model_post_init
+# ---------------------------------------------------------------------------
+
+
+def _make_nrm_kwargs(out_dir, **extra):
+    base = dict(
+        resume=None,
+        out_dir=str(out_dir),
+        system=GaussiansNRMSystemConfig(),
+        dataset={"predict": None},
+        model=_make_model_cfg(),
+    )
+    base.update(extra)
+    return base
+
+
+def test_nrm_config_post_init_no_resume_no_env(tmp_path, monkeypatch):
+    monkeypatch.delenv("NRE_ENV_RUN_ID", raising=False)
+    cfg = NRMConfig(**_make_nrm_kwargs(tmp_path))
+    # config_dir auto-derives to out_dir/run_id/config
+    assert cfg.config_dir == os.path.join(str(tmp_path), cfg.run_id, "config")
+    assert cfg.run_id  # auto-generated shortuuid
+
+
+def test_nrm_config_post_init_env_run_id_overrides(tmp_path, monkeypatch):
+    monkeypatch.setenv("NRE_ENV_RUN_ID", "fixed-run-123")
+    cfg = NRMConfig(**_make_nrm_kwargs(tmp_path))
+    assert cfg.run_id == "fixed-run-123"
+    assert cfg.config_dir == os.path.join(str(tmp_path), "fixed-run-123", "config")
+
+
+def test_nrm_config_post_init_resume_existing_ckpt(tmp_path, monkeypatch):
+    monkeypatch.delenv("NRE_ENV_RUN_ID", raising=False)
+    ckpt = tmp_path / "model.ckpt"
+    ckpt.write_bytes(b"")
+    cfg = NRMConfig(**_make_nrm_kwargs(tmp_path, resume=str(ckpt)))
+    assert cfg.resume == str(ckpt)
+
+
+def test_nrm_config_post_init_resume_appends_ckpt_suffix(tmp_path, monkeypatch):
+    """When resume doesn't end with .ckpt, it gets appended; if the resulting
+    path doesn't exist, a FileNotFoundError is raised."""
+    monkeypatch.delenv("NRE_ENV_RUN_ID", raising=False)
+    base = tmp_path / "model"
+    base.with_suffix(".ckpt").write_bytes(b"")
+    cfg = NRMConfig(**_make_nrm_kwargs(tmp_path, resume=str(base)))
+    # The .ckpt suffix was appended.
+    assert cfg.resume == str(base) + ".ckpt"
+
+
+def test_nrm_config_post_init_resume_missing_file_raises(tmp_path, monkeypatch):
+    monkeypatch.delenv("NRE_ENV_RUN_ID", raising=False)
+    with pytest.raises(FileNotFoundError, match="does not exist"):
+        NRMConfig(**_make_nrm_kwargs(tmp_path, resume=str(tmp_path / "missing.ckpt")))
