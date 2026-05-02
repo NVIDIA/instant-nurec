@@ -8,6 +8,8 @@
 # without an express license agreement from NVIDIA CORPORATION or
 # its affiliates is strictly prohibited.
 
+import os
+
 import nvdiffrast.torch as dr
 import torch
 
@@ -95,6 +97,79 @@ def unproject_to_sky_cubemap(
     return sky_cubemap_feature, sky_cubemap_valid_mask[..., None]
 
 
+def _rotate_sky_cubemap_torch(cubemap: torch.Tensor, rotation: torch.Tensor) -> torch.Tensor:
+    """Pure-torch replacement for the dr.texture(boundary_mode="cube") path.
+
+    Per-face (u, v) projection follows the conventions established by
+    ``cubemap_ray_directions`` (the NRE face order is +X, -X, -Y, +Y, +Z, -Z;
+    note that indices 2/3 are swapped relative to OpenGL). See
+    ``internal/parity_proofs/phase2_7_cubemap_research.md`` for the full
+    derivation.
+
+    Cross-face seam interpolation differs from ``dr.texture`` here: each
+    face is sampled independently with ``padding_mode="border"``. Phase 2
+    step 7.4 may need to bump per-property tolerances to absorb the seam
+    drift.
+    """
+    H = cubemap.shape[1]
+    C = cubemap.shape[-1]
+    device = cubemap.device
+
+    query_rays = cubemap_ray_directions(H, device=device) @ rotation.float()
+    query_rays = query_rays.reshape(-1, 3)  # (6*H*H, 3)
+
+    abs_xyz = query_rays.abs()
+    dominant_axis = abs_xyz.argmax(dim=-1)  # 0=x, 1=y, 2=z
+    a = abs_xyz.gather(-1, dominant_axis.unsqueeze(-1)).squeeze(-1)  # (N,)
+    pos = query_rays.gather(-1, dominant_axis.unsqueeze(-1)).squeeze(-1) > 0
+
+    face_idx = torch.where(
+        dominant_axis == 0,
+        torch.where(pos, torch.zeros_like(dominant_axis), torch.ones_like(dominant_axis)),
+        torch.where(
+            dominant_axis == 1,
+            torch.where(pos, torch.full_like(dominant_axis, 3), torch.full_like(dominant_axis, 2)),
+            torch.where(pos, torch.full_like(dominant_axis, 4), torch.full_like(dominant_axis, 5)),
+        ),
+    )
+
+    x, y, z = query_rays.unbind(-1)
+    inv_a = 1.0 / a.clamp(min=1e-12)
+    # u/v formulas per face:
+    # 0 (+X): u=-z/a, v= y/a
+    # 1 (-X): u= z/a, v= y/a
+    # 2 (-Y): u= x/a, v= z/a
+    # 3 (+Y): u= x/a, v=-z/a
+    # 4 (+Z): u= x/a, v= y/a
+    # 5 (-Z): u=-x/a, v= y/a
+    u_per_face = torch.stack(
+        [-z * inv_a, z * inv_a, x * inv_a, x * inv_a, x * inv_a, -x * inv_a], dim=-1
+    )
+    v_per_face = torch.stack(
+        [y * inv_a, y * inv_a, z * inv_a, -z * inv_a, y * inv_a, y * inv_a], dim=-1
+    )
+    u = u_per_face.gather(-1, face_idx.unsqueeze(-1)).squeeze(-1)
+    v = v_per_face.gather(-1, face_idx.unsqueeze(-1)).squeeze(-1)
+
+    cube_4d = cubemap.permute(0, 3, 1, 2).contiguous()  # (6, C, H, H)
+    out = torch.zeros((6 * H * H, C), dtype=cubemap.dtype, device=device)
+    for f in range(6):
+        mask = face_idx == f
+        if mask.any():
+            uv = torch.stack([u[mask], v[mask]], dim=-1)  # (M, 2)
+            grid = uv.unsqueeze(0).unsqueeze(0)  # (1, 1, M, 2)
+            sampled = torch.nn.functional.grid_sample(
+                cube_4d[f : f + 1],
+                grid,
+                mode="bilinear",
+                padding_mode="border",
+                align_corners=False,
+            )
+            out[mask] = sampled[0, :, 0].T
+
+    return out.reshape(6, H, H, C)
+
+
 def rotate_sky_cubemap(cubemap: torch.Tensor, rotation: torch.Tensor) -> torch.Tensor:
     """
     Rotate the cubemap by the given rotation matrix.
@@ -104,7 +179,14 @@ def rotate_sky_cubemap(cubemap: torch.Tensor, rotation: torch.Tensor) -> torch.T
         rotation: (3, 3)
     Returns:
         (6, cubemap_size, cubemap_size, 3)
+
+    Phase 2 step 7 (additive): when ``INSTANT_NUREC_TORCH_CUBEMAP=1``, dispatch
+    to the pure-torch grid_sample replacement instead of ``dr.texture``. Default
+    behavior (env var unset) is unchanged.
     """
+    if os.environ.get("INSTANT_NUREC_TORCH_CUBEMAP", "0") == "1":
+        return _rotate_sky_cubemap_torch(cubemap, rotation)
+
     cubemap_size = cubemap.shape[1]
     query_rays = cubemap_ray_directions(cubemap_size, device=cubemap.device) @ rotation.float()
     query_rays = query_rays.reshape(-1, 3)
