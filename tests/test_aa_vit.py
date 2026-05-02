@@ -158,3 +158,165 @@ def test_get_rope_positions_n_cls_tokens_aa_branch_value():
     expected_cls = torch.arange(3).reshape(3, 1).expand(3, 2)
     assert torch.equal(g[:3], expected_cls)
     assert torch.equal(l[:3], expected_cls)
+
+
+# ---------------------------------------------------------------------------
+# get_intermediate_features
+# ---------------------------------------------------------------------------
+
+
+def test_get_intermediate_features_returns_correct_shapes():
+    """For block_indices=[depth-1] and global_cls_token provided, the output
+    is a single feat (B, V, h, w, 2*C) and a single cls (B, V, n_cls, 2*C)."""
+    m = _make_aa_vit(depth=4, embed_dim=32, n_heads=4, aa_start_block_idx=2)
+    m.eval()
+    img_tokens = torch.randn(1, 2, 4, 4, 32)
+    global_cls_token = torch.randn(1, 2, 1, 32)
+    feats, cls = m.get_intermediate_features(
+        img_tokens, block_indices=[3], global_cls_token=global_cls_token
+    )
+    assert len(feats) == 1
+    assert feats[0].shape == (1, 2, 4, 4, 64)
+    assert len(cls) == 1
+    assert cls[0].shape == (1, 2, 1, 64)
+
+
+def test_get_intermediate_features_multiple_block_indices():
+    """Asking for multiple block indices yields multiple outputs in order."""
+    m = _make_aa_vit(depth=4, embed_dim=32, n_heads=4, aa_start_block_idx=2)
+    m.eval()
+    img_tokens = torch.randn(1, 1, 4, 4, 32)
+    global_cls_token = torch.randn(1, 1, 1, 32)
+    feats, cls = m.get_intermediate_features(
+        img_tokens, block_indices=[1, 2, 3], global_cls_token=global_cls_token
+    )
+    assert len(feats) == 3
+    assert len(cls) == 3
+
+
+def test_get_intermediate_features_missing_last_block_raises():
+    m = _make_aa_vit(depth=4)
+    img_tokens = torch.randn(1, 1, 4, 4, 32)
+    with pytest.raises(ValueError, match="Last block index"):
+        m.get_intermediate_features(img_tokens, block_indices=[0, 1, 2])
+
+
+def test_get_intermediate_features_modulated_requires_cond():
+    m = _make_aa_vit(depth=4, use_modulated_attention=True)
+    img_tokens = torch.randn(1, 1, 4, 4, 32)
+    with pytest.raises(ValueError, match="modulation_cond"):
+        m.get_intermediate_features(img_tokens, block_indices=[3])
+
+
+def test_get_intermediate_features_default_global_cls_tokens_branch():
+    """global_cls_token=None falls back to default_global_cls_tokens when
+    with_default_global_cls_tokens=True."""
+    m = _make_aa_vit(
+        depth=4, embed_dim=32, aa_start_block_idx=2, with_default_global_cls_tokens=True
+    )
+    m.eval()
+    img_tokens = torch.randn(1, 2, 4, 4, 32)
+    # global_cls_token=None → uses default_global_cls_tokens
+    feats, cls = m.get_intermediate_features(
+        img_tokens, block_indices=[3], global_cls_token=None
+    )
+    assert feats[0].shape == (1, 2, 4, 4, 64)
+
+
+def test_get_intermediate_features_no_default_no_global_cls_raises():
+    """global_cls_token=None and with_default_global_cls_tokens=False →
+    AssertionError when transitioning to global blocks."""
+    m = _make_aa_vit(
+        depth=4, aa_start_block_idx=2, with_default_global_cls_tokens=False
+    )
+    img_tokens = torch.randn(1, 2, 4, 4, 32)
+    with pytest.raises(AssertionError, match="with_default_global_cls_tokens"):
+        m.get_intermediate_features(img_tokens, block_indices=[3], global_cls_token=None)
+
+
+def test_get_intermediate_features_aa_start_zero_path():
+    """When aa_start_block_idx=0, the early-block local-attention loop body
+    is never entered for any block; the transition body fires immediately
+    at block_idx=0."""
+    m = _make_aa_vit(
+        depth=2, embed_dim=32, n_heads=4, aa_start_block_idx=0,
+        with_default_global_cls_tokens=True,
+    )
+    m.eval()
+    img_tokens = torch.randn(1, 1, 4, 4, 32)
+    feats, cls = m.get_intermediate_features(img_tokens, block_indices=[1])
+    assert feats[0].shape == (1, 1, 4, 4, 64)
+
+
+def test_get_intermediate_features_modulated_with_cond():
+    """use_modulated_attention=True + modulation_cond provided → forward
+    completes."""
+    m = _make_aa_vit(
+        depth=4, embed_dim=32, n_heads=4, aa_start_block_idx=2,
+        use_modulated_attention=True, with_default_global_cls_tokens=True,
+    )
+    m.eval()
+    B, V = 1, 2
+    img_tokens = torch.randn(B, V, 4, 4, 32)
+    modulation_cond = torch.randn(B, V, 32)
+    feats, cls = m.get_intermediate_features(
+        img_tokens, block_indices=[3], modulation_cond=modulation_cond
+    )
+    assert feats[0].shape == (B, V, 4, 4, 64)
+
+
+# ---------------------------------------------------------------------------
+# _forward_attention_block branches (private but worth covering directly)
+# ---------------------------------------------------------------------------
+
+
+def test_forward_attention_block_checkpointing_all_wraps():
+    """checkpointing='all' wraps via torch.utils.checkpoint.checkpoint regardless of block_type."""
+    m = _make_aa_vit(depth=2, checkpointing="all")
+    m.eval()
+    x = torch.randn(2, 5, 32)
+    block = m.blocks[0]
+    out = m._forward_attention_block(
+        block.forward, "local", x, rope_positions=None, modulation_cond=None
+    )
+    assert out.shape == x.shape
+
+
+def test_forward_attention_block_checkpointing_local_only_wraps_local():
+    """checkpointing='local' wraps only block_type='local' calls; 'global' is unwrapped."""
+    m = _make_aa_vit(depth=2, checkpointing="local")
+    m.eval()
+    x = torch.randn(2, 5, 32)
+    block = m.blocks[0]
+    out_local = m._forward_attention_block(
+        block.forward, "local", x, rope_positions=None, modulation_cond=None
+    )
+    out_global = m._forward_attention_block(
+        block.forward, "global", x, rope_positions=None, modulation_cond=None
+    )
+    assert out_local.shape == x.shape
+    assert out_global.shape == x.shape
+
+
+def test_forward_attention_block_checkpointing_none_no_wrap():
+    """checkpointing='none' uses the block directly."""
+    m = _make_aa_vit(depth=2, checkpointing="none")
+    m.eval()
+    x = torch.randn(2, 5, 32)
+    block = m.blocks[0]
+    out = m._forward_attention_block(
+        block.forward, "local", x, rope_positions=None, modulation_cond=None
+    )
+    assert out.shape == x.shape
+
+
+def test_forward_attention_block_modulated_requires_cond_assertion():
+    """use_modulated_attention=True + modulation_cond=None inside
+    _forward_attention_block → AssertionError."""
+    m = _make_aa_vit(depth=2, use_modulated_attention=True)
+    x = torch.randn(2, 5, 32)
+    block = m.blocks[0]
+    with pytest.raises(AssertionError, match="modulation_cond is required"):
+        m._forward_attention_block(
+            block.forward, "local", x, rope_positions=None, modulation_cond=None
+        )
