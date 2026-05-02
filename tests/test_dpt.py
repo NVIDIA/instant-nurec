@@ -394,3 +394,61 @@ def test_full_head_zero_init_with_values_and_without():
     x_list = [torch.randn(1, 4, 4, 32) for _ in range(4)]
     out = head(x_list, output_shape=(8, 8))
     assert torch.allclose(out, torch.zeros_like(out))
+
+
+def test_fusion_head_forward_pos_embed_branch():
+    """When pos_embed_strength is set, the pos_embed branch in forward fires."""
+    head = DPTFusionHead(
+        input_dim=8,
+        output_dim=3,
+        n_blocks=2,
+        before_conv="1-layer",
+        after_conv="2-layers",
+        after_conv_dim=16,
+        pos_embed_strength=0.1,  # enables pos_embed branch
+    )
+    x_list = [torch.randn(1, 8, 4, 4), torch.randn(1, 8, 2, 2)]
+    out = head(x_list, output_shape=(8, 8))
+    assert out.shape == (1, 3, 8, 8)
+
+
+def test_full_head_forward_with_fusion_features_chunk_branch():
+    """fusion_features kwarg triggers the per-chunk slicing branch."""
+    head = DPTFullHead(
+        input_dim=32,
+        reassemble_hidden_dims=(4, 8, 16, 32),
+        reassemble_dim=8,
+        output_dim=3,
+        n_blocks=4,
+        head_before_conv="1-layer",
+        head_after_conv="2-layers",
+        head_after_conv_dim=16,
+        pos_embed_strength=None,
+    )
+    B = 4
+    x_list = [torch.randn(B, 4, 4, 32) for _ in range(4)]
+    fusion = torch.randn(B, 4, 8, 8)  # input_dim // 2 = 4 channels
+    out = head(x_list, output_shape=(8, 8), fusion_features=fusion, chunk_size=2)
+    assert out.shape == (B, 3, 8, 8)
+
+
+def test_full_head_forward_checkpointing_branch():
+    """checkpointing=True wraps each chunk in torch.utils.checkpoint.checkpoint."""
+    head = DPTFullHead(
+        input_dim=32,
+        reassemble_hidden_dims=(4, 8, 16, 32),
+        reassemble_dim=8,
+        output_dim=3,
+        n_blocks=4,
+        head_before_conv="1-layer",
+        head_after_conv="2-layers",
+        head_after_conv_dim=16,
+        pos_embed_strength=None,
+        checkpointing=True,
+    )
+    head.train()  # checkpointing requires train mode for autograd-friendly path
+    # Need at least one tensor with requires_grad for checkpoint to be exercised
+    # — use a leaf input.
+    x_list = [torch.randn(2, 4, 4, 32, requires_grad=True) for _ in range(4)]
+    out = head(x_list, output_shape=(8, 8))
+    assert out.shape == (2, 3, 8, 8)
