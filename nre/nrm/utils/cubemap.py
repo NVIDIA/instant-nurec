@@ -8,9 +8,6 @@
 # without an express license agreement from NVIDIA CORPORATION or
 # its affiliates is strictly prohibited.
 
-import os
-
-import nvdiffrast.torch as dr
 import torch
 
 from einops import rearrange
@@ -97,8 +94,8 @@ def unproject_to_sky_cubemap(
     return sky_cubemap_feature, sky_cubemap_valid_mask[..., None]
 
 
-def _rotate_sky_cubemap_torch(cubemap: torch.Tensor, rotation: torch.Tensor) -> torch.Tensor:
-    """Pure-torch replacement for the dr.texture(boundary_mode="cube") path.
+def rotate_sky_cubemap(cubemap: torch.Tensor, rotation: torch.Tensor) -> torch.Tensor:
+    """Rotate the cubemap by the given rotation matrix.
 
     Per-face (u, v) projection follows the conventions established by
     ``cubemap_ray_directions`` (the NRE face order is +X, -X, -Y, +Y, +Z, -Z;
@@ -106,10 +103,18 @@ def _rotate_sky_cubemap_torch(cubemap: torch.Tensor, rotation: torch.Tensor) -> 
     ``internal/parity_proofs/phase2_7_cubemap_research.md`` for the full
     derivation.
 
-    Cross-face seam interpolation differs from ``dr.texture`` here: each
-    face is sampled independently with ``padding_mode="border"``. Phase 2
-    step 7.4 may need to bump per-property tolerances to absorb the seam
-    drift.
+    Phase 2 step 7: replaced ``nvdiffrast.dr.texture(boundary_mode="cube")``
+    with this pure-torch grid_sample path. Each face is sampled
+    independently with ``padding_mode="border"``; seam blending is local
+    to a face rather than cross-face, but parity holds within
+    ``tests/tolerance.json``. Note that due to aliasing, rotating the
+    cubemap first and then back is not the same as the original.
+
+    Args:
+        cubemap: (6, cubemap_size, cubemap_size, C)
+        rotation: (3, 3)
+    Returns:
+        (6, cubemap_size, cubemap_size, C)
     """
     H = cubemap.shape[1]
     C = cubemap.shape[-1]
@@ -170,35 +175,5 @@ def _rotate_sky_cubemap_torch(cubemap: torch.Tensor, rotation: torch.Tensor) -> 
     return out.reshape(6, H, H, C)
 
 
-def rotate_sky_cubemap(cubemap: torch.Tensor, rotation: torch.Tensor) -> torch.Tensor:
-    """
-    Rotate the cubemap by the given rotation matrix.
-    Note that due to aliasing, rotating the cubemap first and then back is not the same as the original.
-    Args:
-        cubemap: (6, cubemap_size, cubemap_size, 3)
-        rotation: (3, 3)
-    Returns:
-        (6, cubemap_size, cubemap_size, 3)
-
-    Phase 2 step 7: torch grid_sample is the default. Set
-    ``INSTANT_NUREC_NVDIFFRAST_CUBEMAP=1`` to fall back to the legacy
-    ``dr.texture`` path (kept temporarily as a recovery option).
-    """
-    if os.environ.get("INSTANT_NUREC_NVDIFFRAST_CUBEMAP", "0") != "1":
-        return _rotate_sky_cubemap_torch(cubemap, rotation)
-
-    cubemap_size = cubemap.shape[1]
-    query_rays = cubemap_ray_directions(cubemap_size, device=cubemap.device) @ rotation.float()
-    query_rays = query_rays.reshape(-1, 3)
-    opengl_rays_d = torch.stack([query_rays[:, 0], -query_rays[:, 1], query_rays[:, 2]], dim=-1)
-    sky_color = dr.texture(
-        cubemap[None],
-        opengl_rays_d[None, None],
-        filter_mode="linear",
-        boundary_mode="cube",
-    )
-    assert isinstance(sky_color, torch.Tensor)
-    sky_color = sky_color.reshape(6, cubemap_size, cubemap_size, 3)
-    return sky_color
 
 

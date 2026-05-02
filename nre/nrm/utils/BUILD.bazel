@@ -57,7 +57,6 @@ py_library(
         pip_requirement("torch"),
         pip_requirement("einops"),
         pip_requirement("nvidia-ncore"),
-        pip_requirement("nvdiffrast"),
     ],
 )
 
