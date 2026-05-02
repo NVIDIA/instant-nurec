@@ -1,3 +1,31 @@
+[project]
+name = "instant_nurec"
+version = "0.1.0"
+description = "Standalone NRM Kelvin predict pipeline (NRMConfig → ncorev4 ingest → Kelvin predict → 3D-Gaussian PLY export)."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "LicenseRef-NvidiaProprietary" }
+dependencies = [
+    "numpy",
+    "plyfile",
+    "pillow",
+    "pyyaml",
+    "tqdm",
+    "pydantic",
+    "torch",
+    "pandas",
+    "zarr",
+    "universal-pathlib",
+    "requests",
+]
+
+[project.scripts]
+instant-nurec = "instant_nurec.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["instant_nurec*"]
+exclude = ["tests*", "baselines*", "internal*", "scripts*"]
+
 [tool.uv]
 managed = true
 
@@ -10,7 +38,7 @@ exclude = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["nre", "scripts", "libs", "ncore", "ncore_internal"]
+known-first-party = ["instant_nurec", "scripts", "libs", "ncore", "ncore_internal"]
 default-section = "third-party"
 known-third-party = ["wandb"] # prevent local wandb folders to be treaded as different package - see https://github.com/astral-sh/ruff/issues/8571
 section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
@@ -21,5 +49,5 @@ lines-after-imports = 2
 exclude = ["bazel**/"]
 
 [build-system]
-requires = ["setuptools>=42", "wheel", "pydantic", "pyyaml"]
+requires = ["setuptools>=42", "wheel"]
 build-backend = "setuptools.build_meta"
