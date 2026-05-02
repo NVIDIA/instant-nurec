@@ -252,6 +252,25 @@ def test_system_config_defaults():
 
 
 # ---------------------------------------------------------------------------
+# BaseConfigSchema.__hash__
+# ---------------------------------------------------------------------------
+
+
+def test_base_config_schema_is_hashable():
+    """The custom __hash__ override (vs PydanticBaseModel's hash-by-identity)
+    enables instances to be used as dict keys / set members."""
+    cfg1 = PrimitiveMergeConfig(enabled=False)
+    cfg2 = PrimitiveMergeConfig(enabled=False)
+    cfg3 = PrimitiveMergeConfig(enabled=True)
+    # Same content → same hash.
+    assert hash(cfg1) == hash(cfg2)
+    # Different content → different hash (almost always; depends on __repr__ diff).
+    assert hash(cfg1) != hash(cfg3)
+    # And both are hashable in a set / dict
+    assert len({cfg1, cfg2, cfg3}) == 2
+
+
+# ---------------------------------------------------------------------------
 # NRMConfig.model_post_init
 # ---------------------------------------------------------------------------
 
