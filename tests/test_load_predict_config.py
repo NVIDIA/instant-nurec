@@ -176,3 +176,40 @@ def test_missing_pretrained_checkpoint_raises_file_not_found(
             output_dir=tmp_path / "out",
             merge_enabled=False,
         )
+
+
+def test_resolve_pretrained_checkpoint_invokes_create_model_registry(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """Cover the implementation of ``_resolve_pretrained_checkpoint`` itself by
+    monkey-patching ``create_model_registry`` (the network-bound dep) to a
+    captured-args stub. Verifies the function plumbs the configured
+    URL+cache path through and returns whatever ``.get_model()`` yields.
+
+    The autouse fixture above replaces ``_resolve_pretrained_checkpoint`` to
+    avoid network during other tests; we reload the module to restore the
+    original implementation, then rely on monkeypatch teardown to undo our
+    own patches.
+    """
+    import importlib
+    import instant_nurec.config as config_mod
+
+    importlib.reload(config_mod)
+
+    captured = {}
+
+    class _FakeRegistry:
+        def get_model(self):
+            return "/cached/path/to/kelvin.ckpt"
+
+    def _fake_create_model_registry(url, cache_dir):
+        captured["url"] = url
+        captured["cache_dir"] = cache_dir
+        return _FakeRegistry()
+
+    monkeypatch.setattr(config_mod, "create_model_registry", _fake_create_model_registry)
+
+    out = config_mod._resolve_pretrained_checkpoint()
+    assert out == "/cached/path/to/kelvin.ckpt"
+    assert captured["url"] == config_mod._PRETRAINED_MODEL_URL
+    assert captured["cache_dir"] == config_mod._PRETRAINED_CACHE_DIR
