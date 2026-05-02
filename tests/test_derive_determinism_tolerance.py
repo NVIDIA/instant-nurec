@@ -88,6 +88,52 @@ def test_read_props_returns_multiple_properties_in_one_dict(tmp_path: Path):
     assert set(out.keys()) == {"x", "red"}
 
 
+def test_read_props_widens_multibyte_int_dtypes_to_int64(tmp_path: Path):
+    """A PLY with `u4` (unsigned int) or `i4` (signed int) properties must
+    take the multi-byte int branch (line 47-48), widening to int64."""
+    from plyfile import PlyData, PlyElement
+
+    p = tmp_path / "ints.ply"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    rec = np.empty(2, dtype=[("seq_id", "u4"), ("delta", "i4")])
+    rec["seq_id"] = [10, 4_000_000_000 % (2**32)]  # large unsigned
+    rec["delta"] = [-1, 2_000_000_000]
+    PlyData([PlyElement.describe(rec, "vertex")]).write(str(p))
+
+    out = _read_props(p)
+    # val_dtype strings come straight from numpy: "u4"/"i4".
+    assert out["seq_id"][0].startswith("u") and out["seq_id"][0] != "u1"
+    assert out["seq_id"][1].dtype == torch.int64
+    assert out["delta"][0].startswith("i")
+    assert out["delta"][1].dtype == torch.int64
+    # values round-trip through the int64 widen
+    assert out["delta"][1].tolist() == [-1, 2_000_000_000]
+
+
+def test_read_props_raises_on_unsupported_dtype(tmp_path: Path, monkeypatch):
+    """Defensive ValueError branch (line 50): if the PLY has a property whose
+    val_dtype isn't ``f*`` / ``u1`` / ``u*`` / ``i*``, _read_props must raise."""
+    import scripts.derive_determinism_tolerance as ddt
+
+    class _FakeProp:
+        name = "weird"
+        val_dtype = "z9"
+
+    class _FakeVert:
+        properties = (_FakeProp(),)
+
+        def __getitem__(self, name):
+            return np.array([0.0])
+
+    class _FakePly:
+        def __getitem__(self, name):
+            return _FakeVert()
+
+    monkeypatch.setattr(ddt.PlyData, "read", staticmethod(lambda _path: _FakePly()))
+    with pytest.raises(ValueError, match="Unsupported dtype z9"):
+        _read_props(tmp_path / "anything.ply")
+
+
 # ---------------------------------------------------------------------------
 # _glob_one
 # ---------------------------------------------------------------------------
@@ -293,6 +339,44 @@ def test_main_with_drift_records_max_diff(tmp_path, monkeypatch):
     ddt.main()
     data = json.loads(out.read_text())
     assert data["x"] == pytest.approx(0.5)
+
+
+def test_main_no_merge_bumped_print_branch(tmp_path, monkeypatch, capsys):
+    """The no_merge ``if bumped:`` branch (lines 133-137) only fires when a
+    no_merge chunk-pair ratchets tolerance higher than the merge step did.
+    Build identical merge PLYs (no merge ratchet) but differing no_merge
+    chunks (forces a no_merge ratchet) and assert the print fires."""
+    import scripts.derive_determinism_tolerance as ddt
+
+    base = tmp_path / "baselines" / "more_baselines"
+
+    # both runs: identical merge data → merge step does NOT ratchet on iter 1
+    # because before == {} so 0.0 != prev.get(k, 0.0) is False ⇒ bumped is empty.
+    for run_i in (1, 2):
+        _write_ply(
+            base / f"run_{run_i}" / "merge" / "s" / "ply" / "p" / "p.ply",
+            floats={"x": np.array([0.0, 0.0])},
+        )
+
+    # run_1 no_merge x=0; run_2 no_merge x=0.7 → diff 0.7 > tolerance 0.0 ⇒ bumped fires
+    _write_ply(
+        base / "run_1" / "no_merge" / "s" / "ply" / "p" / "p_chunk0.ply",
+        floats={"x": np.array([0.0])},
+    )
+    _write_ply(
+        base / "run_2" / "no_merge" / "s" / "ply" / "p" / "p_chunk0.ply",
+        floats={"x": np.array([0.7])},
+    )
+
+    runs = sorted(base.glob("run_*/"))
+    monkeypatch.setattr(ddt, "RUNS", runs)
+    monkeypatch.setattr(ddt, "OUT", tmp_path / "tol.json")
+    monkeypatch.setattr(ddt, "REPO_ROOT", tmp_path)
+    ddt.main()
+    captured = capsys.readouterr().out
+    # Bumped-print line for chunk0 / run_1 vs run_2 must appear.
+    assert "chunk0 run_1 vs run_2: bumped" in captured
+    assert "x:" in captured
 
 
 def test_main_rejects_fewer_than_2_runs(tmp_path, monkeypatch):
