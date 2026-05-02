@@ -1,0 +1,232 @@
+"""Branch-coverage tests for nre.nrm.datasets.samplers.
+
+The module imports from ``nre.utils.types`` which transitively pulls
+in ``lietorch`` and ``ncore.data``. We stub them via ``sys.modules``
+exactly like ``tests/test_types.py`` does.
+"""
+
+from __future__ import annotations
+
+import sys
+import types as _typesmod
+from pathlib import Path
+
+import numpy as np
+import pytest
+
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT))
+
+
+@pytest.fixture(autouse=True)
+def _stub_compiled_imports(monkeypatch: pytest.MonkeyPatch):
+    fake_lt = _typesmod.ModuleType("lietorch")
+
+    class _FakeSE3:
+        pass
+
+    fake_lt.SE3 = _FakeSE3  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "lietorch", fake_lt)
+
+    ncore_mod = _typesmod.ModuleType("ncore")
+    ncore_data_mod = _typesmod.ModuleType("ncore.data")
+    ncore_data_mod.ConcreteCameraModelParametersUnion = type(  # type: ignore[attr-defined]
+        "X", (), {}
+    )
+    ncore_data_mod.ConcreteLidarModelParametersUnion = type(  # type: ignore[attr-defined]
+        "Y", (), {}
+    )
+    monkeypatch.setitem(sys.modules, "ncore", ncore_mod)
+    monkeypatch.setitem(sys.modules, "ncore.data", ncore_data_mod)
+
+    # Force fresh import of samplers and types
+    sys.modules.pop("nre.nrm.datasets.samplers", None)
+    sys.modules.pop("nre.utils.types", None)
+
+
+# ---------------------------------------------------------------------------
+# get_closest_frame_index
+# ---------------------------------------------------------------------------
+
+
+def test_get_closest_frame_index_exact_match_returns_that_index():
+    from nre.nrm.datasets.samplers import get_closest_frame_index
+
+    ts = np.array([0, 100, 200, 300])
+    assert get_closest_frame_index(ts, 200) == 2
+
+
+def test_get_closest_frame_index_picks_nearest_neighbor():
+    from nre.nrm.datasets.samplers import get_closest_frame_index
+
+    ts = np.array([0, 100, 200, 300])
+    assert get_closest_frame_index(ts, 110) == 1  # closer to 100 than 200
+    assert get_closest_frame_index(ts, 250) == 2  # tied to 200/300; argmin picks first
+
+
+def test_get_closest_frame_index_target_below_min():
+    from nre.nrm.datasets.samplers import get_closest_frame_index
+
+    ts = np.array([100, 200, 300])
+    assert get_closest_frame_index(ts, -50) == 0
+
+
+def test_get_closest_frame_index_target_above_max():
+    from nre.nrm.datasets.samplers import get_closest_frame_index
+
+    ts = np.array([100, 200, 300])
+    assert get_closest_frame_index(ts, 99999) == 2
+
+
+def test_get_closest_frame_index_returns_python_int():
+    from nre.nrm.datasets.samplers import get_closest_frame_index
+
+    ts = np.array([0, 100], dtype=np.uint64)
+    out = get_closest_frame_index(ts, 50)
+    assert isinstance(out, int) and not isinstance(out, np.integer)
+
+
+# ---------------------------------------------------------------------------
+# AdaptiveSequentialFrameBatchSampler
+# ---------------------------------------------------------------------------
+
+
+def _make_sampler(**overrides):
+    from nre.nrm.config.dataset import AdaptiveSequentialFrameBatchSamplerConfig
+    from nre.nrm.datasets.samplers import AdaptiveSequentialFrameBatchSampler
+
+    base = dict(
+        n_frames_per_sample=4,
+        n_samples_per_sequence=8,
+        max_frame_gap_timestamp_us=200_000,
+    )
+    base.update(overrides)
+    cfg = AdaptiveSequentialFrameBatchSamplerConfig(**base)
+    return AdaptiveSequentialFrameBatchSampler(cfg)
+
+
+def test_sampler_constructor_rejects_zero_frames_per_sample():
+    from nre.nrm.config.dataset import AdaptiveSequentialFrameBatchSamplerConfig
+    from nre.nrm.datasets.samplers import AdaptiveSequentialFrameBatchSampler
+
+    cfg = AdaptiveSequentialFrameBatchSamplerConfig(
+        n_frames_per_sample=0, n_samples_per_sequence=1, max_frame_gap_timestamp_us=1
+    )
+    with pytest.raises(AssertionError, match="n_frames_per_sample"):
+        AdaptiveSequentialFrameBatchSampler(cfg)
+
+
+def test_sampler_constructor_rejects_zero_samples_per_sequence():
+    from nre.nrm.config.dataset import AdaptiveSequentialFrameBatchSamplerConfig
+    from nre.nrm.datasets.samplers import AdaptiveSequentialFrameBatchSampler
+
+    cfg = AdaptiveSequentialFrameBatchSamplerConfig(
+        n_frames_per_sample=1, n_samples_per_sequence=0, max_frame_gap_timestamp_us=1
+    )
+    with pytest.raises(AssertionError, match="n_samples_per_sequence"):
+        AdaptiveSequentialFrameBatchSampler(cfg)
+
+
+def test_sampler_constructor_rejects_zero_max_frame_gap():
+    from nre.nrm.config.dataset import AdaptiveSequentialFrameBatchSamplerConfig
+    from nre.nrm.datasets.samplers import AdaptiveSequentialFrameBatchSampler
+
+    cfg = AdaptiveSequentialFrameBatchSamplerConfig(
+        n_frames_per_sample=1, n_samples_per_sequence=1, max_frame_gap_timestamp_us=0
+    )
+    with pytest.raises(AssertionError, match="max_frame_gap_timestamp_us"):
+        AdaptiveSequentialFrameBatchSampler(cfg)
+
+
+def test_sample_frame_batch_returns_correct_indices_per_camera():
+    from nre.utils.types import HalfClosedInterval
+
+    sampler = _make_sampler(
+        n_frames_per_sample=4, n_samples_per_sequence=2, max_frame_gap_timestamp_us=200_000
+    )
+    cam_a_ts = np.array([0, 100_000, 200_000, 300_000, 400_000, 500_000, 600_000, 700_000])
+    cam_b_ts = np.array([50_000, 150_000, 250_000, 350_000, 450_000, 550_000, 650_000, 750_000])
+    intervals = [HalfClosedInterval(0, 800_000)]
+    out = sampler.sample_frame_batch(
+        sample_idx=0,
+        camera_frame_timestamps_us={"cam_a": cam_a_ts, "cam_b": cam_b_ts},
+        time_intervals=intervals,
+    )
+    assert set(out.keys()) == {"cam_a", "cam_b"}
+    assert len(out["cam_a"]) == 4
+    assert len(out["cam_b"]) == 4
+
+
+def test_sample_frame_batch_rejects_empty_camera_dict():
+    from nre.utils.types import HalfClosedInterval
+
+    sampler = _make_sampler()
+    with pytest.raises(AssertionError, match="No camera timestamps"):
+        sampler.sample_frame_batch(
+            sample_idx=0, camera_frame_timestamps_us={}, time_intervals=[HalfClosedInterval(0, 1)]
+        )
+
+
+def test_sample_frame_batch_rejects_out_of_range_sample_idx():
+    from nre.utils.types import HalfClosedInterval
+
+    sampler = _make_sampler(n_samples_per_sequence=2)
+    cams = {"a": np.array([0, 100])}
+    intervals = [HalfClosedInterval(0, 100)]
+    with pytest.raises(AssertionError, match="Sample index out of bounds"):
+        sampler.sample_frame_batch(
+            sample_idx=2, camera_frame_timestamps_us=cams, time_intervals=intervals
+        )
+    with pytest.raises(AssertionError, match="Sample index out of bounds"):
+        sampler.sample_frame_batch(
+            sample_idx=-1, camera_frame_timestamps_us=cams, time_intervals=intervals
+        )
+
+
+def test_sample_frame_batch_rejects_empty_time_intervals():
+    sampler = _make_sampler()
+    with pytest.raises(AssertionError, match="No time intervals"):
+        sampler.sample_frame_batch(
+            sample_idx=0, camera_frame_timestamps_us={"a": np.array([0])}, time_intervals=[]
+        )
+
+
+def test_sample_frame_batch_returns_empty_when_chunk_count_under_sample_idx():
+    """When the sequence is short enough that fewer chunks are needed than
+    sample_idx, the method returns an empty dict."""
+    from nre.utils.types import HalfClosedInterval
+
+    sampler = _make_sampler(
+        n_frames_per_sample=4, n_samples_per_sequence=8, max_frame_gap_timestamp_us=10_000_000
+    )
+    cams = {"a": np.array([0, 100_000])}
+    # 100us span with 40,000,000us max_chunk_timespan → only 1 chunk needed
+    intervals = [HalfClosedInterval(0, 100_000)]
+    # sample_idx=0 returns; sample_idx >=1 returns {}
+    out_zero = sampler.sample_frame_batch(
+        sample_idx=0, camera_frame_timestamps_us=cams, time_intervals=intervals
+    )
+    assert "a" in out_zero
+    out_one = sampler.sample_frame_batch(
+        sample_idx=1, camera_frame_timestamps_us=cams, time_intervals=intervals
+    )
+    assert out_one == {}
+
+
+def test_sample_frame_batch_multi_interval_uses_min_start_max_end():
+    """When multiple intervals are provided, the sampled span is min(start)
+    to max(end)."""
+    from nre.utils.types import HalfClosedInterval
+
+    sampler = _make_sampler(
+        n_frames_per_sample=2, n_samples_per_sequence=4, max_frame_gap_timestamp_us=500_000
+    )
+    cams = {"a": np.array([0, 100_000, 200_000, 300_000, 400_000, 500_000, 600_000, 700_000, 800_000])}
+    # Two intervals with a gap → min start 0, max end 800_000
+    intervals = [HalfClosedInterval(0, 200_000), HalfClosedInterval(600_000, 800_000)]
+    out = sampler.sample_frame_batch(
+        sample_idx=0, camera_frame_timestamps_us=cams, time_intervals=intervals
+    )
+    assert "a" in out
+    assert len(out["a"]) == 2
