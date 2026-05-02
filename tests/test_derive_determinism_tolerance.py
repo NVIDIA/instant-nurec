@@ -9,6 +9,7 @@ because each owns one well-defined branch.
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -49,6 +50,7 @@ def _write_ply(
     rec = np.empty(n, dtype=dtype)
     for (name, _), col in zip(dtype, cols):
         rec[name] = col
+    path.parent.mkdir(parents=True, exist_ok=True)
     PlyData([PlyElement.describe(rec, "vertex")]).write(str(path))
 
 
@@ -219,3 +221,90 @@ def test_max_pair_diff_does_not_mutate_prev():
     # prev untouched; out is a fresh dict
     assert prev == {"x": 0.5}
     assert out is not prev
+
+
+# ---------------------------------------------------------------------------
+# main()
+# ---------------------------------------------------------------------------
+
+
+def _build_run_tree(tmp_path: Path, n_runs: int = 2, n_chunks: int = 1) -> Path:
+    """Build a fake baselines/more_baselines tree under tmp_path."""
+    base = tmp_path / "baselines" / "more_baselines"
+    for i in range(n_runs):
+        run_root = base / f"run_{i + 1}"
+        # merge: 1 PLY
+        merge_dir = run_root / "merge" / f"sess_{i}" / "ply" / f"pai_{i}"
+        _write_ply(merge_dir / f"pai_{i}.ply", floats={"x": np.zeros(2)})
+        # no_merge: n_chunks PLYs
+        nm_dir = run_root / "no_merge" / f"sess_{i}" / "ply" / f"pai_{i}"
+        for c in range(n_chunks):
+            _write_ply(nm_dir / f"pai_{i}_chunk{c}.ply", floats={"x": np.zeros(2)})
+    return tmp_path
+
+
+def test_main_writes_tolerance_json(tmp_path, monkeypatch, capsys):
+    """End-to-end: monkey-patch RUNS and OUT, run main(), verify tolerance.json
+    is written with all expected property keys."""
+    import scripts.derive_determinism_tolerance as ddt
+
+    fake_repo = _build_run_tree(tmp_path, n_runs=3, n_chunks=2)
+    runs = sorted((fake_repo / "baselines" / "more_baselines").glob("run_*/"))
+    out = fake_repo / "tests" / "tolerance.json"
+    monkeypatch.setattr(ddt, "RUNS", runs)
+    monkeypatch.setattr(ddt, "OUT", out)
+    monkeypatch.setattr(ddt, "REPO_ROOT", fake_repo)
+
+    ddt.main()
+    assert out.exists()
+    data = json.loads(out.read_text())
+    # Identical PLYs across runs → tolerance is 0 for x
+    assert data == {"x": 0.0}
+
+
+def test_main_with_drift_records_max_diff(tmp_path, monkeypatch):
+    """Two runs with the same property but slightly different values — main()
+    should record the larger diff into tolerance.json."""
+    import scripts.derive_determinism_tolerance as ddt
+
+    base = tmp_path / "baselines" / "more_baselines"
+    # run_1: x = 0
+    _write_ply(
+        base / "run_1" / "merge" / "s" / "ply" / "p" / "p.ply", floats={"x": np.array([0.0, 0.0])}
+    )
+    _write_ply(
+        base / "run_1" / "no_merge" / "s" / "ply" / "p" / "p_chunk0.ply",
+        floats={"x": np.array([0.0])},
+    )
+    # run_2: x = 0.5
+    _write_ply(
+        base / "run_2" / "merge" / "s" / "ply" / "p" / "p.ply", floats={"x": np.array([0.0, 0.5])}
+    )
+    _write_ply(
+        base / "run_2" / "no_merge" / "s" / "ply" / "p" / "p_chunk0.ply",
+        floats={"x": np.array([0.5])},
+    )
+
+    runs = sorted(base.glob("run_*/"))
+    out = tmp_path / "tests" / "tolerance.json"
+    monkeypatch.setattr(ddt, "RUNS", runs)
+    monkeypatch.setattr(ddt, "OUT", out)
+    monkeypatch.setattr(ddt, "REPO_ROOT", tmp_path)
+    ddt.main()
+    data = json.loads(out.read_text())
+    assert data["x"] == pytest.approx(0.5)
+
+
+def test_main_rejects_fewer_than_2_runs(tmp_path, monkeypatch):
+    import scripts.derive_determinism_tolerance as ddt
+
+    base = tmp_path / "baselines" / "more_baselines"
+    _write_ply(
+        base / "run_1" / "merge" / "s" / "ply" / "p" / "p.ply", floats={"x": np.zeros(1)}
+    )
+    runs = sorted(base.glob("run_*/"))  # only 1 run
+    monkeypatch.setattr(ddt, "RUNS", runs)
+    monkeypatch.setattr(ddt, "OUT", tmp_path / "tol.json")
+    monkeypatch.setattr(ddt, "REPO_ROOT", tmp_path)
+    with pytest.raises(SystemExit, match="need at least 2 runs"):
+        ddt.main()
