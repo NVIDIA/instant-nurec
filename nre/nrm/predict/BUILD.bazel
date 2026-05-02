@@ -37,7 +37,6 @@ py_library(
         "//nre/utils:pylib",
         "//nre/utils:pylib_types",
         pip_requirement("torch"),
-        pip_requirement("torch_scatter"),
         pip_requirement("nvidia-ncore"),
     ],
 )
