@@ -180,11 +180,11 @@ def rotate_sky_cubemap(cubemap: torch.Tensor, rotation: torch.Tensor) -> torch.T
     Returns:
         (6, cubemap_size, cubemap_size, 3)
 
-    Phase 2 step 7 (additive): when ``INSTANT_NUREC_TORCH_CUBEMAP=1``, dispatch
-    to the pure-torch grid_sample replacement instead of ``dr.texture``. Default
-    behavior (env var unset) is unchanged.
+    Phase 2 step 7: torch grid_sample is the default. Set
+    ``INSTANT_NUREC_NVDIFFRAST_CUBEMAP=1`` to fall back to the legacy
+    ``dr.texture`` path (kept temporarily as a recovery option).
     """
-    if os.environ.get("INSTANT_NUREC_TORCH_CUBEMAP", "0") == "1":
+    if os.environ.get("INSTANT_NUREC_NVDIFFRAST_CUBEMAP", "0") != "1":
         return _rotate_sky_cubemap_torch(cubemap, rotation)
 
     cubemap_size = cubemap.shape[1]
