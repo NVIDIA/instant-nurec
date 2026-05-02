@@ -104,3 +104,59 @@ def test_constructor_init_token_scale_controls_param_magnitude():
     is exactly zero."""
     m = PerCameraAffinePostProcessing(embed_dim=16, init_token_scale=0.0)
     assert torch.allclose(m.affine_token, torch.zeros_like(m.affine_token))
+
+
+# ---------------------------------------------------------------------------
+# transform_tokens / _transform_tokens_cross_attention
+# ---------------------------------------------------------------------------
+
+
+def test_transform_tokens_returns_unchanged_x_and_affine_token():
+    """transform_tokens returns (x, affine_token); x is unchanged from input."""
+    m = PerCameraAffinePostProcessing(embed_dim=32, init_token_scale=0.1)
+    m.eval()
+    B, v, t, hw, C = 1, 2, 3, 4, 32
+    x = torch.randn(B, v * t * hw, C)
+    camera_idxs = torch.tensor([[0, 0, 0, 1, 1, 1]])
+    embedded_x, affine_token = m.transform_tokens(x, camera_idxs)
+    # embedded_x is the LayerNorm-applied version of the input
+    assert embedded_x.shape == (B, v * t * hw, C)
+    # affine_token is (B, v, C)
+    assert affine_token.shape == (B, v, C)
+
+
+def test_transform_tokens_camera_idxs_must_be_consistent_per_segment():
+    """Within each (v, t) segment the camera id must be consistent —
+    a t-axis that mixes cameras triggers an AssertionError."""
+    m = PerCameraAffinePostProcessing(embed_dim=32, init_token_scale=0.1)
+    m.eval()
+    B, v, t, hw, C = 1, 2, 3, 4, 32
+    x = torch.randn(B, v * t * hw, C)
+    # Inconsistent camera ids: median per-segment doesn't match all segment entries
+    camera_idxs = torch.tensor([[0, 1, 0, 1, 0, 1]])
+    with pytest.raises(AssertionError, match="must be the same"):
+        m.transform_tokens(x, camera_idxs)
+
+
+def test_transform_tokens_inferred_v_from_unique_camera_idxs():
+    """The number of views v is inferred from the unique values in
+    camera_idxs — three unique values → v=3."""
+    m = PerCameraAffinePostProcessing(embed_dim=32, init_token_scale=0.1)
+    m.eval()
+    B, v, t, hw, C = 1, 3, 2, 4, 32
+    x = torch.randn(B, v * t * hw, C)
+    camera_idxs = torch.tensor([[0, 0, 1, 1, 2, 2]])
+    embedded_x, affine_token = m.transform_tokens(x, camera_idxs)
+    assert affine_token.shape == (B, 3, C)
+
+
+def test_transform_tokens_eval_mode_deterministic():
+    """In eval mode, repeating the call yields identical output."""
+    m = PerCameraAffinePostProcessing(embed_dim=32, init_token_scale=0.1)
+    m.eval()
+    x = torch.randn(1, 8, 32)
+    camera_idxs = torch.tensor([[0, 0, 0, 0]])
+    e1, a1 = m.transform_tokens(x, camera_idxs)
+    e2, a2 = m.transform_tokens(x.clone(), camera_idxs.clone())
+    assert torch.allclose(e1, e2)
+    assert torch.allclose(a1, a2)
