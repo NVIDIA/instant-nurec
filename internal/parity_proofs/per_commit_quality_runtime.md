@@ -27,38 +27,44 @@ original-frame meters; multiply by 6.667 to get back to meters).
 
 ## Sweep results
 
-| commit  | label                        | wall (no_merge / merge)         | Δ chunk0 | Δ chunk1 | Δ merge | Chamfer (no_merge / merge) | F1@0.01 (no_merge / merge) | Source       |
-|---------|------------------------------|---------------------------------|----------|----------|---------|----------------------------|----------------------------|--------------|
-| —       | baseline (NRE bazel)         | 19.6 / 21.1 (log.txt)           |    —     |    —     |    —    | 0 / 0                      | 1.000 / 1.000              | log.txt      |
-| 2b48686 | A.4 packed_ops               | 108.7 / 36.5 (cold) / —         |   0      |   0      |   0     | 0 / 0                      | 1.000 / 1.000              | sweep ✓     |
-| fc23075 | A.1 se3pose_from_matrix      | 120.0 / 37.2 (cold) / —         |  +8      |  +5      | −25     | 4.78e-3 / 4.38e-3          | 0.902 / 0.909              | sweep ✓     |
-| 6b32da4 | A.5 pose_calib               | bazel build failed mid-sweep    |  +8      |  −4      | −30     | (cite commit body)         | (not measured)             | commit body |
-| 037ed34 | A.2+A.3+A.6 bundle           | bazel build failed mid-sweep    |  +5      |  −4      | −30     | (cite commit body)         | (not measured)             | commit body |
-| efa4cc9 | A.7 vren                     | bazel build failed mid-sweep    |  +5      |  −4      | −30     | (cite commit body)         | (not measured)             | commit body |
-| 882c0d0 | A.8 drop libs/               | bazel build failed mid-sweep    |  +5      |  −4      | −30     | (cite commit body)         | (not measured)             | commit body |
-| c144996 | lietorch → _se3_torch shim   | bazel build failed mid-sweep    |  +5      |  −4      | −30     | (no math change)           | (not measured)             | audit       |
-| e177e4c | Phase C basic flatten        | bazel build failed mid-sweep    |  +5      |  −4      | −30     | (layout-only, no math)     | (not measured)             | audit       |
-| b33892f | drop torchvision (B prep)    | bazel build failed mid-sweep    |  +5      |  −4      | −30     | (no math change)           | (not measured)             | audit       |
-| 07c8b20 | drop bazel + cu128 wheel     | 32.5 / 33.5                     |  −2      |  +7      | −21     | 5.09e-3 / 4.61e-3          | 0.903 / 0.907              | sweep ✓     |
-| 7ea7a65 | single-.pt artifact          | 29.1 / 33.1                     |  −2      |  +7      | −21     | 5.09e-3 / 4.61e-3          | 0.903 / 0.907              | sweep ✓     |
-| HEAD    | (current)                    | 28.5 / 33.1                     |  −2      |  +7      | −21     | 5.09e-3 / 4.61e-3          | 0.903 / 0.907              | sweep ✓     |
+| commit  | label                          | wall (no_merge / merge) | Δ chunk0 | Δ chunk1 | Δ merge | Chamfer (chunk0 / chunk1 / merge) | F1@0.01 (chunk0 / chunk1 / merge) | Source     |
+|---------|--------------------------------|-------------------------|----------|----------|---------|-----------------------------------|-----------------------------------|------------|
+| —       | baseline (bazel reference)     | 19.6 / 21.1 (log.txt)   |    —     |    —     |    —    | 0 / 0 / 0                         | 1.000 / 1.000 / 1.000             | log.txt    |
+| 2b48686 | A.4 packed_ops                 | 108.7 / 36.5 (cold)     |    0     |    0     |    0    | 0 / 0 / 0                         | 1.000 / 1.000 / 1.000             | sweep ✓    |
+| fc23075 | A.1 se3pose_from_matrix        | 120.0 / 37.2 (cold)     |   +8     |   +5     |  −25    | 4.78e-3 / 6.11e-3 / 4.38e-3       | 0.902 / 0.860 / 0.909             | sweep ✓    |
+| 6b32da4 | A.5 pose_calib                 | 39.8 / 36.4             |   +5     |   −4     |  −30    | 4.75e-3 / 6.50e-3 / 4.60e-3       | 0.901 / 0.848 / 0.900             | sweep ✓    |
+| 037ed34 | A.2+A.3+A.6 bundle             | 121.5 / 37.7            |   +5     |   −4     |  −30    | 4.75e-3 / 6.50e-3 / 4.60e-3       | 0.901 / 0.848 / 0.900             | sweep ✓    |
+| efa4cc9 | A.7 vren                       | 63.6 / 52.2             |   +5     |   −4     |  −30    | 4.75e-3 / 6.50e-3 / 4.60e-3       | 0.901 / 0.848 / 0.900             | sweep ✓    |
+| 882c0d0 | A.8 drop libs/                 | 128.1 / 49.2            |   +5     |   −4     |  −30    | 4.75e-3 / 6.50e-3 / 4.60e-3       | 0.901 / 0.848 / 0.900             | sweep ✓    |
+| c144996 | lietorch → _se3_torch shim     | 135.4 / 50.7            |   +5     |   −4     |  −30    | 4.75e-3 / 6.50e-3 / 4.60e-3       | 0.901 / 0.848 / 0.900             | sweep ✓    |
+| e177e4c | Phase C basic flatten          | 132.8 / 49.2            |   +5     |   −4     |  −30    | 4.75e-3 / 6.50e-3 / 4.60e-3       | 0.901 / 0.848 / 0.900             | sweep ✓    |
+| b33892f | drop torchvision (B prep)      | 130.5 / 51.3            |   +5     |   −4     |  −30    | 4.75e-3 / 6.50e-3 / 4.60e-3       | 0.901 / 0.848 / 0.900             | sweep ✓    |
+| 07c8b20 | drop bazel + cu128 wheel       | 32.5 / 33.5             |   −2     |   +7     |  −21    | 5.09e-3 / 6.26e-3 / 4.61e-3       | 0.903 / 0.851 / 0.907             | sweep ✓    |
+| 7ea7a65 | single-.pt artifact            | 29.1 / 33.1             |   −2     |   +7     |  −21    | 5.09e-3 / 6.26e-3 / 4.61e-3       | 0.903 / 0.851 / 0.907             | sweep ✓    |
+| e58736e | NRM → InstantNuRec rename      | 28.5 / 33.1             |   −2     |   +7     |  −21    | 5.09e-3 / 6.26e-3 / 4.61e-3       | 0.903 / 0.851 / 0.907             | smoke ✓    |
+| HEAD    | (current)                      | 28.5 / 33.1             |   −2     |   +7     |  −21    | 5.09e-3 / 6.26e-3 / 4.61e-3       | 0.903 / 0.851 / 0.907             | sweep ✓    |
 
-## Caveat: 7 middle commits
+## Sweep coverage notes
 
-The sweep crashed mid-run when bazel's per-target cache exploded to
-**297 GB** (each commit's bazel build re-resolves BUILD targets without
-deduping across commits). The 6 bazel commits in the table show
-`bazel build failed mid-sweep` because by the time the sweep reached
-them the partition was full. Their drift numbers are taken from each
-commit's own message body (which validated parity at the time the
-commit was authored, against the same baseline).
+The first sweep crashed mid-run when bazel's per-target cache exploded
+to **297 GB** (each commit's bazel build re-resolves BUILD targets
+without deduping across commits). After cleaning the cache and adding
+per-commit `bazel clean --expunge` to the sweep script, a second sweep
+filled in every previously-missing commit. The data above is fully
+empirical except `e58736e` (NRM → InstantNuRec rename), which was
+verified via a single-commit smoke run rather than a full sweep — the
+rename is provably math-unchanging (textual identifier swap + a one-off
+.pt re-pickle that round-trips the same tensor data through new
+qualnames; `validate_parity.py` green for both modes against the
+baseline).
 
 The 3 commits between A.8 and 07c8b20 (`c144996` lietorch shim,
-`e177e4c` Phase C basic flatten, `b33892f` torchvision drop) are
-provably math-unchanging: lietorch `SE3`/`SO3` ops were replaced by
-algebraically-identical pure-torch ops; Phase C flatten is layout-only;
-torchvision's `Normalize` was an affine transform replicated bit-for-bit
-by `_RGBNormalize`, and `transforms.functional.resize(antialias=True)`
+`e177e4c` Phase C basic flatten, `b33892f` torchvision drop) reproduce
+the A.8 drift numbers exactly — confirming they are math-unchanging:
+lietorch `SE3`/`SO3` ops were replaced by algebraically-identical
+pure-torch ops; Phase C flatten is layout-only; torchvision's
+`Normalize` was an affine transform replicated bit-for-bit by
+`_RGBNormalize`, and `transforms.functional.resize(antialias=True)`
 maps to `torch.nn.functional.interpolate(antialias=True)` (same kernel).
 
 ## Where parity changed (single source of truth)
