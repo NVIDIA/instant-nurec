@@ -375,15 +375,19 @@ None of `.coverage`, `.pytest_cache/`, `.ruff_cache/`, `.venv/` are tracked; all
 
 None of the listed paths are tracked. `.gitignore` already excludes `.idea/`, `.vscode/`, `.ripgreprc`, `.mcp.json`, `.bashrc`, `.bash_profile`, `.zshrc`, `.zprofile`, `.profile`, `.gitconfig`. No-op.
 
-### D.4 — Add asset-harvester-style files
+### D.4 — Add asset-harvester-style files (DONE — `d6c7977`)
 
-asset-harvester has these; we don't:
-- `LICENSE.txt` — NVIDIA proprietary text. Source from corp / asset-harvester's own copy. **Pending — needs corp source material.**
-- `THIRD_PARTY_LICENSE.txt` — replaces the dropped `NOTICES`. Source from corp / asset-harvester. **Pending — needs corp source material.**
-- `SECURITY.md` — corp standard security-disclosure policy. **Pending — needs corp source material.**
-- `CONTRIBUTING.md` — short dev guide pointing at `setup.sh`, `pytest`, `ruff`, `validate_parity.py`. **DONE — `dd8b5b3`.**
-- `data_samples/` — small ncorev4 fixture (1 sequence, ≤ 50 MB) to make the README quickstart self-contained. Source: extract from `/storage/data/nurec/ncorev4` using the same sample that produced the baselines. The HF mock (`instant_nurec/_hf_mock.py:get_sample_data_path`) already references this name. **Pending — needs user direction on size/extraction strategy.**
-- *(optional)* `benchmark/` — relocate `scripts/derive_determinism_tolerance.py` here, plus a `benchmark/parity.py` that wraps `validate_parity.py` for repeatable benchmarking. Keep the underlying script in `scripts/` if simpler.
+Per user direction "use the same files as the asset harvester repo
+has", the corp files were sourced verbatim from
+https://github.com/NVIDIA/asset-harvester:
+- `LICENSE.txt` — Apache License 2.0 (asset-harvester's). DONE.
+- `THIRD_PARTY_LICENSE.txt` — third-party attributions, 745 lines. DONE.
+- `SECURITY.md` — corp standard security-disclosure policy. DONE.
+- `CONTRIBUTING.md` — short dev guide pointing at `setup.sh`, `pytest`, `ruff`, `validate_parity.py`. DONE — `dd8b5b3` (kept the project-specific NRM body rather than asset-harvester's generic one).
+- `data_samples/` — placeholder directory + README. DONE (the actual ≤50 MB ncorev4 fixture is deferred until the corp publishes `nvidia/instant-nurec-kelvin`; the HF mock at `instant_nurec/_hf_mock.py:get_sample_data_path` is already wired up to look for `ncorev4_sample/` here).
+- *(optional)* `benchmark/` — deliberately skipped. asset-harvester's benchmark is rendering-metrics-specific (DINOv3 / SAM 3D Body for Gaussian splat asset evaluation); the standalone's parity surface is already covered by `scripts/derive_determinism_tolerance.py` + `scripts/validate_parity.py`.
+
+A follow-up audit (commit pending) aligned the SPDX file headers across all 110 .py/.sh files to match asset-harvester (Apache-2.0, copyright year 2026), and switched `pyproject.toml`'s `[project].license` to `Apache-2.0`.
 
 ### D.5 — Resolve `internal/` (DONE — `33a30e8`)
 
