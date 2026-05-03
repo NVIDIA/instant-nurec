@@ -13,16 +13,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Standalone argparse CLI for the NRM Kelvin predict pipeline.
+"""Standalone argparse CLI.
 
-Phase 1 step 3 introduced the user-facing flag surface; step 4.4 dropped the
-Hydra/OmegaConf composition path entirely — ``instant_nurec.config`` now
-holds the static config inline as a Python dict and validates against
-:class:`NRMConfig` at load time. No yaml/hydra/omegaconf imports.
+Builds a default-populated ``NRMConfig`` from the
+``instant_nurec.config_schema`` pydantic models and overrides only the
+three fields that genuinely vary per invocation: ``out_dir``,
+``dataset.predict.ncore_json_*``, and ``predict.primitive_merge.enabled``.
 
-Phase B dropped bazel; the canonical invocation is now
-``python run_inference.py --ncore-path <path> --output-dir <path>
---merge {none,frustum-ownership}``.
+Canonical invocation:
+
+    python run_inference.py --ncore-path <path> --output-dir <path> \\
+                            --merge {none,frustum-ownership}
 """
 
 from __future__ import annotations
@@ -37,7 +38,7 @@ from typing import Sequence
 def make_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="instant_nurec",
-        description="Standalone NRM Kelvin predict-mode CLI.",
+        description="Standalone Kelvin predict-mode CLI.",
     )
     parser.add_argument(
         "--ncore-path",
@@ -74,13 +75,27 @@ def main(argv: Sequence[str] | None = None) -> int:
     logging.basicConfig(level=getattr(logging, args.log_level.upper()))
 
     # Lazy imports keep argparse-only invocations (e.g. --help) cheap.
-    from instant_nurec.config import load_predict_config
+    from instant_nurec.config_schema.dataset import (
+        NCoreNRMDatasetConfig,
+        NRMSplitsConfig,
+    )
+    from instant_nurec.config_schema.nrm import NRMConfig
+    from instant_nurec.config_schema.predict import PredictConfig, PrimitiveMergeConfig
     from instant_nurec.predict.run import run_predict
 
-    config = load_predict_config(
-        ncore_path=args.ncore_path,
-        output_dir=args.output_dir,
-        merge_enabled=(args.merge == "frustum-ownership"),
+    config = NRMConfig(
+        out_dir=str(args.output_dir),
+        dataset=NRMSplitsConfig(
+            predict=NCoreNRMDatasetConfig(
+                ncore_json_base_path=str(args.ncore_path),
+                ncore_json_list_path=str(args.ncore_path / "debug.lst"),
+            ),
+        ),
+        predict=PredictConfig(
+            primitive_merge=PrimitiveMergeConfig(
+                enabled=(args.merge == "frustum-ownership"),
+            ),
+        ),
     )
     run_predict(config)
     return 0

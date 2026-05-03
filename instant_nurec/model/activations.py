@@ -139,7 +139,7 @@ class GaussianActivations(nn.Module):
     Predict-only standalone calls the per-attribute submodules directly
     (`self.gaussian_activations.{rgb,scale,opacity,rotation}` from the
     decoder); `forward` was unused, so the `xyz` / `distance` activation
-    classes that fed it are gone (Phase 1 step 4.3).
+    classes that fed it are gone
     """
 
     def __init__(self, config: GaussiansActivationConfig):

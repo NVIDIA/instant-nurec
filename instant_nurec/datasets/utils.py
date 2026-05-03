@@ -37,7 +37,7 @@ def compute_cuboid_df(
     Predict-only standalone always uses `vars(observation)` directly; the
     NRE-side `serialize_observation=True` path that produced JSON dicts via
     `observation.to_dict()` was unused at predict time and significantly
-    slower (Phase 1 step 4.3). The progress bar is also always disabled.
+    slower The progress bar is also always disabled.
     """
 
     cuboid_observations = sequence_loader.get_cuboid_track_observations(

@@ -6,27 +6,34 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "Apache-2.0" }
 dependencies = [
-    "einops",
-    "numpy",
-    "nvidia-ncore",
-    "pandas",
-    "pillow",
-    "plyfile",
-    "point-cloud-utils",
-    "pydantic",
-    "pyyaml",
-    "scipy",
-    "shortuuid",
+    # All version pins below match what the NRE bazel build at commit
+    # a54a6af resolves out of its internal index. Carrying those exact
+    # versions over here means any parity / runtime drift is attributable
+    # to a deliberate dep bump rather than to whichever wheel happens to
+    # be the latest at install time. Update a pin only with a re-parity
+    # sweep against ``baselines/original_baseline``.
+    "einops==0.8.1",
+    "numpy==1.26.4",
+    "nvidia-ncore==18.7.0",
+    "pandas==2.3.3",
+    "pillow==12.1.1",
+    # plyfile is the only dep not pinned by the NRE build (NRE itself does
+    # not depend on it; it's used here by ``benchmark/validate_parity.py``
+    # and ``predict/export_ply.py`` for the standalone PLY round-trip).
+    # Pin to the version this branch was developed + tested against.
+    "plyfile==1.1.3",
+    "point-cloud-utils==0.34.0",
+    "pydantic==2.8.2",
+    "pyyaml==6.0",
+    "scipy==1.11.1",
+    "shortuuid==1.0.11",
     # torch pinned to match the NRE-internal bazel build (NRE@a54a6af pinned
     # ``torch==2.7.0+cu128.gitc41f6e01287`` via the internal index;
-    # ``2.7.0+cu128`` is the closest publicly-installable equivalent). Pinning
-    # here keeps the parity drift attributable to a known torch+CUDA version
-    # rather than whichever wheel happens to be the latest. Update the pin
-    # only deliberately, with a re-parity sweep.
+    # ``2.7.0+cu128`` is the closest publicly-installable equivalent).
     "torch==2.7.0+cu128",
-    "tqdm",
-    "universal-pathlib",
-    "zarr",
+    "tqdm==4.66.3",
+    "universal-pathlib==0.3.6",
+    "zarr==2.18.2",
 ]
 
 [project.scripts]

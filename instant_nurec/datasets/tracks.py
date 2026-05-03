@@ -397,7 +397,7 @@ class CuboidTracks(Tracks):
 
         Predict-only standalone never consumed the auxiliary `interpolated_mask`
         return that the NRE-side `_ex` variant produced; collapsed to a single
-        function (Phase 1 step 4.3).
+        function
 
         Inputs:
         - timestamps_us: timestamps to interpolate the pose at, N_data [int64]

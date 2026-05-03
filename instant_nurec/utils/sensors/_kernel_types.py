@@ -17,7 +17,6 @@
 ``libs.sensors.kernels.cameras.parameters`` and
 ``libs.sensors.kernels.common``.
 
-After Phase A.6 the standalone consumes these dataclasses through pure-torch
 ray-gen (``_image_points_to_world_rays_torch.py``); the slang kernel and its
 ``isinstance`` checks against the libs-side classes are gone from the
 predict path. Field names mirror the libs version so the existing converter
@@ -81,7 +80,6 @@ class OpenCVPinholeProjection(CameraProjection):
     """OpenCVPinhole projection — passive value container.
 
     The math (forward + inverse projection) lives in the slang kernel that
-    Phase A.6 replaces; the torch ray-gen rejects this type until the
     pinhole branch is wired (no current dataset uses it).
     """
 

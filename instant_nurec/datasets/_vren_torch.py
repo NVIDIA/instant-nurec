@@ -16,7 +16,7 @@
 """Pure-torch replacements for two ``libs.vren.interface`` ray/point-cuboid
 intersection kernels used by ``CuboidTracks``.
 
-Replaces (Phase A.7):
+Replaces:
 * ``vren.ray_cuboidtracks_intersection`` (used by
   ``CuboidTracks.ray_intersection``) — per-(ray, track) ray-AABB slab
   intersection in the cuboid's local frame at the ray's timestamp.
@@ -30,7 +30,6 @@ Math is taken from the corresponding CUDA kernel in
 point). NRE has no torch-only equivalent — the predict path always called
 the bazel-built kernel.
 
-Self-invented: torch broadcasting + torch.searchsorted for the per-track
 binary search, plus quat slerp / quat-rotate-vector helpers.
 """
 

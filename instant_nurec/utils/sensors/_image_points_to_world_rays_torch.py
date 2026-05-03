@@ -16,7 +16,7 @@
 """Pure-torch replacements for the slang-side camera projection kernels:
 
 * ``image_points_to_world_rays_shutter_pose`` — inverse projection +
-  rolling-shutter pose interp (Phase A.6).
+  rolling-shutter pose interp
 * ``camera_rays_to_image_points`` — forward camera projection
   (Phase A.7's third sub-kernel; consumed by
   ``instant_nurec/_pkg/nrm/utils/cubemap.py``).

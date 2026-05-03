@@ -27,7 +27,7 @@ def get_lidar_model_parameters(
     Predict-only standalone reads ncorev4 only; the NRE-side V3 native
     sensor branch and the cwccw fallback (which fired only for V3
     datasets generated before `nrs/ncore!363`) were dropped together
-    with the V3 sequence loader (Phase 1 step 4.3).
+    with the V3 sequence loader
     """
     assert isinstance(lidar_sensor, ncore.data.v4.SequenceLoaderV4.LidarSensor), (
         f"Unsupported lidar sensor type: {type(lidar_sensor)} -- expected NCore V4 LidarSensor"

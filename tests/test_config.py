@@ -18,7 +18,7 @@
 Covers ``instant_nurec.config_schema.predict`` (``PrimitiveMergeConfig`` + ``PredictConfig``),
 ``instant_nurec.config_schema.models`` (``KelvinDPTDecoderConfig.model_post_init`` +
 default-fields paths), and ``instant_nurec.config_schema.nrm.NRMConfig.model_post_init``
-(resume / .ckpt suffix / NRE_ENV_RUN_ID env override / config_dir derivation).
+(resume / .ckpt suffix / INSTANT_NUREC_RUN_ID env override / config_dir derivation).
 """
 
 from __future__ import annotations
@@ -60,7 +60,7 @@ from instant_nurec.config_schema.predict import PredictConfig, PrimitiveMergeCon
 def test_primitive_merge_default_disabled():
     cfg = PrimitiveMergeConfig()
     assert cfg.enabled is False
-    assert cfg.frustum_ownership_max_diff_m == 0.0
+    assert cfg.frustum_ownership_max_diff_m == 5.0
 
 
 def test_primitive_merge_enabled_with_positive_diff():
@@ -100,8 +100,8 @@ def test_kelvin_dpt_decoder_post_init_accepts_positive_dpt_dim():
     cfg = KelvinDPTDecoderConfig(dpt_dim=128, dpt_reassemble_hidden_dims=[8, 16, 32, 64])
     assert cfg.dpt_dim == 128
     # defaults
-    assert cfg.checkpointing is False
-    assert cfg.dpt_chunk_size == -1
+    assert cfg.checkpointing is True
+    assert cfg.dpt_chunk_size == 4
     assert cfg.time_encoding_dim == 256
     assert cfg.motion_depth == 4
 
@@ -125,8 +125,8 @@ def test_kelvin_dpt_decoder_post_init_rejects_negative_dpt_dim():
 def test_activation_config_defaults():
     cfg = GaussiansActivationConfig()
     assert cfg.opacity_shift == -2.0
-    assert cfg.scale_shift_log_ratio == -1.0
-    assert cfg.scale_max == 0.3
+    assert cfg.scale_shift_log_ratio == -2.9
+    assert cfg.scale_max == 0.045
     assert cfg.scale_min == 0.0
 
 
@@ -175,8 +175,8 @@ def _make_model_cfg(**overrides):
 def test_kelvin_model_default_track_padding_and_scene_rescale():
     cfg = _make_model_cfg()
     assert cfg.track_padding_m == [1.0, 1.0, 1.0]
-    assert cfg.scene_rescale == 1.0
-    assert cfg.patch_shape == (8, 8)
+    assert cfg.scene_rescale == 0.15
+    assert cfg.patch_shape == (14, 14)
     assert isinstance(cfg.activations, GaussiansActivationConfig)
     assert isinstance(cfg.export_preprocess, PrimitiveExportPreprocessConfig)
 
@@ -262,8 +262,8 @@ def test_adaptive_sequential_frame_batch_sampler_basic():
 
 def test_system_config_defaults():
     cfg = GaussiansNRMSystemConfig()
-    assert cfg.predict_num_workers == 0
-    assert cfg.predict_batch_size == 1
+    assert cfg.predict_num_workers == 4
+    assert cfg.predict_batch_size == 8
 
 
 # ---------------------------------------------------------------------------
@@ -302,7 +302,7 @@ def _make_nrm_kwargs(out_dir, **extra):
 
 
 def test_nrm_config_post_init_no_env(tmp_path, monkeypatch):
-    monkeypatch.delenv("NRE_ENV_RUN_ID", raising=False)
+    monkeypatch.delenv("INSTANT_NUREC_RUN_ID", raising=False)
     cfg = NRMConfig(**_make_nrm_kwargs(tmp_path))
     # config_dir auto-derives to out_dir/run_id/config
     assert cfg.config_dir == os.path.join(str(tmp_path), cfg.run_id, "config")
@@ -310,7 +310,7 @@ def test_nrm_config_post_init_no_env(tmp_path, monkeypatch):
 
 
 def test_nrm_config_post_init_env_run_id_overrides(tmp_path, monkeypatch):
-    monkeypatch.setenv("NRE_ENV_RUN_ID", "fixed-run-123")
+    monkeypatch.setenv("INSTANT_NUREC_RUN_ID", "fixed-run-123")
     cfg = NRMConfig(**_make_nrm_kwargs(tmp_path))
     assert cfg.run_id == "fixed-run-123"
     assert cfg.config_dir == os.path.join(str(tmp_path), "fixed-run-123", "config")

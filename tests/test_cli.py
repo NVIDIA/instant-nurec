@@ -13,15 +13,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Tests for instant_nurec.cli.
+"""Tests for ``instant_nurec.cli``.
 
-The CLI is the user-facing flag surface for the standalone Kelvin predict
-pipeline. After the Phase 1 step 4.4 hydra strip, ``main`` constructs an
-:class:`NRMConfig` directly via ``instant_nurec.config.load_predict_config``
-and hands it to ``instant_nurec.predict.run.run_predict`` -- no Hydra overrides involved.
-
-The lazy imports inside ``main`` are stubbed via ``sys.modules`` so this
-suite does not require NRE's runtime deps to be installed in the test venv.
+The CLI builds a ``NRMConfig`` directly from the pydantic schemas in
+``config_schema/`` and hands it to ``predict.run.run_predict``. We
+stub ``predict.run`` so the test doesn't need GPU / NRE deps, then
+inspect the constructed ``NRMConfig``.
 """
 
 from __future__ import annotations
@@ -39,25 +36,14 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 
-def _install_runtime_stubs(monkeypatch: pytest.MonkeyPatch) -> tuple[MagicMock, MagicMock]:
-    """Inject fake ``instant_nurec.config`` + ``instant_nurec.predict.run`` modules so
-    cli.main()'s lazy imports resolve without pulling in NRE/torch."""
-    config_mod = types.ModuleType("instant_nurec.config")
-    fake_config = MagicMock(name="NRMConfig")
-    fake_load = MagicMock(return_value=fake_config)
-    config_mod.load_predict_config = fake_load
-
-    nre_mod = types.ModuleType("nre")
-    nrm_mod = types.ModuleType("instant_nurec.nrm")
+def _install_runtime_stubs(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
+    """Stub ``instant_nurec.predict.run`` so cli.main()'s lazy import
+    resolves without pulling in the full predict path."""
     run_mod = types.ModuleType("instant_nurec.predict.run")
     fake_run_predict = MagicMock(return_value=None)
     run_mod.run_predict = fake_run_predict
-
-    monkeypatch.setitem(sys.modules, "instant_nurec.config", config_mod)
-    monkeypatch.setitem(sys.modules, "nre", nre_mod)
-    monkeypatch.setitem(sys.modules, "instant_nurec.nrm", nrm_mod)
     monkeypatch.setitem(sys.modules, "instant_nurec.predict.run", run_mod)
-    return fake_load, fake_run_predict
+    return fake_run_predict
 
 
 # ---------- argparse surface ----------
@@ -130,26 +116,30 @@ def test_parser_requires_output_dir() -> None:
 # ---------- end-to-end main() with runtime stubbed ----------
 
 
-def test_main_no_merge_passes_disabled_to_loader(monkeypatch: pytest.MonkeyPatch) -> None:
-    fake_load, fake_run_predict = _install_runtime_stubs(monkeypatch)
+def test_main_no_merge_constructs_config_with_disabled_merge(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_run_predict = _install_runtime_stubs(monkeypatch)
     from instant_nurec.cli import main
     rc = main(["--ncore-path", "/d", "--output-dir", "/o"])
     assert rc == 0
-    fake_load.assert_called_once()
-    kwargs = fake_load.call_args.kwargs
-    assert kwargs["ncore_path"] == Path("/d")
-    assert kwargs["output_dir"] == Path("/o")
-    assert kwargs["merge_enabled"] is False
-    fake_run_predict.assert_called_once_with(fake_load.return_value)
+    fake_run_predict.assert_called_once()
+    cfg = fake_run_predict.call_args.args[0]
+    assert cfg.out_dir == "/o"
+    assert cfg.dataset.predict.ncore_json_base_path == "/d"
+    assert cfg.dataset.predict.ncore_json_list_path == "/d/debug.lst"
+    assert cfg.predict.primitive_merge.enabled is False
 
 
-def test_main_frustum_ownership_passes_enabled_to_loader(monkeypatch: pytest.MonkeyPatch) -> None:
-    fake_load, fake_run_predict = _install_runtime_stubs(monkeypatch)
+def test_main_frustum_ownership_constructs_config_with_enabled_merge(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_run_predict = _install_runtime_stubs(monkeypatch)
     from instant_nurec.cli import main
     rc = main(["--ncore-path", "/d", "--output-dir", "/o", "--merge", "frustum-ownership"])
     assert rc == 0
-    assert fake_load.call_args.kwargs["merge_enabled"] is True
-    fake_run_predict.assert_called_once_with(fake_load.return_value)
+    cfg = fake_run_predict.call_args.args[0]
+    assert cfg.predict.primitive_merge.enabled is True
 
 
 def test_main_configures_log_level(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -27,7 +27,7 @@ class PrimitiveMergeConfig(BaseConfigSchema):
 
     enabled: bool = Field(default=False, description="Whether to enable primitive merging")
     frustum_ownership_max_diff_m: float = Field(
-        default=0.0,
+        default=5.0,
         description="Maximum distance in meters between the distances from one GS to non-owned chunks and owned chunks",
         ge=0.0,
     )

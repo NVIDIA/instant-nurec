@@ -31,7 +31,6 @@ The mock is selected via the env var ``INSTANT_NUREC_HF_MOCK`` (default
 ``1``). Setting it to ``0`` forwards the call through to
 ``huggingface_hub`` proper if it's installed.
 
-Self-invented: NRE has no HF equivalent (it pulls from NGC via
 ``nre.utils.model_registry``).
 """
 
@@ -76,7 +75,6 @@ def _seed_cache_from_full_pt(cache_dir: Path) -> Path:
     doesn't already have ``kelvin_full.pt``, copy it in. Returns the cache dir.
 
     This bridges Phase 1 step 5 (the user's existing pickled system) to the
-    Phase 4 HF mock without requiring them to manually move files around.
     """
     src = os.environ.get("INSTANT_NUREC_FULL_PT")
     if not src:

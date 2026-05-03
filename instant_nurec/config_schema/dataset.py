@@ -26,9 +26,10 @@ logger = logging.getLogger(__name__)
 
 
 class NCoreNRMCuboidTracksParamsConfig(BaseConfigSchema):
-    lidar_id: str
-    track_min_travel_distance_m: float = Field(ge=0.0)
+    lidar_id: str = Field(default="lidar_top_360fov")
+    track_min_travel_distance_m: float = Field(default=1.5, ge=0.0)
     track_min_centroid_rig_dist_m: float = Field(
+        default=3.0,
         ge=0.0,
         description="Distance threshold for cubic tracks to be considered self-classifications to skip [m]",
     )
@@ -36,28 +37,36 @@ class NCoreNRMCuboidTracksParamsConfig(BaseConfigSchema):
         default=int(1e6),
         description="Extrapolate the track by this many timestamps in the past and future (to improve interpolation coverage)",
     )
-    track_label_source: Literal["AUTOLABEL", "EXTERNAL", "GT_SYNTHETIC", "GT_ANNOTATION"]
+    track_label_source: Literal["AUTOLABEL", "EXTERNAL", "GT_SYNTHETIC", "GT_ANNOTATION"] = Field(default="AUTOLABEL")
 
 
 class AdaptiveSequentialFrameBatchSamplerConfig(BaseConfigSchema):
     n_frames_per_sample: int = Field(
-        description="Number of frames in each dataset sample (i.e. one return from get_item of the dataset)"
+        default=18,
+        description="Number of frames in each dataset sample (i.e. one return from get_item of the dataset)",
     )
     n_samples_per_sequence: int = Field(
-        description="Number of samples to return for each sequence (i.e. one recording from the full dataset)"
+        default=8,
+        description="Number of samples to return for each sequence (i.e. one recording from the full dataset)",
     )
     max_frame_gap_timestamp_us: int = Field(
-        description="Maximum gap between adjacent sampled frames in the batch, in microseconds."
+        default=750_000,
+        description="Maximum gap between adjacent sampled frames in the batch, in microseconds.",
     )
 
 
 class CameraSubsamplerConfig(BaseConfigSchema):
-    frame_width: int = Field(description="Width of the image to subsample (aspect-preserving center crop)")
-    frame_height: int = Field(description="Height of the image to subsample (aspect-preserving center crop)")
+    frame_width: int = Field(default=784, description="Width of the image to subsample (aspect-preserving center crop)")
+    frame_height: int = Field(default=448, description="Height of the image to subsample (aspect-preserving center crop)")
 
 
 class NCoreNRMDatasetConfig(BaseConfigSchema):
-    """Predict-side config for the NCorev4 dataset loader."""
+    """Predict-side config for the NCorev4 dataset loader.
+
+    Required fields (no default): ``ncore_json_list_path`` /
+    ``ncore_json_base_path`` — these are the dataset roots and must be
+    supplied by the caller (CLI / API).
+    """
 
     ncore_json_list_path: str = Field(
         description="The path to a file that contains the list of sequence meta json files to load.",
@@ -73,26 +82,34 @@ class NCoreNRMDatasetConfig(BaseConfigSchema):
     )
     n_camera_mask_dilation_iterations: int = Field(default=10)
 
-    camera_subsampler: CameraSubsamplerConfig = Field(description="Image resize to a given height/width.")
+    camera_subsampler: CameraSubsamplerConfig = Field(
+        default_factory=CameraSubsamplerConfig,
+        description="Image resize to a given height/width.",
+    )
 
     context_camera_ids: list[str] = Field(
+        default_factory=lambda: ["camera_front_wide_120fov"],
         description="A list of camera ids, such as `camera_front_wide_120fov`",
     )
 
-    frame_batch_sampler: AdaptiveSequentialFrameBatchSamplerConfig
+    frame_batch_sampler: AdaptiveSequentialFrameBatchSamplerConfig = Field(
+        default_factory=AdaptiveSequentialFrameBatchSamplerConfig,
+    )
     supervision_camera_ids: list[str] = Field(
+        default_factory=lambda: ["camera_front_wide_120fov"],
         description="A list of camera ids, such as `camera_front_wide_120fov`. This is also used to determine the canonical order of cameras in unique sensor idx",
     )
 
-    # Note: this is not the same as the other cuboid tracks params
-    cuboid_tracks_params: NCoreNRMCuboidTracksParamsConfig
+    cuboid_tracks_params: NCoreNRMCuboidTracksParamsConfig = Field(
+        default_factory=NCoreNRMCuboidTracksParamsConfig,
+    )
 
 
 
 
 class NRMSplitsConfig(BaseConfigSchema):
-    """NRM splits configuration. Predict-only standalone keeps just the predict
-    split; pydantic extras="ignore" drops the train/val/test entries that the
-    pretrained parsed.yaml still carries."""
+    """Splits configuration. Predict-only standalone keeps just the predict
+    split; pydantic ``extras="ignore"`` drops the train/val/test entries
+    that the pretrained ``parsed.yaml`` still carries."""
 
     predict: NCoreNRMDatasetConfig | None = Field(default=None, description="Dataset to use in prediction mode")

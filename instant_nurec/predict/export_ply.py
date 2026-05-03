@@ -105,7 +105,6 @@ def export_ply(primitives: KelvinNRMPrimitive, rig_trajectories: RigTrajectories
     This ply export is intended to be used as an initialization for NuRec SO.
     """
     # First transform the primitives to the world frame.
-    # Self-invented: NRE relied on Lightning's batch transfer to move
     # rig_trajectories.T_world_base onto the primitive's device; the standalone
     # predict loop moves it explicitly here.
     primitives = primitives.rigid_transform(

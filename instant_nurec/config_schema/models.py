@@ -34,18 +34,14 @@ class PrimitiveExportPreprocessConfig(BaseConfigSchema):
 class GaussiansActivationConfig(BaseConfigSchema):
     """
     Configuration for activation functions used in neural reconstruction models.
-
-    Predict-only standalone keeps the active subset (opacity_shift, scale_*).
-    The NRE-side `scale_type`/`distance_*`/`xyz_*` knobs configured activation
-    classes that the decoder never invokes (Phase 1 step 4.3).
     """
 
     # Opacity activation parameters
     opacity_shift: float = Field(default=-2.0, description="Shift parameter for opacity sigmoid activation")
 
     # Scale activation parameters
-    scale_shift_log_ratio: float = Field(default=-1.0, description="Shift parameter for scale activation")
-    scale_max: float = Field(default=0.3, description="Maximum scale value")
+    scale_shift_log_ratio: float = Field(default=-2.9, description="Shift parameter for scale activation")
+    scale_max: float = Field(default=0.045, description="Maximum scale value")
     scale_min: float = Field(
         default=0.0,
         description="Minimum scale value (clamp applied after exp). Use 0.01 when using 3DGUT renderer to avoid NaN gradients.",
@@ -55,23 +51,23 @@ class GaussiansActivationConfig(BaseConfigSchema):
 
 
 class KelvinDAv3EncoderConfig(BaseConfigSchema):
-    depth: int
-    n_heads: int
-    embed_dim: int
-    take_block_indices: List[int]
-    aa_start_block_idx: int
+    depth: int = Field(default=12)
+    n_heads: int = Field(default=12)
+    embed_dim: int = Field(default=1536)
+    take_block_indices: List[int] = Field(default_factory=lambda: [5, 7, 9, 11])
+    aa_start_block_idx: int = Field(default=4)
     checkpointing: Literal["all", "local", "none"] = Field(
-        default="none", description="Whether to checkpoint the encoder"
+        default="all", description="Whether to checkpoint the encoder"
     )
 
 
 class KelvinDPTDecoderConfig(BaseConfigSchema):
-    dpt_dim: int
-    dpt_reassemble_hidden_dims: List[int]
+    dpt_dim: int = Field(default=128)
+    dpt_reassemble_hidden_dims: List[int] = Field(default_factory=lambda: [96, 192, 384, 768])
 
-    checkpointing: bool = Field(default=False, description="Whether to use checkpointing for the DPT decoder")
+    checkpointing: bool = Field(default=True, description="Whether to use checkpointing for the DPT decoder")
     dpt_chunk_size: int = Field(
-        default=-1, description="Chunk size for the DPT decoder. Used for saving memory. -1 to disable."
+        default=4, description="Chunk size for the DPT decoder. Used for saving memory. -1 to disable."
     )
 
     # Motion-related:
@@ -83,10 +79,10 @@ class KelvinDPTDecoderConfig(BaseConfigSchema):
 
 
 class KelvinSkyCubemapDecoderConfig(BaseConfigSchema):
-    cubemap_size: int
-    embed_dim: int
-    depth: int
-    checkpointing: bool = Field(default=False, description="Whether to use checkpointing for the cubemap decoder")
+    cubemap_size: int = Field(default=448)
+    embed_dim: int = Field(default=384)
+    depth: int = Field(default=1)
+    checkpointing: bool = Field(default=True, description="Whether to use checkpointing for the cubemap decoder")
 
 
 class KelvinModelConfig(BaseConfigSchema):
@@ -95,7 +91,7 @@ class KelvinModelConfig(BaseConfigSchema):
     """
 
     track_padding_m: List[float] = Field(
-        default=[1.0, 1.0, 1.0],
+        default_factory=lambda: [1.0, 1.0, 1.0],
         description=(
             "Padding in meters for cuboid track bounding boxes when warping world points for motion supervision "
             "(x, y, z)."
@@ -104,13 +100,13 @@ class KelvinModelConfig(BaseConfigSchema):
         max_length=3,
     )
 
-    scene_rescale: float = Field(default=1.0, description="Rescale scenes for model input and output")
-    sky: KelvinSkyCubemapDecoderConfig
+    scene_rescale: float = Field(default=0.15, description="Rescale scenes for model input and output")
+    sky: KelvinSkyCubemapDecoderConfig = Field(default_factory=KelvinSkyCubemapDecoderConfig)
 
-    patch_shape: Tuple[int, int] = Field(default=(8, 8))
+    patch_shape: Tuple[int, int] = Field(default=(14, 14))
 
-    encoder: KelvinDAv3EncoderConfig
-    decoder: KelvinDPTDecoderConfig
+    encoder: KelvinDAv3EncoderConfig = Field(default_factory=KelvinDAv3EncoderConfig)
+    decoder: KelvinDPTDecoderConfig = Field(default_factory=KelvinDPTDecoderConfig)
     activations: GaussiansActivationConfig = Field(
         default_factory=GaussiansActivationConfig, description="Activation functions configuration."
     )

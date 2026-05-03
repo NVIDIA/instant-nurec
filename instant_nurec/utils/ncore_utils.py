@@ -43,7 +43,7 @@ from instant_nurec.utils.types import HalfClosedInterval
 # Common aux base-group names. Predict-only standalone uses just three;
 # instance_segmentation, optical_flow, scene_flow, normal,
 # lidar_semantic_segmentation, lidar_camera_visibility, semantic_logits,
-# and dinov2 were defined but unreferenced (Phase 1 step 4.3).
+# and dinov2 were defined but unreferenced
 SEMANTIC_SEG_BASE_GROUP = "semantic_segmentation"
 DEPTH_BASE_GROUP = "depth"
 EGO_MASK_BASE_GROUP = "egomask"
@@ -357,7 +357,7 @@ def get_camera_sensor_mask(
     The resulting mask is returned as a NumPy boolean array, where `True` indicates masked-out regions.
 
     Predict-only standalone reads ncorev4 only; the V3 native sensor branch
-    was dropped together with the V3 sequence loader (Phase 1 step 4.3).
+    was dropped together with the V3 sequence loader
 
     Returns:
         np.ndarray | None: A boolean NumPy array representing the mask, or None if no mask image is available.
@@ -377,7 +377,7 @@ def parse_sequence_meta_file(sequence_meta_file: UPath) -> tuple[str, HalfClosed
     """Parse a NCore V4 single-sequence meta JSON; return ``(sequence_id, time_range_us, component_store_paths)``.
 
     Predict-only standalone consumes ncorev4 archives only; the NRE-side V3
-    branch was dropped (Phase 1 step 4.3).
+    branch was dropped
     """
 
     assert sequence_meta_file.is_file(), f"{__name__} provided path {sequence_meta_file} not a file"

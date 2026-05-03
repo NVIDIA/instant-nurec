@@ -342,7 +342,7 @@ class LidarFrameLabels:
     Predict-only standalone keeps just `flags` and `distance`; the NRE-side
     `intensity`, `raydrop`, `sparse_rays`, `sparse_timestamps`,
     `sparse_elements` fields were defaulted to None by the dataset and never
-    read elsewhere (Phase 1 step 4.3).
+    read elsewhere
 
     The fields are:
     - flags: Optional. Bitmask integer value (see RayFlags). Default is None. [Tensor[int32]]. (B, height, width, 1).
@@ -819,7 +819,6 @@ class NRMDataBatch:
 
     Predict-only standalone never produces or consumes supervision data;
     the NRE-side `supervision` / `supervision_rig` fields were dropped
-    (Phase 1 step 4.3).
 
     Contains
         - context: list of context images (A DataAndRenderingBatch)

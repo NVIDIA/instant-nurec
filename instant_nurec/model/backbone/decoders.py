@@ -418,7 +418,7 @@ class KelvinDPTDecoder(nn.Module):
 
         # ScaleActivation (the world-space variant) ignores `pixel_scale`; the
         # NRE-side PixelScaleActivation that consumed it was dropped along with
-        # `config.activations.scale_type` (Phase 1 step 4.3).
+        # `config.activations.scale_type`
         gs_scale = self.gaussian_activations.scale(gs_scale, scene_rescale=scene_rescale)
         gs_valid_mask = KelvinSemanticClass.opacity_mask_from_semantic_probs(
             torch.softmax(context_semantic_logits, dim=-1)

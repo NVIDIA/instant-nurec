@@ -111,7 +111,6 @@ def rotate_sky_cubemap(cubemap: torch.Tensor, rotation: torch.Tensor) -> torch.T
     ``internal/parity_proofs/phase2_7_cubemap_research.md`` for the full
     derivation.
 
-    Phase 2 step 7: replaced ``nvdiffrast.dr.texture(boundary_mode="cube")``
     with this pure-torch grid_sample path. Each face is sampled
     independently with ``padding_mode="border"``; seam blending is local
     to a face rather than cross-face, but parity holds within

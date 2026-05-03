@@ -31,20 +31,25 @@ SENTINEL = "<sentinel>"
 class GaussiansNRMSystemConfig(BaseConfigSchema):
     """Predict-only system config; just dataloader knobs."""
 
-    predict_num_workers: int = Field(default=0, description="Number of workers for the predict dataloader per-node.")
-    predict_batch_size: int = Field(default=1, description="Batch size for the predict dataloader. Typically set to 1.")
+    predict_num_workers: int = Field(default=4, description="Number of workers for the predict dataloader per-node.")
+    predict_batch_size: int = Field(default=8, description="Batch size for the predict dataloader. Typically set to 1.")
 
 
 class NRMConfig(BaseConfigSchema):
-    """Top-level NRM predict configuration."""
+    """Top-level predict configuration.
+
+    All defaults are populated for the canonical kelvin-pa-front predict
+    pipeline; only ``out_dir`` and ``dataset.predict.{ncore_json_*}``
+    must be supplied per-invocation.
+    """
 
     seed: int = Field(default=38, description="Random seed.")
 
     out_dir: str
 
-    system: GaussiansNRMSystemConfig
+    system: GaussiansNRMSystemConfig = Field(default_factory=GaussiansNRMSystemConfig)
     dataset: NRMSplitsConfig
-    model: KelvinModelConfig
+    model: KelvinModelConfig = Field(default_factory=KelvinModelConfig)
 
     predict: PredictConfig = Field(
         default_factory=PredictConfig,
@@ -59,11 +64,11 @@ class NRMConfig(BaseConfigSchema):
         default_factory=shortuuid.uuid,
         description=(
             "Unique identifier of this run; auto-generated as a shortuuid unless "
-            "overridden via the NRE_ENV_RUN_ID environment variable."
+            "overridden via the INSTANT_NUREC_RUN_ID environment variable."
         ),
     )
 
     def model_post_init(self, __context) -> None:
-        if (env_run_id := os.environ.get("NRE_ENV_RUN_ID")) is not None:
+        if (env_run_id := os.environ.get("INSTANT_NUREC_RUN_ID")) is not None:
             self.run_id = env_run_id
         self.config_dir = os.path.join(self.out_dir, self.run_id, "config")
