@@ -6,17 +6,23 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "LicenseRef-NvidiaProprietary" }
 dependencies = [
+    "einops",
     "numpy",
-    "plyfile",
-    "pillow",
-    "pyyaml",
-    "tqdm",
-    "pydantic",
-    "torch",
+    "nvidia-ncore",
     "pandas",
-    "zarr",
-    "universal-pathlib",
+    "pillow",
+    "plyfile",
+    "point-cloud-utils",
+    "pydantic",
+    "pyyaml",
     "requests",
+    "scipy",
+    "shortuuid",
+    "torch",
+    "torchvision",
+    "tqdm",
+    "universal-pathlib",
+    "zarr",
 ]
 
 [project.scripts]

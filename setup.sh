@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Standalone Kelvin predict — environment setup.
 #
-# Phase 3 transition: this script bootstraps a venv and installs the
-# Python-side dependencies. The compiled libs/ kernels (slang/CUDA) are still
-# built via bazel for the moment; ``bazel run //instant_nurec:run -- ...``
-# remains the launcher path. ``run_inference.py`` shells through to the same
-# CLI entrypoint.
+# Bootstraps a venv and ``pip install -e .``. All slang/CUDA kernels
+# in ``libs/`` were replaced with pure-torch equivalents (Phase A);
+# the only CUDA dependency left is whatever ``torch`` ships with the
+# CUDA build you choose. ``run_inference.py`` is the canonical
+# entrypoint.
 
 set -euo pipefail
 
@@ -19,20 +19,8 @@ fi
 # shellcheck disable=SC1091
 source .venv/bin/activate
 
-# Bring the venv to a baseline of Python deps the standalone needs at import
-# time. ``torch`` installs CPU-only by default; install a matching CUDA build
-# manually if you need GPU at the Python level.
 python -m pip install --upgrade pip
-python -m pip install \
-    "numpy" \
-    "plyfile" \
-    "pillow" \
-    "pyyaml" \
-    "tqdm" \
-    "pydantic" \
-    "torch" \
-    "pandas" \
-    "zarr"
+python -m pip install -e .
 
 cat <<'EOF'
 
@@ -50,7 +38,8 @@ Or directly:
 
     python run_inference.py --ncore-path /path/to/ncorev4 --output-dir /tmp/out --merge {none,frustum-ownership}
 
-The compiled libs/ kernels are currently built via bazel; the canonical
-``run_inference.py`` form will be self-contained once Phase 2 finishes
-replacing them with torch-native equivalents.
+If you need a CUDA torch build (the default install is CPU-only), reinstall
+torch with the matching CUDA wheel after running this script:
+
+    python -m pip install torch --index-url https://download.pytorch.org/whl/cu121
 EOF
