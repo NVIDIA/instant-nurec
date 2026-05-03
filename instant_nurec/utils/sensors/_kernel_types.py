@@ -16,7 +16,7 @@ non-FTheta dataset comes through.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import IntEnum
 
 import torch

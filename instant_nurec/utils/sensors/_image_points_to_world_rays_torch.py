@@ -207,6 +207,7 @@ def _numerically_stable_xy_norm(cam_rays: torch.Tensor) -> torch.Tensor:
     return xy_norms
 
 
+@torch._dynamo.disable  # numpy→list conversion confuses dynamo's from_numpy guards
 def _ncore_ftheta_to_projection_and_resolution(
     ncore_params: object, device: torch.device, dtype: torch.dtype
 ) -> tuple[FThetaProjection, tuple[int, int]]:
@@ -219,15 +220,18 @@ def _ncore_ftheta_to_projection_and_resolution(
     """
     import numpy as np  # local import to avoid mandatory numpy dep if unused
 
-    # Polynomials (already (N,) torch tensors or numpy).
-    fw_poly_np = ncore_params.angle_to_pixeldist_poly
-    bw_poly_np = ncore_params.pixeldist_to_angle_poly
+    # Polynomials (already (N,) torch tensors or numpy). Convert to plain
+    # Python lists before going through torch.tensor — direct numpy arrays
+    # trip dynamo's ``___from_numpy`` guard machinery when this helper is
+    # invoked from inside a ``@torch.compile``-decorated frame.
+    fw_poly_list = [float(x) for x in ncore_params.angle_to_pixeldist_poly]
+    bw_poly_list = [float(x) for x in ncore_params.pixeldist_to_angle_poly]
 
-    fw_poly = torch.as_tensor(fw_poly_np, device=device, dtype=dtype)
-    bw_poly = torch.as_tensor(bw_poly_np, device=device, dtype=dtype)
+    fw_poly = torch.tensor(fw_poly_list, device=device, dtype=dtype)
+    bw_poly = torch.tensor(bw_poly_list, device=device, dtype=dtype)
 
     # Linear term A = [[c, d], [e, 1]], Ainv = (1/(c-e*d)) * [[1, -d], [-e, c]].
-    c, d_, e = ncore_params.linear_cde
+    c, d_, e = (float(x) for x in ncore_params.linear_cde)
     A = torch.tensor([[c, d_], [e, 1.0]], device=device, dtype=dtype)
     det = c - e * d_
     Ainv = torch.tensor(
@@ -235,21 +239,17 @@ def _ncore_ftheta_to_projection_and_resolution(
     ) / float(det)
 
     # Polynomial derivatives (coefficient-of-power-i = i * c_i for i>=1).
-    fw_list = list(fw_poly_np)
-    bw_list = list(bw_poly_np)
     dfw_poly = torch.tensor(
-        [i * c for i, c in enumerate(fw_list[1:], start=1)], device=device, dtype=dtype
+        [i * x for i, x in enumerate(fw_poly_list[1:], start=1)], device=device, dtype=dtype
     )
     dbw_poly = torch.tensor(
-        [i * c for i, c in enumerate(bw_list[1:], start=1)], device=device, dtype=dtype
+        [i * x for i, x in enumerate(bw_poly_list[1:], start=1)], device=device, dtype=dtype
     )
 
     # ncore convention: principal-point origin is at the centre of the first
     # pixel; CameraModel uses top-left-corner origin → +0.5 px.
-    pp = (
-        torch.as_tensor(ncore_params.principal_point, device=device, dtype=dtype)
-        + 0.5
-    )
+    pp_list = [float(x) + 0.5 for x in ncore_params.principal_point]
+    pp = torch.tensor(pp_list, device=device, dtype=dtype)
 
     # reference_poly mapping.
     poly_type_str = str(ncore_params.reference_poly)

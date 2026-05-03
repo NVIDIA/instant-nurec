@@ -90,7 +90,7 @@ def module_call_type(forward_fn: C) -> C:  # `forward_fn` is unused but its type
     def call(self, *args, **kwargs):
         """A closure which calls Module.__call__ (which internally calls forward + various hooks)"""
         if not isinstance(self, nn.Module):
-            raise TypeError(f"`module_call_type` used on a class which does not derive from nn.Module.")
+            raise TypeError("`module_call_type` used on a class which does not derive from nn.Module.")
         return nn.Module.__call__(self, *args, **kwargs)
 
     # cast the type of `call` to align with the type of `forward_fn`.

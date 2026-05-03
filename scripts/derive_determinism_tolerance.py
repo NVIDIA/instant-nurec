@@ -137,7 +137,7 @@ def main() -> None:
                     print(f"    {k}: {v:.6e}")
 
     print()
-    print(f"Final per-property determinism tolerance (max |a-b| across all run pairs):")
+    print("Final per-property determinism tolerance (max |a-b| across all run pairs):")
     for k in sorted(tolerance):
         print(f"  {k:>14}: {tolerance[k]:.6e}")
 
