@@ -267,7 +267,7 @@ class CuboidTracks(Tracks):
             track_starts_counts = cuboid_tracks.tracks_packinfo[indices_tensor]
             track_starts, track_counts = track_starts_counts[:, 0], track_starts_counts[:, 1]
             packed_attr_ind = (
-                linstep_interleave(track_starts, track_counts, 1).values
+                linstep_interleave(track_starts, track_counts, 1)
                 if len(track_starts)
                 else torch.empty(0, dtype=torch.long, device=cuboid_tracks.device)
             )

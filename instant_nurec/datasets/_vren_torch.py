@@ -41,37 +41,6 @@ import torch
 from instant_nurec.utils._se3_torch import quat_xyzw_slerp, quat_xyzw_to_rotmat
 
 
-def _per_track_searchsorted_indexed_vals(
-    bins: torch.Tensor,
-    pack_infos: torch.Tensor,
-    queries: torch.Tensor,
-    track_idx: torch.Tensor,
-) -> torch.Tensor:
-    """Per-track lower-bound binary search returning a global index.
-
-    Mirrors the kernel's ``binary_search_interp`` over the per-track
-    timestamp slice ``bins[start:start+count]``. Returns the global index
-    of the smallest ``j`` such that ``bins[j] >= queries[i]``, restricted
-    to the track's own slice.
-    """
-    starts = pack_infos[:, 0].to(torch.int64)
-    lengths = pack_infos[:, 1].to(torch.int64)
-    q_starts = starts[track_idx.to(torch.int64)]
-    q_ends = q_starts + lengths[track_idx.to(torch.int64)]
-
-    # Shift trick: per-track offset large enough to push pack i+1's smallest
-    # bin above pack i's largest in shifted space.
-    bin_range = bins.max() - bins.min() + bins.new_tensor(1)
-    pack_idx_per_bin = torch.repeat_interleave(
-        torch.arange(pack_infos.shape[0], dtype=torch.int64, device=bins.device),
-        lengths,
-    )
-    shifted_bins = bins + bin_range * pack_idx_per_bin.to(bins.dtype)
-    shifted_queries = queries + bin_range * track_idx.to(queries.dtype)
-    raw = torch.searchsorted(shifted_bins, shifted_queries).to(torch.int64)
-    return raw.clamp(min=q_starts, max=q_ends)
-
-
 def _slab_aabb_intersection(
     rays_o: torch.Tensor,  # (N, 3)
     rays_d: torch.Tensor,  # (N, 3)

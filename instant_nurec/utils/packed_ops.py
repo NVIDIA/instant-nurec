@@ -15,8 +15,6 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 import torch
 
 from instant_nurec.utils._packed_ops_torch import (
@@ -24,26 +22,23 @@ from instant_nurec.utils._packed_ops_torch import (
 )
 
 
-@dataclass(slots=True, frozen=True)
-class ValuesAndPidx:
-    values: torch.Tensor
-    pidx: torch.Tensor
-
-
 @torch.no_grad()
 def linstep_interleave(
     start: torch.Tensor,
     num_steps: torch.Tensor,
     step_size: torch.Tensor | int | float,
-    return_idx: bool = False,
-) -> ValuesAndPidx:
-    """Returns interleaved per-pack arange-style sequences, one step_size apart."""
+) -> torch.Tensor:
+    """Returns interleaved per-pack arange-style sequences, one step_size apart.
+
+    The bazel kernel also accepted a ``return_idx`` flag that returned a
+    per-element pack-index tensor; the standalone never read that tensor
+    so the parameter and the wrapper's ``ValuesAndPidx`` dataclass were
+    deleted (final dead-code pass).
+    """
     if start.numel() == 0:
-        return ValuesAndPidx(torch.empty_like(start), torch.empty_like(num_steps))
-    out, nidx = _linstep_interleave_torch(
+        return torch.empty_like(start)
+    return _linstep_interleave_torch(
         start.contiguous(),
         num_steps.contiguous().long(),
         step_size.contiguous() if isinstance(step_size, torch.Tensor) else step_size,
-        return_idx,
     )
-    return ValuesAndPidx(out, nidx if nidx is not None else torch.empty_like(num_steps))

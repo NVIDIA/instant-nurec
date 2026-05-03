@@ -47,52 +47,40 @@ from instant_nurec.utils._packed_ops_torch import (  # noqa: E402
 def test_linstep_interleave_simple_three_packs_int_step():
     start = torch.tensor([0.0, 10.0, 100.0])
     num_steps = torch.tensor([3, 2, 4], dtype=torch.int64)
-    out, nidx = linstep_interleave(start, num_steps, 1, return_idx=False)
+    out = linstep_interleave(start, num_steps, 1)
     expected = torch.tensor([0.0, 1.0, 2.0, 10.0, 11.0, 100.0, 101.0, 102.0, 103.0])
     assert torch.equal(out, expected)
-    assert nidx is None
-
-
-def test_linstep_interleave_returns_pack_index_when_requested():
-    start = torch.tensor([0.0, 10.0, 100.0])
-    num_steps = torch.tensor([3, 2, 4], dtype=torch.int64)
-    _, nidx = linstep_interleave(start, num_steps, 1, return_idx=True)
-    assert nidx.dtype == torch.int64
-    assert torch.equal(nidx, torch.tensor([0, 0, 0, 1, 1, 2, 2, 2, 2]))
 
 
 def test_linstep_interleave_with_per_pack_step_size_tensor():
     start = torch.tensor([0.0, 10.0])
     num_steps = torch.tensor([3, 2], dtype=torch.int64)
     step_size = torch.tensor([0.5, 2.0])
-    out, _ = linstep_interleave(start, num_steps, step_size)
+    out = linstep_interleave(start, num_steps, step_size)
     expected = torch.tensor([0.0, 0.5, 1.0, 10.0, 12.0])
     assert torch.allclose(out, expected)
 
 
 def test_linstep_interleave_empty_packs_returns_empty():
-    out, nidx = linstep_interleave(
+    out = linstep_interleave(
         torch.empty(0, dtype=torch.long),
         torch.empty(0, dtype=torch.int64),
         1,
-        return_idx=True,
     )
     assert out.numel() == 0
-    assert nidx is not None and nidx.numel() == 0
 
 
 def test_linstep_interleave_zero_steps_packs_yield_no_elements():
     start = torch.tensor([5.0, 7.0, 9.0])
     num_steps = torch.tensor([0, 3, 0], dtype=torch.int64)
-    out, nidx = linstep_interleave(start, num_steps, 1, return_idx=True)
+    out = linstep_interleave(start, num_steps, 1)
     assert torch.equal(out, torch.tensor([7.0, 8.0, 9.0]))
-    assert nidx is not None and torch.equal(nidx, torch.tensor([1, 1, 1]))
 
 
 def test_linstep_interleave_all_packs_zero_yield_empty_output():
     start = torch.tensor([5.0, 7.0])
     num_steps = torch.tensor([0, 0], dtype=torch.int64)
-    out, _ = linstep_interleave(start, num_steps, 1)
+    out = linstep_interleave(start, num_steps, 1)
     assert out.numel() == 0
 
 
@@ -100,7 +88,7 @@ def test_linstep_interleave_int_input_int_step():
     """The tracks.py call site uses ``track_starts`` (int64) + step_size=1."""
     start = torch.tensor([100, 200, 300], dtype=torch.int64)
     num_steps = torch.tensor([2, 3, 1], dtype=torch.int64)
-    out, _ = linstep_interleave(start, num_steps, 1)
+    out = linstep_interleave(start, num_steps, 1)
     assert out.dtype == torch.int64
     assert torch.equal(out, torch.tensor([100, 101, 200, 201, 202, 300]))
 
@@ -108,16 +96,15 @@ def test_linstep_interleave_int_input_int_step():
 def test_linstep_interleave_preserves_dtype_float32():
     start = torch.tensor([0.0, 1.0], dtype=torch.float32)
     num_steps = torch.tensor([2, 2], dtype=torch.int64)
-    out, _ = linstep_interleave(start, num_steps, 0.5)
+    out = linstep_interleave(start, num_steps, 0.5)
     assert out.dtype == torch.float32
 
 
 def test_linstep_interleave_preserves_device():
     start = torch.tensor([0.0, 1.0])
     num_steps = torch.tensor([2, 2], dtype=torch.int64)
-    out, nidx = linstep_interleave(start, num_steps, 1, return_idx=True)
+    out = linstep_interleave(start, num_steps, 1)
     assert out.device == start.device
-    assert nidx is not None and nidx.device == start.device
 
 
 # ---------------------------------------------------------------------------

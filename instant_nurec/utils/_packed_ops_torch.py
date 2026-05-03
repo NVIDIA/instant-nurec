@@ -33,8 +33,7 @@ def linstep_interleave(
     start: torch.Tensor,
     num_steps: torch.Tensor,
     step_size: torch.Tensor | float | int,
-    return_idx: bool = False,
-) -> tuple[torch.Tensor, torch.Tensor | None]:
+) -> torch.Tensor:
     """Per-pack arange-style interleaved sequence.
 
     For each pack ``p``, emits ``num_steps[p]`` values
@@ -46,35 +45,24 @@ def linstep_interleave(
         num_steps: (P,) int64 number of values per pack.
         step_size: scalar (int/float) or (P,) tensor of per-pack step sizes
             (same dtype as ``start``).
-        return_idx: if True, also return the (N,) per-element pack-index tensor
-            (int64), matching the kernel's ``nidx`` output.
 
     Returns:
-        (out, nidx) where ``out`` has shape (N,) with N = num_steps.sum() and
-        dtype matching ``start``; ``nidx`` is the same length and int64 if
-        requested, else ``None``.
+        (N,) tensor with N = num_steps.sum() and dtype matching ``start``.
 
-    Empty-input contract: matches the call-site wrapper in
-    ``instant_nurec/_pkg/utils/packed_ops.py`` — caller short-circuits the
-    P=0 case before calling, so the impl assumes P > 0. We still handle it
-    gracefully here for the test suite.
+    The bazel kernel also returned a per-element pack-index tensor when
+    called with ``return_idx=True``; the standalone never read that
+    output, so the parameter and the second return value were dropped
+    in the final dead-code pass.
     """
     num_packs = start.shape[0]
     if num_packs == 0:
-        empty_out = torch.empty(0, dtype=start.dtype, device=start.device)
-        empty_idx = torch.empty(0, dtype=torch.int64, device=start.device) if return_idx else None
-        return empty_out, empty_idx
+        return torch.empty(0, dtype=start.dtype, device=start.device)
 
     num_steps_long = num_steps.to(torch.int64)
     total = int(num_steps_long.sum().item())
     if total == 0:
-        empty_out = torch.empty(0, dtype=start.dtype, device=start.device)
-        empty_idx = torch.empty(0, dtype=torch.int64, device=start.device) if return_idx else None
-        return empty_out, empty_idx
+        return torch.empty(0, dtype=start.dtype, device=start.device)
 
-    pack_idx = torch.repeat_interleave(
-        torch.arange(num_packs, dtype=torch.int64, device=start.device), num_steps_long
-    )
     # Per-element offset within its pack: 0, 1, ..., num_steps[p]-1.
     cum = num_steps_long.cumsum(0)
     pack_starts = cum - num_steps_long
@@ -85,12 +73,8 @@ def linstep_interleave(
     start_per_elem = torch.repeat_interleave(start, num_steps_long)
     if isinstance(step_size, torch.Tensor):
         step_per_elem = torch.repeat_interleave(step_size, num_steps_long)
-        out = start_per_elem + within.to(start.dtype) * step_per_elem
-    else:
-        out = start_per_elem + within.to(start.dtype) * start.new_tensor(step_size)
-
-    nidx = pack_idx if return_idx else None
-    return out, nidx
+        return start_per_elem + within.to(start.dtype) * step_per_elem
+    return start_per_elem + within.to(start.dtype) * start.new_tensor(step_size)
 
 
 def packed_searchsorted_indexed_vals(
