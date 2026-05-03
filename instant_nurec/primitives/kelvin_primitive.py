@@ -12,7 +12,7 @@ import torch
 
 
 from instant_nurec.config_schema.models import PrimitiveExportPreprocessConfig
-from instant_nurec.nrm.primitives.base import BaseNRMPrimitive
+from instant_nurec.primitives.base import BaseNRMPrimitive
 from instant_nurec.nrm.utils.cubemap import rotate_sky_cubemap
 from instant_nurec.utils.batch import DataAndRenderingBatch
 from instant_nurec.utils.geometry import quat_mult_xyzw, so3_matrix_to_quat

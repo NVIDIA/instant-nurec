@@ -18,7 +18,7 @@ from pathlib import Path
 import torch
 
 from instant_nurec.models.gaussians.utils import RGB2SH, write_ply_3dgs
-from instant_nurec.nrm.primitives.kelvin_primitive import KelvinNRMPrimitive, KelvinSemanticClass
+from instant_nurec.primitives.kelvin_primitive import KelvinNRMPrimitive, KelvinSemanticClass
 from instant_nurec.utils.types import RigTrajectories
 
 

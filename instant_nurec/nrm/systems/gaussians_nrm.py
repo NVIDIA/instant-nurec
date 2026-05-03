@@ -27,7 +27,7 @@ from instant_nurec.nrm.datasets.datamodule import NRMDataModule
 from instant_nurec.nrm.models.kelvin_model import KelvinNRM
 from instant_nurec.nrm.predict.export_ply import export_ply
 from instant_nurec.nrm.predict.primitive_merge import KelvinPrimitiveMerge
-from instant_nurec.nrm.primitives.base import BaseNRMPrimitive
+from instant_nurec.primitives.base import BaseNRMPrimitive
 from instant_nurec.utils.batch import NRMDataBatch
 from instant_nurec.utils.types import RigTrajectories
 

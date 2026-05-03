@@ -20,7 +20,7 @@ import torch  # type: ignore
 from ncore.data import ConcreteCameraModelParametersUnion  # type: ignore
 from ncore.sensors import CameraModel  # type: ignore
 from instant_nurec.config_schema.predict import PrimitiveMergeConfig
-from instant_nurec.nrm.primitives.kelvin_primitive import KelvinDynamicLayer, KelvinNRMPrimitive, KelvinStaticLayer
+from instant_nurec.primitives.kelvin_primitive import KelvinDynamicLayer, KelvinNRMPrimitive, KelvinStaticLayer
 from instant_nurec.nrm.utils.cubemap import unproject_to_sky_cubemap
 from instant_nurec.nrm.utils.trajectory import merge_rig_trajectories, transform_rig_trajectories
 from instant_nurec.utils.batch import CameraFreePoseViewGeometry, DataAndRenderingBatch, DataBatch, NRMDataBatch, RenderingBatch

@@ -33,7 +33,7 @@ from instant_nurec.nrm.models.kelvin_backbone.base import (
     KelvinLatent,
     KelvinMultiscaleFeaturesLatent,
 )
-from instant_nurec.nrm.primitives.kelvin_primitive import (
+from instant_nurec.primitives.kelvin_primitive import (
     KelvinDynamicLayer,
     KelvinSemanticClass,
     KelvinStaticLayer,
