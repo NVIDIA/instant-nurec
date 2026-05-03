@@ -3,7 +3,7 @@
 The CLI is the user-facing flag surface for the standalone Kelvin predict
 pipeline. After the Phase 1 step 4.4 hydra strip, ``main`` constructs an
 :class:`NRMConfig` directly via ``instant_nurec.config.load_predict_config``
-and hands it to ``nre.nrm.run.run_predict`` -- no Hydra overrides involved.
+and hands it to ``instant_nurec.nrm.run.run_predict`` -- no Hydra overrides involved.
 
 The lazy imports inside ``main`` are stubbed via ``sys.modules`` so this
 suite does not require NRE's runtime deps to be installed in the test venv.
@@ -25,7 +25,7 @@ sys.path.insert(0, str(REPO_ROOT))
 
 
 def _install_runtime_stubs(monkeypatch: pytest.MonkeyPatch) -> tuple[MagicMock, MagicMock]:
-    """Inject fake ``instant_nurec.config`` + ``nre.nrm.run`` modules so
+    """Inject fake ``instant_nurec.config`` + ``instant_nurec.nrm.run`` modules so
     cli.main()'s lazy imports resolve without pulling in NRE/torch."""
     config_mod = types.ModuleType("instant_nurec.config")
     fake_config = MagicMock(name="NRMConfig")

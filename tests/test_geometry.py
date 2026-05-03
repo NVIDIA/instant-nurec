@@ -1,4 +1,4 @@
-"""Branch-coverage tests for nre.utils.geometry.
+"""Branch-coverage tests for instant_nurec.utils.geometry.
 
 Pure-math helpers; verified by:
   - identity / known-rotation roundtrips,

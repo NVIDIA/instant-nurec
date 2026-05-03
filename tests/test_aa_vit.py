@@ -1,4 +1,4 @@
-"""Branch-coverage tests for nre.nrm.models.blocks.aa_vit.
+"""Branch-coverage tests for instant_nurec.nrm.models.blocks.aa_vit.
 
 We avoid running ``get_intermediate_features`` (the full forward pass) which
 requires real backbone weights and only matters at predict-runtime — the

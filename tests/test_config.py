@@ -1,8 +1,8 @@
 """Branch-coverage tests for the predict-only NRM pydantic config schemas.
 
-Covers ``nre.nrm.config.predict`` (``PrimitiveMergeConfig`` + ``PredictConfig``),
-``nre.nrm.config.models`` (``KelvinDPTDecoderConfig.model_post_init`` +
-default-fields paths), and ``nre.nrm.config.nrm.NRMConfig.model_post_init``
+Covers ``instant_nurec.nrm.config.predict`` (``PrimitiveMergeConfig`` + ``PredictConfig``),
+``instant_nurec.nrm.config.models`` (``KelvinDPTDecoderConfig.model_post_init`` +
+default-fields paths), and ``instant_nurec.nrm.config.nrm.NRMConfig.model_post_init``
 (resume / .ckpt suffix / NRE_ENV_RUN_ID env override / config_dir derivation).
 """
 

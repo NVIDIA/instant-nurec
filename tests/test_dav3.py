@@ -1,7 +1,7 @@
-"""Branch-coverage tests for nre.nrm.models.blocks.dav3.CameraEncoder.
+"""Branch-coverage tests for instant_nurec.nrm.models.blocks.dav3.CameraEncoder.
 
 Pure torch — no compiled-lib stubs needed. ``so3_matrix_to_quat``
-imports from nre.utils.geometry which is already cpu-importable
+imports from instant_nurec.utils.geometry which is already cpu-importable
 (used by the existing ``tests/test_geometry.py`` suite).
 """
 

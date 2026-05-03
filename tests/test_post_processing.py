@@ -1,4 +1,4 @@
-"""Branch-coverage tests for nre.nrm.models.post_processing.
+"""Branch-coverage tests for instant_nurec.nrm.models.post_processing.
 
 The constructor pulls in CrossAttentionWithKVProjector but it imports
 cleanly in the cpu-only test venv. We only exercise the methods that

@@ -1,4 +1,4 @@
-"""Branch-coverage tests for nre.nrm.models.kelvin_backbone.base.KelvinMultiscaleFeaturesLatent.
+"""Branch-coverage tests for instant_nurec.nrm.models.kelvin_backbone.base.KelvinMultiscaleFeaturesLatent.
 
 The abstract ``KelvinLatent`` base class only contains abstract properties;
 the concrete ``KelvinMultiscaleFeaturesLatent`` is the only implementation

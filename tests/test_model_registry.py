@@ -1,4 +1,4 @@
-"""Branch-coverage tests for nre.utils.model_registry.
+"""Branch-coverage tests for instant_nurec.utils.model_registry.
 
 The module is mostly HTTP plumbing for NGC. We cover the tractable pieces
 that can be exercised without spinning up a real or mocked HTTP server:

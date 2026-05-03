@@ -1,4 +1,4 @@
-"""Branch-coverage tests for nre.utils.lidar_model.
+"""Branch-coverage tests for instant_nurec.utils.lidar_model.
 
 The module is six lines: an ``isinstance`` guard against ncorev4's
 ``SequenceLoaderV4.LidarSensor`` and a passthrough of ``model_parameters``.
@@ -23,7 +23,7 @@ sys.path.insert(0, str(REPO_ROOT))
 @pytest.fixture
 def stubbed_ncore(monkeypatch):
     """Install minimal ``ncore.data`` / ``ncore.data.v4`` stubs and reload
-    ``nre.utils.lidar_model`` so it picks them up."""
+    ``instant_nurec.utils.lidar_model`` so it picks them up."""
     ncore_mod = types.ModuleType("ncore")
     data_mod = types.ModuleType("ncore.data")
     v4_mod = types.ModuleType("ncore.data.v4")

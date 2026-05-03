@@ -1,4 +1,4 @@
-"""Branch-coverage tests for nre.models.nn_extensions.
+"""Branch-coverage tests for instant_nurec.models.nn_extensions.
 
 The module is pure torch.nn — no heavy / compiled deps.
 """

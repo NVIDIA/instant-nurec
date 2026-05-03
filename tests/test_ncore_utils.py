@@ -1,4 +1,4 @@
-"""Branch-coverage tests for nre.utils.ncore_utils.
+"""Branch-coverage tests for instant_nurec.utils.ncore_utils.
 
 The module imports a substantial dependency graph (ncore, zarr, PIL,
 torchvision). We stub the ncore parts via ``sys.modules``; the others are

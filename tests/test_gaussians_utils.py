@@ -1,4 +1,4 @@
-"""Branch-coverage tests for nre.models.gaussians.utils.
+"""Branch-coverage tests for instant_nurec.models.gaussians.utils.
 
 The module imports ``point_cloud_utils`` at top-level (compiled wheel
 unavailable in the cpu test venv); we stub it via sys.modules. The

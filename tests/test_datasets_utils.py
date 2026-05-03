@@ -1,4 +1,4 @@
-"""Branch-coverage tests for nre.datasets.utils.
+"""Branch-coverage tests for instant_nurec.datasets.utils.
 
 The module orchestrates ncore-side cuboid-track ingest into pandas DataFrames
 and per-track dicts. The dependencies (`ncore.data`, `ncore.impl.common.
@@ -120,7 +120,7 @@ def stubbed_datasets_utils(monkeypatch):
         pass
 
     data_mod.SequenceLoaderProtocol = _SequenceLoaderProtocol
-    # nre.utils.types pulls these unions in too — shape doesn't matter, we
+    # instant_nurec.utils.types pulls these unions in too — shape doesn't matter, we
     # just need the names to resolve at import time.
     data_mod.ConcreteCameraModelParametersUnion = object
     data_mod.ConcreteLidarModelParametersUnion = object

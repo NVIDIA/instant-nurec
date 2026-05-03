@@ -1,4 +1,4 @@
-"""Branch-coverage tests for nre.nrm.utils.cubemap.
+"""Branch-coverage tests for instant_nurec.nrm.utils.cubemap.
 
 The module imports ``libs.vren.interface`` and ``ncore.impl.data.types``
 at the top level for the unrelated ``unproject_to_sky_cubemap`` helper;
@@ -24,7 +24,7 @@ sys.path.insert(0, str(REPO_ROOT))
 
 @pytest.fixture(autouse=True)
 def _stub_compiled_imports(monkeypatch: pytest.MonkeyPatch):
-    """Provide minimal sys.modules stubs so ``import nre.nrm.utils.cubemap``
+    """Provide minimal sys.modules stubs so ``import instant_nurec.nrm.utils.cubemap``
     succeeds in the cpu-only test venv."""
     # ncore.data + ncore.sensors are pulled by the in-tree torch
     # camera_rays_to_image_points (via the sensors package __init__).

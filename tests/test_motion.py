@@ -1,4 +1,4 @@
-"""Branch-coverage tests for nre.nrm.utils.motion.TimeRemapping.
+"""Branch-coverage tests for instant_nurec.nrm.utils.motion.TimeRemapping.
 
 The module is pure-torch + pure-python (the ``CuboidTracks`` import is
 ``TYPE_CHECKING``-only), so no stubs are needed here.

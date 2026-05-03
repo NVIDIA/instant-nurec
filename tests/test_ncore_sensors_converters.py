@@ -50,7 +50,7 @@ def stubbed_converters(monkeypatch):
 
     data_mod.FThetaCameraModelParameters = _FThetaCameraModelParameters
     data_mod.ReferencePolynomial = _NcoreReferencePolynomial
-    # nre.utils.types pulls these unions in too.
+    # instant_nurec.utils.types pulls these unions in too.
     data_mod.ConcreteCameraModelParametersUnion = object
     data_mod.ConcreteLidarModelParametersUnion = object
 

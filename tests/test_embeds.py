@@ -1,4 +1,4 @@
-"""Branch-coverage tests for nre.nrm.models.blocks.embeds.
+"""Branch-coverage tests for instant_nurec.nrm.models.blocks.embeds.
 
 Pure torch.nn / torch.nn.functional / einops — no compiled-lib stubs needed.
 """

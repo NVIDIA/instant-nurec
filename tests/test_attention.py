@@ -1,4 +1,4 @@
-"""Branch-coverage tests for nre.nrm.models.blocks.attention.
+"""Branch-coverage tests for instant_nurec.nrm.models.blocks.attention.
 
 Pure torch.nn / functional / einops — no compiled-lib stubs needed.
 """

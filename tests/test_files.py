@@ -1,4 +1,4 @@
-"""Branch-coverage tests for nre.utils.files.parse_universal_path."""
+"""Branch-coverage tests for instant_nurec.utils.files.parse_universal_path."""
 
 from __future__ import annotations
 

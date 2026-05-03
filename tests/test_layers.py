@@ -1,4 +1,4 @@
-"""Branch-coverage tests for nre.nrm.models.blocks.layers.
+"""Branch-coverage tests for instant_nurec.nrm.models.blocks.layers.
 
 Pure torch.nn — no compiled-lib stubs needed.
 """

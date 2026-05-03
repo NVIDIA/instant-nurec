@@ -1,4 +1,4 @@
-"""Branch-coverage tests for nre.utils.misc.
+"""Branch-coverage tests for instant_nurec.utils.misc.
 
 The helpers in misc.py are tiny and pure (modulo torch tensor I/O), so each
 test exercises one input branch end to end.

@@ -1,4 +1,4 @@
-"""Branch-coverage tests for nre.nrm.models.activations.
+"""Branch-coverage tests for instant_nurec.nrm.models.activations.
 
 The module imports cleanly in the cpu-only test venv (only depends on
 torch + the pydantic-style ``GaussiansActivationConfig`` dataclass).
