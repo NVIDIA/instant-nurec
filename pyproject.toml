@@ -1,7 +1,7 @@
 [project]
 name = "instant_nurec"
 version = "0.1.0"
-description = "Standalone NRM Kelvin predict pipeline (NRMConfig → ncorev4 ingest → Kelvin predict → 3D-Gaussian PLY export)."
+description = "Standalone InstantNuRec Kelvin predict pipeline (ncorev4 ingest → Kelvin predict → 3D-Gaussian PLY export)."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "Apache-2.0" }
@@ -50,6 +50,13 @@ exclude = [
     # Prevent checking ci-cache files
     ".ci-keep",
 ]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests + run_inference.py prepend the repo root to sys.path before importing
+# in-tree modules; ruff's E402 (module-level import not at top of file) flags
+# the legitimate ordering.
+"tests/*.py" = ["E402"]
+"run_inference.py" = ["E402"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["instant_nurec", "benchmark", "ncore"]

@@ -178,19 +178,19 @@ def compute_metrics(path_a: Path, path_b: Path) -> CloudMetrics:
 def _print_metrics(label: str, m: CloudMetrics) -> None:
     print(f"\n=== {label} ===")
     print(f"  vertex counts:  A={m.n_a:,}  B={m.n_b:,}  Δ={m.n_b - m.n_a:+,}")
-    print(f"  Chamfer (PLY units, scene-rescaled by 0.15):")
+    print("  Chamfer (PLY units, scene-rescaled by 0.15):")
     print(f"    A→B mean NN dist:   {m.cd_a_to_b:.6e}")
     print(f"    B→A mean NN dist:   {m.cd_b_to_a:.6e}")
     print(f"    Chamfer (½ sum):    {m.chamfer:.6e}")
     print(f"    Hausdorff (max NN): {m.hausdorff:.6e}")
-    print(f"  F-score @ τ:")
+    print("  F-score @ τ:")
     print(f"    τ=0.01:             {m.fscore_at_001:.6f}")
     print(f"    τ=0.10:             {m.fscore_at_01:.6f}")
-    print(f"  Nearest-neighbor attribute residuals (B→A pairs):")
+    print("  Nearest-neighbor attribute residuals (B→A pairs):")
     print(f"    {'attr':<14s}  {'RMSE':>14s}  {'MAE':>14s}  {'p95(|err|)':>14s}")
     for k in sorted(m.nn_attr_rmse):
         print(f"    {k:<14s}  {m.nn_attr_rmse[k]:>14.6e}  {m.nn_attr_mae[k]:>14.6e}  {m.nn_attr_p95[k]:>14.6e}")
-    print(f"  Marginal Wasserstein-1 per attribute:")
+    print("  Marginal Wasserstein-1 per attribute:")
     for k in sorted(m.wasserstein):
         print(f"    {k:<14s}  {m.wasserstein[k]:>14.6e}")
 
