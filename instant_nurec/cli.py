@@ -5,9 +5,9 @@ Hydra/OmegaConf composition path entirely — ``instant_nurec.config`` now
 holds the static config inline as a Python dict and validates against
 :class:`NRMConfig` at load time. No yaml/hydra/omegaconf imports.
 
-Until Phase 3 swaps the build system, this module is launched via
-``bazel run //instant_nurec:run -- ...`` so that bazel-compiled slang/CUDA
-artifacts stay deterministic across the strip iterations.
+Phase B dropped bazel; the canonical invocation is now
+``python run_inference.py --ncore-path <path> --output-dir <path>
+--merge {none,frustum-ownership}``.
 """
 
 from __future__ import annotations
