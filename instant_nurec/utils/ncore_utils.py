@@ -182,7 +182,7 @@ class AuxShardDataLoader:
 
     def get_semantic_segmentation(self, camera_id: str, frame_timestamps_us: int) -> PILImage.Image:
         if SEMANTIC_SEG_BASE_GROUP not in self.base_groups:
-            raise KeyError(f"no semantic segmentation data loaded")
+            raise KeyError("no semantic segmentation data loaded")
 
         # find sample by linearly going through available shards samples
         # TODO(@janickm): this can be done much more efficiently and will be slow for a lot of shards

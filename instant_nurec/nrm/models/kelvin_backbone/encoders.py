@@ -17,22 +17,6 @@ import torch
 import torch.nn as _nn
 
 from einops import rearrange
-
-
-class _RGBNormalize(_nn.Module):
-    """Pure-torch ``transforms.Normalize`` for RGB tensors (..., C, H, W).
-
-    Non-persistent buffers — kept out of ``state_dict()`` so existing
-    pickled checkpoints load without spurious missing-key errors.
-    """
-
-    def __init__(self, mean, std):
-        super().__init__()
-        self.register_buffer("_mean", torch.tensor(mean).view(1, -1, 1, 1), persistent=False)
-        self.register_buffer("_std", torch.tensor(std).view(1, -1, 1, 1), persistent=False)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return (x - self._mean) / self._std
 from torch import nn
 
 from ncore.data import ConcreteCameraModelParametersUnion, OpenCVPinholeCameraModelParameters
@@ -51,6 +35,22 @@ from instant_nurec.nrm.utils.sensor import to_simple_pinhole_model_parameters
 from instant_nurec.utils.batch import DataAndRenderingBatch
 from instant_nurec.utils.geometry import tquat_to_se3_matrix
 from instant_nurec.utils.misc import unpack_optional
+
+
+class _RGBNormalize(_nn.Module):
+    """Pure-torch ``transforms.Normalize`` for RGB tensors (..., C, H, W).
+
+    Non-persistent buffers — kept out of ``state_dict()`` so existing
+    pickled checkpoints load without spurious missing-key errors.
+    """
+
+    def __init__(self, mean, std):
+        super().__init__()
+        self.register_buffer("_mean", torch.tensor(mean).view(1, -1, 1, 1), persistent=False)
+        self.register_buffer("_std", torch.tensor(std).view(1, -1, 1, 1), persistent=False)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return (x - self._mean) / self._std
 
 
 logger = logging.getLogger(__name__)

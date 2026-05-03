@@ -11,6 +11,22 @@
 import torch
 import torch.nn as _nn
 
+from einops import rearrange, repeat
+from torch import nn
+
+from instant_nurec.models.nn_extensions import TypedModuleList
+from instant_nurec.nrm.config.models import (
+    KelvinModelConfig,
+    KelvinSkyCubemapDecoderConfig,
+)
+from instant_nurec.nrm.models.blocks.attention import CrossAttentionBlock, KVProjector
+from instant_nurec.nrm.models.blocks.dpt import DPTFusionHead, DPTReassembleBlock
+from instant_nurec.nrm.models.blocks.embeds import PatchEmbed, PositionalEmbed
+from instant_nurec.nrm.models.kelvin_backbone.base import KelvinLatent
+from instant_nurec.nrm.utils.cubemap import cubemap_ray_directions
+from instant_nurec.utils.batch import DataAndRenderingBatch
+from instant_nurec.utils.misc import unpack_optional
+
 
 class _RGBNormalize(_nn.Module):
     """Pure-torch ``transforms.Normalize`` for RGB tensors of shape (..., C, H, W).
@@ -29,22 +45,6 @@ class _RGBNormalize(_nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return (x - self._mean) / self._std
-
-from einops import rearrange, repeat
-from torch import nn
-
-from instant_nurec.models.nn_extensions import TypedModuleList
-from instant_nurec.nrm.config.models import (
-    KelvinModelConfig,
-    KelvinSkyCubemapDecoderConfig,
-)
-from instant_nurec.nrm.models.blocks.attention import CrossAttentionBlock, KVProjector
-from instant_nurec.nrm.models.blocks.dpt import DPTFusionHead, DPTReassembleBlock
-from instant_nurec.nrm.models.blocks.embeds import PatchEmbed, PositionalEmbed
-from instant_nurec.nrm.models.kelvin_backbone.base import KelvinLatent
-from instant_nurec.nrm.utils.cubemap import cubemap_ray_directions
-from instant_nurec.utils.batch import DataAndRenderingBatch
-from instant_nurec.utils.misc import unpack_optional
 
 
 class CubemapDecoderSky(nn.Module):
