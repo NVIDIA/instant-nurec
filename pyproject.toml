@@ -17,7 +17,13 @@ dependencies = [
     "pyyaml",
     "scipy",
     "shortuuid",
-    "torch",
+    # torch pinned to match the NRE-internal bazel build (NRE@a54a6af pinned
+    # ``torch==2.7.0+cu128.gitc41f6e01287`` via the internal index;
+    # ``2.7.0+cu128`` is the closest publicly-installable equivalent). Pinning
+    # here keeps the parity drift attributable to a known torch+CUDA version
+    # rather than whichever wheel happens to be the latest. Update the pin
+    # only deliberately, with a re-parity sweep.
+    "torch==2.7.0+cu128",
     "tqdm",
     "universal-pathlib",
     "zarr",

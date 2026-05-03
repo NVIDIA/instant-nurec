@@ -36,6 +36,12 @@ fi
 source .venv/bin/activate
 
 python -m pip install --upgrade pip
+
+# Install the pinned CUDA torch build first (the cu128 wheel is published
+# on PyTorch's own index, not pypi.org). pyproject.toml pins
+# ``torch==2.7.0+cu128`` so this index is required during install.
+python -m pip install torch==2.7.0+cu128 --index-url https://download.pytorch.org/whl/cu128
+
 python -m pip install -e .
 
 cat <<'EOF'
@@ -53,9 +59,4 @@ Run inference with:
 Or directly:
 
     python run_inference.py --ncore-path /path/to/ncorev4 --output-dir /tmp/out --merge {none,frustum-ownership}
-
-If you need a CUDA torch build (the default install is CPU-only), reinstall
-torch with the matching CUDA wheel after running this script:
-
-    python -m pip install torch --index-url https://download.pytorch.org/whl/cu121
 EOF

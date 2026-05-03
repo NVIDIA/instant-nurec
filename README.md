@@ -29,9 +29,18 @@ Both modes are bit-for-bit (within the determinism tolerance in
 source .venv/bin/activate
 ```
 
-`setup.sh` creates a Python venv and runs `pip install -e .`. All
-runtime deps are pure Python / torch wheels — no bazel, no compiled
-kernels, no `nvdiffrast` / `gsplat` / `torch_scatter`.
+`setup.sh` creates a Python venv, installs the pinned CUDA torch build
+(`torch==2.7.0+cu128` from `https://download.pytorch.org/whl/cu128`),
+then `pip install -e .`. All other runtime deps are pure Python / torch
+wheels — no bazel, no compiled kernels, no `nvdiffrast` / `gsplat` /
+`torch_scatter`.
+
+The `torch` pin matches the version used by the NRE bazel build at
+commit `a54a6af` (NRE pinned `torch==2.7.0+cu128.gitc41f6e01287` via the
+NVIDIA-internal index; `2.7.0+cu128` from the public PyTorch index is
+the closest publicly-installable equivalent). This keeps the
+parity-vs-baseline drift attributable to a known torch+CUDA version.
+Updating the pin is a deliberate, parity-gated change.
 
 ## Pretrained model
 
