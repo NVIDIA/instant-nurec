@@ -1,4 +1,4 @@
-"""Branch-coverage tests for instant_nurec.nrm.models.kelvin_backbone.base.KelvinMultiscaleFeaturesLatent.
+"""Branch-coverage tests for instant_nurec.model.backbone.base.KelvinMultiscaleFeaturesLatent.
 
 The abstract ``KelvinLatent`` base class only contains abstract properties;
 the concrete ``KelvinMultiscaleFeaturesLatent`` is the only implementation
@@ -19,7 +19,7 @@ import torch
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from instant_nurec.nrm.models.kelvin_backbone.base import (
+from instant_nurec.model.backbone.base import (
     KelvinLatent,
     KelvinMultiscaleFeaturesLatent,
 )

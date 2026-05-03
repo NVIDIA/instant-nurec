@@ -1,4 +1,4 @@
-"""Branch-coverage tests for instant_nurec.nrm.models.blocks.embeds.
+"""Branch-coverage tests for instant_nurec.model.blocks.embeds.
 
 Pure torch.nn / torch.nn.functional / einops — no compiled-lib stubs needed.
 """
@@ -15,7 +15,7 @@ import torch
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from instant_nurec.nrm.models.blocks.embeds import (
+from instant_nurec.model.blocks.embeds import (
     ContinuousTimeEmbed,
     NormalizedPositionalEmbed,
     PatchEmbed,

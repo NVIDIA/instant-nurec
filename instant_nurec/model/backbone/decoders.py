@@ -25,11 +25,11 @@ from instant_nurec.config_schema.models import (
     KelvinDPTDecoderConfig,
     KelvinModelConfig,
 )
-from instant_nurec.nrm.models.activations import GaussianActivations, GaussianParams
-from instant_nurec.nrm.models.blocks.aa_vit import AlternateAttentionVisionTransformer
-from instant_nurec.nrm.models.blocks.dpt import DPTFullHead
-from instant_nurec.nrm.models.blocks.embeds import ContinuousTimeEmbed
-from instant_nurec.nrm.models.kelvin_backbone.base import (
+from instant_nurec.model.activations import GaussianActivations, GaussianParams
+from instant_nurec.model.blocks.aa_vit import AlternateAttentionVisionTransformer
+from instant_nurec.model.blocks.dpt import DPTFullHead
+from instant_nurec.model.blocks.embeds import ContinuousTimeEmbed
+from instant_nurec.model.backbone.base import (
     KelvinLatent,
     KelvinMultiscaleFeaturesLatent,
 )

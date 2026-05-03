@@ -24,10 +24,10 @@ from instant_nurec.config_schema.models import (
     KelvinDAv3EncoderConfig,
     KelvinModelConfig,
 )
-from instant_nurec.nrm.models.blocks.aa_vit import AlternateAttentionVisionTransformer
-from instant_nurec.nrm.models.blocks.dav3 import CameraEncoder
-from instant_nurec.nrm.models.blocks.embeds import PatchEmbed
-from instant_nurec.nrm.models.kelvin_backbone.base import (
+from instant_nurec.model.blocks.aa_vit import AlternateAttentionVisionTransformer
+from instant_nurec.model.blocks.dav3 import CameraEncoder
+from instant_nurec.model.blocks.embeds import PatchEmbed
+from instant_nurec.model.backbone.base import (
     KelvinLatent,
     KelvinMultiscaleFeaturesLatent,
 )

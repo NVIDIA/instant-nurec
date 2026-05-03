@@ -1,4 +1,4 @@
-"""Branch-coverage tests for instant_nurec.nrm.models.blocks.dpt.
+"""Branch-coverage tests for instant_nurec.model.blocks.dpt.
 
 Pure torch.nn — no compiled-lib stubs needed.
 """
@@ -17,7 +17,7 @@ import torch.nn as nn
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from instant_nurec.nrm.models.blocks.dpt import (
+from instant_nurec.model.blocks.dpt import (
     DPTFullHead,
     DPTFusionBlock,
     DPTFusionHead,

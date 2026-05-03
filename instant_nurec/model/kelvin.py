@@ -13,10 +13,10 @@ from einops import rearrange
 
 from instant_nurec.datasets.tracks import CuboidTracks
 from instant_nurec.config_schema.models import KelvinModelConfig
-from instant_nurec.nrm.models.kelvin_backbone.decoders import KelvinDPTDecoder
-from instant_nurec.nrm.models.kelvin_backbone.encoders import KelvinDAv3Encoder
-from instant_nurec.nrm.models.kelvin_backbone.sky import CubemapDecoderSky
-from instant_nurec.nrm.models.post_processing import PerCameraAffinePostProcessing
+from instant_nurec.model.backbone.decoders import KelvinDPTDecoder
+from instant_nurec.model.backbone.encoders import KelvinDAv3Encoder
+from instant_nurec.model.backbone.sky import CubemapDecoderSky
+from instant_nurec.model.post_processing import PerCameraAffinePostProcessing
 from instant_nurec.primitives.kelvin_primitive import KelvinNRMPrimitive
 from instant_nurec.utils.motion import TimeRemapping
 from instant_nurec.utils.batch import DataAndRenderingBatch

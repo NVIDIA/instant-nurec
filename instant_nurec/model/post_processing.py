@@ -13,7 +13,7 @@ import torch.nn as nn
 
 from einops import rearrange, repeat
 
-from instant_nurec.nrm.models.blocks.attention import CrossAttention, CrossAttentionWithKVProjector
+from instant_nurec.model.blocks.attention import CrossAttention, CrossAttentionWithKVProjector
 
 
 class PerCameraAffinePostProcessing(nn.Module):

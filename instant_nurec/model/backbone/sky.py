@@ -19,10 +19,10 @@ from instant_nurec.config_schema.models import (
     KelvinModelConfig,
     KelvinSkyCubemapDecoderConfig,
 )
-from instant_nurec.nrm.models.blocks.attention import CrossAttentionBlock, KVProjector
-from instant_nurec.nrm.models.blocks.dpt import DPTFusionHead, DPTReassembleBlock
-from instant_nurec.nrm.models.blocks.embeds import PatchEmbed, PositionalEmbed
-from instant_nurec.nrm.models.kelvin_backbone.base import KelvinLatent
+from instant_nurec.model.blocks.attention import CrossAttentionBlock, KVProjector
+from instant_nurec.model.blocks.dpt import DPTFusionHead, DPTReassembleBlock
+from instant_nurec.model.blocks.embeds import PatchEmbed, PositionalEmbed
+from instant_nurec.model.backbone.base import KelvinLatent
 from instant_nurec.utils.cubemap import cubemap_ray_directions
 from instant_nurec.utils.batch import DataAndRenderingBatch
 from instant_nurec.utils.misc import unpack_optional

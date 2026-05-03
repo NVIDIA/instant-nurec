@@ -1,4 +1,4 @@
-"""Branch-coverage tests for instant_nurec.nrm.models.activations.
+"""Branch-coverage tests for instant_nurec.model.activations.
 
 The module imports cleanly in the cpu-only test venv (only depends on
 torch + the pydantic-style ``GaussiansActivationConfig`` dataclass).
@@ -18,7 +18,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 from instant_nurec.config_schema.models import GaussiansActivationConfig
-from instant_nurec.nrm.models.activations import (
+from instant_nurec.model.activations import (
     GaussianActivations,
     GaussianParams,
     OpacityActivation,

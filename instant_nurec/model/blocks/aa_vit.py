@@ -18,8 +18,8 @@ import torch.utils.checkpoint
 
 from einops import rearrange, repeat
 
-from instant_nurec.nrm.models.blocks.attention import AttentionBlock, ModulatedAttentionBlock
-from instant_nurec.nrm.models.blocks.embeds import RotaryPositionEmbed2D
+from instant_nurec.model.blocks.attention import AttentionBlock, ModulatedAttentionBlock
+from instant_nurec.model.blocks.embeds import RotaryPositionEmbed2D
 
 
 class AlternateAttentionVisionTransformer(nn.Module):

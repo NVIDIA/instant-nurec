@@ -1,4 +1,4 @@
-"""Branch-coverage tests for instant_nurec.nrm.models.blocks.dav3.CameraEncoder.
+"""Branch-coverage tests for instant_nurec.model.blocks.dav3.CameraEncoder.
 
 Pure torch — no compiled-lib stubs needed. ``so3_matrix_to_quat``
 imports from instant_nurec.utils.geometry which is already cpu-importable
@@ -16,7 +16,7 @@ import torch
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from instant_nurec.nrm.models.blocks.dav3 import CameraEncoder
+from instant_nurec.model.blocks.dav3 import CameraEncoder
 
 
 # ---------------------------------------------------------------------------

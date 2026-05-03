@@ -1,4 +1,4 @@
-"""Branch-coverage tests for instant_nurec.nrm.models.post_processing.
+"""Branch-coverage tests for instant_nurec.model.post_processing.
 
 The constructor pulls in CrossAttentionWithKVProjector but it imports
 cleanly in the cpu-only test venv. We only exercise the methods that
@@ -20,7 +20,7 @@ import torch
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from instant_nurec.nrm.models.post_processing import PerCameraAffinePostProcessing
+from instant_nurec.model.post_processing import PerCameraAffinePostProcessing
 
 
 # ---------------------------------------------------------------------------

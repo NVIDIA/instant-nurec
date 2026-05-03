@@ -1,4 +1,4 @@
-"""Branch-coverage tests for instant_nurec.nrm.models.blocks.aa_vit.
+"""Branch-coverage tests for instant_nurec.model.blocks.aa_vit.
 
 We avoid running ``get_intermediate_features`` (the full forward pass) which
 requires real backbone weights and only matters at predict-runtime — the
@@ -18,8 +18,8 @@ import torch
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from instant_nurec.nrm.models.blocks.aa_vit import AlternateAttentionVisionTransformer
-from instant_nurec.nrm.models.blocks.attention import (
+from instant_nurec.model.blocks.aa_vit import AlternateAttentionVisionTransformer
+from instant_nurec.model.blocks.attention import (
     AttentionBlock,
     ModulatedAttentionBlock,
 )

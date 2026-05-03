@@ -1,4 +1,4 @@
-"""Branch-coverage tests for instant_nurec.nrm.models.blocks.layers.
+"""Branch-coverage tests for instant_nurec.model.blocks.layers.
 
 Pure torch.nn — no compiled-lib stubs needed.
 """
@@ -14,7 +14,7 @@ import torch
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from instant_nurec.nrm.models.blocks.layers import FeedForwardMLP, LayerNorm2d, LayerScale
+from instant_nurec.model.blocks.layers import FeedForwardMLP, LayerNorm2d, LayerScale
 
 
 # ---------------------------------------------------------------------------

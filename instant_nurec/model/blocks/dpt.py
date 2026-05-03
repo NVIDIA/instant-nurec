@@ -18,8 +18,8 @@ import torch.utils.checkpoint
 
 from einops import rearrange, repeat
 
-from instant_nurec.nrm.models.blocks.embeds import NormalizedPositionalEmbed
-from instant_nurec.nrm.models.blocks.layers import LayerNorm2d
+from instant_nurec.model.blocks.embeds import NormalizedPositionalEmbed
+from instant_nurec.model.blocks.layers import LayerNorm2d
 from instant_nurec.utils.misc import unpack_optional
 
 

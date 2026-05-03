@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Optional
 import torch
 
 from instant_nurec import _hf_mock
-from instant_nurec.nrm.systems.gaussians_nrm import GaussiansNRMSystem
+from instant_nurec.model.system import GaussiansNRMSystem
 
 
 if TYPE_CHECKING:

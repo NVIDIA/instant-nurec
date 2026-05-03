@@ -1,4 +1,4 @@
-"""Branch-coverage tests for ``instant_nurec.nrm.systems._resolve_full_pt_path``.
+"""Branch-coverage tests for ``instant_nurec.model._resolve_full_pt_path``.
 
 The full ``make()`` body GPU-loads a real GaussiansNRMSystem so we don't
 exercise it in the cpu-only test venv. The new ``_resolve_full_pt_path``
@@ -19,7 +19,7 @@ sys.path.insert(0, str(REPO_ROOT))
 
 
 from instant_nurec import _hf_mock  # noqa: E402
-from instant_nurec.nrm.systems import _resolve_full_pt_path  # noqa: E402
+from instant_nurec.model import _resolve_full_pt_path  # noqa: E402
 
 
 def test_resolve_returns_hf_mock_path_when_mock_succeeds(monkeypatch, tmp_path):
