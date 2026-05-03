@@ -26,9 +26,6 @@ instant-nurec = "instant_nurec.cli:main"
 include = ["instant_nurec*"]
 exclude = ["tests*", "baselines*", "internal*", "scripts*"]
 
-[tool.uv]
-managed = true
-
 [tool.ruff]
 target-version = "py311"
 line-length = 120
