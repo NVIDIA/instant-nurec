@@ -39,13 +39,21 @@ This follow-up plan delivers all four outcomes, parity-gated at every step.
 
 Each substep: equivalence test → torch impl → equivalence test green → bazel run both modes → `validate_parity.py` → tolerance bump (if needed) → commit. Order is chosen so trivial value-container swaps land first (low risk, parity unchanged) before the math-heavy kernels.
 
-### A.1 — `se3pose_from_matrix` → reuse existing `se3_matrix_to_tquat`
+### A.1 — `se3pose_from_matrix` → reuse existing `se3_matrix_to_tquat` (DEFERRED)
 
+- **Status:** deferred until after A.6 lands. A faithful slang-equivalent torch
+  impl (strict-comparison Shepperd, slang's ``s = 2*sqrt(1+...)`` formula,
+  ``normalizeSafe``) still produces ~1-ULP drift relative to the bazel-built
+  kernel on GPU. The drift propagates through the still-slang
+  ``image_points_to_world_rays_shutter_pose`` (A.6) into a non-deterministic
+  Gaussian cull boundary, breaking the exact vertex-count contract
+  (1748388 → 1748396 chunk0; 1428209 → 1428215 chunk1; 2871662 → 2871628 merge).
 - **Call site:** `instant_nurec/_pkg/utils/batch.py:20` (import), `:773-774` (call returning `(translations, rotations)`).
-- **Replacement:** `instant_nurec/_pkg/utils/geometry.py:se3_matrix_to_tquat` already returns `(N, 7)` tquat in pure torch. Wrap it to split into `(translations, rotations)` to match the kernel's two-tensor return.
+- **Resume condition:** once A.5+A.6 land a torch ray-gen, the FP precision of the entire pose → ray chain is controlled in Python and the kernel can be replaced. The bit-identity-with-slang requirement disappears.
+- **Replacement (deferred):** new function `instant_nurec/_pkg/utils/geometry.py:se3pose_from_matrix` mirroring `libs/geometry/kernels/quaternion.slang::fromMatrix` exactly (strict-cmp Shepperd + slang's `s = 2*sqrt(1+...)` formula + slang's `normalizeSafe`).
 - **Test:** `tests/test_se3pose_torch.py` — equivalence on identity, translation-only, rotation-only, random SE(3) batches; check `(out_torch - out_kernel).abs().max() ≤ 1e-6`.
-- **Parity risk:** none expected (pure-torch already covers this math).
-- **Commit:** `feat(geometry): replace libs.geometry.kernels.pose.se3pose_from_matrix with torch helper (Phase A.1)`.
+- **Parity risk:** ~1-ULP per-component until A.6 absorbs the drift.
+- **Commit (deferred):** `feat(geometry): replace libs.geometry.kernels.pose.se3pose_from_matrix with torch helper (Phase A.1)`.
 
 ### A.2 — `libs.sensors.kernels.cameras.parameters.*` → in-tree dataclasses
 
@@ -116,7 +124,7 @@ After A.1–A.7, no remaining `from libs.X` imports anywhere. Verify with `grep 
 - Full unit suite + bazel run + validate_parity sweep.
 - **Commit:** `refactor(strip): drop libs/ now that all CUDA/slang kernels are torch-native (Phase A.8)`.
 
-### A.9 — Re-strip pass (plan.md Phase 1 Step 4.1–4.8) against the post-A codebase
+### A.9 — Re-strip pass (plan.md Phase 1 Step 4.0–4.8) against the post-A codebase
 
 After each major phase, re-run the iterative aggressive strip from plan.md §"Step 4 — Iterative aggressive strip". This keeps the repo lean by deleting whatever just became dead. Sub-iterations are the same as plan.md (4.1 drop non-Kelvin → 4.2 drop training → 4.3 drop output-irrelevant → 4.4 drop yaml → 4.5 drop NRE/PL → 4.6 drop "nre" strings → 4.7 simplify pass → 4.8 convergence). Most of these have already been done; the re-strip looks for *new* dead code that the kernel replacements exposed:
 
@@ -168,7 +176,7 @@ Update `instant_nurec_example_call.sh` to be the canonical reference invocation.
 
 Run `python run_inference.py --merge none` and `--merge frustum-ownership` against the dataset; `validate_parity.py` for both. Green → done.
 
-### B.4 — Re-strip pass (plan.md Phase 1 Step 4.1–4.8) against the post-B codebase
+### B.4 — Re-strip pass (plan.md Phase 1 Step 4.0–4.8) against the post-B codebase
 
 After bazel removal, re-run the strip iteration. Bazel removal usually exposes more dead paths (per plan.md §8.5 "bazel-removal usually exposes more dead paths e.g. BUILD.bazel-only deps"):
 
@@ -229,7 +237,7 @@ Both modes; `validate_parity.py`; ruff clean.
 
 - **Commits:** one per top-level move (utils, datasets, predict, primitives, model, config_schema), then a final `refactor(layout): flatten _pkg/ into asset-harvester-style top-level (Phase C)`.
 
-### C.6 — Re-strip pass (plan.md Phase 1 Step 4.1–4.8) against the post-C codebase
+### C.6 — Re-strip pass (plan.md Phase 1 Step 4.0–4.8) against the post-C codebase
 
 Layout flatten typically exposes:
 
@@ -312,7 +320,7 @@ Plan.md §8.3 reserved `internal/` for migration scaffolding (NRE provenance mar
 
 - **Commit:** `chore(internal): drop internal/, move parity_proofs → docs/internal/ (Phase D.5)`.
 
-### D.6 — Re-strip pass (plan.md Phase 1 Step 4.1–4.8) against the post-D codebase
+### D.6 — Re-strip pass (plan.md Phase 1 Step 4.0–4.8) against the post-D codebase
 
 After file hygiene, re-run the strip iteration one final time. Most of the deletions in D will have surfaced extra cleanups:
 
