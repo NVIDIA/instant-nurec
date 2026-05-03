@@ -28,9 +28,8 @@ source .venv/bin/activate
 ```
 
 `setup.sh` uses `pip install -e .`; the build backend is plain
-`setuptools`. There is no separate build step — kernels are imported
-from `libs/` (Phase 3 transition; the long-term target is fully torch-
-native).
+`setuptools`. There is no separate build step — every kernel is pure
+torch, no compiled extensions to build.
 
 ## Running tests
 
