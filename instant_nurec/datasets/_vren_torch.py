@@ -23,6 +23,8 @@ from __future__ import annotations
 
 import torch
 
+from instant_nurec.utils._se3_torch import quat_xyzw_slerp, quat_xyzw_to_rotmat
+
 
 def _per_track_searchsorted_indexed_vals(
     bins: torch.Tensor,
@@ -53,42 +55,6 @@ def _per_track_searchsorted_indexed_vals(
     shifted_queries = queries + bin_range * track_idx.to(queries.dtype)
     raw = torch.searchsorted(shifted_bins, shifted_queries).to(torch.int64)
     return raw.clamp(min=q_starts, max=q_ends)
-
-
-def _quat_xyzw_slerp(
-    quat_s: torch.Tensor, quat_e: torch.Tensor, t: torch.Tensor
-) -> torch.Tensor:
-    """Batched SLERP between two unit quaternions (XYZW)."""
-    cos_omega = torch.sum(quat_s * quat_e, dim=-1)
-    quat_e = torch.where((cos_omega < 0).unsqueeze(-1), -quat_e, quat_e)
-    cos_omega = torch.abs(cos_omega)
-
-    nearby = cos_omega > (1.0 - 1e-3)
-    cos_omega = torch.clamp(cos_omega, -1.0 + 1e-6, 1.0 - 1e-6)
-    omega = torch.acos(cos_omega)
-    alpha = torch.sin((1 - t) * omega)
-    beta = torch.sin(t * omega)
-    alpha = torch.where(nearby, (1 - t), alpha)
-    beta = torch.where(nearby, t, beta)
-    quat = alpha.unsqueeze(-1) * quat_s + beta.unsqueeze(-1) * quat_e
-    return quat / torch.norm(quat, dim=-1, keepdim=True)
-
-
-def _quat_xyzw_to_rotmat(quat: torch.Tensor) -> torch.Tensor:
-    """XYZW unit quaternion → 3x3 rotation matrix."""
-    x = quat[..., 0]; y = quat[..., 1]; z = quat[..., 2]; w = quat[..., 3]
-    x2 = x * x; y2 = y * y; z2 = z * z; w2 = w * w
-    R = torch.empty(quat.shape[:-1] + (3, 3), dtype=quat.dtype, device=quat.device)
-    R[..., 0, 0] = x2 - y2 - z2 + w2
-    R[..., 1, 0] = 2 * (x * y + z * w)
-    R[..., 2, 0] = 2 * (x * z - y * w)
-    R[..., 0, 1] = 2 * (x * y - z * w)
-    R[..., 1, 1] = -x2 + y2 - z2 + w2
-    R[..., 2, 1] = 2 * (y * z + x * w)
-    R[..., 0, 2] = 2 * (x * z + y * w)
-    R[..., 1, 2] = 2 * (y * z - x * w)
-    R[..., 2, 2] = -x2 - y2 + z2 + w2
-    return R
 
 
 def _slab_aabb_intersection(
@@ -204,11 +170,11 @@ def ray_cuboidtracks_intersection(
         q_end = pose_end[:, 3:]
 
         c_interp = (1.0 - t_interp).unsqueeze(-1) * c_start + t_interp.unsqueeze(-1) * c_end
-        q_interp = _quat_xyzw_slerp(q_start, q_end, t_interp)
+        q_interp = quat_xyzw_slerp(q_start, q_end, t_interp)
 
         # Local-frame ray.
         # The kernel does R^T (transpose) — world→local rotation.
-        R_world_to_local = _quat_xyzw_to_rotmat(q_interp).transpose(-1, -2)
+        R_world_to_local = quat_xyzw_to_rotmat(q_interp).transpose(-1, -2)
         rays_o_local = torch.bmm(
             R_world_to_local, (rays_o[ray_idxs] - c_interp).unsqueeze(-1)
         ).squeeze(-1)
@@ -305,9 +271,9 @@ def point_cuboidtracks_intersection_interpolate_pose(
         q_start = pose_start[:, 3:]
         q_end = pose_end[:, 3:]
         c_pointtime = (1.0 - t_interp).unsqueeze(-1) * c_start + t_interp.unsqueeze(-1) * c_end
-        q_pointtime = _quat_xyzw_slerp(q_start, q_end, t_interp)
+        q_pointtime = quat_xyzw_slerp(q_start, q_end, t_interp)
 
-        R_world_to_local = _quat_xyzw_to_rotmat(q_pointtime).transpose(-1, -2)
+        R_world_to_local = quat_xyzw_to_rotmat(q_pointtime).transpose(-1, -2)
         point_local = torch.bmm(
             R_world_to_local, (points[pt_idxs] - c_pointtime).unsqueeze(-1)
         ).squeeze(-1)

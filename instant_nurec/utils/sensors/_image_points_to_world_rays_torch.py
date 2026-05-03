@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import torch
 
+from instant_nurec.utils._se3_torch import quat_xyzw_slerp, quat_xyzw_to_rotmat
 from instant_nurec.utils.sensors._kernel_types import (
     DynamicPose,
     ExternalDistortion,
@@ -143,51 +144,6 @@ def _image_points_relative_frame_times(
     if shutter_type == ShutterType.ROLLING_RIGHT_TO_LEFT:
         return (width - torch.ceil(image_points[:, 0])) / (width - 1)
     raise ValueError(f"Unknown shutter type: {shutter_type}")
-
-
-def _quat_xyzw_slerp(
-    quat_s: torch.Tensor, quat_e: torch.Tensor, t: torch.Tensor
-) -> torch.Tensor:
-    """Batched SLERP between two unit quaternions (XYZW).
-
-    Mirrors ``ncore.impl.sensors.common.unitquat_slerp`` (shortest-arc).
-    """
-    cos_omega = torch.sum(quat_s * quat_e, dim=-1)
-    quat_e = torch.where((cos_omega < 0).unsqueeze(-1), -quat_e, quat_e)
-    cos_omega = torch.abs(cos_omega)
-
-    nearby = cos_omega > (1.0 - 1e-3)
-    cos_omega = torch.clamp(cos_omega, -1.0 + 1e-6, 1.0 - 1e-6)
-    omega = torch.acos(cos_omega)
-    alpha = torch.sin((1 - t) * omega)
-    beta = torch.sin(t * omega)
-    alpha = torch.where(nearby, (1 - t), alpha)
-    beta = torch.where(nearby, t, beta)
-    quat = alpha.unsqueeze(-1) * quat_s + beta.unsqueeze(-1) * quat_e
-    return quat / torch.norm(quat, dim=-1, keepdim=True)
-
-
-def _quat_xyzw_to_rotmat(quat: torch.Tensor) -> torch.Tensor:
-    """XYZW unit quaternion → 3x3 rotation matrix."""
-    x = quat[..., 0]
-    y = quat[..., 1]
-    z = quat[..., 2]
-    w = quat[..., 3]
-    x2 = x * x
-    y2 = y * y
-    z2 = z * z
-    w2 = w * w
-    R = torch.empty(quat.shape[:-1] + (3, 3), dtype=quat.dtype, device=quat.device)
-    R[..., 0, 0] = x2 - y2 - z2 + w2
-    R[..., 1, 0] = 2 * (x * y + z * w)
-    R[..., 2, 0] = 2 * (x * z - y * w)
-    R[..., 0, 1] = 2 * (x * y - z * w)
-    R[..., 1, 1] = -x2 + y2 - z2 + w2
-    R[..., 2, 1] = 2 * (y * z + x * w)
-    R[..., 0, 2] = 2 * (x * z + y * w)
-    R[..., 1, 2] = 2 * (y * z - x * w)
-    R[..., 2, 2] = -x2 - y2 + z2 + w2
-    return R
 
 
 def _numerically_stable_xy_norm(cam_rays: torch.Tensor) -> torch.Tensor:
@@ -418,8 +374,8 @@ def image_points_to_world_rays_shutter_pose(
     rot_e = dynamic_pose.end_pose.rotation.to(device=device, dtype=dtype)
     R_s = rot_s.unsqueeze(0).expand(n, -1)
     R_e = rot_e.unsqueeze(0).expand(n, -1)
-    rot_quat = _quat_xyzw_slerp(R_s, R_e, t)
-    R_per_pixel = _quat_xyzw_to_rotmat(rot_quat)
+    rot_quat = quat_xyzw_slerp(R_s, R_e, t)
+    R_per_pixel = quat_xyzw_to_rotmat(rot_quat)
 
     # Camera-frame rays → world frame.
     world_directions = torch.bmm(R_per_pixel, cam_rays.unsqueeze(-1)).squeeze(-1)

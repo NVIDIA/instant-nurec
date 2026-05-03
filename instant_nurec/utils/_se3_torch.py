@@ -54,6 +54,45 @@ def _quat_rotate(q: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
     return v + qw * t + torch.cross(qv, t, dim=-1)
 
 
+def quat_xyzw_slerp(
+    quat_s: torch.Tensor, quat_e: torch.Tensor, t: torch.Tensor
+) -> torch.Tensor:
+    """Batched SLERP between two unit quaternions (XYZW).
+
+    Mirrors ``ncore.impl.sensors.common.unitquat_slerp`` (shortest-arc).
+    """
+    cos_omega = torch.sum(quat_s * quat_e, dim=-1)
+    quat_e = torch.where((cos_omega < 0).unsqueeze(-1), -quat_e, quat_e)
+    cos_omega = torch.abs(cos_omega)
+
+    nearby = cos_omega > (1.0 - 1e-3)
+    cos_omega = torch.clamp(cos_omega, -1.0 + 1e-6, 1.0 - 1e-6)
+    omega = torch.acos(cos_omega)
+    alpha = torch.sin((1 - t) * omega)
+    beta = torch.sin(t * omega)
+    alpha = torch.where(nearby, (1 - t), alpha)
+    beta = torch.where(nearby, t, beta)
+    quat = alpha.unsqueeze(-1) * quat_s + beta.unsqueeze(-1) * quat_e
+    return quat / torch.norm(quat, dim=-1, keepdim=True)
+
+
+def quat_xyzw_to_rotmat(quat: torch.Tensor) -> torch.Tensor:
+    """XYZW unit quaternion → 3x3 rotation matrix."""
+    x, y, z, w = quat[..., 0], quat[..., 1], quat[..., 2], quat[..., 3]
+    x2, y2, z2, w2 = x * x, y * y, z * z, w * w
+    R = torch.empty(quat.shape[:-1] + (3, 3), dtype=quat.dtype, device=quat.device)
+    R[..., 0, 0] = x2 - y2 - z2 + w2
+    R[..., 1, 0] = 2 * (x * y + z * w)
+    R[..., 2, 0] = 2 * (x * z - y * w)
+    R[..., 0, 1] = 2 * (x * y - z * w)
+    R[..., 1, 1] = -x2 + y2 - z2 + w2
+    R[..., 2, 1] = 2 * (y * z + x * w)
+    R[..., 0, 2] = 2 * (x * z + y * w)
+    R[..., 1, 2] = 2 * (y * z - x * w)
+    R[..., 2, 2] = -x2 - y2 + z2 + w2
+    return R
+
+
 class SO3:
     """XYZW unit-quaternion rotation. Drop-in for ``lietorch.SO3``."""
 
