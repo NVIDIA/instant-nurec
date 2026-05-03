@@ -29,8 +29,10 @@ sys.path.insert(0, str(REPO_ROOT))
 
 @pytest.fixture
 def stubbed_converters(monkeypatch):
-    # lietorch + nre.utils.types deps (transitively imported via the sensors
-    # package __init__).
+    # After Phase A.6 the converter pulls dataclasses from
+    # ``instant_nurec._pkg.utils.sensors._kernel_types`` (in-tree). We use
+    # the real types and wrap their ``from_components`` with a capture
+    # shim so the existing call-arg assertions still work.
     lietorch_mod = types.ModuleType("lietorch")
 
     class _FakeSE3:
@@ -39,96 +41,10 @@ def stubbed_converters(monkeypatch):
     lietorch_mod.SE3 = _FakeSE3
     monkeypatch.setitem(sys.modules, "lietorch", lietorch_mod)
 
-    libs_mod = types.ModuleType("libs")
-    sensors_pkg = types.ModuleType("libs.sensors")
-    kernels_pkg = types.ModuleType("libs.sensors.kernels")
-    cameras_pkg = types.ModuleType("libs.sensors.kernels.cameras")
-    parameters_mod = types.ModuleType("libs.sensors.kernels.cameras.parameters")
-    common_mod = types.ModuleType("libs.sensors.kernels.common")
-    pose_calib_mod = types.ModuleType("libs.sensors.kernels.pose_calib")
-    pose_calib_mod.compute_poses_and_timestamps = lambda *a, **k: (
-        torch.zeros(1, 2, 4, 4),
-        torch.zeros(1, 2),
-    )
-
     captured: dict = {}
 
-    class CameraProjection:
-        pass
-
-    class ExternalDistortion:
-        pass
-
-    class NoExternalDistortion(ExternalDistortion):
-        pass
-
-    class _ProjectionWithFactory(CameraProjection):
-        @classmethod
-        def from_components(cls, **kwargs):
-            obj = cls()
-            obj.kwargs = kwargs
-            captured.setdefault("calls", []).append((cls.__name__, kwargs))
-            return obj
-
-    class OpenCVPinholeProjection(_ProjectionWithFactory):
-        pass
-
-    class OpenCVFisheyeProjection(_ProjectionWithFactory):
-        pass
-
-    class FThetaProjection(_ProjectionWithFactory):
-        pass
-
-    class BivariateWindshieldDistortion(ExternalDistortion):
-        @classmethod
-        def from_components(cls, **kwargs):
-            obj = cls()
-            obj.kwargs = kwargs
-            captured.setdefault("calls", []).append(("BivariateWindshieldDistortion", kwargs))
-            return obj
-
-    from enum import Enum
-
-    class FThetaPolynomialType(Enum):
-        FORWARD = 0
-        BACKWARD = 1
-
-    class ReferencePolynomial(Enum):
-        FORWARD = 0
-        BACKWARD = 1
-
-    class ShutterType(Enum):
-        ROLLING = 0
-        GLOBAL = 1
-
-    parameters_mod.CameraProjection = CameraProjection
-    parameters_mod.ExternalDistortion = ExternalDistortion
-    parameters_mod.NoExternalDistortion = NoExternalDistortion
-    parameters_mod.OpenCVPinholeProjection = OpenCVPinholeProjection
-    parameters_mod.OpenCVFisheyeProjection = OpenCVFisheyeProjection
-    parameters_mod.FThetaProjection = FThetaProjection
-    parameters_mod.FThetaPolynomialType = FThetaPolynomialType
-    parameters_mod.ReferencePolynomial = ReferencePolynomial
-    parameters_mod.ShutterType = ShutterType
-    parameters_mod.BivariateWindshieldDistortion = BivariateWindshieldDistortion
-
-    class Pose:
-        pass
-
-    class DynamicPose:
-        pass
-
-    common_mod.Pose = Pose
-    common_mod.DynamicPose = DynamicPose
-
-    cameras_pkg.parameters = parameters_mod
-    kernels_pkg.cameras = cameras_pkg
-    kernels_pkg.common = common_mod
-    kernels_pkg.pose_calib = pose_calib_mod
-    sensors_pkg.kernels = kernels_pkg
-    libs_mod.sensors = sensors_pkg
-
-    # ncore stubs
+    # ncore stubs (needed BEFORE _kernel_types import — the converter package
+    # __init__ pulls sensors.py which pulls ncore).
     ncore_mod = types.ModuleType("ncore")
     data_mod = types.ModuleType("ncore.data")
     sensors_ncore = types.ModuleType("ncore.sensors")
@@ -151,7 +67,9 @@ def stubbed_converters(monkeypatch):
     data_mod.ConcreteLidarModelParametersUnion = object
 
     class _ShutterTypeNcore:
-        ROLLING = type("RollingTag", (), {"value": 0})()
+        # Match the in-tree _kernel_types.ShutterType IntEnum values (1-5);
+        # the converter does ShutterType(camera_model.shutter_type.value).
+        ROLLING = type("RollingTag", (), {"value": 1})()
 
     data_mod.ShutterType = _ShutterTypeNcore
 
@@ -179,13 +97,6 @@ def stubbed_converters(monkeypatch):
     ncore_mod.sensors = sensors_ncore
 
     for name, mod in [
-        ("libs", libs_mod),
-        ("libs.sensors", sensors_pkg),
-        ("libs.sensors.kernels", kernels_pkg),
-        ("libs.sensors.kernels.cameras", cameras_pkg),
-        ("libs.sensors.kernels.cameras.parameters", parameters_mod),
-        ("libs.sensors.kernels.common", common_mod),
-        ("libs.sensors.kernels.pose_calib", pose_calib_mod),
         ("ncore", ncore_mod),
         ("ncore.data", data_mod),
         ("ncore.sensors", sensors_ncore),
@@ -194,12 +105,58 @@ def stubbed_converters(monkeypatch):
     for cached in (
         "instant_nurec._pkg.utils.sensors.ncore_sensors_converters",
         "instant_nurec._pkg.utils.sensors.sensors",
+        "instant_nurec._pkg.utils.sensors._kernel_types",
+        "instant_nurec._pkg.utils.sensors._image_points_to_world_rays_torch",
         "instant_nurec._pkg.utils.sensors",
         "instant_nurec._pkg.utils.types",
     ):
         monkeypatch.delitem(sys.modules, cached, raising=False)
 
     import importlib
+
+    # Now safe to import the in-tree types (converter package __init__ pulls
+    # sensors.py → ncore.data, which is stubbed above).
+    kt = importlib.import_module("instant_nurec._pkg.utils.sensors._kernel_types")
+
+    def _wrap_from_components(real_cls, captured_name):
+        original = real_cls.from_components
+
+        def _capturing(*args, **kwargs):
+            captured.setdefault("calls", []).append((captured_name, dict(kwargs)))
+            return original(*args, **kwargs)
+
+        return _capturing
+
+    monkeypatch.setattr(
+        kt.OpenCVPinholeProjection,
+        "from_components",
+        _wrap_from_components(kt.OpenCVPinholeProjection, "OpenCVPinholeProjection"),
+    )
+    monkeypatch.setattr(
+        kt.OpenCVFisheyeProjection,
+        "from_components",
+        _wrap_from_components(kt.OpenCVFisheyeProjection, "OpenCVFisheyeProjection"),
+    )
+    monkeypatch.setattr(
+        kt.FThetaProjection,
+        "from_components",
+        _wrap_from_components(kt.FThetaProjection, "FThetaProjection"),
+    )
+    monkeypatch.setattr(
+        kt.BivariateWindshieldDistortion,
+        "from_components",
+        _wrap_from_components(
+            kt.BivariateWindshieldDistortion, "BivariateWindshieldDistortion"
+        ),
+    )
+
+    OpenCVPinholeProjection = kt.OpenCVPinholeProjection  # noqa: F841
+    OpenCVFisheyeProjection = kt.OpenCVFisheyeProjection  # noqa: F841
+    FThetaProjection = kt.FThetaProjection  # noqa: F841
+    BivariateWindshieldDistortion = kt.BivariateWindshieldDistortion  # noqa: F841
+    FThetaPolynomialType = kt.FThetaPolynomialType
+    ReferencePolynomial = kt.ReferencePolynomial
+    ShutterType = kt.ShutterType
 
     converters = importlib.import_module("instant_nurec._pkg.utils.sensors.ncore_sensors_converters")
     return (
@@ -232,7 +189,7 @@ def _make_pinhole(model_cls, ShutterType, with_distortion=False, BivariateModel=
     m.tangential_coeffs = torch.zeros(2)
     m.thin_prism_coeffs = torch.zeros(4)
     m.resolution = torch.tensor([640, 480])
-    m.shutter_type = _shutter_obj(ShutterType.ROLLING)
+    m.shutter_type = _shutter_obj(ShutterType.ROLLING_TOP_TO_BOTTOM)
     m.external_distortion = None
     if with_distortion:
         d = BivariateModel()
@@ -254,7 +211,7 @@ def _make_fisheye(model_cls, ShutterType):
     m.resolution = torch.tensor([640, 480])
     m.max_angle = 1.5
     m.newton_iterations = 5
-    m.shutter_type = _shutter_obj(ShutterType.ROLLING)
+    m.shutter_type = _shutter_obj(ShutterType.ROLLING_TOP_TO_BOTTOM)
     m.external_distortion = None
     return m
 
@@ -272,7 +229,7 @@ def _make_ftheta(model_cls, ShutterType, ref_poly):
     m.max_angle = 1.5
     m.newton_iterations = 5
     m.resolution = torch.tensor([640, 480])
-    m.shutter_type = _shutter_obj(ShutterType.ROLLING)
+    m.shutter_type = _shutter_obj(ShutterType.ROLLING_TOP_TO_BOTTOM)
     m.external_distortion = None
     return m
 
@@ -298,7 +255,7 @@ def test_convert_pinhole_returns_pinhole_projection(stubbed_converters):
     names = [c[0] for c in captured["calls"]]
     assert "OpenCVPinholeProjection" in names
     assert result.resolution == (640, 480)
-    assert result.shutter_type == ShutterType.ROLLING
+    assert result.shutter_type == ShutterType.ROLLING_TOP_TO_BOTTOM
 
 
 def test_convert_fisheye_slices_forward_poly(stubbed_converters):
@@ -404,11 +361,11 @@ def test_external_distortion_none_returns_no_external_distortion(stubbed_convert
     ShutterType = stubbed_converters[6]
     cam = _make_pinhole(OpenCVPinholeCameraModel, ShutterType)
     result = mod.CameraModelConverter.convert(cam)
-    # NoExternalDistortion is a class from libs.sensors.kernels.cameras.parameters.
-    import sys as _sys
+    # After Phase A.6 NoExternalDistortion lives in instant_nurec's in-tree
+    # _kernel_types module.
+    from instant_nurec._pkg.utils.sensors._kernel_types import NoExternalDistortion
 
-    NoExt = _sys.modules["libs.sensors.kernels.cameras.parameters"].NoExternalDistortion
-    assert isinstance(result.external_distortion, NoExt)
+    assert isinstance(result.external_distortion, NoExternalDistortion)
 
 
 def test_external_distortion_bivariate_windshield_branch(stubbed_converters):
@@ -433,9 +390,9 @@ def test_external_distortion_bivariate_windshield_branch(stubbed_converters):
     bw_call = next(c for c in captured["calls"] if c[0] == "BivariateWindshieldDistortion")
     # FORWARD on the ncore side maps to ReferencePolynomial.FORWARD on the kernel side.
     assert bw_call[1]["reference_polynomial"] == ReferencePolynomial.FORWARD
-    assert isinstance(result.external_distortion, type(bw_call[1]).__class__) or hasattr(
-        result.external_distortion, "kwargs"
-    )
+    from instant_nurec._pkg.utils.sensors._kernel_types import BivariateWindshieldDistortion
+
+    assert isinstance(result.external_distortion, BivariateWindshieldDistortion)
 
 
 def test_external_distortion_bivariate_backward_reference_polynomial(stubbed_converters):
@@ -473,17 +430,18 @@ def test_external_distortion_unrecognized_type_returns_none(stubbed_converters):
     cam = _make_pinhole(OpenCVPinholeCameraModel, ShutterType)
     cam.external_distortion = object()  # not None, not BivariateWindshieldModel
     result = mod.CameraModelConverter.convert(cam)
-    import sys as _sys
+    from instant_nurec._pkg.utils.sensors._kernel_types import NoExternalDistortion
 
-    NoExt = _sys.modules["libs.sensors.kernels.cameras.parameters"].NoExternalDistortion
-    assert isinstance(result.external_distortion, NoExt)
+    assert isinstance(result.external_distortion, NoExternalDistortion)
 
 
 def test_module_exports_pose_and_dynamic_pose(stubbed_converters):
     """``__all__`` includes ``Pose`` and ``DynamicPose`` re-exported from
-    libs.sensors.kernels.common."""
+    instant_nurec's in-tree ``_kernel_types`` (after Phase A.6)."""
     (mod, *_) = stubbed_converters
+    from instant_nurec._pkg.utils.sensors._kernel_types import Pose, DynamicPose
+
     assert "Pose" in mod.__all__
     assert "DynamicPose" in mod.__all__
-    assert mod.Pose is sys.modules["libs.sensors.kernels.common"].Pose
-    assert mod.DynamicPose is sys.modules["libs.sensors.kernels.common"].DynamicPose
+    assert mod.Pose is Pose
+    assert mod.DynamicPose is DynamicPose

@@ -17,8 +17,10 @@ from typing import Any, List, Self, Sequence, Tuple, TypeAlias, TypeVar, Union, 
 
 import torch
 
-from libs.sensors.kernels.cameras import image_points_to_world_rays_shutter_pose
 from instant_nurec._pkg.utils.geometry import se3pose_from_matrix
+from instant_nurec._pkg.utils.sensors._image_points_to_world_rays_torch import (
+    image_points_to_world_rays_shutter_pose,
+)
 from ncore.data import (
     ConcreteCameraModelParametersUnion,
     ConcreteLidarModelParametersUnion,

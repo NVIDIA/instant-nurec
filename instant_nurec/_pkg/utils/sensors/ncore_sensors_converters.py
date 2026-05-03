@@ -19,19 +19,20 @@ from typing import Optional
 
 import torch
 
-from libs.sensors.kernels.cameras.parameters import (
+from instant_nurec._pkg.utils.sensors._kernel_types import (
     BivariateWindshieldDistortion,
     CameraProjection,
+    DynamicPose,
     ExternalDistortion,
     FThetaPolynomialType,
     FThetaProjection,
     NoExternalDistortion,
     OpenCVFisheyeProjection,
     OpenCVPinholeProjection,
+    Pose,
     ReferencePolynomial,
     ShutterType,
 )
-from libs.sensors.kernels.common import DynamicPose, Pose
 from ncore.data import FThetaCameraModelParameters
 from ncore.data import ReferencePolynomial as NcoreReferencePolynomial
 from ncore.sensors import (
