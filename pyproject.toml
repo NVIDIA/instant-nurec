@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Standalone NRM Kelvin predict pipeline (NRMConfig → ncorev4 ingest → Kelvin predict → 3D-Gaussian PLY export)."
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "LicenseRef-NvidiaProprietary" }
+license = { text = "Apache-2.0" }
 dependencies = [
     "einops",
     "numpy",

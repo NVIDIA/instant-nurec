@@ -1,13 +1,17 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
-# Phase 1 step 4.3: predict-only standalone keeps just the
-# linstep_interleave helper used by tracks.py. The rest of the
-# packed-ops surface (PackedWeightedSum / PackedCumsum / PackedAdd /
-# PackedSub / PackedMul / PackedDiv / PackedSum / packed_searchsorted /
-# arange_interleave / linspace_interleave / packed_max / packed_min /
-# merge_two_packs_sorted_aligned / PackedDiff / PackedBackwardDiff /
-# packed_invert_cdf / packed_interp) was training-side and is removed.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 from __future__ import annotations
 
