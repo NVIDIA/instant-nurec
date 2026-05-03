@@ -1,8 +1,9 @@
-"""Branch-coverage tests for nre.utils.sensors.ncore_sensors_converters.
+"""Branch-coverage tests for ``instant_nurec.utils.sensors.ncore_sensors_converters``.
 
-The module converts ncore camera models into kernel-compatible parameter
-dataclasses (slang/CUDA-ready). The kernel and ncore types are compiled
-extensions; we stub them via ``sys.modules`` and verify that
+The module converts ncore camera models into the in-tree dataclass
+parameter types (after Phase A.2/A.6 these live in
+``instant_nurec.utils.sensors._kernel_types``). The ncore types are
+compiled extensions; we stub them via ``sys.modules`` and verify that
 ``CameraModelConverter.convert`` dispatches by isinstance, calls each
 projection-specific factory with the right tensors, and assembles the
 ``CameraModelConverterResult`` correctly.
@@ -22,25 +23,12 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 
-# ---------------------------------------------------------------------------
-# Stubs for libs.sensors.kernels.* and ncore.*.
-# ---------------------------------------------------------------------------
-
-
 @pytest.fixture
 def stubbed_converters(monkeypatch):
     # After Phase A.6 the converter pulls dataclasses from
     # ``instant_nurec.utils.sensors._kernel_types`` (in-tree). We use
     # the real types and wrap their ``from_components`` with a capture
     # shim so the existing call-arg assertions still work.
-    lietorch_mod = types.ModuleType("lietorch")
-
-    class _FakeSE3:
-        pass
-
-    lietorch_mod.SE3 = _FakeSE3
-    monkeypatch.setitem(sys.modules, "lietorch", lietorch_mod)
-
     captured: dict = {}
 
     # ncore stubs (needed BEFORE _kernel_types import — the converter package

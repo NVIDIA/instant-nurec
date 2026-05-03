@@ -112,15 +112,6 @@ def _ncore_transformations_module():
 
 @pytest.fixture
 def stubbed_datasets_utils(monkeypatch):
-    # lietorch stub (transitively imported via nre.utils.types).
-    lietorch_mod = types.ModuleType("lietorch")
-
-    class _FakeSE3:
-        pass
-
-    lietorch_mod.SE3 = _FakeSE3
-    monkeypatch.setitem(sys.modules, "lietorch", lietorch_mod)
-
     ncore_mod = types.ModuleType("ncore")
     data_mod = types.ModuleType("ncore.data")
     data_mod.CuboidTrackObservation = _CuboidTrackObservation

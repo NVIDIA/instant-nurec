@@ -28,42 +28,14 @@ sys.path.insert(0, str(REPO_ROOT))
 
 
 # ---------------------------------------------------------------------------
-# Stub fixture — installs ncore.* + lietorch + ncore.data unions, then loads
-# nre.utils.ncore_utils.
+# Stub fixture — installs ncore.* unions, then loads
+# ``instant_nurec.utils.ncore_utils``. Phase B's torchvision/lietorch
+# removals dropped the prior stubs from this fixture.
 # ---------------------------------------------------------------------------
 
 
 @pytest.fixture
 def stubbed_ncore_utils(monkeypatch):
-    # lietorch (transitively imported via nre.utils.types)
-    lietorch_mod = types.ModuleType("lietorch")
-
-    class _FakeSE3:
-        pass
-
-    lietorch_mod.SE3 = _FakeSE3
-    monkeypatch.setitem(sys.modules, "lietorch", lietorch_mod)
-
-    # torchvision binary in this venv is incompatible with the cpu torch
-    # build (op-registration conflict on torchvision::nms). Stub the only
-    # surface ncore_utils touches: the resize transform.
-    torchvision_mod = types.ModuleType("torchvision")
-    transforms_mod = types.ModuleType("torchvision.transforms")
-    functional_mod = types.ModuleType("torchvision.transforms.functional")
-
-    def _fake_resize(tensor, target_hw, antialias=True):
-        # Naive nearest-neighbour resize using torch.nn.functional.interpolate.
-        import torch.nn.functional as F
-
-        return F.interpolate(tensor, size=tuple(target_hw), mode="nearest")
-
-    functional_mod.resize = _fake_resize
-    transforms_mod.functional = functional_mod
-    torchvision_mod.transforms = transforms_mod
-    monkeypatch.setitem(sys.modules, "torchvision", torchvision_mod)
-    monkeypatch.setitem(sys.modules, "torchvision.transforms", transforms_mod)
-    monkeypatch.setitem(sys.modules, "torchvision.transforms.functional", functional_mod)
-
     # ncore packages
     ncore_mod = types.ModuleType("ncore")
     data_mod = types.ModuleType("ncore.data")

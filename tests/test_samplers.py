@@ -1,8 +1,9 @@
-"""Branch-coverage tests for nre.nrm.datasets.samplers.
+"""Branch-coverage tests for ``instant_nurec.nrm.datasets.samplers``.
 
-The module imports from ``nre.utils.types`` which transitively pulls
-in ``lietorch`` and ``ncore.data``. We stub them via ``sys.modules``
-exactly like ``tests/test_types.py`` does.
+The module imports from ``instant_nurec.utils.types`` which pulls in
+``ncore.data``. We stub it via ``sys.modules``. Phase B replaced the
+lietorch dep with the in-tree ``_se3_torch`` shim, so no lietorch stub
+is needed.
 """
 
 from __future__ import annotations
@@ -21,14 +22,6 @@ sys.path.insert(0, str(REPO_ROOT))
 
 @pytest.fixture(autouse=True)
 def _stub_compiled_imports(monkeypatch: pytest.MonkeyPatch):
-    fake_lt = _typesmod.ModuleType("lietorch")
-
-    class _FakeSE3:
-        pass
-
-    fake_lt.SE3 = _FakeSE3  # type: ignore[attr-defined]
-    monkeypatch.setitem(sys.modules, "lietorch", fake_lt)
-
     ncore_mod = _typesmod.ModuleType("ncore")
     ncore_data_mod = _typesmod.ModuleType("ncore.data")
     ncore_data_mod.ConcreteCameraModelParametersUnion = type(  # type: ignore[attr-defined]

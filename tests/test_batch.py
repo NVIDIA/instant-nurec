@@ -1,9 +1,9 @@
-"""Branch-coverage tests for nre.utils.batch.
+"""Branch-coverage tests for ``instant_nurec.utils.batch``.
 
-The module wraps a substantial dependency graph (slang kernels, ncore camera
-models, lt.SE3-shaped tensors). We stub the kernel + ncore surface via
-``sys.modules`` and exercise the testable dataclass logic with plain torch
-tensors.
+After Phase A.8 dropped ``libs/`` and Phase B replaced lietorch with the
+in-tree ``_se3_torch`` shim, the only external surface batch.py still
+needs is the ncore ingest API. We stub ncore via ``sys.modules`` and
+exercise the testable dataclass logic with plain torch tensors.
 
 Coverage focus: ``generate_grid_2d_indices`` + the dataclass __post_init__ /
 ``collate_fn`` / ``to`` / ``__getitem__`` paths for ``RenderingData``,
@@ -11,14 +11,15 @@ Coverage focus: ``generate_grid_2d_indices`` + the dataclass __post_init__ /
 ``DataBatch``, ``RenderingBatch``, ``DataAndRenderingBatch``.
 
 The CameraFreePoseViewGeometry class (which uses ncore.PoseInterpolator +
-slang image_points_to_world_rays_shutter_pose at runtime) is left for
-end-to-end coverage.
+the in-tree image_points_to_world_rays_shutter_pose torch impl at
+runtime) is left for end-to-end coverage.
 """
 
 from __future__ import annotations
 
 import sys
 import types
+from enum import Enum
 from pathlib import Path
 
 import pytest
@@ -31,78 +32,6 @@ sys.path.insert(0, str(REPO_ROOT))
 
 @pytest.fixture
 def stubbed_batch(monkeypatch):
-    # lietorch (nre.utils.types pulls it).
-    lietorch_mod = types.ModuleType("lietorch")
-
-    class _FakeSE3:
-        pass
-
-    lietorch_mod.SE3 = _FakeSE3
-    monkeypatch.setitem(sys.modules, "lietorch", lietorch_mod)
-
-    # libs.geometry.kernels.pose
-    libs_mod = types.ModuleType("libs")
-    geometry_pkg = types.ModuleType("libs.geometry")
-    geometry_kernels_pkg = types.ModuleType("libs.geometry.kernels")
-    geometry_pose_mod = types.ModuleType("libs.geometry.kernels.pose")
-    geometry_pose_mod.se3pose_from_matrix = lambda M: M  # passthrough
-    geometry_kernels_pkg.pose = geometry_pose_mod
-    geometry_pkg.kernels = geometry_kernels_pkg
-
-    # libs.sensors.kernels.cameras + .common + .pose_calib + .cameras.parameters
-    sensors_pkg = types.ModuleType("libs.sensors")
-    sensors_kernels_pkg = types.ModuleType("libs.sensors.kernels")
-    cameras_pkg = types.ModuleType("libs.sensors.kernels.cameras")
-    parameters_mod = types.ModuleType("libs.sensors.kernels.cameras.parameters")
-    common_mod = types.ModuleType("libs.sensors.kernels.common")
-    pose_calib_mod = types.ModuleType("libs.sensors.kernels.pose_calib")
-
-    pose_calib_mod.compute_poses_and_timestamps = lambda *a, **k: (
-        torch.zeros(1, 2, 4, 4),
-        torch.zeros(1, 2),
-    )
-
-    class CameraProjection:
-        pass
-
-    class ExternalDistortion:
-        pass
-
-    class NoExternalDistortion(ExternalDistortion):
-        pass
-
-    class _Projection(CameraProjection):
-        @classmethod
-        def from_components(cls, **kwargs):
-            return cls()
-
-    parameters_mod.CameraProjection = CameraProjection
-    parameters_mod.ExternalDistortion = ExternalDistortion
-    parameters_mod.NoExternalDistortion = NoExternalDistortion
-    parameters_mod.OpenCVPinholeProjection = type("P", (_Projection,), {})
-    parameters_mod.OpenCVFisheyeProjection = type("Q", (_Projection,), {})
-    parameters_mod.FThetaProjection = type("R", (_Projection,), {})
-    parameters_mod.BivariateWindshieldDistortion = type("BWD", (ExternalDistortion,), {})
-
-    from enum import Enum
-
-    parameters_mod.FThetaPolynomialType = Enum("FThetaPT", ["FORWARD", "BACKWARD"])
-    parameters_mod.ReferencePolynomial = Enum("RefP", ["FORWARD", "BACKWARD"])
-    parameters_mod.ShutterType = Enum("ShutterType", ["ROLLING", "GLOBAL"])
-
-    common_mod.Pose = type("Pose", (), {})
-    common_mod.DynamicPose = type("DynamicPose", (), {})
-
-    cameras_pkg.parameters = parameters_mod
-    cameras_pkg.image_points_to_world_rays_shutter_pose = lambda *a, **k: torch.zeros(1, 6)
-    sensors_kernels_pkg.cameras = cameras_pkg
-    sensors_kernels_pkg.common = common_mod
-    sensors_kernels_pkg.pose_calib = pose_calib_mod
-    sensors_pkg.kernels = sensors_kernels_pkg
-
-    libs_mod.geometry = geometry_pkg
-    libs_mod.sensors = sensors_pkg
-
     # ncore stubs.
     ncore_mod = types.ModuleType("ncore")
     ncore_data_mod = types.ModuleType("ncore.data")
@@ -161,17 +90,6 @@ def stubbed_batch(monkeypatch):
     ncore_mod.sensors = sensors_ncore
 
     for name, mod in [
-        ("lietorch", lietorch_mod),
-        ("libs", libs_mod),
-        ("libs.geometry", geometry_pkg),
-        ("libs.geometry.kernels", geometry_kernels_pkg),
-        ("libs.geometry.kernels.pose", geometry_pose_mod),
-        ("libs.sensors", sensors_pkg),
-        ("libs.sensors.kernels", sensors_kernels_pkg),
-        ("libs.sensors.kernels.cameras", cameras_pkg),
-        ("libs.sensors.kernels.cameras.parameters", parameters_mod),
-        ("libs.sensors.kernels.common", common_mod),
-        ("libs.sensors.kernels.pose_calib", pose_calib_mod),
         ("ncore", ncore_mod),
         ("ncore.data", ncore_data_mod),
         ("ncore.impl", impl_mod),

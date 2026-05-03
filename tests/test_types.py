@@ -1,10 +1,10 @@
-"""Branch-coverage tests for nre.utils.types.
+"""Branch-coverage tests for ``instant_nurec.utils.types``.
 
-The module imports ``lietorch`` and ``ncore.data`` at module load. Both
-are unavailable in the cpu-only test venv, so we stub them via
-``sys.modules`` for the duration of each test. The two pure-python /
-pure-numpy types we exercise (``HalfClosedInterval`` and
-``FrameConversion``) don't actually use the stubbed names at runtime.
+The module imports ``ncore.data`` at module load (the lietorch dep was
+replaced by the in-tree ``_se3_torch`` shim in Phase B and no longer
+needs stubbing). The two pure-python / pure-numpy types we exercise
+(``HalfClosedInterval`` and ``FrameConversion``) don't actually use the
+stubbed names at runtime.
 """
 
 from __future__ import annotations
@@ -23,16 +23,8 @@ sys.path.insert(0, str(REPO_ROOT))
 
 @pytest.fixture(autouse=True)
 def _stub_compiled_imports(monkeypatch: pytest.MonkeyPatch):
-    """Provide minimal sys.modules stubs so ``import nre.utils.types``
-    succeeds without lietorch/ncore."""
-    fake_lt = _typesmod.ModuleType("lietorch")
-
-    class _FakeSE3:
-        pass
-
-    fake_lt.SE3 = _FakeSE3  # type: ignore[attr-defined]
-    monkeypatch.setitem(sys.modules, "lietorch", fake_lt)
-
+    """Provide minimal sys.modules stubs so ``import instant_nurec.utils.types``
+    succeeds without ncore."""
     ncore_mod = _typesmod.ModuleType("ncore")
     ncore_data_mod = _typesmod.ModuleType("ncore.data")
     ncore_data_mod.ConcreteCameraModelParametersUnion = type(  # type: ignore[attr-defined]

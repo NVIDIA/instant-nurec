@@ -1,16 +1,12 @@
-"""Branch-coverage tests for nre.datasets.tracks.
+"""Branch-coverage tests for ``instant_nurec.datasets.tracks``.
 
-The heavy compiled-deps surface (lt.SE3 / lt.SO3 math, libs.vren, packed_ops)
-is exercised at end-to-end parity time, not here. These tests cover the
-testable portion of ``tracks.py``: property passthroughs, ``to_device``
-wrappers, the ``Factory.from_pack`` shortcut, and ``Ops.subset_from_*``
-which only needs ``__getitem__``-able stubs.
-
-Strategy: stub ``lietorch`` (with a small SE3 stand-in supporting
-``__getitem__`` / ``.shape`` / ``.dtype`` / ``.device``), ``libs.vren``,
-``libs.packed_ops`` (interface module only — the real ``linstep_interleave``
-is fine because we never call it in these tests). Then drive the
-SUT with hand-built ``TracksData`` / ``CuboidTracksData`` dataclasses.
+After Phase A.7/A.8 dropped ``libs/`` and Phase B replaced lietorch with
+the in-tree ``_se3_torch`` shim, the only thing this fixture still has
+to stub is ``ncore.data`` (transitively imported by
+``instant_nurec.utils.types``). The heavier interface-equivalent
+``_FakeSE3`` / ``_FakeSO3`` classes below remain as test stand-ins
+because they only support the subset of the SE3/SO3 surface ``tracks.py``
+exercises (``__getitem__`` / ``.shape`` / ``.dtype`` / ``.device``).
 """
 
 from __future__ import annotations
@@ -109,70 +105,7 @@ class _FakeSE3:
 
 @pytest.fixture
 def stubbed_tracks(monkeypatch):
-    """Install all the dep stubs and reload nre.datasets.tracks."""
-    # lietorch
-    lietorch_mod = types.ModuleType("lietorch")
-    lietorch_mod.SE3 = _FakeSE3
-    lietorch_mod.SO3 = _FakeSO3
-    monkeypatch.setitem(sys.modules, "lietorch", lietorch_mod)
-
-    # libs.vren.interface
-    libs_mod = types.ModuleType("libs")
-    vren_pkg = types.ModuleType("libs.vren")
-    vren_iface_mod = types.ModuleType("libs.vren.interface")
-
-    class _StubVren:
-        @staticmethod
-        def ray_cuboidtracks_intersection(*a, **k):
-            # We won't actually exercise this — return shape-correct stubs.
-            n_rays = a[0].shape[0]
-            max_per = a[-2]
-            return (
-                torch.zeros(n_rays, dtype=torch.int32),
-                torch.zeros(n_rays, max_per, dtype=torch.int32),
-            )
-
-        @staticmethod
-        def point_cuboidtracks_intersection_interpolate_pose(*a, **k):
-            n_pts = a[0].shape[0]
-            return (
-                torch.zeros(n_pts, 7),
-                torch.full((n_pts,), -1, dtype=torch.long),
-            )
-
-    vren_iface_mod.vren = _StubVren()
-    vren_pkg.interface = vren_iface_mod
-    libs_mod.vren = vren_pkg
-
-    # libs.packed_ops.interface (real interface used by nre.utils.packed_ops
-    # which is imported transitively).
-    packed_pkg = types.ModuleType("libs.packed_ops")
-    packed_iface_mod = types.ModuleType("libs.packed_ops.interface")
-
-    class _StubPackedOps:
-        @staticmethod
-        def linstep_interleave(start, num_steps, step_size, return_idx):
-            total = int(num_steps.sum().item())
-            return torch.zeros(total, dtype=start.dtype), torch.zeros(total, dtype=num_steps.dtype)
-
-        @staticmethod
-        def packed_searchsorted_indexed_vals(*a, **k):
-            return torch.zeros(a[2].shape[0], dtype=torch.long)
-
-    packed_iface_mod.packed_ops = _StubPackedOps()
-    packed_pkg.interface = packed_iface_mod
-    libs_mod.packed_ops = packed_pkg
-
-    for name, mod in [
-        ("libs", libs_mod),
-        ("libs.vren", vren_pkg),
-        ("libs.vren.interface", vren_iface_mod),
-        ("libs.packed_ops", packed_pkg),
-        ("libs.packed_ops.interface", packed_iface_mod),
-    ]:
-        monkeypatch.setitem(sys.modules, name, mod)
-
-    # ncore stubs (transitive via nre.utils.types).
+    """Install ncore stubs and reload ``instant_nurec.datasets.tracks``."""
     ncore_mod = types.ModuleType("ncore")
     ncore_data_mod = types.ModuleType("ncore.data")
     ncore_data_mod.ConcreteCameraModelParametersUnion = object
