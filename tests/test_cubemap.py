@@ -64,11 +64,11 @@ def _stub_compiled_imports(monkeypatch: pytest.MonkeyPatch):
 
     # Force a fresh import (drop any prior cached version).
     for name in (
-        "instant_nurec._pkg.nrm.utils.cubemap",
-        "instant_nurec._pkg.utils.sensors",
-        "instant_nurec._pkg.utils.sensors.sensors",
-        "instant_nurec._pkg.utils.sensors._kernel_types",
-        "instant_nurec._pkg.utils.sensors._image_points_to_world_rays_torch",
+        "instant_nurec.nrm.utils.cubemap",
+        "instant_nurec.utils.sensors",
+        "instant_nurec.utils.sensors.sensors",
+        "instant_nurec.utils.sensors._kernel_types",
+        "instant_nurec.utils.sensors._image_points_to_world_rays_torch",
     ):
         sys.modules.pop(name, None)
 
@@ -81,7 +81,7 @@ def _stub_compiled_imports(monkeypatch: pytest.MonkeyPatch):
 def test_cubemap_ray_directions_shape():
     import torch
 
-    from instant_nurec._pkg.nrm.utils.cubemap import cubemap_ray_directions
+    from instant_nurec.nrm.utils.cubemap import cubemap_ray_directions
 
     out = cubemap_ray_directions(8, device=torch.device("cpu"))
     assert out.shape == (6, 8, 8, 3)
@@ -90,7 +90,7 @@ def test_cubemap_ray_directions_shape():
 def test_cubemap_ray_directions_unit_length():
     import torch
 
-    from instant_nurec._pkg.nrm.utils.cubemap import cubemap_ray_directions
+    from instant_nurec.nrm.utils.cubemap import cubemap_ray_directions
 
     out = cubemap_ray_directions(4, device=torch.device("cpu"))
     norms = out.norm(dim=-1)
@@ -103,7 +103,7 @@ def test_cubemap_ray_directions_face_centers_align_with_dominant_axis():
     front=+Z, back=-Z)."""
     import torch
 
-    from instant_nurec._pkg.nrm.utils.cubemap import cubemap_ray_directions
+    from instant_nurec.nrm.utils.cubemap import cubemap_ray_directions
 
     H = 4
     out = cubemap_ray_directions(H, device=torch.device("cpu"))
@@ -135,7 +135,7 @@ def test_cubemap_ray_directions_face_centers_align_with_dominant_axis():
 def test_rotate_sky_cubemap_shape_preserved():
     import torch
 
-    from instant_nurec._pkg.nrm.utils.cubemap import rotate_sky_cubemap
+    from instant_nurec.nrm.utils.cubemap import rotate_sky_cubemap
 
     cube = torch.randn(6, 8, 8, 3)
     rot = torch.eye(3)
@@ -149,7 +149,7 @@ def test_rotate_sky_cubemap_identity_recovers_input_within_aliasing():
     avoid that aliasing entirely)."""
     import torch
 
-    from instant_nurec._pkg.nrm.utils.cubemap import rotate_sky_cubemap
+    from instant_nurec.nrm.utils.cubemap import rotate_sky_cubemap
 
     # Constant per-face color so the cube is invariant under identity rotation
     # without any boundary-interp loss.
@@ -164,7 +164,7 @@ def test_rotate_sky_cubemap_identity_recovers_input_within_aliasing():
 def test_rotate_sky_cubemap_zero_input_yields_zero():
     import torch
 
-    from instant_nurec._pkg.nrm.utils.cubemap import rotate_sky_cubemap
+    from instant_nurec.nrm.utils.cubemap import rotate_sky_cubemap
 
     cube = torch.zeros(6, 8, 8, 3)
     rot = torch.tensor(
@@ -183,7 +183,7 @@ def test_rotate_sky_cubemap_constant_color_is_constant_after_rotation():
     constant under any rotation — this is a strong invariant."""
     import torch
 
-    from instant_nurec._pkg.nrm.utils.cubemap import rotate_sky_cubemap
+    from instant_nurec.nrm.utils.cubemap import rotate_sky_cubemap
 
     cube = torch.full((6, 8, 8, 3), 0.42)
     angle = math.radians(37.0)
@@ -203,7 +203,7 @@ def test_rotate_sky_cubemap_supports_arbitrary_channel_count():
     feature cubemaps with C != 3 should work too."""
     import torch
 
-    from instant_nurec._pkg.nrm.utils.cubemap import rotate_sky_cubemap
+    from instant_nurec.nrm.utils.cubemap import rotate_sky_cubemap
 
     cube = torch.randn(6, 8, 8, 5)  # 5-channel feature cubemap
     rot = torch.eye(3)
@@ -243,7 +243,7 @@ class _FakeCameraModelParameters:
 @pytest.fixture
 def _vren_with_fake_camera_rays(monkeypatch: pytest.MonkeyPatch):
     """Patch ``camera_rays_to_image_points`` (after Phase A.7 it lives in
-    ``instant_nurec._pkg.utils.sensors._image_points_to_world_rays_torch``;
+    ``instant_nurec.utils.sensors._image_points_to_world_rays_torch``;
     cubemap.py imports it by name)."""
 
     def fake_camera_rays_to_image_points(camera_params, rays):
@@ -252,7 +252,7 @@ def _vren_with_fake_camera_rays(monkeypatch: pytest.MonkeyPatch):
 
     import importlib
 
-    cubemap_mod = importlib.import_module("instant_nurec._pkg.nrm.utils.cubemap")
+    cubemap_mod = importlib.import_module("instant_nurec.nrm.utils.cubemap")
     monkeypatch.setattr(cubemap_mod, "camera_rays_to_image_points", fake_camera_rays_to_image_points)
     yield
 
@@ -262,7 +262,7 @@ def test_unproject_to_sky_cubemap_returns_correct_shapes(_vren_with_fake_camera_
     matches the contract: feature (6, S, S, C) and mask (6, S, S, 1)."""
     import torch
 
-    from instant_nurec._pkg.nrm.utils.cubemap import unproject_to_sky_cubemap
+    from instant_nurec.nrm.utils.cubemap import unproject_to_sky_cubemap
 
     sky_size = 4
     N, H, W, C = 1, 8, 8, 3
@@ -292,10 +292,10 @@ def test_unproject_to_sky_cubemap_zero_valid_rays_yields_empty_mask(monkeypatch)
 
     import importlib
 
-    cubemap_mod = importlib.import_module("instant_nurec._pkg.nrm.utils.cubemap")
+    cubemap_mod = importlib.import_module("instant_nurec.nrm.utils.cubemap")
     monkeypatch.setattr(cubemap_mod, "camera_rays_to_image_points", fake_camera_rays_to_image_points)
 
-    from instant_nurec._pkg.nrm.utils.cubemap import unproject_to_sky_cubemap
+    from instant_nurec.nrm.utils.cubemap import unproject_to_sky_cubemap
 
     sky_size = 4
     R_camera_world = torch.eye(3)[None]
@@ -319,7 +319,7 @@ def test_unproject_to_sky_cubemap_multiple_views(_vren_with_fake_camera_rays):
     """Multi-view input flows through the per-view loop without error."""
     import torch
 
-    from instant_nurec._pkg.nrm.utils.cubemap import unproject_to_sky_cubemap
+    from instant_nurec.nrm.utils.cubemap import unproject_to_sky_cubemap
 
     sky_size = 4
     N, H, W, C = 3, 8, 8, 3

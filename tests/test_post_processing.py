@@ -20,7 +20,7 @@ import torch
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from instant_nurec._pkg.nrm.models.post_processing import PerCameraAffinePostProcessing
+from instant_nurec.nrm.models.post_processing import PerCameraAffinePostProcessing
 
 
 # ---------------------------------------------------------------------------

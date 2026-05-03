@@ -30,7 +30,7 @@ sys.path.insert(0, str(REPO_ROOT))
 @pytest.fixture
 def stubbed_converters(monkeypatch):
     # After Phase A.6 the converter pulls dataclasses from
-    # ``instant_nurec._pkg.utils.sensors._kernel_types`` (in-tree). We use
+    # ``instant_nurec.utils.sensors._kernel_types`` (in-tree). We use
     # the real types and wrap their ``from_components`` with a capture
     # shim so the existing call-arg assertions still work.
     lietorch_mod = types.ModuleType("lietorch")
@@ -103,12 +103,12 @@ def stubbed_converters(monkeypatch):
     ]:
         monkeypatch.setitem(sys.modules, name, mod)
     for cached in (
-        "instant_nurec._pkg.utils.sensors.ncore_sensors_converters",
-        "instant_nurec._pkg.utils.sensors.sensors",
-        "instant_nurec._pkg.utils.sensors._kernel_types",
-        "instant_nurec._pkg.utils.sensors._image_points_to_world_rays_torch",
-        "instant_nurec._pkg.utils.sensors",
-        "instant_nurec._pkg.utils.types",
+        "instant_nurec.utils.sensors.ncore_sensors_converters",
+        "instant_nurec.utils.sensors.sensors",
+        "instant_nurec.utils.sensors._kernel_types",
+        "instant_nurec.utils.sensors._image_points_to_world_rays_torch",
+        "instant_nurec.utils.sensors",
+        "instant_nurec.utils.types",
     ):
         monkeypatch.delitem(sys.modules, cached, raising=False)
 
@@ -116,7 +116,7 @@ def stubbed_converters(monkeypatch):
 
     # Now safe to import the in-tree types (converter package __init__ pulls
     # sensors.py → ncore.data, which is stubbed above).
-    kt = importlib.import_module("instant_nurec._pkg.utils.sensors._kernel_types")
+    kt = importlib.import_module("instant_nurec.utils.sensors._kernel_types")
 
     def _wrap_from_components(real_cls, captured_name):
         original = real_cls.from_components
@@ -158,7 +158,7 @@ def stubbed_converters(monkeypatch):
     ReferencePolynomial = kt.ReferencePolynomial
     ShutterType = kt.ShutterType
 
-    converters = importlib.import_module("instant_nurec._pkg.utils.sensors.ncore_sensors_converters")
+    converters = importlib.import_module("instant_nurec.utils.sensors.ncore_sensors_converters")
     return (
         converters,
         captured,
@@ -363,7 +363,7 @@ def test_external_distortion_none_returns_no_external_distortion(stubbed_convert
     result = mod.CameraModelConverter.convert(cam)
     # After Phase A.6 NoExternalDistortion lives in instant_nurec's in-tree
     # _kernel_types module.
-    from instant_nurec._pkg.utils.sensors._kernel_types import NoExternalDistortion
+    from instant_nurec.utils.sensors._kernel_types import NoExternalDistortion
 
     assert isinstance(result.external_distortion, NoExternalDistortion)
 
@@ -390,7 +390,7 @@ def test_external_distortion_bivariate_windshield_branch(stubbed_converters):
     bw_call = next(c for c in captured["calls"] if c[0] == "BivariateWindshieldDistortion")
     # FORWARD on the ncore side maps to ReferencePolynomial.FORWARD on the kernel side.
     assert bw_call[1]["reference_polynomial"] == ReferencePolynomial.FORWARD
-    from instant_nurec._pkg.utils.sensors._kernel_types import BivariateWindshieldDistortion
+    from instant_nurec.utils.sensors._kernel_types import BivariateWindshieldDistortion
 
     assert isinstance(result.external_distortion, BivariateWindshieldDistortion)
 
@@ -430,7 +430,7 @@ def test_external_distortion_unrecognized_type_returns_none(stubbed_converters):
     cam = _make_pinhole(OpenCVPinholeCameraModel, ShutterType)
     cam.external_distortion = object()  # not None, not BivariateWindshieldModel
     result = mod.CameraModelConverter.convert(cam)
-    from instant_nurec._pkg.utils.sensors._kernel_types import NoExternalDistortion
+    from instant_nurec.utils.sensors._kernel_types import NoExternalDistortion
 
     assert isinstance(result.external_distortion, NoExternalDistortion)
 
@@ -439,7 +439,7 @@ def test_module_exports_pose_and_dynamic_pose(stubbed_converters):
     """``__all__`` includes ``Pose`` and ``DynamicPose`` re-exported from
     instant_nurec's in-tree ``_kernel_types`` (after Phase A.6)."""
     (mod, *_) = stubbed_converters
-    from instant_nurec._pkg.utils.sensors._kernel_types import Pose, DynamicPose
+    from instant_nurec.utils.sensors._kernel_types import Pose, DynamicPose
 
     assert "Pose" in mod.__all__
     assert "DynamicPose" in mod.__all__

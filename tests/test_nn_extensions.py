@@ -16,7 +16,7 @@ import torch.nn as nn
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from instant_nurec._pkg.models.nn_extensions import TypedModuleList, module_call_type
+from instant_nurec.models.nn_extensions import TypedModuleList, module_call_type
 
 
 # ---------------------------------------------------------------------------

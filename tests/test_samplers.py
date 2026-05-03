@@ -41,8 +41,8 @@ def _stub_compiled_imports(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setitem(sys.modules, "ncore.data", ncore_data_mod)
 
     # Force fresh import of samplers and types
-    sys.modules.pop("instant_nurec._pkg.nrm.datasets.samplers", None)
-    sys.modules.pop("instant_nurec._pkg.utils.types", None)
+    sys.modules.pop("instant_nurec.nrm.datasets.samplers", None)
+    sys.modules.pop("instant_nurec.utils.types", None)
 
 
 # ---------------------------------------------------------------------------
@@ -51,14 +51,14 @@ def _stub_compiled_imports(monkeypatch: pytest.MonkeyPatch):
 
 
 def test_get_closest_frame_index_exact_match_returns_that_index():
-    from instant_nurec._pkg.nrm.datasets.samplers import get_closest_frame_index
+    from instant_nurec.nrm.datasets.samplers import get_closest_frame_index
 
     ts = np.array([0, 100, 200, 300])
     assert get_closest_frame_index(ts, 200) == 2
 
 
 def test_get_closest_frame_index_picks_nearest_neighbor():
-    from instant_nurec._pkg.nrm.datasets.samplers import get_closest_frame_index
+    from instant_nurec.nrm.datasets.samplers import get_closest_frame_index
 
     ts = np.array([0, 100, 200, 300])
     assert get_closest_frame_index(ts, 110) == 1  # closer to 100 than 200
@@ -66,21 +66,21 @@ def test_get_closest_frame_index_picks_nearest_neighbor():
 
 
 def test_get_closest_frame_index_target_below_min():
-    from instant_nurec._pkg.nrm.datasets.samplers import get_closest_frame_index
+    from instant_nurec.nrm.datasets.samplers import get_closest_frame_index
 
     ts = np.array([100, 200, 300])
     assert get_closest_frame_index(ts, -50) == 0
 
 
 def test_get_closest_frame_index_target_above_max():
-    from instant_nurec._pkg.nrm.datasets.samplers import get_closest_frame_index
+    from instant_nurec.nrm.datasets.samplers import get_closest_frame_index
 
     ts = np.array([100, 200, 300])
     assert get_closest_frame_index(ts, 99999) == 2
 
 
 def test_get_closest_frame_index_returns_python_int():
-    from instant_nurec._pkg.nrm.datasets.samplers import get_closest_frame_index
+    from instant_nurec.nrm.datasets.samplers import get_closest_frame_index
 
     ts = np.array([0, 100], dtype=np.uint64)
     out = get_closest_frame_index(ts, 50)
@@ -93,8 +93,8 @@ def test_get_closest_frame_index_returns_python_int():
 
 
 def _make_sampler(**overrides):
-    from instant_nurec._pkg.nrm.config.dataset import AdaptiveSequentialFrameBatchSamplerConfig
-    from instant_nurec._pkg.nrm.datasets.samplers import AdaptiveSequentialFrameBatchSampler
+    from instant_nurec.nrm.config.dataset import AdaptiveSequentialFrameBatchSamplerConfig
+    from instant_nurec.nrm.datasets.samplers import AdaptiveSequentialFrameBatchSampler
 
     base = dict(
         n_frames_per_sample=4,
@@ -107,8 +107,8 @@ def _make_sampler(**overrides):
 
 
 def test_sampler_constructor_rejects_zero_frames_per_sample():
-    from instant_nurec._pkg.nrm.config.dataset import AdaptiveSequentialFrameBatchSamplerConfig
-    from instant_nurec._pkg.nrm.datasets.samplers import AdaptiveSequentialFrameBatchSampler
+    from instant_nurec.nrm.config.dataset import AdaptiveSequentialFrameBatchSamplerConfig
+    from instant_nurec.nrm.datasets.samplers import AdaptiveSequentialFrameBatchSampler
 
     cfg = AdaptiveSequentialFrameBatchSamplerConfig(
         n_frames_per_sample=0, n_samples_per_sequence=1, max_frame_gap_timestamp_us=1
@@ -118,8 +118,8 @@ def test_sampler_constructor_rejects_zero_frames_per_sample():
 
 
 def test_sampler_constructor_rejects_zero_samples_per_sequence():
-    from instant_nurec._pkg.nrm.config.dataset import AdaptiveSequentialFrameBatchSamplerConfig
-    from instant_nurec._pkg.nrm.datasets.samplers import AdaptiveSequentialFrameBatchSampler
+    from instant_nurec.nrm.config.dataset import AdaptiveSequentialFrameBatchSamplerConfig
+    from instant_nurec.nrm.datasets.samplers import AdaptiveSequentialFrameBatchSampler
 
     cfg = AdaptiveSequentialFrameBatchSamplerConfig(
         n_frames_per_sample=1, n_samples_per_sequence=0, max_frame_gap_timestamp_us=1
@@ -129,8 +129,8 @@ def test_sampler_constructor_rejects_zero_samples_per_sequence():
 
 
 def test_sampler_constructor_rejects_zero_max_frame_gap():
-    from instant_nurec._pkg.nrm.config.dataset import AdaptiveSequentialFrameBatchSamplerConfig
-    from instant_nurec._pkg.nrm.datasets.samplers import AdaptiveSequentialFrameBatchSampler
+    from instant_nurec.nrm.config.dataset import AdaptiveSequentialFrameBatchSamplerConfig
+    from instant_nurec.nrm.datasets.samplers import AdaptiveSequentialFrameBatchSampler
 
     cfg = AdaptiveSequentialFrameBatchSamplerConfig(
         n_frames_per_sample=1, n_samples_per_sequence=1, max_frame_gap_timestamp_us=0
@@ -140,7 +140,7 @@ def test_sampler_constructor_rejects_zero_max_frame_gap():
 
 
 def test_sample_frame_batch_returns_correct_indices_per_camera():
-    from instant_nurec._pkg.utils.types import HalfClosedInterval
+    from instant_nurec.utils.types import HalfClosedInterval
 
     sampler = _make_sampler(
         n_frames_per_sample=4, n_samples_per_sequence=2, max_frame_gap_timestamp_us=200_000
@@ -159,7 +159,7 @@ def test_sample_frame_batch_returns_correct_indices_per_camera():
 
 
 def test_sample_frame_batch_rejects_empty_camera_dict():
-    from instant_nurec._pkg.utils.types import HalfClosedInterval
+    from instant_nurec.utils.types import HalfClosedInterval
 
     sampler = _make_sampler()
     with pytest.raises(AssertionError, match="No camera timestamps"):
@@ -169,7 +169,7 @@ def test_sample_frame_batch_rejects_empty_camera_dict():
 
 
 def test_sample_frame_batch_rejects_out_of_range_sample_idx():
-    from instant_nurec._pkg.utils.types import HalfClosedInterval
+    from instant_nurec.utils.types import HalfClosedInterval
 
     sampler = _make_sampler(n_samples_per_sequence=2)
     cams = {"a": np.array([0, 100])}
@@ -195,7 +195,7 @@ def test_sample_frame_batch_rejects_empty_time_intervals():
 def test_sample_frame_batch_returns_empty_when_chunk_count_under_sample_idx():
     """When the sequence is short enough that fewer chunks are needed than
     sample_idx, the method returns an empty dict."""
-    from instant_nurec._pkg.utils.types import HalfClosedInterval
+    from instant_nurec.utils.types import HalfClosedInterval
 
     sampler = _make_sampler(
         n_frames_per_sample=4, n_samples_per_sequence=8, max_frame_gap_timestamp_us=10_000_000
@@ -217,7 +217,7 @@ def test_sample_frame_batch_returns_empty_when_chunk_count_under_sample_idx():
 def test_sample_frame_batch_multi_interval_uses_min_start_max_end():
     """When multiple intervals are provided, the sampled span is min(start)
     to max(end)."""
-    from instant_nurec._pkg.utils.types import HalfClosedInterval
+    from instant_nurec.utils.types import HalfClosedInterval
 
     sampler = _make_sampler(
         n_frames_per_sample=2, n_samples_per_sequence=4, max_frame_gap_timestamp_us=500_000

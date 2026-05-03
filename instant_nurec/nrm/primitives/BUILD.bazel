@@ -1,0 +1,45 @@
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+load("@nre_pip_deps//:requirements.bzl", pip_requirement = "requirement")
+load("@rules_python//python:defs.bzl", "py_library")
+
+DEFAULT_VISIBILITY = [
+    # Broader visibility so renderer could take this
+    "//:core_package_group",
+    # Asset Harvester requires NRM primitive to initiate training
+]
+
+filegroup(
+    name = "py_files",
+    srcs = glob(["**/*.py"]),
+    visibility = [
+    ],
+)
+
+py_library(
+    name = "pylib",
+    srcs = [
+        "base.py",
+        "kelvin_primitive.py",
+    ],
+    visibility = DEFAULT_VISIBILITY,
+    deps = [
+        pip_requirement("omegaconf"),
+        pip_requirement("torch"),
+        "//instant_nurec/models:pylib",
+        "//instant_nurec/models/gaussians:pylib",
+        "//instant_nurec/nrm/config:pylib",
+        "//instant_nurec/nrm/utils:pylib_cubemap",
+        "//instant_nurec/utils:pylib_geometry",
+        "//instant_nurec/utils:pylib_misc",
+        "//instant_nurec/utils:pylib_types",
+    ],
+)

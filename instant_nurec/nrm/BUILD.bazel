@@ -1,0 +1,42 @@
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+load("@aspect_rules_py//py:defs.bzl", "py_library")
+
+# nre:allow-py-venv-binary - py_venv_binary used for better perf and multiprocess-safety of deliverables
+load("@aspect_rules_py//py/unstable:defs.bzl", "py_venv_binary")
+load("@nre_pip_deps//:requirements.bzl", pip_requirement = "requirement")
+
+exports_files(
+    ["run.py"],
+)
+
+py_library(
+    name = "pylib",
+    srcs = ["run.py"],
+    visibility = ["//visibility:public"],
+    deps = [
+        pip_requirement("numpy"),
+        pip_requirement("torch"),
+        pip_requirement("pyyaml"),
+        "//instant_nurec/config_schema:pylib",
+        "//instant_nurec/nrm/config:pylib",
+        "//instant_nurec/nrm/models:pylib",
+        "//instant_nurec/nrm/systems:pylib",
+        "//instant_nurec/utils:pylib",
+    ],
+)
+
+py_venv_binary(
+    name = "run",
+    main = "run.py",
+    deps = [":pylib"],
+)
+

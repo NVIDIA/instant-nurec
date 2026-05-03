@@ -19,7 +19,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 
-from instant_nurec._pkg.utils._packed_ops_torch import (  # noqa: E402
+from instant_nurec.utils._packed_ops_torch import (  # noqa: E402
     linstep_interleave,
     packed_searchsorted_indexed_vals,
 )

@@ -1,4 +1,4 @@
-"""Branch-coverage tests for ``instant_nurec._pkg.utils.packed_ops``.
+"""Branch-coverage tests for ``instant_nurec.utils.packed_ops``.
 
 After Phase A.4 the wrapper delegates to the pure-torch impl in
 ``_packed_ops_torch``; the kernel-stub fixture is no longer needed.
@@ -18,7 +18,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 
-from instant_nurec._pkg.utils import packed_ops as mod  # noqa: E402
+from instant_nurec.utils import packed_ops as mod  # noqa: E402
 
 
 def test_linstep_interleave_empty_start_short_circuits():

@@ -16,7 +16,7 @@ import torch
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from instant_nurec._pkg.nrm.utils.motion import TimeRemapping
+from instant_nurec.nrm.utils.motion import TimeRemapping
 
 
 # ---------------------------------------------------------------------------
@@ -200,7 +200,7 @@ class _FakeCuboidTracks:
 def test_warp_points_no_dynamic_short_circuits_with_clones():
     """When tracks_idx is all -1 (no associations), the warp should just
     return identical clones of the input for every target."""
-    from instant_nurec._pkg.nrm.utils.motion import warp_points_with_cuboid_tracks
+    from instant_nurec.nrm.utils.motion import warp_points_with_cuboid_tracks
 
     points = torch.zeros(4, 3)
     src_ts = torch.zeros(4, dtype=torch.int64)
@@ -225,7 +225,7 @@ def test_warp_points_falls_back_to_aux_when_main_returns_minus_one():
     """If point_intersection_interpolate_pose returns -1 for an entry,
     the function should fall back to aux_tracks_idx (and only -1 there
     means no association)."""
-    from instant_nurec._pkg.nrm.utils.motion import warp_points_with_cuboid_tracks
+    from instant_nurec.nrm.utils.motion import warp_points_with_cuboid_tracks
 
     points = torch.tensor([[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]])
     src_ts = torch.zeros(2, dtype=torch.int64)
@@ -252,7 +252,7 @@ def test_warp_points_falls_back_to_aux_when_main_returns_minus_one():
 
 def test_warp_points_squeeze_trailing_one_branch():
     """Source/target timestamps with shape [..., 1] are squeezed to [...]."""
-    from instant_nurec._pkg.nrm.utils.motion import warp_points_with_cuboid_tracks
+    from instant_nurec.nrm.utils.motion import warp_points_with_cuboid_tracks
 
     points = torch.zeros(3, 3)
     # Squeezable timestamp shapes (..., 1)
@@ -271,7 +271,7 @@ def test_warp_points_squeeze_trailing_one_branch():
 
 def test_warp_points_already_squeezed_timestamps_path():
     """Plain (...) shape (no trailing 1) goes through the no-squeeze branch."""
-    from instant_nurec._pkg.nrm.utils.motion import warp_points_with_cuboid_tracks
+    from instant_nurec.nrm.utils.motion import warp_points_with_cuboid_tracks
 
     points = torch.zeros(3, 3)
     src_ts = torch.zeros(3, dtype=torch.int64)

@@ -1,4 +1,4 @@
-"""Branch-coverage tests for ``instant_nurec._pkg.utils.sensors`` (sensors.py + __init__.py).
+"""Branch-coverage tests for ``instant_nurec.utils.sensors`` (sensors.py + __init__.py).
 
 After Phase A.5 the slang ``compute_poses_and_timestamps`` kernel is replaced
 with a torch helper (matrix indexing); we no longer need the kernel stub.
@@ -51,12 +51,12 @@ def stubbed_sensors(monkeypatch):
     ]:
         monkeypatch.setitem(sys.modules, name, mod)
 
-    monkeypatch.delitem(sys.modules, "instant_nurec._pkg.utils.sensors", raising=False)
-    monkeypatch.delitem(sys.modules, "instant_nurec._pkg.utils.sensors.sensors", raising=False)
+    monkeypatch.delitem(sys.modules, "instant_nurec.utils.sensors", raising=False)
+    monkeypatch.delitem(sys.modules, "instant_nurec.utils.sensors.sensors", raising=False)
 
     import importlib
 
-    sensors_pkg_loaded = importlib.import_module("instant_nurec._pkg.utils.sensors")
+    sensors_pkg_loaded = importlib.import_module("instant_nurec.utils.sensors")
     return sensors_pkg_loaded, _ShutterType
 
 

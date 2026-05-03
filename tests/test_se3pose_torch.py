@@ -1,4 +1,4 @@
-"""Branch-coverage tests for ``instant_nurec._pkg.utils.geometry.se3pose_from_matrix``.
+"""Branch-coverage tests for ``instant_nurec.utils.geometry.se3pose_from_matrix``.
 
 Phase A.1 replacement for ``libs.geometry.kernels.pose.se3pose_from_matrix``.
 The helper does Shepperd's method in float64 internally and casts the
@@ -25,7 +25,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 
-from instant_nurec._pkg.utils.geometry import (  # noqa: E402
+from instant_nurec.utils.geometry import (  # noqa: E402
     se3pose_from_matrix,
     tquat_to_se3_matrix,
 )
