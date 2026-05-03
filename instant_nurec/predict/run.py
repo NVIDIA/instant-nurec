@@ -22,9 +22,9 @@ import torch
 import yaml
 
 import instant_nurec.datasets  # noqa: F401  (populates dataset registry)
-import instant_nurec.model as nrm_systems
+import instant_nurec.model as instantnurec_systems
 
-from instant_nurec.config_schema.nrm import NRMConfig
+from instant_nurec.config_schema.instantnurec import InstantNuRecConfig
 
 
 logger = logging.getLogger(__name__)
@@ -37,16 +37,16 @@ def _seed_everything(seed: int) -> None:
     torch.cuda.manual_seed_all(seed)
 
 
-def run_predict(config: NRMConfig) -> None:
+def run_predict(config: InstantNuRecConfig) -> None:
     """Run the standalone Kelvin predict pipeline against an already-typed config."""
     os.makedirs(config.config_dir, exist_ok=True)
     with open(os.path.join(config.config_dir, "parsed.yaml"), "w") as fp:
         yaml.safe_dump(config.model_dump(mode="json"), fp, sort_keys=False)
 
     _seed_everything(config.seed)
-    logger.info("NRM RUN \U0001f194: %s", config.run_id)
+    logger.info("InstantNuRec RUN \U0001f194: %s", config.run_id)
 
-    system = nrm_systems.make(config)
+    system = instantnurec_systems.make(config)
     device = torch.device("cuda")
     system.to(device).eval()
 

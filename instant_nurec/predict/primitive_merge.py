@@ -25,10 +25,10 @@ import torch  # type: ignore
 from ncore.data import ConcreteCameraModelParametersUnion  # type: ignore
 from ncore.sensors import CameraModel  # type: ignore
 from instant_nurec.config_schema.predict import PrimitiveMergeConfig
-from instant_nurec.primitives.kelvin_primitive import KelvinDynamicLayer, KelvinNRMPrimitive, KelvinStaticLayer
+from instant_nurec.primitives.kelvin_primitive import KelvinDynamicLayer, KelvinInstantNuRecPrimitive, KelvinStaticLayer
 from instant_nurec.utils.cubemap import unproject_to_sky_cubemap
 from instant_nurec.utils.trajectory import merge_rig_trajectories, transform_rig_trajectories
-from instant_nurec.utils.batch import CameraFreePoseViewGeometry, DataAndRenderingBatch, DataBatch, NRMDataBatch, RenderingBatch
+from instant_nurec.utils.batch import CameraFreePoseViewGeometry, DataAndRenderingBatch, DataBatch, InstantNuRecDataBatch, RenderingBatch
 from instant_nurec.utils.geometry import se3_matrix_inverse, tquat_to_se3_matrix
 from instant_nurec.utils.misc import list_of_dicts_to_singleton_dict, unpack_optional
 from instant_nurec.utils.types import RayFlags, RigTrajectories
@@ -99,7 +99,7 @@ def merge_context_batch(
 
 
 def build_world_camera_frustums(
-    batch: NRMDataBatch,
+    batch: InstantNuRecDataBatch,
     batch_rig_transforms: list[torch.Tensor],
 ) -> list[list[CameraFrustum]]:
     """
@@ -178,9 +178,9 @@ class KelvinPrimitiveMerge:
     @torch.autocast(device_type="cuda", enabled=False)
     def merge_primitives_and_batch(
         self,
-        primitives_list: list[KelvinNRMPrimitive],
-        batch: NRMDataBatch,
-    ) -> tuple[KelvinNRMPrimitive, NRMDataBatch]:
+        primitives_list: list[KelvinInstantNuRecPrimitive],
+        batch: InstantNuRecDataBatch,
+    ) -> tuple[KelvinInstantNuRecPrimitive, InstantNuRecDataBatch]:
         """
         Merge primitives from non-overlapping chunks into a single primitive.
 
@@ -223,7 +223,7 @@ class KelvinPrimitiveMerge:
                 data=merged_context_data, rendering=RenderingBatch(camera=merged_context_rendering)
             )
             merged_meta = None if batch.meta is None else list_of_dicts_to_singleton_dict(batch.meta)
-            merged_batch = NRMDataBatch(
+            merged_batch = InstantNuRecDataBatch(
                 context=[merged_context_batch],
                 context_rig=[merged_context_rig],
                 cuboid_tracks=None,
@@ -277,7 +277,7 @@ class KelvinPrimitiveMerge:
     def _merge_sky_cubemaps(
         self,
         sky_cubemaps: list[torch.Tensor],
-        batch: NRMDataBatch,
+        batch: InstantNuRecDataBatch,
         batch_rig_transforms: list[torch.Tensor],
         dilate_kernel_size: int = 31,
         blur_sigma: float = 8.0,
@@ -363,8 +363,8 @@ class KelvinPrimitiveMerge:
         return ref_matrices, y_inv_matrices
 
     def merge_processed_primitives(
-        self, all_primitives: list[KelvinNRMPrimitive], batch_rig_transforms: list[torch.Tensor], batch: NRMDataBatch
-    ) -> KelvinNRMPrimitive:
+        self, all_primitives: list[KelvinInstantNuRecPrimitive], batch_rig_transforms: list[torch.Tensor], batch: InstantNuRecDataBatch
+    ) -> KelvinInstantNuRecPrimitive:
         if len(all_primitives) == 1:
             return all_primitives[0]
 
@@ -392,7 +392,7 @@ class KelvinPrimitiveMerge:
             [p.sky_cubemap for p in all_primitives], batch, batch_rig_transforms
         )
 
-        merged_primitive = KelvinNRMPrimitive(
+        merged_primitive = KelvinInstantNuRecPrimitive(
             static_layer=KelvinStaticLayer.concatenate(all_static_layers),
             dynamic_layers=[KelvinDynamicLayer.concatenate(all_dynamic_layers)],
             sky_cubemap=merged_sky_cubemap,

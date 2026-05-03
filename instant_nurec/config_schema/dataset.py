@@ -25,7 +25,7 @@ from instant_nurec.config_schema.base_schema import BaseConfigSchema, Field
 logger = logging.getLogger(__name__)
 
 
-class NCoreNRMCuboidTracksParamsConfig(BaseConfigSchema):
+class NCoreInstantNuRecCuboidTracksParamsConfig(BaseConfigSchema):
     lidar_id: str = Field(default="lidar_top_360fov")
     track_min_travel_distance_m: float = Field(default=1.5, ge=0.0)
     track_min_centroid_rig_dist_m: float = Field(
@@ -60,7 +60,7 @@ class CameraSubsamplerConfig(BaseConfigSchema):
     frame_height: int = Field(default=448, description="Height of the image to subsample (aspect-preserving center crop)")
 
 
-class NCoreNRMDatasetConfig(BaseConfigSchema):
+class NCoreInstantNuRecDatasetConfig(BaseConfigSchema):
     """Predict-side config for the NCorev4 dataset loader.
 
     Required fields (no default): ``ncore_json_list_path`` /
@@ -100,16 +100,16 @@ class NCoreNRMDatasetConfig(BaseConfigSchema):
         description="A list of camera ids, such as `camera_front_wide_120fov`. This is also used to determine the canonical order of cameras in unique sensor idx",
     )
 
-    cuboid_tracks_params: NCoreNRMCuboidTracksParamsConfig = Field(
-        default_factory=NCoreNRMCuboidTracksParamsConfig,
+    cuboid_tracks_params: NCoreInstantNuRecCuboidTracksParamsConfig = Field(
+        default_factory=NCoreInstantNuRecCuboidTracksParamsConfig,
     )
 
 
 
 
-class NRMSplitsConfig(BaseConfigSchema):
+class InstantNuRecSplitsConfig(BaseConfigSchema):
     """Splits configuration. Predict-only standalone keeps just the predict
     split; pydantic ``extras="ignore"`` drops the train/val/test entries
     that the pretrained ``parsed.yaml`` still carries."""
 
-    predict: NCoreNRMDatasetConfig | None = Field(default=None, description="Dataset to use in prediction mode")
+    predict: NCoreInstantNuRecDatasetConfig | None = Field(default=None, description="Dataset to use in prediction mode")

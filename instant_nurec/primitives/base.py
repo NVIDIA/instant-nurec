@@ -25,9 +25,9 @@ from instant_nurec.utils.batch import DataAndRenderingBatch
 from instant_nurec.utils.types import RigTrajectories
 
 
-class BaseNRMPrimitive:
+class BaseInstantNuRecPrimitive:
     """
-    Base class for all renderable primitives reconstructed by an NRM.
+    Base class for all renderable primitives reconstructed by an InstantNuRec.
     """
 
     @abstractmethod

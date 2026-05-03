@@ -133,7 +133,7 @@ def merge_rig_trajectories(
         assert ref_camera_keys == other_camera_keys, "Reference camera keys must match"
 
     merged_T_world_base = first_trajectories.T_world_base
-    merged_world_to_nre = first_trajectories.world_to_nre
+    merged_world_to_scene = first_trajectories.world_to_scene
 
     # Make sure that T_world_base is the same for all rig trajectories
     for rig_trajectories in rig_trajectories_list:
@@ -143,7 +143,7 @@ def merge_rig_trajectories(
 
     final_rig_trajectories = RigTrajectories(
         T_world_base=merged_T_world_base,
-        world_to_nre=merged_world_to_nre,
+        world_to_scene=merged_world_to_scene,
         rig_trajectories=merged_rig_trajectories,
         camera_calibrations=merged_camera_calibrations,
         lidar_calibrations=first_trajectories.lidar_calibrations,

@@ -27,27 +27,27 @@ from torch import nn
 from tqdm import tqdm
 
 from instant_nurec.datasets.tracks import CuboidTracks
-from instant_nurec.config_schema.nrm import GaussiansNRMSystemConfig, NRMConfig
-from instant_nurec.datasets.datamodule import NRMDataModule
-from instant_nurec.model.kelvin import KelvinNRM
+from instant_nurec.config_schema.instantnurec import GaussiansInstantNuRecSystemConfig, InstantNuRecConfig
+from instant_nurec.datasets.datamodule import InstantNuRecDataModule
+from instant_nurec.model.kelvin import KelvinInstantNuRec
 from instant_nurec.predict.export_ply import export_ply
 from instant_nurec.predict.primitive_merge import KelvinPrimitiveMerge
-from instant_nurec.primitives.base import BaseNRMPrimitive
-from instant_nurec.utils.batch import NRMDataBatch
+from instant_nurec.primitives.base import BaseInstantNuRecPrimitive
+from instant_nurec.utils.batch import InstantNuRecDataBatch
 from instant_nurec.utils.types import RigTrajectories
 
 
 logger = logging.getLogger(__name__)
 
 
-class GaussiansNRMSystem(nn.Module):
+class GaussiansInstantNuRecSystem(nn.Module):
     """Predict-only system; the predict driver invokes hooks directly."""
 
-    config: GaussiansNRMSystemConfig
-    model: KelvinNRM
-    datamodule: NRMDataModule
+    config: GaussiansInstantNuRecSystemConfig
+    model: KelvinInstantNuRec
+    datamodule: InstantNuRecDataModule
 
-    def __init__(self, config: NRMConfig) -> None:
+    def __init__(self, config: InstantNuRecConfig) -> None:
         super().__init__()
 
         self.out_dir = config.out_dir
@@ -56,14 +56,14 @@ class GaussiansNRMSystem(nn.Module):
         self.predict_config = config.predict
         self.export_preprocess = config.model.export_preprocess
 
-        self.datamodule = NRMDataModule(config)
-        self.model = KelvinNRM(config.model)
+        self.datamodule = InstantNuRecDataModule(config)
+        self.model = KelvinInstantNuRec(config.model)
 
     @property
     def device(self) -> torch.device:
         return next(self.parameters()).device
 
-    def forward(self, batch: NRMDataBatch) -> list[BaseNRMPrimitive]:
+    def forward(self, batch: InstantNuRecDataBatch) -> list[BaseInstantNuRecPrimitive]:
         cuboid_tracks = None
         if batch.cuboid_tracks is not None:
             cuboid_tracks = [CuboidTracks.Factory.from_pack(ct) for ct in batch.cuboid_tracks]
@@ -71,12 +71,12 @@ class GaussiansNRMSystem(nn.Module):
         batch.context = self.model.prepare_context(batch.context)
         return self.model.reconstruct(batch.context, cuboid_tracks)
 
-    def predict_step(self, batch: NRMDataBatch) -> dict[str, list[BaseNRMPrimitive] | NRMDataBatch]:
+    def predict_step(self, batch: InstantNuRecDataBatch) -> dict[str, list[BaseInstantNuRecPrimitive] | InstantNuRecDataBatch]:
         # In the future maybe rendering data is not required any more for model forwarding.
         batch.maybe_compute_rendering_data(device=self.device)
 
         # For large batch sizes, process in chunks
-        primitives_list: list[BaseNRMPrimitive] = []
+        primitives_list: list[BaseInstantNuRecPrimitive] = []
 
         inner_batch_idx: int = 0
         progress_bar = tqdm(total=len(batch), desc="Predicting in chunks")
@@ -110,15 +110,15 @@ class GaussiansNRMSystem(nn.Module):
         # Ensure outputs are not None and contain the required keys
         assert outputs is not None and "primitives" in outputs and "batch" in outputs
 
-        out_batch: NRMDataBatch = outputs["batch"]
-        primitives_list: list[BaseNRMPrimitive] = outputs["primitives"]
+        out_batch: InstantNuRecDataBatch = outputs["batch"]
+        primitives_list: list[BaseInstantNuRecPrimitive] = outputs["primitives"]
         n_chunks = len(primitives_list)
         assert len(out_batch) == n_chunks, "batch context length must match number of primitives"
 
         if out_batch.meta is None or out_batch.context_rig is None:
             return
 
-        def export_chunk(primitive: BaseNRMPrimitive, rig: RigTrajectories, meta: dict, chunk_suffix: str) -> None:
+        def export_chunk(primitive: BaseInstantNuRecPrimitive, rig: RigTrajectories, meta: dict, chunk_suffix: str) -> None:
             path = os.path.join(
                 self.out_dir,
                 self.run_id,

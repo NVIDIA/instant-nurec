@@ -23,7 +23,7 @@ from pathlib import Path
 import torch
 
 from instant_nurec.utils.gaussians.utils import RGB2SH, write_ply_3dgs
-from instant_nurec.primitives.kelvin_primitive import KelvinNRMPrimitive, KelvinSemanticClass
+from instant_nurec.primitives.kelvin_primitive import KelvinInstantNuRecPrimitive, KelvinSemanticClass
 from instant_nurec.utils.types import RigTrajectories
 
 
@@ -72,7 +72,7 @@ class PLYExportGaussians:
         )
 
 
-def export_kelvin_ply(primitives: KelvinNRMPrimitive) -> PLYExportGaussians:
+def export_kelvin_ply(primitives: KelvinInstantNuRecPrimitive) -> PLYExportGaussians:
     """Export the ply file, static layer only."""
     static_layer = primitives.static_layer
 
@@ -100,8 +100,8 @@ def export_kelvin_ply(primitives: KelvinNRMPrimitive) -> PLYExportGaussians:
     )
 
 
-def export_ply(primitives: KelvinNRMPrimitive, rig_trajectories: RigTrajectories, path: Path) -> None:
-    """Export the NRM Primitives as a ply file after transforming to world space and applying some filtering.
+def export_ply(primitives: KelvinInstantNuRecPrimitive, rig_trajectories: RigTrajectories, path: Path) -> None:
+    """Export the InstantNuRec Primitives as a ply file after transforming to world space and applying some filtering.
     This ply export is intended to be used as an initialization for NuRec SO.
     """
     # First transform the primitives to the world frame.

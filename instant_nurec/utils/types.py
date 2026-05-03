@@ -169,7 +169,7 @@ class RigTrajectories:
     T_world_base: torch.Tensor
 
     # NCore world -> scene-frame conversion
-    world_to_nre: FrameConversion
+    world_to_scene: FrameConversion
 
     @dataclass(slots=True, kw_only=True)
     class RigTrajectory:

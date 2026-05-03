@@ -21,11 +21,11 @@ from typing import TYPE_CHECKING, Optional
 import torch
 
 from instant_nurec import _hf_mock
-from instant_nurec.model.system import GaussiansNRMSystem
+from instant_nurec.model.system import GaussiansInstantNuRecSystem
 
 
 if TYPE_CHECKING:
-    from instant_nurec.config_schema.nrm import NRMConfig
+    from instant_nurec.config_schema.instantnurec import InstantNuRecConfig
 
 
 logger = logging.getLogger(__name__)
@@ -37,26 +37,25 @@ class FullModelNotFoundError(RuntimeError):
 
 
 def _resolve_full_pt_path() -> Optional[str]:
-    """Try the HF mock first (Phase 4 step 9 wire-up); fall back to the
-    ``INSTANT_NUREC_FULL_PT`` env var if the mock can't satisfy the request.
+    """Resolve the ``kelvin_full.pt`` path.
 
-    The mock's ``get_full_model_path`` already consumes
-    ``INSTANT_NUREC_FULL_PT`` internally to seed the cache, so this preserves
-    the previous behaviour while routing the lookup through the HF surface
-    that the future-corp-published repo will hit.
+    An explicit ``INSTANT_NUREC_FULL_PT`` env var wins; otherwise route the
+    lookup through the HF mock.
     """
+    env_path = os.environ.get("INSTANT_NUREC_FULL_PT")
+    if env_path and os.path.exists(env_path):
+        return env_path
     try:
         return _hf_mock.get_full_model_path()
     except _hf_mock.HFMockError:
-        env_path = os.environ.get("INSTANT_NUREC_FULL_PT")
-        return env_path if env_path else None
+        return None
 
 
-def make(config: "NRMConfig") -> GaussiansNRMSystem:
+def make(config: "InstantNuRecConfig") -> GaussiansInstantNuRecSystem:
     """Load the pretrained ``kelvin_full.pt`` and patch in the per-invocation
     config (output dir / merge toggle / ncore paths).
 
-    Single supported artifact: a torch-pickled ``GaussiansNRMSystem`` saved
+    Single supported artifact: a torch-pickled ``GaussiansInstantNuRecSystem`` saved
     via ``torch.save(system, path)``. Resolved through the HF mock
     (placeholder repo ``nvidia/instant-nurec-kelvin``) or the
     ``INSTANT_NUREC_FULL_PT`` env var.
@@ -73,18 +72,18 @@ def make(config: "NRMConfig") -> GaussiansNRMSystem:
 
     logger.info("Loading full system from %s.", full_pt_path)
     loaded = torch.load(full_pt_path, map_location="cpu", weights_only=False)
-    assert isinstance(loaded, GaussiansNRMSystem), (
-        f"Expected GaussiansNRMSystem from {full_pt_path}, got {type(loaded).__name__}"
+    assert isinstance(loaded, GaussiansInstantNuRecSystem), (
+        f"Expected GaussiansInstantNuRecSystem from {full_pt_path}, got {type(loaded).__name__}"
     )
 
     # Per-invocation overrides — the .pt only round-trips weight tensors;
     # out_dir / run_id / merge flag / ncore path change every run.
-    from instant_nurec.datasets.datamodule import NRMDataModule  # local to avoid bootstrap loops
+    from instant_nurec.datasets.datamodule import InstantNuRecDataModule  # local to avoid bootstrap loops
 
     loaded.out_dir = config.out_dir
     loaded.run_id = config.run_id
     loaded.config = config.system
     loaded.predict_config = config.predict
     loaded.export_preprocess = config.model.export_preprocess
-    loaded.datamodule = NRMDataModule(config)
+    loaded.datamodule = InstantNuRecDataModule(config)
     return loaded

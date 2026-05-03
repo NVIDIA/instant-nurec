@@ -15,26 +15,26 @@
 
 from torch.utils.data import DataLoader
 
-from instant_nurec.config_schema.nrm import NRMConfig
-from instant_nurec.datasets.nrm_ncore import NCoreNRMDataset
-from instant_nurec.utils.batch import NRMDataBatch
+from instant_nurec.config_schema.instantnurec import InstantNuRecConfig
+from instant_nurec.datasets.instantnurec_ncore import NCoreInstantNuRecDataset
+from instant_nurec.utils.batch import InstantNuRecDataBatch
 
 
-class NRMDataModule:
-    def __init__(self, nrm_config: NRMConfig) -> None:
-        self.nrm_config = nrm_config
-        self.predict_dataset: NCoreNRMDataset | None = None
+class InstantNuRecDataModule:
+    def __init__(self, instantnurec_config: InstantNuRecConfig) -> None:
+        self.instantnurec_config = instantnurec_config
+        self.predict_dataset: NCoreInstantNuRecDataset | None = None
 
     def predict_dataloader(self) -> DataLoader:
-        dataset_config = self.nrm_config.dataset.predict
+        dataset_config = self.instantnurec_config.dataset.predict
         assert dataset_config is not None, "dataset.predict has to be specified in the config to use the predict mode"
 
-        self.predict_dataset = NCoreNRMDataset(dataset_config)
+        self.predict_dataset = NCoreInstantNuRecDataset(dataset_config)
         return DataLoader(
             self.predict_dataset,
-            num_workers=self.nrm_config.system.predict_num_workers,
+            num_workers=self.instantnurec_config.system.predict_num_workers,
             persistent_workers=False,
-            batch_size=self.nrm_config.system.predict_batch_size,
+            batch_size=self.instantnurec_config.system.predict_batch_size,
             pin_memory=True,
-            collate_fn=NRMDataBatch.collate_fn,
+            collate_fn=InstantNuRecDataBatch.collate_fn,
         )

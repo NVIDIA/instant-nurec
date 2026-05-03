@@ -15,7 +15,7 @@
 
 """Standalone argparse CLI.
 
-Builds a default-populated ``NRMConfig`` from the
+Builds a default-populated ``InstantNuRecConfig`` from the
 ``instant_nurec.config_schema`` pydantic models and overrides only the
 three fields that genuinely vary per invocation: ``out_dir``,
 ``dataset.predict.ncore_json_*``, and ``predict.primitive_merge.enabled``.
@@ -76,17 +76,17 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     # Lazy imports keep argparse-only invocations (e.g. --help) cheap.
     from instant_nurec.config_schema.dataset import (
-        NCoreNRMDatasetConfig,
-        NRMSplitsConfig,
+        NCoreInstantNuRecDatasetConfig,
+        InstantNuRecSplitsConfig,
     )
-    from instant_nurec.config_schema.nrm import NRMConfig
+    from instant_nurec.config_schema.instantnurec import InstantNuRecConfig
     from instant_nurec.config_schema.predict import PredictConfig, PrimitiveMergeConfig
     from instant_nurec.predict.run import run_predict
 
-    config = NRMConfig(
+    config = InstantNuRecConfig(
         out_dir=str(args.output_dir),
-        dataset=NRMSplitsConfig(
-            predict=NCoreNRMDatasetConfig(
+        dataset=InstantNuRecSplitsConfig(
+            predict=NCoreInstantNuRecDatasetConfig(
                 ncore_json_base_path=str(args.ncore_path),
                 ncore_json_list_path=str(args.ncore_path / "debug.lst"),
             ),

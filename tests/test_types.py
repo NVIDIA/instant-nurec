@@ -356,7 +356,7 @@ def _make_rig_trajectories(camera_ids, lidar_ids, traj_camera_ids=None, traj_lid
 
     return RigTrajectories(
         T_world_base=torch.eye(4),
-        world_to_nre=FrameConversion(matrix=np.eye(4, dtype=np.float64)),
+        world_to_scene=FrameConversion(matrix=np.eye(4, dtype=np.float64)),
         rig_trajectories=[rt],
         camera_calibrations=cam_calibs,
         lidar_calibrations=lid_calibs,

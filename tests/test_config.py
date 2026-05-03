@@ -13,11 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Branch-coverage tests for the predict-only NRM pydantic config schemas.
+"""Branch-coverage tests for the predict-only InstantNuRec pydantic config schemas.
 
 Covers ``instant_nurec.config_schema.predict`` (``PrimitiveMergeConfig`` + ``PredictConfig``),
 ``instant_nurec.config_schema.models`` (``KelvinDPTDecoderConfig.model_post_init`` +
-default-fields paths), and ``instant_nurec.config_schema.nrm.NRMConfig.model_post_init``
+default-fields paths), and ``instant_nurec.config_schema.instantnurec.InstantNuRecConfig.model_post_init``
 (resume / .ckpt suffix / INSTANT_NUREC_RUN_ID env override / config_dir derivation).
 """
 
@@ -38,7 +38,7 @@ from pydantic import ValidationError
 from instant_nurec.config_schema.dataset import (
     AdaptiveSequentialFrameBatchSamplerConfig,
     CameraSubsamplerConfig,
-    NCoreNRMCuboidTracksParamsConfig,
+    NCoreInstantNuRecCuboidTracksParamsConfig,
 )
 from instant_nurec.config_schema.models import (
     GaussiansActivationConfig,
@@ -48,7 +48,7 @@ from instant_nurec.config_schema.models import (
     KelvinSkyCubemapDecoderConfig,
     PrimitiveExportPreprocessConfig,
 )
-from instant_nurec.config_schema.nrm import GaussiansNRMSystemConfig, NRMConfig
+from instant_nurec.config_schema.instantnurec import GaussiansInstantNuRecSystemConfig, InstantNuRecConfig
 from instant_nurec.config_schema.predict import PredictConfig, PrimitiveMergeConfig
 
 
@@ -192,13 +192,13 @@ def test_kelvin_model_rejects_track_padding_too_long():
 
 
 # ---------------------------------------------------------------------------
-# NCoreNRMCuboidTracksParamsConfig
+# NCoreInstantNuRecCuboidTracksParamsConfig
 # ---------------------------------------------------------------------------
 
 
 def test_cuboid_tracks_params_rejects_negative_travel_distance():
     with pytest.raises(ValidationError):
-        NCoreNRMCuboidTracksParamsConfig(
+        NCoreInstantNuRecCuboidTracksParamsConfig(
             lidar_id="lidar_top",
             track_min_travel_distance_m=-1.0,
             track_min_centroid_rig_dist_m=0.5,
@@ -208,7 +208,7 @@ def test_cuboid_tracks_params_rejects_negative_travel_distance():
 
 def test_cuboid_tracks_params_rejects_negative_centroid_dist():
     with pytest.raises(ValidationError):
-        NCoreNRMCuboidTracksParamsConfig(
+        NCoreInstantNuRecCuboidTracksParamsConfig(
             lidar_id="lidar_top",
             track_min_travel_distance_m=0.5,
             track_min_centroid_rig_dist_m=-0.1,
@@ -218,7 +218,7 @@ def test_cuboid_tracks_params_rejects_negative_centroid_dist():
 
 def test_cuboid_tracks_params_rejects_invalid_label_source():
     with pytest.raises(ValidationError):
-        NCoreNRMCuboidTracksParamsConfig(
+        NCoreInstantNuRecCuboidTracksParamsConfig(
             lidar_id="lidar_top",
             track_min_travel_distance_m=0.5,
             track_min_centroid_rig_dist_m=0.5,
@@ -227,7 +227,7 @@ def test_cuboid_tracks_params_rejects_invalid_label_source():
 
 
 def test_cuboid_tracks_params_default_extrapolate_us():
-    cfg = NCoreNRMCuboidTracksParamsConfig(
+    cfg = NCoreInstantNuRecCuboidTracksParamsConfig(
         lidar_id="lidar_top",
         track_min_travel_distance_m=0.5,
         track_min_centroid_rig_dist_m=0.5,
@@ -256,12 +256,12 @@ def test_adaptive_sequential_frame_batch_sampler_basic():
 
 
 # ---------------------------------------------------------------------------
-# GaussiansNRMSystemConfig
+# GaussiansInstantNuRecSystemConfig
 # ---------------------------------------------------------------------------
 
 
 def test_system_config_defaults():
-    cfg = GaussiansNRMSystemConfig()
+    cfg = GaussiansInstantNuRecSystemConfig()
     assert cfg.predict_num_workers == 4
     assert cfg.predict_batch_size == 8
 
@@ -286,14 +286,14 @@ def test_base_config_schema_is_hashable():
 
 
 # ---------------------------------------------------------------------------
-# NRMConfig.model_post_init
+# InstantNuRecConfig.model_post_init
 # ---------------------------------------------------------------------------
 
 
 def _make_nrm_kwargs(out_dir, **extra):
     base = dict(
         out_dir=str(out_dir),
-        system=GaussiansNRMSystemConfig(),
+        system=GaussiansInstantNuRecSystemConfig(),
         dataset={"predict": None},
         model=_make_model_cfg(),
     )
@@ -303,7 +303,7 @@ def _make_nrm_kwargs(out_dir, **extra):
 
 def test_nrm_config_post_init_no_env(tmp_path, monkeypatch):
     monkeypatch.delenv("INSTANT_NUREC_RUN_ID", raising=False)
-    cfg = NRMConfig(**_make_nrm_kwargs(tmp_path))
+    cfg = InstantNuRecConfig(**_make_nrm_kwargs(tmp_path))
     # config_dir auto-derives to out_dir/run_id/config
     assert cfg.config_dir == os.path.join(str(tmp_path), cfg.run_id, "config")
     assert cfg.run_id  # auto-generated shortuuid
@@ -311,6 +311,6 @@ def test_nrm_config_post_init_no_env(tmp_path, monkeypatch):
 
 def test_nrm_config_post_init_env_run_id_overrides(tmp_path, monkeypatch):
     monkeypatch.setenv("INSTANT_NUREC_RUN_ID", "fixed-run-123")
-    cfg = NRMConfig(**_make_nrm_kwargs(tmp_path))
+    cfg = InstantNuRecConfig(**_make_nrm_kwargs(tmp_path))
     assert cfg.run_id == "fixed-run-123"
     assert cfg.config_dir == os.path.join(str(tmp_path), "fixed-run-123", "config")

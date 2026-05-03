@@ -33,8 +33,8 @@ import instant_nurec.utils.ncore_utils as ncore_utils
 
 from instant_nurec.datasets.tracks import CuboidTracks, CuboidTracksDataPack, TrackFlags
 from instant_nurec.datasets.utils import compute_cuboid_df, consolidate_cuboid_tracks
-from instant_nurec.config_schema.dataset import NCoreNRMDatasetConfig
-from instant_nurec.datasets.nrm_base import CameraSubsampler, NRMDataError
+from instant_nurec.config_schema.dataset import NCoreInstantNuRecDatasetConfig
+from instant_nurec.datasets.instantnurec_base import CameraSubsampler, InstantNuRecDataError
 from instant_nurec.datasets.samplers import (
     AdaptiveSequentialFrameBatchSampler,
     SampledSensorFrameIdxs,
@@ -45,7 +45,7 @@ from instant_nurec.utils.batch import (
     DataBatch,
     FrameMeta,
     LidarFrameLabels,
-    NRMDataBatch,
+    InstantNuRecDataBatch,
 )
 from instant_nurec.utils.files import parse_universal_path
 from instant_nurec.utils.geometry import se3_matrix_inverse
@@ -85,7 +85,7 @@ def get_lidar_sensor_from_sequence_loader(
     )
 
 
-class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
+class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
     """
     The native ncore dataset loader
     """
@@ -119,8 +119,8 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
         unique_sensor_idx: int
 
         @staticmethod
-        def from_config(camera_id: str, unique_sensor_idx: int = -1) -> "NCoreNRMDataset.ExtendedCameraId":
-            return NCoreNRMDataset.ExtendedCameraId(
+        def from_config(camera_id: str, unique_sensor_idx: int = -1) -> "NCoreInstantNuRecDataset.ExtendedCameraId":
+            return NCoreInstantNuRecDataset.ExtendedCameraId(
                 camera_id=camera_id, unique_sensor_idx=unique_sensor_idx
             )
 
@@ -139,24 +139,24 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
         T_rig_worlds_with_timestamps_us: tuple[np.ndarray, np.ndarray]
         sequence_loader: ncore.data.SequenceLoaderProtocol
         aux_loader: ncore_utils.AuxShardDataLoader
-        camera_sensors: dict["NCoreNRMDataset.ExtendedCameraId", ncore.data.CameraSensorProtocol]
+        camera_sensors: dict["NCoreInstantNuRecDataset.ExtendedCameraId", ncore.data.CameraSensorProtocol]
         lidar_sensors: dict[str, ncore.data.LidarSensorProtocol]
 
-    def __init__(self, config: NCoreNRMDatasetConfig):
+    def __init__(self, config: NCoreInstantNuRecDatasetConfig):
         self.ncore_json_list_path = parse_universal_path(config.ncore_json_list_path)
         self.ncore_json_base_path = parse_universal_path(config.ncore_json_base_path)
         self.open_consolidated = config.open_consolidated
         self.camera_max_fov_deg = config.camera_max_fov_deg
         self.n_camera_mask_dilation_iterations = config.n_camera_mask_dilation_iterations
 
-        self.all_supervision_camera_ids: list[NCoreNRMDataset.ExtendedCameraId] = []
+        self.all_supervision_camera_ids: list[NCoreInstantNuRecDataset.ExtendedCameraId] = []
         for camera_idx, camera_id_config in enumerate(config.supervision_camera_ids):
             # For string-based camera ids, we directly use their sequence as in the config.
             # For external supervision cameras, the unique sensor index is specified directly in the config.
             self.all_supervision_camera_ids.append(
-                NCoreNRMDataset.ExtendedCameraId.from_config(camera_id_config, camera_idx)
+                NCoreInstantNuRecDataset.ExtendedCameraId.from_config(camera_id_config, camera_idx)
             )
-        self.all_context_camera_ids: list[NCoreNRMDataset.ExtendedCameraId] = []
+        self.all_context_camera_ids: list[NCoreInstantNuRecDataset.ExtendedCameraId] = []
         for camera_id_config in config.context_camera_ids:
             try:
                 camera_id_idx = [str(c) for c in self.all_supervision_camera_ids].index(str(camera_id_config))
@@ -506,9 +506,9 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
         frame_timestamps_us_list: list[tuple[int, int]] = []
         camera_frame_timestamps_us: dict[str, torch.Tensor] = {}
         all_camera_model_parameters: dict[
-            NCoreNRMDataset.ExtendedCameraId, ncore.data.ConcreteCameraModelParametersUnion
+            NCoreInstantNuRecDataset.ExtendedCameraId, ncore.data.ConcreteCameraModelParametersUnion
         ] = {}
-        camera_idx_mapping: dict[NCoreNRMDataset.UniqueFrameId, int] = {}
+        camera_idx_mapping: dict[NCoreInstantNuRecDataset.UniqueFrameId, int] = {}
 
         # Find the matching ExtendedCameraId given the string name from the sampler.
         frame_batch_camera_ids = [
@@ -552,7 +552,7 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
                 frame_timestamps_us_list.append((frame_start_timestamp_us, frame_end_timestamp_us))
 
                 # NB [JH]: We must ensure that the sequence of iteration matches the logic of CameraFreePoseViewGeometry
-                camera_idx_mapping[NCoreNRMDataset.UniqueFrameId(sensor_id=str(camera_id), frame_idx=frame_idx)] = (
+                camera_idx_mapping[NCoreInstantNuRecDataset.UniqueFrameId(sensor_id=str(camera_id), frame_idx=frame_idx)] = (
                     current_unique_frame_idx
                 )
                 current_unique_frame_idx += 1
@@ -564,7 +564,7 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
         ## Load lidars (always assume loader key is "main")
         lidar_frame_timestamps_us: dict[str, torch.Tensor] = {}
         all_lidar_model_parameters: dict[str, ncore.data.ConcreteLidarModelParametersUnion | None] = {}
-        lidar_idx_mapping: dict[NCoreNRMDataset.UniqueFrameId, int] = {}
+        lidar_idx_mapping: dict[NCoreInstantNuRecDataset.UniqueFrameId, int] = {}
         frame_batch_lidar_ids = [lid for lid in self.lidar_ids if lid in frame_batch.keys()]
 
         current_unique_frame_idx = 0
@@ -580,7 +580,7 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
                     lidar_sensor.get_frame_timestamp_us(frame_idx, ncore.data.FrameTimepoint.END)
                 )
                 frame_timestamps_us_list.append((frame_start_timestamp_us, frame_end_timestamp_us))
-                lidar_idx_mapping[NCoreNRMDataset.UniqueFrameId(sensor_id=lidar_id, frame_idx=frame_idx)] = (
+                lidar_idx_mapping[NCoreInstantNuRecDataset.UniqueFrameId(sensor_id=lidar_id, frame_idx=frame_idx)] = (
                     current_unique_frame_idx
                 )
                 current_unique_frame_idx += 1
@@ -651,11 +651,11 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
 
         return (
             RigTrajectories(
-                # Since world coordinates are already transformed to NRM space,
+                # Since world coordinates are already transformed to scene space,
                 # to record the ncore world coordinates, we leverage T_world_base here.
                 # This would not affect rays or transforms, just for book-keeping for primitive merging.
                 T_world_base=se3_matrix_inverse(to_torch(T_world_ref, device="cpu", dtype=torch.float64)),
-                world_to_nre=FrameConversion(matrix=np.eye(4, dtype=np.float32)),
+                world_to_scene=FrameConversion(matrix=np.eye(4, dtype=np.float32)),
                 rig_trajectories=rig_trajectores,
                 camera_calibrations=camera_calibrations,
                 lidar_calibrations=lidar_calibrations,
@@ -667,8 +667,8 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
     def _get_loaders_and_sensors(
         self,
         ncore_json_path: UPath,
-        all_camera_ids: "list[NCoreNRMDataset.ExtendedCameraId]",
-    ) -> "NCoreNRMDataset.LoadersAndSensorsResult":
+        all_camera_ids: "list[NCoreInstantNuRecDataset.ExtendedCameraId]",
+    ) -> "NCoreInstantNuRecDataset.LoadersAndSensorsResult":
         """
         Load sequence loaders, aux loaders, camera/lidar sensors, and rig poses for the
         given ncore sequence meta path. Returns a LoadersAndSensorsResult dataclass.
@@ -692,7 +692,7 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
                 v4_cuboids_component_group="default",
             )
         except FileNotFoundError as e:
-            raise NRMDataError(f"Ncore files not found for dataset_paths {dataset_paths}.") from e
+            raise InstantNuRecDataError(f"Ncore files not found for dataset_paths {dataset_paths}.") from e
 
         # NB [JH]: We should be very careful about the poses' timestamps_us -- it can be a large
         # superset of sensor timestamps (e.g. 36s vs 10s).
@@ -713,7 +713,7 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
                 open_consolidated=self.open_consolidated,
             )
         except ValueError as e:
-            raise NRMDataError(f"Failed to load auxiliary data for sequence {ncore_json_path.stem}.") from e
+            raise InstantNuRecDataError(f"Failed to load auxiliary data for sequence {ncore_json_path.stem}.") from e
 
         camera_sensors = {
             camera_id: sequence_loader.get_camera_sensor(camera_id.camera_id) for camera_id in all_camera_ids
@@ -728,7 +728,7 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
         }
 
         root_logger.setLevel(logging.INFO)
-        return NCoreNRMDataset.LoadersAndSensorsResult(
+        return NCoreInstantNuRecDataset.LoadersAndSensorsResult(
             T_rig_worlds_with_timestamps_us=T_rig_worlds_with_timestamps_us,
             sequence_loader=sequence_loader,
             aux_loader=aux_loader,
@@ -736,7 +736,7 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
             lidar_sensors=lidar_sensors,
         )
 
-    def __getitem__(self, batch_idx: int) -> NRMDataBatch:
+    def __getitem__(self, batch_idx: int) -> InstantNuRecDataBatch:
         # Disable fsspect INFO logs to not spam the logs.
         logging.getLogger("fsspec").setLevel(logging.WARNING)
 
@@ -749,12 +749,12 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
         context_id_lookup = {str(c): c for c in self.all_context_camera_ids}
         supervision_id_lookup = {str(c): c for c in self.all_supervision_camera_ids}
 
-        context_camera_ids: list[NCoreNRMDataset.ExtendedCameraId] = [
-            context_id_lookup[str(NCoreNRMDataset.ExtendedCameraId.from_config(camera_id))]
+        context_camera_ids: list[NCoreInstantNuRecDataset.ExtendedCameraId] = [
+            context_id_lookup[str(NCoreInstantNuRecDataset.ExtendedCameraId.from_config(camera_id))]
             for camera_id in self.config.context_camera_ids
         ]
-        supervision_camera_ids: list[NCoreNRMDataset.ExtendedCameraId] = [
-            supervision_id_lookup[str(NCoreNRMDataset.ExtendedCameraId.from_config(camera_id))]
+        supervision_camera_ids: list[NCoreInstantNuRecDataset.ExtendedCameraId] = [
+            supervision_id_lookup[str(NCoreInstantNuRecDataset.ExtendedCameraId.from_config(camera_id))]
             for camera_id in self.config.supervision_camera_ids
         ]
         assert set(map(str, context_camera_ids)) <= set(map(str, supervision_camera_ids)), (
@@ -765,7 +765,7 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
 
         ncore_json_path: UPath = self.ncore_json_paths[sequence_idx]
         if not ncore_json_path.exists():
-            raise NRMDataError(f"{ncore_json_path} does not exist.")
+            raise InstantNuRecDataError(f"{ncore_json_path} does not exist.")
 
         loaders_sensors = self._get_loaders_and_sensors(ncore_json_path, supervision_camera_ids)
         T_rig_worlds_with_timestamps_us = loaders_sensors.T_rig_worlds_with_timestamps_us
@@ -797,7 +797,7 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
         )
         if len(context_frame_batch) == 0:
             # If nothing is sampled (e.g. out of bounds), return 0-sized batch to be concatenated with other batches.
-            return NRMDataBatch(context=[], cuboid_tracks=[], context_rig=[], meta=[])
+            return InstantNuRecDataBatch(context=[], cuboid_tracks=[], context_rig=[], meta=[])
 
         # Determine a good reference coordinates (first camera first frame - non-rig)
         ref_camera_id = context_camera_ids[0]
@@ -843,11 +843,11 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
             "sequence_id": sequence_loader.sequence_id,
         }
 
-        nrm_data_batch = NRMDataBatch(
+        instantnurec_data_batch = InstantNuRecDataBatch(
             context=[context],
             context_rig=[context_rig_trajectory],
             cuboid_tracks=[cuboid_tracks],
             meta=[meta],
         )
 
-        return nrm_data_batch
+        return instantnurec_data_batch

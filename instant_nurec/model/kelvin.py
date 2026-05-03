@@ -32,7 +32,7 @@ from instant_nurec.model.backbone.decoders import KelvinDPTDecoder
 from instant_nurec.model.backbone.encoders import KelvinDAv3Encoder
 from instant_nurec.model.backbone.sky import CubemapDecoderSky
 from instant_nurec.model.post_processing import PerCameraAffinePostProcessing
-from instant_nurec.primitives.kelvin_primitive import KelvinNRMPrimitive
+from instant_nurec.primitives.kelvin_primitive import KelvinInstantNuRecPrimitive
 from instant_nurec.utils.motion import TimeRemapping
 from instant_nurec.utils.batch import DataAndRenderingBatch
 from instant_nurec.utils.misc import unpack_optional
@@ -42,7 +42,7 @@ from instant_nurec.utils.types import RayFlags
 logger = logging.getLogger(__name__)
 
 
-class KelvinNRM(nn.Module):
+class KelvinInstantNuRec(nn.Module):
     """
     Please refer to the [Kelvin Model](../docs/KELVIN_MODEL.md) for more details.
     """
@@ -140,7 +140,7 @@ class KelvinNRM(nn.Module):
         self,
         context: list[DataAndRenderingBatch],
         cuboid_tracks: list[CuboidTracks] | None,
-    ) -> list[KelvinNRMPrimitive]:
+    ) -> list[KelvinInstantNuRecPrimitive]:
         # Add assertions about input context -- num_images and num_views should match
         num_imgs, num_views, camera_idxs, time_remappings = self._grab_metainfo(context)
 
@@ -169,9 +169,9 @@ class KelvinNRM(nn.Module):
         affine_matrix = torch.cat([affine_matrix_3, affine_bias[..., None]], dim=-1)
 
         # Build the primitives
-        primitives: list[KelvinNRMPrimitive] = []
+        primitives: list[KelvinInstantNuRecPrimitive] = []
         for bidx in range(len(context)):
-            primitive = KelvinNRMPrimitive(
+            primitive = KelvinInstantNuRecPrimitive(
                 static_layer=unpack_optional(static_layers[bidx]),
                 dynamic_layers=dynamic_layers[bidx],
                 sky_cubemap=sky_cubemaps[bidx],

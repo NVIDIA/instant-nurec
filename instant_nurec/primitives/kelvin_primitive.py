@@ -27,7 +27,7 @@ import torch
 
 
 from instant_nurec.config_schema.models import PrimitiveExportPreprocessConfig
-from instant_nurec.primitives.base import BaseNRMPrimitive
+from instant_nurec.primitives.base import BaseInstantNuRecPrimitive
 from instant_nurec.utils.cubemap import rotate_sky_cubemap
 from instant_nurec.utils.batch import DataAndRenderingBatch
 from instant_nurec.utils.geometry import quat_mult_xyzw, so3_matrix_to_quat
@@ -258,11 +258,11 @@ class KelvinDynamicLayer(KelvinLayer):
         )
 
 
-class KelvinNRMPrimitive(BaseNRMPrimitive):
+class KelvinInstantNuRecPrimitive(BaseInstantNuRecPrimitive):
     """
-    Kelvin NRM primitive containing static and dynamic layers, with the following additional attributes:
+    Kelvin InstantNuRec primitive containing static and dynamic layers, with the following additional attributes:
         - sky_cubemap:         The sky cubemap for rendering the sky                            [6, height, width, 3]
-                               Image order is (Right, Left, Top, Bottom, Front, Back) within NRM coordinate system.
+                               Image order is (Right, Left, Top, Bottom, Front, Back) within InstantNuRec coordinate system.
         - affine_matrix:        The affine transform matrix                                        [n_cameras, 3, 4]
     """
 
@@ -305,7 +305,7 @@ class KelvinNRMPrimitive(BaseNRMPrimitive):
         return len(self.static_layer) + sum(len(layer) for layer in self.dynamic_layers)
 
     def __repr__(self) -> str:
-        return f"KelvinNRMPrimitive({repr(self.static_layer)}, {repr(self.dynamic_layers)})"
+        return f"KelvinInstantNuRecPrimitive({repr(self.static_layer)}, {repr(self.dynamic_layers)})"
 
     @torch.autocast(device_type="cuda", enabled=False)
     def preprocess_for_export(

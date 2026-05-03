@@ -20,7 +20,7 @@ import os
 import shortuuid
 
 from instant_nurec.config_schema.base_schema import BaseConfigSchema, Field
-from instant_nurec.config_schema.dataset import NRMSplitsConfig
+from instant_nurec.config_schema.dataset import InstantNuRecSplitsConfig
 from instant_nurec.config_schema.models import KelvinModelConfig
 from instant_nurec.config_schema.predict import PredictConfig
 
@@ -28,14 +28,14 @@ from instant_nurec.config_schema.predict import PredictConfig
 SENTINEL = "<sentinel>"
 
 
-class GaussiansNRMSystemConfig(BaseConfigSchema):
+class GaussiansInstantNuRecSystemConfig(BaseConfigSchema):
     """Predict-only system config; just dataloader knobs."""
 
     predict_num_workers: int = Field(default=4, description="Number of workers for the predict dataloader per-node.")
     predict_batch_size: int = Field(default=8, description="Batch size for the predict dataloader. Typically set to 1.")
 
 
-class NRMConfig(BaseConfigSchema):
+class InstantNuRecConfig(BaseConfigSchema):
     """Top-level predict configuration.
 
     All defaults are populated for the canonical kelvin-pa-front predict
@@ -47,8 +47,8 @@ class NRMConfig(BaseConfigSchema):
 
     out_dir: str
 
-    system: GaussiansNRMSystemConfig = Field(default_factory=GaussiansNRMSystemConfig)
-    dataset: NRMSplitsConfig
+    system: GaussiansInstantNuRecSystemConfig = Field(default_factory=GaussiansInstantNuRecSystemConfig)
+    dataset: InstantNuRecSplitsConfig
     model: KelvinModelConfig = Field(default_factory=KelvinModelConfig)
 
     predict: PredictConfig = Field(

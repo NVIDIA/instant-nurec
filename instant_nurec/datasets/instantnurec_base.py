@@ -131,12 +131,12 @@ class CameraSubsampler:
         return frame_data if batch_dim else frame_data[..., 0]
 
 
-class NRMDataError(Exception):
-    """Raised when an error occurs while loading NRM data.
+class InstantNuRecDataError(Exception):
+    """Raised when an error occurs while loading InstantNuRec data.
 
     Propagated directly to the caller — predict fails loud on a bad sample.
     """
 
-    def __init__(self, message: str = "An error occurred while loading NRM data"):
+    def __init__(self, message: str = "An error occurred while loading InstantNuRec data"):
         super().__init__(message)
         self.message = message

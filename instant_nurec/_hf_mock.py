@@ -69,8 +69,8 @@ def _cache_dir() -> Path:
 
 
 def _seed_cache_from_full_pt(cache_dir: Path) -> Path:
-    """If ``INSTANT_NUREC_FULL_PT`` points at an existing file and the cache
-    doesn't already have ``kelvin_full.pt``, copy it in. Returns the cache dir.
+    """If ``INSTANT_NUREC_FULL_PT`` points at an existing file, seed the cache
+    when missing or stale (size differs or source is newer). Returns the cache dir.
     """
     src = os.environ.get("INSTANT_NUREC_FULL_PT")
     if not src:
@@ -80,7 +80,13 @@ def _seed_cache_from_full_pt(cache_dir: Path) -> Path:
         return cache_dir
     cache_dir.mkdir(parents=True, exist_ok=True)
     dst = cache_dir / _FULL_MODEL_FILENAME
-    if not dst.exists() or dst.stat().st_size != src_path.stat().st_size:
+    src_stat = src_path.stat()
+    needs_copy = (
+        not dst.exists()
+        or dst.stat().st_size != src_stat.st_size
+        or dst.stat().st_mtime < src_stat.st_mtime
+    )
+    if needs_copy:
         shutil.copyfile(src_path, dst)
     return cache_dir
 

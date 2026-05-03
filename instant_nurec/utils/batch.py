@@ -636,7 +636,7 @@ class CameraFreePoseViewGeometry(torch.nn.Module):
         Initialize a `CameraFreePoseViewGeometry` from a `NCOREDataSource`.
         """
         camera_calibrations = rig_trajectories.camera_calibrations
-        world_to_nre = rig_trajectories.world_to_nre
+        world_to_scene = rig_trajectories.world_to_scene
 
         # collect all extrinsics and intrinsics
         T_sensor_world_startend_allviews = []
@@ -674,7 +674,7 @@ class CameraFreePoseViewGeometry(torch.nn.Module):
             T_sensor_rig_np = camera_calibration.T_sensor_rig.cpu().numpy()
             for timestamp_us in timestamps_us:
                 T_rig_world_startend = pose_interpolator.interpolate_to_timestamps(timestamp_us.cpu())
-                T_sensor_world_startend = world_to_nre.transform_poses(T_rig_world_startend @ T_sensor_rig_np)
+                T_sensor_world_startend = world_to_scene.transform_poses(T_rig_world_startend @ T_sensor_rig_np)
                 T_sensor_world_startend_allviews.append(torch.from_numpy(T_sensor_world_startend).to(torch.float32))
 
             # Build map from sensor id to a range of unique frame indices that can be used to recover the slices of
@@ -807,7 +807,7 @@ class CameraFreePoseViewGeometry(torch.nn.Module):
 
 
 @dataclass(slots=False, kw_only=True)
-class NRMDataBatch:
+class InstantNuRecDataBatch:
     """
     A batch that contains (B,) groups of context DataBatch(es).
     We also precompute RenderingBatch altogether to hide latency for data preprocessing.
@@ -891,7 +891,7 @@ class NRMDataBatch:
     @classmethod
     def collate_fn(
         cls,
-        seq: Sequence[NRMDataBatch],
+        seq: Sequence[InstantNuRecDataBatch],
         device: torch.device = torch.device("cpu"),
     ) -> Self:
         T = TypeVar("T")
