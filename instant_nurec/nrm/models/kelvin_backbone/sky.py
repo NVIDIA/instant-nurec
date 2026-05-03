@@ -15,7 +15,7 @@ from einops import rearrange, repeat
 from torch import nn
 
 from instant_nurec.models.nn_extensions import TypedModuleList
-from instant_nurec.nrm.config.models import (
+from instant_nurec.config_schema.models import (
     KelvinModelConfig,
     KelvinSkyCubemapDecoderConfig,
 )

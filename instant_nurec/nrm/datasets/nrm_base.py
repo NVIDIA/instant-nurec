@@ -20,7 +20,7 @@ import torch.nn.functional as F
 
 import ncore.data
 
-from instant_nurec.nrm.config.dataset import CameraSubsamplerConfig
+from instant_nurec.config_schema.dataset import CameraSubsamplerConfig
 from instant_nurec.utils.sensors import RectSubsampledSensor
 
 

@@ -21,7 +21,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from instant_nurec.nrm.config.nrm import NRMConfig
+from instant_nurec.config_schema.nrm import NRMConfig
 from instant_nurec.utils.model_registry import create_model_registry
 
 

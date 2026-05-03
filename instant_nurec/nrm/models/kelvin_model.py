@@ -12,7 +12,7 @@ import torch.nn as nn
 from einops import rearrange
 
 from instant_nurec.datasets.tracks import CuboidTracks
-from instant_nurec.nrm.config.models import KelvinModelConfig
+from instant_nurec.config_schema.models import KelvinModelConfig
 from instant_nurec.nrm.models.kelvin_backbone.decoders import KelvinDPTDecoder
 from instant_nurec.nrm.models.kelvin_backbone.encoders import KelvinDAv3Encoder
 from instant_nurec.nrm.models.kelvin_backbone.sky import CubemapDecoderSky

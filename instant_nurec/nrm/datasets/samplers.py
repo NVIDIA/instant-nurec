@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from instant_nurec.nrm.config.dataset import AdaptiveSequentialFrameBatchSamplerConfig
+from instant_nurec.config_schema.dataset import AdaptiveSequentialFrameBatchSamplerConfig
 from instant_nurec.utils.types import HalfClosedInterval
 
 

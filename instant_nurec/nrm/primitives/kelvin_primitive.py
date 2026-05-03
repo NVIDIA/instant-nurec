@@ -11,7 +11,7 @@ from typing import Self, Sequence
 import torch
 
 
-from instant_nurec.nrm.config.models import PrimitiveExportPreprocessConfig
+from instant_nurec.config_schema.models import PrimitiveExportPreprocessConfig
 from instant_nurec.nrm.primitives.base import BaseNRMPrimitive
 from instant_nurec.nrm.utils.cubemap import rotate_sky_cubemap
 from instant_nurec.utils.batch import DataAndRenderingBatch

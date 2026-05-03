@@ -20,7 +20,7 @@ from einops import rearrange
 from torch import nn
 
 from instant_nurec.datasets.tracks import CuboidTracks, TrackFlags
-from instant_nurec.nrm.config.models import (
+from instant_nurec.config_schema.models import (
     KelvinDAv3EncoderConfig,
     KelvinDPTDecoderConfig,
     KelvinModelConfig,

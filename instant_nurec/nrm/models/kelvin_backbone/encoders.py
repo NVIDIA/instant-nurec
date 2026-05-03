@@ -20,7 +20,7 @@ from einops import rearrange
 from torch import nn
 
 from ncore.data import ConcreteCameraModelParametersUnion, OpenCVPinholeCameraModelParameters
-from instant_nurec.nrm.config.models import (
+from instant_nurec.config_schema.models import (
     KelvinDAv3EncoderConfig,
     KelvinModelConfig,
 )

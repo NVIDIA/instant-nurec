@@ -86,7 +86,7 @@ def test_get_closest_frame_index_returns_python_int():
 
 
 def _make_sampler(**overrides):
-    from instant_nurec.nrm.config.dataset import AdaptiveSequentialFrameBatchSamplerConfig
+    from instant_nurec.config_schema.dataset import AdaptiveSequentialFrameBatchSamplerConfig
     from instant_nurec.nrm.datasets.samplers import AdaptiveSequentialFrameBatchSampler
 
     base = dict(
@@ -100,7 +100,7 @@ def _make_sampler(**overrides):
 
 
 def test_sampler_constructor_rejects_zero_frames_per_sample():
-    from instant_nurec.nrm.config.dataset import AdaptiveSequentialFrameBatchSamplerConfig
+    from instant_nurec.config_schema.dataset import AdaptiveSequentialFrameBatchSamplerConfig
     from instant_nurec.nrm.datasets.samplers import AdaptiveSequentialFrameBatchSampler
 
     cfg = AdaptiveSequentialFrameBatchSamplerConfig(
@@ -111,7 +111,7 @@ def test_sampler_constructor_rejects_zero_frames_per_sample():
 
 
 def test_sampler_constructor_rejects_zero_samples_per_sequence():
-    from instant_nurec.nrm.config.dataset import AdaptiveSequentialFrameBatchSamplerConfig
+    from instant_nurec.config_schema.dataset import AdaptiveSequentialFrameBatchSamplerConfig
     from instant_nurec.nrm.datasets.samplers import AdaptiveSequentialFrameBatchSampler
 
     cfg = AdaptiveSequentialFrameBatchSamplerConfig(
@@ -122,7 +122,7 @@ def test_sampler_constructor_rejects_zero_samples_per_sequence():
 
 
 def test_sampler_constructor_rejects_zero_max_frame_gap():
-    from instant_nurec.nrm.config.dataset import AdaptiveSequentialFrameBatchSamplerConfig
+    from instant_nurec.config_schema.dataset import AdaptiveSequentialFrameBatchSamplerConfig
     from instant_nurec.nrm.datasets.samplers import AdaptiveSequentialFrameBatchSampler
 
     cfg = AdaptiveSequentialFrameBatchSamplerConfig(

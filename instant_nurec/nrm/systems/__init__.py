@@ -20,7 +20,7 @@ from instant_nurec.nrm.systems.gaussians_nrm import GaussiansNRMSystem
 
 
 if TYPE_CHECKING:
-    from instant_nurec.nrm.config.nrm import NRMConfig
+    from instant_nurec.config_schema.nrm import NRMConfig
 
 
 logger = logging.getLogger(__name__)

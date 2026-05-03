@@ -15,9 +15,9 @@ import os
 import shortuuid
 
 from instant_nurec.config_schema.base_schema import BaseConfigSchema, Field
-from instant_nurec.nrm.config.dataset import NRMSplitsConfig
-from instant_nurec.nrm.config.models import KelvinModelConfig
-from instant_nurec.nrm.config.predict import PredictConfig
+from instant_nurec.config_schema.dataset import NRMSplitsConfig
+from instant_nurec.config_schema.models import KelvinModelConfig
+from instant_nurec.config_schema.predict import PredictConfig
 
 
 SENTINEL = "<sentinel>"

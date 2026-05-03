@@ -16,7 +16,7 @@ import yaml
 import instant_nurec.nrm.datasets  # noqa: F401  (populates dataset registry)
 import instant_nurec.nrm.systems as nrm_systems
 
-from instant_nurec.nrm.config.nrm import NRMConfig
+from instant_nurec.config_schema.nrm import NRMConfig
 
 
 logger = logging.getLogger(__name__)

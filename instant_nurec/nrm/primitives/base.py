@@ -15,7 +15,7 @@ from typing import Self
 
 import torch
 
-from instant_nurec.nrm.config.models import PrimitiveExportPreprocessConfig
+from instant_nurec.config_schema.models import PrimitiveExportPreprocessConfig
 from instant_nurec.utils.batch import DataAndRenderingBatch
 from instant_nurec.utils.types import RigTrajectories
 

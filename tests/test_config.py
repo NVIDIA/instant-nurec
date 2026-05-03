@@ -1,8 +1,8 @@
 """Branch-coverage tests for the predict-only NRM pydantic config schemas.
 
-Covers ``instant_nurec.nrm.config.predict`` (``PrimitiveMergeConfig`` + ``PredictConfig``),
-``instant_nurec.nrm.config.models`` (``KelvinDPTDecoderConfig.model_post_init`` +
-default-fields paths), and ``instant_nurec.nrm.config.nrm.NRMConfig.model_post_init``
+Covers ``instant_nurec.config_schema.predict`` (``PrimitiveMergeConfig`` + ``PredictConfig``),
+``instant_nurec.config_schema.models`` (``KelvinDPTDecoderConfig.model_post_init`` +
+default-fields paths), and ``instant_nurec.config_schema.nrm.NRMConfig.model_post_init``
 (resume / .ckpt suffix / NRE_ENV_RUN_ID env override / config_dir derivation).
 """
 
@@ -20,12 +20,12 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from pydantic import ValidationError
 
-from instant_nurec.nrm.config.dataset import (
+from instant_nurec.config_schema.dataset import (
     AdaptiveSequentialFrameBatchSamplerConfig,
     CameraSubsamplerConfig,
     NCoreNRMCuboidTracksParamsConfig,
 )
-from instant_nurec.nrm.config.models import (
+from instant_nurec.config_schema.models import (
     GaussiansActivationConfig,
     KelvinDAv3EncoderConfig,
     KelvinDPTDecoderConfig,
@@ -33,8 +33,8 @@ from instant_nurec.nrm.config.models import (
     KelvinSkyCubemapDecoderConfig,
     PrimitiveExportPreprocessConfig,
 )
-from instant_nurec.nrm.config.nrm import GaussiansNRMSystemConfig, NRMConfig
-from instant_nurec.nrm.config.predict import PredictConfig, PrimitiveMergeConfig
+from instant_nurec.config_schema.nrm import GaussiansNRMSystemConfig, NRMConfig
+from instant_nurec.config_schema.predict import PredictConfig, PrimitiveMergeConfig
 
 
 # ---------------------------------------------------------------------------

@@ -22,7 +22,7 @@ from torch import nn
 from tqdm import tqdm
 
 from instant_nurec.datasets.tracks import CuboidTracks
-from instant_nurec.nrm.config.nrm import GaussiansNRMSystemConfig, NRMConfig
+from instant_nurec.config_schema.nrm import GaussiansNRMSystemConfig, NRMConfig
 from instant_nurec.nrm.datasets.datamodule import NRMDataModule
 from instant_nurec.nrm.models.kelvin_model import KelvinNRM
 from instant_nurec.nrm.predict.export_ply import export_ply
