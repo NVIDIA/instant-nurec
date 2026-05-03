@@ -13,9 +13,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal, Self, cast
 
-import lietorch as lt
 import numpy as np
 import torch
+
+from instant_nurec._pkg.utils import _se3_torch as lt
 
 from instant_nurec._pkg.datasets._vren_torch import (
     point_cuboidtracks_intersection_interpolate_pose as _point_cuboidtracks_intersection_interpolate_pose,

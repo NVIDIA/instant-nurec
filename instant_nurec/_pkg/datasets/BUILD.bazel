@@ -47,7 +47,6 @@ py_library(
         pip_requirement("numpy"),
         pip_requirement("torch"),
         pip_requirement("omegaconf"),
-        pip_requirement("lietorch"),
         pip_requirement("pillow"),
         pip_requirement("pandas"),
         pip_requirement("universal-pathlib"),
@@ -79,6 +78,7 @@ py_library(
         pip_requirement("torch"),
         pip_requirement("numpy"),
         "//instant_nurec/_pkg/utils:pylib",
+        "//instant_nurec/_pkg/utils:pylib_se3_torch",
     ],
 )
 

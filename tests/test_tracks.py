@@ -634,9 +634,9 @@ def test_interpolate_tracks_poses_returns_se3_with_right_shape(
     timestamps_us = torch.tensor([5, 10], dtype=torch.int64)
     tracks_idx = torch.tensor([0, 0], dtype=torch.long)
     out = ct.interpolate_tracks_poses(timestamps_us, tracks_idx)
-    # SUT returns lt.SE3.InitFromVec(torch.cat([t, R], dim=1)) — our fake
-    # wraps the resulting tensor unchanged.
-    assert isinstance(out, _FakeSE3)
+    # SUT returns lt.SE3.InitFromVec(torch.cat([t, R], dim=1)).
+    # After Phase B's lietorch shim, ``lt`` is ``_se3_torch.SE3`` (in-tree).
+    assert hasattr(out, "data")
     assert out.data.shape == (2, 7)
 
 

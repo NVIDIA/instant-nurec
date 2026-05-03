@@ -35,15 +35,12 @@ exclude = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["instant_nurec", "scripts", "libs", "ncore", "ncore_internal"]
+known-first-party = ["instant_nurec", "scripts", "ncore"]
 default-section = "third-party"
 known-third-party = ["wandb"] # prevent local wandb folders to be treaded as different package - see https://github.com/astral-sh/ruff/issues/8571
 section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
 lines-between-types = 1
 lines-after-imports = 2
-
-[tool.pyright]
-exclude = ["bazel**/"]
 
 [build-system]
 requires = ["setuptools>=42", "wheel"]

@@ -23,7 +23,6 @@ py_library(
     srcs = ["nn_extensions.py"],
     deps = [
         pip_requirement("torch"),
-        pip_requirement("lietorch"),
         "//instant_nurec/_pkg/utils:pylib_geometry",
     ],
 )

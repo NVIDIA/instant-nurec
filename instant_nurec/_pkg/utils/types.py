@@ -15,7 +15,7 @@ from typing import Optional, OrderedDict, Self
 from dataclasses import dataclass
 from enum import IntFlag, auto
 
-import lietorch as lt
+from instant_nurec._pkg.utils import _se3_torch as lt
 import numpy as np
 import numpy.typing as npt
 import torch
