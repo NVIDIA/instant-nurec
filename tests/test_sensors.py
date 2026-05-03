@@ -1,12 +1,10 @@
-"""Branch-coverage tests for nre.utils.sensors (sensors.py + __init__.py).
+"""Branch-coverage tests for ``instant_nurec._pkg.utils.sensors`` (sensors.py + __init__.py).
 
-The module imports a Slang kernel (``libs.sensors.kernels.pose_calib``) and
-ncore enums; we stub both via ``sys.modules`` so the module imports in a
-CPU-only test venv. The CUDA assertion in
-``get_poses_and_timestamps_startend`` is fired by passing CPU tensors —
-the kernel itself is stubbed to return shape-compatible tensors so the
-post-kernel squeeze logic can be exercised when CUDA tensors are supplied
-(simulated by a no-op ``is_cuda`` override).
+After Phase A.5 the slang ``compute_poses_and_timestamps`` kernel is replaced
+with a torch helper (matrix indexing); we no longer need the kernel stub.
+``ncore`` is still stubbed via ``sys.modules`` for CPU-only test venvs.
+The CUDA assertion in ``get_poses_and_timestamps_startend`` is exercised
+via a tensor subclass whose ``.is_cuda`` is forced to True.
 """
 
 from __future__ import annotations
@@ -25,39 +23,8 @@ sys.path.insert(0, str(REPO_ROOT))
 
 @pytest.fixture
 def stubbed_sensors(monkeypatch):
-    # libs.sensors.kernels.pose_calib stub
-    libs_mod = types.ModuleType("libs")
-    sensors_pkg = types.ModuleType("libs.sensors")
-    kernels_pkg = types.ModuleType("libs.sensors.kernels")
-    pose_calib_mod = types.ModuleType("libs.sensors.kernels.pose_calib")
-
-    captured: dict = {}
-
-    def _fake_compute_poses_and_timestamps(
-        T_sensor_world_startend_allviews,
-        embed_weights,
-        unique_frame_idx_tensor,
-        subsample_rect_points_lb,
-        subsample_resolution,
-        timestamps_startend_us_allviews,
-        shutter_value,
-        enable_calib,
-    ):
-        captured["embed_weights"] = embed_weights
-        captured["enable_calib"] = enable_calib
-        captured["shutter_value"] = shutter_value
-        # Return (T_batch, ts_batch) where T_batch.squeeze(0) gives (2,4,4)
-        # and ts_batch.squeeze(0) gives (2,).
-        T_batch = torch.zeros(1, 2, 4, 4)
-        ts_batch = torch.zeros(1, 2)
-        return T_batch, ts_batch
-
-    pose_calib_mod.compute_poses_and_timestamps = _fake_compute_poses_and_timestamps
-    kernels_pkg.pose_calib = pose_calib_mod
-    sensors_pkg.kernels = kernels_pkg
-    libs_mod.sensors = sensors_pkg
-
-    # ncore.data.ShutterType + ncore.sensors camera models stubs
+    # ncore.data.ShutterType + ncore.sensors camera models stubs (the only
+    # external imports left after Phase A.5).
     ncore_mod = types.ModuleType("ncore")
     ncore_data_mod = types.ModuleType("ncore.data")
     ncore_sensors_mod = types.ModuleType("ncore.sensors")
@@ -78,10 +45,6 @@ def stubbed_sensors(monkeypatch):
     ncore_mod.sensors = ncore_sensors_mod
 
     for name, mod in [
-        ("libs", libs_mod),
-        ("libs.sensors", sensors_pkg),
-        ("libs.sensors.kernels", kernels_pkg),
-        ("libs.sensors.kernels.pose_calib", pose_calib_mod),
         ("ncore", ncore_mod),
         ("ncore.data", ncore_data_mod),
         ("ncore.sensors", ncore_sensors_mod),
@@ -94,7 +57,7 @@ def stubbed_sensors(monkeypatch):
     import importlib
 
     sensors_pkg_loaded = importlib.import_module("instant_nurec._pkg.utils.sensors")
-    return sensors_pkg_loaded, captured, _ShutterType
+    return sensors_pkg_loaded, _ShutterType
 
 
 # ---------------------------------------------------------------------------
@@ -103,7 +66,7 @@ def stubbed_sensors(monkeypatch):
 
 
 def test_rect_subsampled_sensor_default_offsets_and_subsample(stubbed_sensors):
-    sensors_pkg, _, _ = stubbed_sensors
+    sensors_pkg, _ = stubbed_sensors
     s = sensors_pkg.RectSubsampledSensor(width=640, height=480)
     assert s.width == 640
     assert s.height == 480
@@ -113,20 +76,20 @@ def test_rect_subsampled_sensor_default_offsets_and_subsample(stubbed_sensors):
 
 
 def test_rect_subsampled_sensor_kw_only_overrides(stubbed_sensors):
-    sensors_pkg, _, _ = stubbed_sensors
+    sensors_pkg, _ = stubbed_sensors
     s = sensors_pkg.RectSubsampledSensor(width=320, height=240, i=10, j=20, subsample_factor=0.5)
     assert (s.i, s.j, s.subsample_factor) == (10, 20, 0.5)
 
 
 def test_rect_subsampled_sensor_is_slotted_kw_only(stubbed_sensors):
     """`slots=True, kw_only=True` — positional args should fail."""
-    sensors_pkg, _, _ = stubbed_sensors
+    sensors_pkg, _ = stubbed_sensors
     with pytest.raises(TypeError):
         sensors_pkg.RectSubsampledSensor(640, 480)  # type: ignore[call-arg]
 
 
 def test_sensors_package_init_re_exports_public_symbols(stubbed_sensors):
-    sensors_pkg, _, _ = stubbed_sensors
+    sensors_pkg, _ = stubbed_sensors
     assert "RectSubsampledSensor" in sensors_pkg.__all__
     assert "SensorModelComputations" in sensors_pkg.__all__
 
@@ -172,11 +135,11 @@ class _CudaLike(torch.Tensor):
 
 
 def test_get_poses_and_timestamps_startend_returns_squeezed_tensors(stubbed_sensors):
-    sensors_pkg, captured, ShutterType = stubbed_sensors
+    sensors_pkg, ShutterType = stubbed_sensors
     smc = sensors_pkg.SensorModelComputations
 
     T_views = _CudaLike(torch.zeros(1, 2, 4, 4))
-    ts_views = _CudaLike(torch.zeros(1, 2))
+    ts_views = _CudaLike(torch.zeros(1, 2, dtype=torch.int64))
     ts_views_cpu = torch.zeros(1, 2)
     sensor_models = _FakeModuleDict({"front": _FakeSensorModel(ShutterType.ROLLING)})
 
@@ -193,14 +156,37 @@ def test_get_poses_and_timestamps_startend_returns_squeezed_tensors(stubbed_sens
     assert out.timestamps_startend_us.shape == (2,)
     assert out.timestamps_startend_us_gpu.shape == (1, 2)
     assert out.timestamps_startend_us_cpu.shape == (1, 2)
-    # Static plumbing the SUT must always pass through:
-    assert captured["embed_weights"] is None
-    assert captured["enable_calib"] is False
-    assert captured["shutter_value"] == 1
+
+
+def test_compute_poses_and_timestamps_torch_indexes_views(stubbed_sensors):
+    """Phase A.5 helper: per-sample matrix and timestamp indexing."""
+    sensors_pkg, _ = stubbed_sensors
+    helper = sensors_pkg.sensors._compute_poses_and_timestamps_torch
+    T = torch.arange(96).reshape(3, 2, 4, 4).to(torch.float32)
+    ts = torch.tensor([[0, 100], [1000, 1100], [2000, 2100]], dtype=torch.int64)
+    fidx = torch.tensor([2, 0], dtype=torch.int32)
+    T_out, ts_out = helper(T, fidx, ts)
+    assert T_out.shape == (2, 2, 4, 4)
+    assert ts_out.shape == (2, 2)
+    assert torch.equal(T_out[0], T[2])
+    assert torch.equal(T_out[1], T[0])
+    assert torch.equal(ts_out, torch.tensor([[2000, 2100], [0, 100]]))
+
+
+def test_compute_poses_and_timestamps_torch_empty_frame_idx(stubbed_sensors):
+    sensors_pkg, _ = stubbed_sensors
+    helper = sensors_pkg.sensors._compute_poses_and_timestamps_torch
+    T = torch.zeros(2, 2, 4, 4)
+    ts = torch.zeros(2, 2, dtype=torch.int64)
+    fidx = torch.empty(0, dtype=torch.int32)
+    T_out, ts_out = helper(T, fidx, ts)
+    assert T_out.shape == (0, 2, 4, 4)
+    assert ts_out.shape == (0, 2)
+    assert ts_out.dtype == torch.int64
 
 
 def test_get_poses_and_timestamps_startend_requires_cuda(stubbed_sensors):
-    sensors_pkg, _, ShutterType = stubbed_sensors
+    sensors_pkg, ShutterType = stubbed_sensors
     smc = sensors_pkg.SensorModelComputations
 
     cpu_tensor = torch.zeros(1, 2, 4, 4)  # is_cuda=False

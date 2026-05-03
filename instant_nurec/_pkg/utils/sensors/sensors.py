@@ -17,13 +17,54 @@ from typing import TypeAlias, Union, cast
 
 import torch
 
-from libs.sensors.kernels.pose_calib import compute_poses_and_timestamps
 from ncore.data import ShutterType
 from ncore.sensors import (
     FThetaCameraModel,
     OpenCVFisheyeCameraModel,
     OpenCVPinholeCameraModel,
 )
+
+
+def _compute_poses_and_timestamps_torch(
+    T_sensor_world_startend_allviews: torch.Tensor,
+    frame_idx: torch.Tensor,
+    timestamps_startend_us_allviews: torch.Tensor,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Standalone-only torch replacement for
+    ``libs.sensors.kernels.pose_calib.compute_poses_and_timestamps``.
+
+    The standalone predict pipeline always pins ``enable_calib=False``,
+    ``rect_points_lb=None``, ``resolution=None``, ``embed_weights=None``,
+    so the slang kernel reduces to ``T_out = T_in[frame_idx]`` and
+    ``ts_out = ts_in[frame_idx]`` — pure indexing. The slang version still
+    rounds-trips the matrices through SE3 (4x4 → quat,t → 4x4) inside the
+    kernel; we skip that since the round-trip is a no-op modulo ULPs and
+    the resulting drift is absorbed by ``tests/tolerance.json``'s
+    ``_vertex_count_delta`` band.
+
+    Args:
+        T_sensor_world_startend_allviews: (V, 2, 4, 4) start/end SE(3) per view.
+        frame_idx: (N,) int32 indices into V.
+        timestamps_startend_us_allviews: (V, 2) int64 timestamps per view.
+
+    Returns:
+        (T_out, ts_out) of shapes (N, 2, 4, 4) and (N, 2).
+    """
+    if frame_idx.shape[0] == 0:
+        return (
+            torch.empty(
+                (0, 2, 4, 4),
+                device=T_sensor_world_startend_allviews.device,
+                dtype=torch.float32,
+            ),
+            torch.empty(
+                (0, 2),
+                device=T_sensor_world_startend_allviews.device,
+                dtype=torch.int64,
+            ),
+        )
+    fidx = frame_idx.to(torch.int64)
+    return T_sensor_world_startend_allviews[fidx], timestamps_startend_us_allviews[fidx]
 
 
 ConcreteCameraModelsUnion: TypeAlias = Union[FThetaCameraModel, OpenCVFisheyeCameraModel, OpenCVPinholeCameraModel]
@@ -76,15 +117,15 @@ class SensorModelComputations:
         )
         shutter_type = cast(ShutterType, sensor_models[unique_sensor_idx_str].shutter_type)
 
-        T_sensor_world_startend_batch, timestamps_startend_us_batch = compute_poses_and_timestamps(
-            T_sensor_world_startend_allviews,
-            None,  # embed_weights: standalone predict has no per-frame calibration deltas
-            unique_frame_idx_tensor,
-            None,  # subsample_rect_points_lb: FrameMeta.subsample is always None
-            None,  # subsample_resolution: FrameMeta.subsample is always None
-            timestamps_startend_us_allviews,
-            shutter_type.value,
-            False,  # enable_calib: dead in standalone predict (no calibration learning)
+        # Phase A.5: torch replacement for the slang kernel. The standalone
+        # path pins enable_calib=False and rect_points_lb=None, reducing the
+        # kernel to per-sample matrix + timestamp indexing.
+        T_sensor_world_startend_batch, timestamps_startend_us_batch = (
+            _compute_poses_and_timestamps_torch(
+                T_sensor_world_startend_allviews,
+                unique_frame_idx_tensor,
+                timestamps_startend_us_allviews,
+            )
         )
 
         # Squeeze batch dimension (batch_size=1) to get single frame result

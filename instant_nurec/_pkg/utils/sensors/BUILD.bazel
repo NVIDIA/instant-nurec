@@ -43,7 +43,6 @@ py_library(
     deps = [
         pip_requirement("torch"),
         pip_requirement("nvidia-ncore"),
-        "//libs/sensors:pose_calib_kernels",
         "//instant_nurec/_pkg/utils:pylib_geometry",
     ],
 )
