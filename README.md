@@ -1,88 +1,93 @@
 <!-- SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved. -->
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
-# instant_nurec
+# InstantNuRec: Feed-Forward 3D Gaussian Reconstruction from Driving Logs
 
-Standalone reference implementation of the NRM Kelvin predict pipeline:
-ncorev4 ingest → frame batch prep → Kelvin predict → 3D-Gaussian PLY export.
+[![Paper](https://img.shields.io/badge/arXiv-Paper-b31b1b?logo=arxiv)](https://arxiv.org/abs/2501.00602)
+[![License](https://img.shields.io/badge/License-Apache--2.0-orange)](LICENSE.txt)
+[![Model](https://img.shields.io/badge/HF-Model-yellow?logo=huggingface&style=flat-square)](https://huggingface.co/nvidia/instant-nurec-kelvin)
 
-This is the predict-only carve-out of the NRM Kelvin model from the NRE
-codebase (commit `a54a6af`); training, validation, and the rendering /
-loss / supervision paths are not included.
+**NVIDIA**
 
-## What it does
+### Abstract
 
-Given a directory of ncorev4 sequences and a PLY output directory, the
-pipeline runs Kelvin inference and writes either:
+Reconstructing dynamic outdoor scenes from autonomous-vehicle driving
+logs traditionally requires lengthy per-scene optimization. InstantNuRec
+takes a different route: a feed-forward transformer directly infers a
+dynamic 3D-Gaussian scene representation in a single forward pass.
+Given a short window of multi-camera observations from an AV log, the
+model emits a Gaussian primitive per pixel — covering geometry,
+appearance, and per-Gaussian motion — which can be rendered in real
+time and interchanged with existing simulation pipelines.
 
-- one merged PLY per sequence (`--merge frustum-ownership`), or
-- one PLY per chunk (`--merge none`).
+This repository is the public reference implementation of the predict
+side of the **Kelvin** model: ncorev4 ingest → frame batch prep →
+forward pass → 3D-Gaussian PLY export. It is sufficient to reproduce
+the paper's reconstruction outputs from a recorded ncorev4 sequence.
 
-Both modes are bit-for-bit (within the determinism tolerance in
-`tests/tolerance.json`) reproducible against the reference baselines under
-`baselines/original_baseline/`.
+## Pipeline Overview
 
-## Setup
+NCore V4 Sequence ─► Frame Batching ─► Kelvin Forward Pass ─► 3D Gaussians ─► PLY (per-chunk or merged)
+
+## User Guide
+
+<details>
+<summary><b>Setup</b></summary>
+
+#### Prerequisites
+
+- **Python** 3.12
+- **NVIDIA driver** >= 570 (CUDA 12.8 compatible)
+- **GPU VRAM** ≥ 16 GB
 
 ```bash
+git clone https://github.com/NVIDIA/instant-nurec.git
+cd instant-nurec
 ./setup.sh
 source .venv/bin/activate
 ```
 
-`setup.sh` creates a Python venv, installs the pinned CUDA torch build
-(`torch==2.7.0+cu128` from `https://download.pytorch.org/whl/cu128`),
-then `pip install -e .`. All other runtime deps are pure Python / torch
-wheels — no bazel, no compiled kernels, no `nvdiffrast` / `gsplat` /
-`torch_scatter`.
+`setup.sh` creates a Python venv, installs the pinned CUDA torch wheel
+(`torch==2.7.0+cu128`), and `pip install -e .`. All other runtime
+dependencies are pure Python or torch wheels — no bazel, no compiled
+kernels, no `nvdiffrast` / `gsplat` / `torch_scatter`.
 
-The `torch` pin matches the version used by the NRE bazel build at
-commit `a54a6af` (NRE pinned `torch==2.7.0+cu128.gitc41f6e01287` via the
-NVIDIA-internal index; `2.7.0+cu128` from the public PyTorch index is
-the closest publicly-installable equivalent). This keeps the
-parity-vs-baseline drift attributable to a known torch+CUDA version.
-Updating the pin is a deliberate, parity-gated change.
+#### Download the pretrained model
 
-## Pretrained model
+The pipeline loads a single artifact: a torch-pickled `GaussiansNRMSystem`
+saved as `kelvin_full.pt`. Either fetch it from Hugging Face:
 
-The pipeline loads a single artifact: a torch-pickled
-`GaussiansNRMSystem` saved as `kelvin_full.pt`. There are exactly two
-ways to make it available:
+```bash
+pip install huggingface_hub[cli]
+hf auth login
+hf download nvidia/instant-nurec-kelvin --local-dir ~/.cache/instant_nurec
+```
 
-1. **HuggingFace cache** (eventual default): the placeholder repo id is
-   `nvidia/instant-nurec-kelvin`; the in-tree mock at
-   `instant_nurec/_hf_mock.py` resolves it to
-   `~/.cache/instant_nurec/kelvin_full.pt`. When the corp publishes the
-   real repo, set `INSTANT_NUREC_HF_MOCK=0` and `huggingface_hub`
-   downloads it for you.
+…or point `INSTANT_NUREC_FULL_PT` at a local path; the file will be
+copied into the cache on first run.
 
-2. **Manual override**: set `INSTANT_NUREC_FULL_PT` to a local path. The
-   first time the pipeline runs with that env var set, the file is
-   copied into the HF cache so subsequent runs find it through path
-   (1) automatically.
+</details>
 
-If neither path resolves a `.pt` file, the pipeline raises
-`FullModelNotFoundError` with a clear message rather than attempting any
-other download.
-
-## Quickstart
+<details>
+<summary><b>Inference</b></summary>
 
 The two canonical invocations:
 
 ```bash
-# No-merge mode: writes per-chunk PLYs.
+# Per-chunk PLYs.
 ./run.sh \
     --ncore-path /path/to/ncorev4 \
     --output-dir /tmp/out/no_merge \
     --merge none
 
-# Merge mode: writes a single merged PLY per sequence.
+# Single merged PLY per sequence.
 ./run.sh \
     --ncore-path /path/to/ncorev4 \
     --output-dir /tmp/out/merge \
     --merge frustum-ownership
 ```
 
-`run.sh` validates the inputs and execs `python run_inference.py`. You
+`run.sh` validates the inputs and execs `python run_inference.py`; you
 can also call the CLI directly:
 
 ```bash
@@ -92,7 +97,7 @@ python run_inference.py \
     --merge none
 ```
 
-## CLI reference
+#### CLI reference
 
 | flag | purpose |
 | --- | --- |
@@ -101,16 +106,21 @@ python run_inference.py \
 | `--merge` | `none` (default) for per-chunk PLYs, `frustum-ownership` for a single merged PLY. |
 | `--log-level` | `DEBUG` / `INFO` (default) / `WARNING` / `ERROR` / `CRITICAL`. |
 
-## Environment variables
+#### Environment variables
 
 | variable | purpose |
 | --- | --- |
 | `INSTANT_NUREC_FULL_PT` | Absolute path to a local `kelvin_full.pt`. Takes priority over the HF cache. |
 | `INSTANT_NUREC_HF_MOCK` | `1` (default) selects the in-tree placeholder mock; `0` forwards through to real `huggingface_hub`. |
 
-## Validating parity
+</details>
 
-Round-trip output against the reference baselines:
+<details>
+<summary><b>Benchmark / Parity</b></summary>
+
+`benchmark/validate_parity.py` checks bit-for-bit (within tolerance)
+agreement between a fresh inference run and the reference baselines
+under `baselines/original_baseline/`:
 
 ```bash
 python benchmark/validate_parity.py merge \
@@ -122,57 +132,88 @@ python benchmark/validate_parity.py no_merge \
     /tmp/out/no_merge/*/ply/*/
 ```
 
-Both must exit 0 within `tests/tolerance.json`. The tolerance file is
-derived from the run-to-run noise floor of the original NRE pipeline
-(C(5,2)=10 pairwise comparisons across `baselines/more_baselines/run_{1..5}`).
+Tolerances live in `tests/tolerance.json` and are derived from the
+run-to-run noise floor of the original pipeline (10 pairwise comparisons
+across 5 reruns in `baselines/more_baselines/`).
 
-## Repository layout
+`benchmark/compare_clouds.py` provides quality metrics for attributed
+point clouds of differing vertex counts (bidirectional Chamfer + F-score
+@ τ, NN-attribute residuals, and marginal Wasserstein-1 per attribute).
+
+</details>
+
+<details>
+<summary><b>Repository Structure</b></summary>
 
 ```
-instant_nurec/                  # standalone package
-    __init__.py
-    cli.py                      # argparse entrypoint
-    config.py                   # static NRMConfig literal + load_predict_config
-    _hf_mock.py                 # placeholder HF resolver (Phase 4 step 9)
-    config_schema/              # pydantic schemas for NRMConfig
-    datasets/                   # ncorev4 ingest + cuboid-track helpers
-    model/                      # GaussiansNRMSystem + KelvinNRM + blocks/backbone
-    predict/                    # predict loop + PLY export + frustum-ownership merge
-    primitives/                 # KelvinNRMPrimitive
-    utils/                      # batch / geometry / sensors / nn-extensions
-benchmark/
-    validate_parity.py          # torch-backed PLY parity check
-    derive_determinism_tolerance.py
-tests/                          # branch-coverage tests
-    tolerance.json
-baselines/                      # reference PLYs + parsed configs (not modified)
-data_samples/                   # ncorev4 fixture placeholder (HF mock target)
-internal/                       # migration scaffolding — runtime is decoupled
-    plans/                      # plan.md + plan2.md (project history)
-    parity_proofs/              # parity-proof notes
-run_inference.py                # canonical Python entrypoint
-run.sh                          # input-validation wrapper
-setup.sh                        # venv bootstrap
-pyproject.toml                  # setuptools build + ruff config
+instant-nurec/
+├── instant_nurec/                  # main package
+│   ├── cli.py                      # argparse entrypoint
+│   ├── _hf_mock.py                 # placeholder HF resolver
+│   ├── config_schema/              # pydantic schemas + defaults
+│   ├── datasets/                   # ncorev4 ingest + cuboid-track helpers
+│   ├── model/                      # GaussiansNRMSystem + KelvinNRM + blocks
+│   ├── predict/                    # predict loop + PLY export + merge
+│   ├── primitives/                 # KelvinNRMPrimitive
+│   └── utils/                      # batch / geometry / sensors / nn-extensions
+├── benchmark/
+│   ├── validate_parity.py          # PLY parity check
+│   ├── compare_clouds.py           # quality metrics for attributed point clouds
+│   └── derive_determinism_tolerance.py
+├── tests/                          # branch-coverage tests
+│   └── tolerance.json
+├── baselines/                      # reference PLYs + parsed configs
+├── run_inference.py                # main inference entry point
+├── run.sh                          # input-validation wrapper
+├── setup.sh                        # venv bootstrap
+├── pyproject.toml
+├── CONTRIBUTING.md
+├── LICENSE.txt
+└── THIRD_PARTY_LICENSE.txt
 ```
 
-## Development
+</details>
+
+<details>
+<summary><b>Development</b></summary>
 
 ```bash
-# Run the unit tests (CPU-only, no GPU required for the suite — runtime parity
-# tests are GPU-only and live in the iter loop).
 .venv/bin/python -m pytest tests/ -q
-
-# Lint:
 .venv/bin/ruff check .
 ```
 
-## Provenance
+</details>
 
-Code adapted from the NRE repository at commit `a54a6af`. All compiled
-CUDA/slang kernels from that source tree (`libs/geometry/`,
-`libs/sensors/`, `libs/vren/`, `libs/packed_ops/`) were replaced with
-pure-torch equivalents (Phase A); bazel was dropped (Phase B); the
-package was flattened to asset-harvester shape (Phase C); the
-NGC-checkpoint download path was replaced by the single-`.pt` HF flow
-described above (final dead-code pass).
+## License
+
+This project is licensed under the Apache License 2.0. See [LICENSE.txt](LICENSE.txt)
+and individual file headers for details. Third-party attributions are
+in [THIRD_PARTY_LICENSE.txt](THIRD_PARTY_LICENSE.txt).
+
+## Citation
+
+If you find this work useful in your research, please consider citing:
+
+```bibtex
+@article{yang2025storm,
+  title   = {STORM: Spatio-Temporal Reconstruction Model for Large-Scale Outdoor Scenes},
+  author  = {Yang, Jiawei and Huang, Jiahui and Chen, Yuxiao and Wang, Yan
+             and Li, Boyi and You, Yurong and Sharma, Apoorva and Igl, Maximilian
+             and Karkus, Peter and Xu, Danfei and Ivanovic, Boris
+             and Wang, Yue and Pavone, Marco},
+  journal = {arXiv preprint arXiv:2501.00602},
+  year    = {2025}
+}
+```
+
+## Disclaimer
+
+InstantNuRec is trained for the autonomous-vehicle domain; results
+outside that domain are not guaranteed.
+
+AI models generate responses and outputs based on complex algorithms
+and machine-learning techniques, and those responses or outputs may be
+inaccurate or offensive. By downloading a model, you assume the risk of
+any harm caused by any response or output of the model. By using this
+software or model, you are agreeing to the terms and conditions of the
+license, acceptable-use policy, and privacy policy as applicable.
