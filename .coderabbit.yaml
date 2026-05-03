@@ -1,9 +1,0 @@
-tone_instructions: "Be concise and focus on critical issues only"
-  
-reviews:
-  pre_merge_checks:
-    custom_checks:
-      - name: "Require tests for changes"
-        mode: "warning"
-        instructions:  "If no test file is added or modified in this merge request, raise a warning."
-   
