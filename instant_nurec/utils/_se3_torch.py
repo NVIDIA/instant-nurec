@@ -13,14 +13,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Pure-torch drop-in shim for the lietorch SE3/SO3 surface used by the
-predict pipeline.
+"""Pure-torch SE3/SO3 shim — small subset of the ``lietorch`` API.
 
-After Phase A.8 dropped ``libs/`` and Phase B aimed to drop ``bazel``,
-``lietorch`` became the last native dep blocking ``pip install -e .``
-on systems whose glibc is older than the pip wheel's requirement
-(``GLIBC_2.36``). This module replaces the API surface used by
-``tracks.py``, ``types.py``, and ``motion.py`` with pure torch:
+We *would* have used ``pip install lietorch``, but the public PyPI
+``lietorch==0.8.2`` (the latest release) hard-pins ``torch==2.6.*`` and
+``torchvision==0.21.*``. This project pins ``torch==2.7.0+cu128`` for
+compute-stack stability; pulling lietorch would force a torch downgrade
+and break the cu128 wheel choice. (The custom build of lietorch
+compatible with torch 2.7.0+cu128 is published only to NVIDIA's internal
+package index and is therefore not available to this codebase.)
+
+To avoid the version clash we re-implement only the small subset of the
+lietorch API the predict path actually exercises:
 
 * ``SE3(data)`` / ``SE3.InitFromVec(data)`` — construct from
   ``(..., 7)`` ``[tx, ty, tz, qx, qy, qz, qw]``.
@@ -34,6 +38,17 @@ on systems whose glibc is older than the pip wheel's requirement
 * ``SO3.inv()``.
 
 Quaternion convention: XYZW (matches lietorch and the slang/ncore code).
+
+All intellectual credit for the lietorch interface, the SE3/SO3 group
+algebra and the underlying numerics belongs to the original lietorch
+authors:
+
+    Zachary Teed and Jia Deng
+    https://github.com/princeton-vl/lietorch
+
+If you need the full lietorch surface (Lie-group derivatives, autograd
+hooks, optimizer interop), prefer the upstream package on a torch
+version it supports.
 """
 
 from __future__ import annotations
