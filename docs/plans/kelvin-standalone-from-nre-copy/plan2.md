@@ -148,9 +148,30 @@ Iterate until convergence (4.8): try removing one more file/function/import; par
 
 ---
 
-## Phase B — Drop bazel
+## Phase B — Drop bazel (PARTIAL — prep done, removal blocked on env)
 
-Per plan.md §8.1 — but only safely doable AFTER Phase A because libs/ is gone.
+**Status:** Phase A.8 already removed all `from libs.X` imports and the
+``libs/`` subtree. The remaining native-pip blockers — ``lietorch`` and
+``torchvision`` — were both replaced with pure-torch shims in
+``c144996`` and ``b33892f``:
+* ``instant_nurec/utils/_se3_torch.py`` — drop-in for ``lietorch.SE3`` /
+  ``lietorch.SO3`` (XYZW quaternion + translation, exp/log/slerp,
+  composition, point transform).
+* ``_RGBNormalize`` ``nn.Module`` (in-tree, ``persistent=False`` buffers)
+  replaces ``torchvision.transforms.Normalize``;
+  ``F.interpolate(antialias=True)`` replaces
+  ``torchvision.transforms.functional.resize``.
+
+After both replacements, the predict path imports zero native pip deps
+beyond ``torch`` itself.
+
+**Blocked on environment:** ``python run_inference.py …`` requires a
+CUDA-enabled torch venv; the test ``.venv`` here is CPU-only and the
+NVIDIA-internal ``torch==2.11.0+cpu`` wheel doesn't have a matching
+public ``torchvision``-or-CUDA pair, so a fresh CUDA venv setup is
+needed before the bazel ``BUILD.bazel`` files can be safely deleted and
+``pip install -e .`` becomes the canonical install. That last step is
+deferred to a follow-up session that can stand up the CUDA venv.
 
 ### B.1 — Verify pip-install runs without bazel
 
@@ -200,9 +221,27 @@ Iterate to 4.8 convergence.
 
 ---
 
-## Phase C — Flatten layout to asset-harvester shape
+## Phase C — Flatten layout to asset-harvester shape (DONE — `e177e4c`)
 
-Per plan.md §8.2.
+Per plan.md §8.2. Basic flatten landed in `e177e4c`:
+
+```
+instant_nurec/_pkg/utils/         → instant_nurec/utils/
+instant_nurec/_pkg/datasets/      → instant_nurec/datasets/
+instant_nurec/_pkg/models/        → instant_nurec/models/
+instant_nurec/_pkg/nrm/           → instant_nurec/nrm/
+instant_nurec/_pkg/config/        → instant_nurec/config_schema/
+                                    (renamed to avoid clash with config.py)
+```
+
+~70 .py files updated (`instant_nurec._pkg.X` → `instant_nurec.X`).
+``//instant_nurec/_pkg/...`` BUILD labels collapsed to
+``//instant_nurec/...``. Predict + tests + parity all GREEN.
+
+The further merges plan2 §C.1 calls for — collapsing
+``utils/`` + ``models/`` + ``nrm/utils/`` into one ``utils/``, and
+``nrm/systems/`` + ``nrm/models/kelvin_model.py`` into ``model.py`` —
+are deferred to C.6 re-strip.
 
 ### C.1 — Source moves
 
