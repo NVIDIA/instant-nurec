@@ -39,7 +39,6 @@ class NRMConfig(BaseConfigSchema):
     """Top-level NRM predict configuration."""
 
     seed: int = Field(default=38, description="Random seed.")
-    resume: str | None
 
     out_dir: str
 
@@ -65,11 +64,6 @@ class NRMConfig(BaseConfigSchema):
     )
 
     def model_post_init(self, __context) -> None:
-        if self.resume is not None:
-            if not self.resume.endswith(".ckpt"):
-                self.resume += ".ckpt"
-            if not os.path.exists(self.resume):
-                raise FileNotFoundError(f"Checkpoint {self.resume!r} does not exist")
         if (env_run_id := os.environ.get("NRE_ENV_RUN_ID")) is not None:
             self.run_id = env_run_id
         self.config_dir = os.path.join(self.out_dir, self.run_id, "config")

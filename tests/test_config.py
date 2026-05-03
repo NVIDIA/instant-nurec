@@ -292,7 +292,6 @@ def test_base_config_schema_is_hashable():
 
 def _make_nrm_kwargs(out_dir, **extra):
     base = dict(
-        resume=None,
         out_dir=str(out_dir),
         system=GaussiansNRMSystemConfig(),
         dataset={"predict": None},
@@ -302,7 +301,7 @@ def _make_nrm_kwargs(out_dir, **extra):
     return base
 
 
-def test_nrm_config_post_init_no_resume_no_env(tmp_path, monkeypatch):
+def test_nrm_config_post_init_no_env(tmp_path, monkeypatch):
     monkeypatch.delenv("NRE_ENV_RUN_ID", raising=False)
     cfg = NRMConfig(**_make_nrm_kwargs(tmp_path))
     # config_dir auto-derives to out_dir/run_id/config
@@ -315,28 +314,3 @@ def test_nrm_config_post_init_env_run_id_overrides(tmp_path, monkeypatch):
     cfg = NRMConfig(**_make_nrm_kwargs(tmp_path))
     assert cfg.run_id == "fixed-run-123"
     assert cfg.config_dir == os.path.join(str(tmp_path), "fixed-run-123", "config")
-
-
-def test_nrm_config_post_init_resume_existing_ckpt(tmp_path, monkeypatch):
-    monkeypatch.delenv("NRE_ENV_RUN_ID", raising=False)
-    ckpt = tmp_path / "model.ckpt"
-    ckpt.write_bytes(b"")
-    cfg = NRMConfig(**_make_nrm_kwargs(tmp_path, resume=str(ckpt)))
-    assert cfg.resume == str(ckpt)
-
-
-def test_nrm_config_post_init_resume_appends_ckpt_suffix(tmp_path, monkeypatch):
-    """When resume doesn't end with .ckpt, it gets appended; if the resulting
-    path doesn't exist, a FileNotFoundError is raised."""
-    monkeypatch.delenv("NRE_ENV_RUN_ID", raising=False)
-    base = tmp_path / "model"
-    base.with_suffix(".ckpt").write_bytes(b"")
-    cfg = NRMConfig(**_make_nrm_kwargs(tmp_path, resume=str(base)))
-    # The .ckpt suffix was appended.
-    assert cfg.resume == str(base) + ".ckpt"
-
-
-def test_nrm_config_post_init_resume_missing_file_raises(tmp_path, monkeypatch):
-    monkeypatch.delenv("NRE_ENV_RUN_ID", raising=False)
-    with pytest.raises(FileNotFoundError, match="does not exist"):
-        NRMConfig(**_make_nrm_kwargs(tmp_path, resume=str(tmp_path / "missing.ckpt")))

@@ -46,8 +46,7 @@ def run_predict(config: NRMConfig) -> None:
     _seed_everything(config.seed)
     logger.info("NRM RUN \U0001f194: %s", config.run_id)
 
-    assert config.resume, "Standalone predict requires a checkpoint path (config.resume)."
-    system = nrm_systems.make(config, load_from_checkpoint=config.resume)
+    system = nrm_systems.make(config)
     device = torch.device("cuda")
     system.to(device).eval()
 

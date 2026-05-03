@@ -22,36 +22,25 @@ that:
   1. Holds the static portion of the config inline (sourced 1:1 from the
      hydra-produced ``parsed.yaml`` for the kelvin_pa_front pretrained
      predict run; Phase 1 step 4.4 dropped the YAML round-trip).
-  2. Resolves the pretrained checkpoint path via ``create_model_registry``
-     (same NGC registry NRE used; the cache lives at
-     ``~/.cache/nrm/pretrained_models/kelvin_pa_front``).
-  3. Injects the CLI-derived fields (output dir, ncore paths, merge toggle).
-  4. Validates against ``NRMConfig`` and returns the typed instance.
+  2. Injects the CLI-derived fields (output dir, ncore paths, merge toggle).
+  3. Validates against ``NRMConfig`` and returns the typed instance.
+
+The pretrained-weights download is handled separately by ``model.make()``
+through the HF mock (``_hf_mock.get_full_model_path`` /
+``INSTANT_NUREC_FULL_PT``); this loader stays pure / network-free.
 
 No ``hydra-core``/``omegaconf``/``pyyaml`` imports.
 """
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 from instant_nurec.config_schema.nrm import NRMConfig
-from instant_nurec.utils.model_registry import create_model_registry
-
-
-_PRETRAINED_MODEL_URL = (
-    "https://api.ngc.nvidia.com/v2/org/nvstaging/team/nre/models/"
-    "nrm-kelvin-pa/versions/1.0.0-front/files/nrm-kelvin-pa_1.0.0-front.ckpt"
-)
-_PRETRAINED_CACHE_DIR = Path(
-    os.path.expandvars("$HOME/.cache/nrm/pretrained_models/kelvin_pa_front")
-)
 
 
 # Static portion of the NRMConfig consumed by the standalone Kelvin predict
 # pipeline. CLI-driven fields are injected at load time:
-#   - resume                                  (cached pretrained checkpoint path)
 #   - out_dir                                 (--output-dir)
 #   - dataset.predict.ncore_json_list_path    (--ncore-path/debug.lst)
 #   - dataset.predict.ncore_json_base_path    (--ncore-path)
@@ -136,18 +125,6 @@ _PREDICT_CONFIG: dict = {
 }
 
 
-def _resolve_pretrained_checkpoint() -> str:
-    """Return the absolute path to the pretrained kelvin_pa_front checkpoint.
-
-    Downloads it to the local cache if it isn't there already (first-run
-    only); subsequent calls just return the cached path. Mirrors what
-    ``parse_pretrained_nrm_config`` does in NRE.
-    """
-    return create_model_registry(
-        _PRETRAINED_MODEL_URL, _PRETRAINED_CACHE_DIR
-    ).get_model()
-
-
 def load_predict_config(
     *,
     ncore_path: Path,
@@ -163,22 +140,16 @@ def load_predict_config(
             (``--merge frustum-ownership`` vs ``--merge none``).
 
     Returns:
-        Validated :class:`NRMConfig`.
+        Validated :class:`NRMConfig`. The ``resume`` field is intentionally
+        not populated here; ``model.make()`` resolves the pretrained-weights
+        location separately through the HF mock.
     """
-    cfg: dict = _deep_copy_predict_config()
+    import copy
 
-    cfg["resume"] = _resolve_pretrained_checkpoint()
+    cfg: dict = copy.deepcopy(_PREDICT_CONFIG)
     cfg["out_dir"] = str(output_dir)
     cfg["dataset"]["predict"]["ncore_json_base_path"] = str(ncore_path)
     cfg["dataset"]["predict"]["ncore_json_list_path"] = str(ncore_path / "debug.lst")
     cfg["predict"]["primitive_merge"]["enabled"] = bool(merge_enabled)
 
     return NRMConfig.model_validate(cfg)
-
-
-def _deep_copy_predict_config() -> dict:
-    """Return a fresh deep copy of ``_PREDICT_CONFIG`` so callers can mutate
-    the CLI-driven fields without polluting the module-level template."""
-    import copy
-
-    return copy.deepcopy(_PREDICT_CONFIG)

@@ -1,5 +1,5 @@
 <!-- SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved. -->
-<!-- SPDX-License-Identifier: LicenseRef-NvidiaProprietary -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
 
 # instant_nurec
 
@@ -29,11 +29,31 @@ Both modes are bit-for-bit (within the determinism tolerance in
 source .venv/bin/activate
 ```
 
-`setup.sh` creates a Python venv and installs `numpy`/`torch`/`plyfile`
-and the rest of the runtime deps. The compiled CUDA/slang kernels under
-`libs/` are still built via bazel during the Phase 3 transition; the
-pure-`python run_inference.py` form will be self-contained once Phase 2
-finishes replacing them with torch-native equivalents.
+`setup.sh` creates a Python venv and runs `pip install -e .`. All
+runtime deps are pure Python / torch wheels — no bazel, no compiled
+kernels, no `nvdiffrast` / `gsplat` / `torch_scatter`.
+
+## Pretrained model
+
+The pipeline loads a single artifact: a torch-pickled
+`GaussiansNRMSystem` saved as `kelvin_full.pt`. There are exactly two
+ways to make it available:
+
+1. **HuggingFace cache** (eventual default): the placeholder repo id is
+   `nvidia/instant-nurec-kelvin`; the in-tree mock at
+   `instant_nurec/_hf_mock.py` resolves it to
+   `~/.cache/instant_nurec/kelvin_full.pt`. When the corp publishes the
+   real repo, set `INSTANT_NUREC_HF_MOCK=0` and `huggingface_hub`
+   downloads it for you.
+
+2. **Manual override**: set `INSTANT_NUREC_FULL_PT` to a local path. The
+   first time the pipeline runs with that env var set, the file is
+   copied into the HF cache so subsequent runs find it through path
+   (1) automatically.
+
+If neither path resolves a `.pt` file, the pipeline raises
+`FullModelNotFoundError` with a clear message rather than attempting any
+other download.
 
 ## Quickstart
 
@@ -53,20 +73,11 @@ The two canonical invocations:
     --merge frustum-ownership
 ```
 
-`run.sh` validates the inputs and execs `python run_inference.py`. You can
-also call the CLI directly:
+`run.sh` validates the inputs and execs `python run_inference.py`. You
+can also call the CLI directly:
 
 ```bash
 python run_inference.py \
-    --ncore-path /path/to/ncorev4 \
-    --output-dir /tmp/out \
-    --merge none
-```
-
-While the bazel transition is in flight the equivalent legacy launcher is:
-
-```bash
-bazel run //instant_nurec:run -- \
     --ncore-path /path/to/ncorev4 \
     --output-dir /tmp/out \
     --merge none
@@ -85,8 +96,8 @@ bazel run //instant_nurec:run -- \
 
 | variable | purpose |
 | --- | --- |
-| `INSTANT_NUREC_FULL_PT` | When set to a path that exists, the pipeline torch-loads the full pickled `GaussiansNRMSystem` from there and skips the constructor + checkpoint state-dict load. When the path does not exist, the pipeline builds via the constructor and writes the system to that path so the next run takes the fast path. |
-| `INSTANT_NUREC_HF_MOCK` | (Phase 4 placeholder) When set to `1` (default), `_hf_mock` resolves the HF placeholder repo `nvidia/instant-nurec-kelvin` to a local cached path. |
+| `INSTANT_NUREC_FULL_PT` | Absolute path to a local `kelvin_full.pt`. Takes priority over the HF cache. |
+| `INSTANT_NUREC_HF_MOCK` | `1` (default) selects the in-tree placeholder mock; `0` forwards through to real `huggingface_hub`. |
 
 ## Validating parity
 
@@ -110,25 +121,30 @@ derived from the run-to-run noise floor of the original NRE pipeline
 
 ```
 instant_nurec/                  # standalone package
+    __init__.py
     cli.py                      # argparse entrypoint
     config.py                   # static NRMConfig literal + load_predict_config
-    _pkg/                       # ported Kelvin pipeline (Phase 1.5 rename target: flatten)
-        nrm/                    # Kelvin model + datasets + predict driver
-        utils/                  # batch / geometry / sensors / model registry / ncore helpers
-        datasets/               # cuboid track helpers
-        models/                 # PLY writer + nn extensions
-        config/                 # base pydantic schema
-libs/                           # compiled CUDA/slang kernels (bazel-built; Phase 3 transition)
+    _hf_mock.py                 # placeholder HF resolver (Phase 4 step 9)
+    config_schema/              # pydantic schemas for NRMConfig
+    datasets/                   # ncorev4 ingest + cuboid-track helpers
+    model/                      # GaussiansNRMSystem + KelvinNRM + blocks/backbone
+    predict/                    # predict loop + PLY export + frustum-ownership merge
+    primitives/                 # KelvinNRMPrimitive
+    utils/                      # batch / geometry / sensors / nn-extensions
 scripts/
     validate_parity.py          # torch-backed PLY parity check
     derive_determinism_tolerance.py
-tests/                          # branch-coverage tests (96% line coverage)
+tests/                          # branch-coverage tests
     tolerance.json
 baselines/                      # reference PLYs + parsed configs (not modified)
+data_samples/                   # ncorev4 fixture placeholder (HF mock target)
+docs/
+    plans/                      # plan.md + plan2.md (project history)
+    internal/                   # parity-proof notes (migration scaffolding)
 run_inference.py                # canonical Python entrypoint
 run.sh                          # input-validation wrapper
 setup.sh                        # venv bootstrap
-pyproject.toml                  # setuptools build + ruff/pyright config
+pyproject.toml                  # setuptools build + ruff config
 ```
 
 ## Development
@@ -144,7 +160,10 @@ pyproject.toml                  # setuptools build + ruff/pyright config
 
 ## Provenance
 
-Code adapted from the NRE repository at commit `a54a6af`. The Kelvin model
-weights, the rolling-shutter sensor kernels (`libs/sensors/`), the
-ray-cuboid intersection (`libs/vren/`), and the SE(3) pose helpers
-(`libs/geometry/`) all originate there.
+Code adapted from the NRE repository at commit `a54a6af`. All compiled
+CUDA/slang kernels from that source tree (`libs/geometry/`,
+`libs/sensors/`, `libs/vren/`, `libs/packed_ops/`) were replaced with
+pure-torch equivalents (Phase A); bazel was dropped (Phase B); the
+package was flattened to asset-harvester shape (Phase C); the
+NGC-checkpoint download path was replaced by the single-`.pt` HF flow
+described above (final dead-code pass).

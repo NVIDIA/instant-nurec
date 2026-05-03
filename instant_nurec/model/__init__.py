@@ -31,6 +31,11 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+class FullModelNotFoundError(RuntimeError):
+    """The pretrained ``kelvin_full.pt`` couldn't be resolved through any
+    supported channel (HF cache or ``INSTANT_NUREC_FULL_PT``)."""
+
+
 def _resolve_full_pt_path() -> Optional[str]:
     """Try the HF mock first (Phase 4 step 9 wire-up); fall back to the
     ``INSTANT_NUREC_FULL_PT`` env var if the mock can't satisfy the request.
@@ -47,52 +52,39 @@ def _resolve_full_pt_path() -> Optional[str]:
         return env_path if env_path else None
 
 
-def make(config: "NRMConfig", load_from_checkpoint: Optional[str] = None) -> GaussiansNRMSystem:
-    """Predict-only standalone: NRE supported both Lightning checkpoint loading
-    and weights-only loading; only the latter survives (the predict config
-    always set resume_weights_only=true).
+def make(config: "NRMConfig") -> GaussiansNRMSystem:
+    """Load the pretrained ``kelvin_full.pt`` and patch in the per-invocation
+    config (output dir / merge toggle / ncore paths).
 
-    Phase 1 step 5 + Phase 4 step 9: when the HF mock can resolve
-    ``kelvin_full.pt`` (transitively from ``INSTANT_NUREC_FULL_PT`` or a
-    pre-populated cache), skip construction + state_dict-load and torch.load
-    the entire system. Otherwise, follow the build-from-config path and (if
-    the env var is set but the file is missing) write the system to that
-    path so the next run can use the fast path. This preserves parity
-    bit-for-bit while exposing the load shortcut step 5 relies on.
+    Single supported artifact: a torch-pickled ``GaussiansNRMSystem`` saved
+    via ``torch.save(system, path)``. Resolved through the HF mock
+    (placeholder repo ``nvidia/instant-nurec-kelvin``) or the
+    ``INSTANT_NUREC_FULL_PT`` env var.
+
+    Raises ``FullModelNotFoundError`` if no .pt file can be resolved.
     """
     full_pt_path = _resolve_full_pt_path()
-
-    if full_pt_path and os.path.exists(full_pt_path):
-        logger.info("Loading full system from %s (bypassing construct+state_dict path).", full_pt_path)
-        loaded = torch.load(full_pt_path, map_location="cpu", weights_only=False)
-        assert isinstance(loaded, GaussiansNRMSystem), (
-            f"Expected GaussiansNRMSystem from {full_pt_path}, got {type(loaded).__name__}"
+    if not full_pt_path or not os.path.exists(full_pt_path):
+        raise FullModelNotFoundError(
+            "kelvin_full.pt not found. Either set INSTANT_NUREC_FULL_PT to a "
+            "local .pt path or wait for the corp-published HF repo "
+            f"{_hf_mock.PLACEHOLDER_REPO_ID!r} to provide it."
         )
-        # Override the saved config-derived attributes with the new config: the
-        # weight tensors are the only thing that needs to roundtrip via the .pt;
-        # out_dir / run_id / merge flag / ncore path all change per invocation.
-        from instant_nurec.datasets.datamodule import NRMDataModule  # local to avoid bootstrap loops
 
-        loaded.out_dir = config.out_dir
-        loaded.run_id = config.run_id
-        loaded.config = config.system
-        loaded.predict_config = config.predict
-        loaded.export_preprocess = config.model.export_preprocess
-        loaded.datamodule = NRMDataModule(config)
-        return loaded
+    logger.info("Loading full system from %s.", full_pt_path)
+    loaded = torch.load(full_pt_path, map_location="cpu", weights_only=False)
+    assert isinstance(loaded, GaussiansNRMSystem), (
+        f"Expected GaussiansNRMSystem from {full_pt_path}, got {type(loaded).__name__}"
+    )
 
-    system = GaussiansNRMSystem(config)
-    if load_from_checkpoint is None:
-        return system
+    # Per-invocation overrides — the .pt only round-trips weight tensors;
+    # out_dir / run_id / merge flag / ncore path change every run.
+    from instant_nurec.datasets.datamodule import NRMDataModule  # local to avoid bootstrap loops
 
-    checkpoint = torch.load(load_from_checkpoint, map_location="cpu", weights_only=False)
-    state_dict = checkpoint["state_dict"] if "state_dict" in checkpoint else checkpoint
-    system.load_state_dict(state_dict, strict=True)
-
-    write_path = os.environ.get("INSTANT_NUREC_FULL_PT")
-    if write_path:
-        logger.info("Writing full system to %s for the next run's fast path.", write_path)
-        os.makedirs(os.path.dirname(write_path) or ".", exist_ok=True)
-        torch.save(system, write_path)
-
-    return system
+    loaded.out_dir = config.out_dir
+    loaded.run_id = config.run_id
+    loaded.config = config.system
+    loaded.predict_config = config.predict
+    loaded.export_preprocess = config.model.export_preprocess
+    loaded.datamodule = NRMDataModule(config)
+    return loaded
