@@ -21,9 +21,7 @@ __all__ = ["BaseConfigSchema", "Field"]
 
 
 class BaseConfigSchema(PydanticBaseModel):
-    """
-    The base class for NRE config structs, acts very similar to python's dataclasses.
-    """
+    """Base class for config structs; behaves similar to a python dataclass."""
 
     def __hash__(self) -> int:
         return hash((type(self), self.__repr__()))

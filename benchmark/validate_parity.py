@@ -16,11 +16,10 @@
 #!/usr/bin/env python3
 """Validate PLY parity against a baseline.
 
-This is the gate for the kelvin-standalone branch: every commit that touches
-runtime code must keep this script green against `baselines/original_baseline`
-within the tolerances recorded in `tests/tolerance.json` (initially derived from
-`baselines/more_baselines/run_{1..5}` — the run-to-run noise floor of the
-original NRE pipeline).
+Every commit that touches runtime code must keep this script green against
+`baselines/original_baseline` within the tolerances recorded in
+`tests/tolerance.json` (derived from the run-to-run noise floor across the
+5 reruns in `baselines/more_baselines/run_{1..5}`).
 
 Usage::
 
@@ -118,9 +117,6 @@ def _compare_pair(
         # Counts differ but within tolerance — skip per-property maxabs since
         # there's no canonical 1:1 vertex correspondence between point clouds
         # of different sizes. The count-delta check above is the only signal.
-        # (Phase A.1 absorbs ~8-30 vertex drift per chunk from FP-precision
-        # differences between slang and torch on GPU; see
-        # ``instant_nurec/_pkg/utils/geometry.py:se3pose_from_matrix`` docstring.)
         return errors
 
     for name in sorted(props_a):
@@ -248,9 +244,7 @@ def main(argv: list[str] | None = None) -> int:
         help=(
             "Maximum allowed |count_a - count_b| per file. Overrides the "
             "``_vertex_count_delta`` key in tolerance.json. Default 0 "
-            "(exact-match) when not set anywhere. Phase A torch swaps "
-            "introduce ~5-30 vertex drift per chunk from FP-precision "
-            "differences between slang and torch on GPU."
+            "(exact-match) when not set anywhere."
         ),
     )
     sub = parser.add_subparsers(dest="mode", required=True)

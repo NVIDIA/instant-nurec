@@ -27,8 +27,7 @@ import torch
 
 log = logging.getLogger(__name__)
 
-# SH degree-0 coefficient -- the only SH constant the predict-only standalone
-# uses (RGB <-> SH band-0 round-trip in export_ply).
+# SH degree-0 coefficient (RGB <-> SH band-0 round-trip in export_ply).
 C0 = 0.28209479177387814
 
 T = TypeVar("T", np.ndarray, torch.Tensor)

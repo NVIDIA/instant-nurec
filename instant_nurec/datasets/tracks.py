@@ -395,10 +395,6 @@ class CuboidTracks(Tracks):
         """Compute the interpolated pose of the tracks at the given timestamps.
         This will not check if the timestamps are within the range of the tracks!
 
-        Predict-only standalone never consumed the auxiliary `interpolated_mask`
-        return that the NRE-side `_ex` variant produced; collapsed to a single
-        function
-
         Inputs:
         - timestamps_us: timestamps to interpolate the pose at, N_data [int64]
         - tracks_idx: indices of the tracks to interpolate the pose for, N_data [int]

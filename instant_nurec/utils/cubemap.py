@@ -106,16 +106,13 @@ def rotate_sky_cubemap(cubemap: torch.Tensor, rotation: torch.Tensor) -> torch.T
     """Rotate the cubemap by the given rotation matrix.
 
     Per-face (u, v) projection follows the conventions established by
-    ``cubemap_ray_directions`` (the NRE face order is +X, -X, -Y, +Y, +Z, -Z;
-    note that indices 2/3 are swapped relative to OpenGL). See
-    ``internal/parity_proofs/phase2_7_cubemap_research.md`` for the full
-    derivation.
+    ``cubemap_ray_directions`` (face order +X, -X, -Y, +Y, +Z, -Z; note
+    that indices 2/3 are swapped relative to OpenGL).
 
-    with this pure-torch grid_sample path. Each face is sampled
-    independently with ``padding_mode="border"``; seam blending is local
-    to a face rather than cross-face, but parity holds within
-    ``tests/tolerance.json``. Note that due to aliasing, rotating the
-    cubemap first and then back is not the same as the original.
+    Each face is sampled independently with ``padding_mode="border"``;
+    seam blending is local to a face rather than cross-face. Note that
+    due to aliasing, rotating the cubemap first and then back is not
+    the same as the original.
 
     Args:
         cubemap: (6, cubemap_size, cubemap_size, C)

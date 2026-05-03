@@ -285,13 +285,7 @@ def _maybe_layer_scale(dim: int, init_values: Optional[float]) -> LayerScale | n
 
 
 class AttentionBlock(nn.Module):
-    """Standard Transformer block that contains one application of self-attention and MLP.
-
-    Predict-only standalone hardcodes the FFN to `FeedForwardMLP`; the
-    NRE-side `swiglu` branch (`FeedForwardSwiGLU`) was unreachable because
-    `KelvinDAv3EncoderConfig.ffn_type` is "mlp" and the decoder doesn't
-    plumb `ffn_type` to the AA-ViT.
-    """
+    """Standard Transformer block: one self-attention application + an MLP."""
 
     mlp: FeedForwardMLP
 

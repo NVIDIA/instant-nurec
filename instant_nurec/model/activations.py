@@ -95,10 +95,6 @@ class GaussianParams:
     - rotation: (*, 4)
     - opacity: (*, 1)
     - xyz: (*, 3)
-
-    Predict-only standalone always carries `xyz` directly; the NRE-side
-    `distance` field and the activation/forward fan-out that resolved
-    distance->xyz via rays were removed in Phase 1 step 4.3.
     """
 
     rgb: Tensor

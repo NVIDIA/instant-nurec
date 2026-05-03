@@ -168,7 +168,7 @@ class RigTrajectories:
     # NCore world frame -> base frame rigid transformation (potentially geo-located)
     T_world_base: torch.Tensor
 
-    # NCore world -> NRE frame conversion
+    # NCore world -> scene-frame conversion
     world_to_nre: FrameConversion
 
     @dataclass(slots=True, kw_only=True)

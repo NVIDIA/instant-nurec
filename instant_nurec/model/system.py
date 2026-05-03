@@ -41,9 +41,7 @@ logger = logging.getLogger(__name__)
 
 
 class GaussiansNRMSystem(nn.Module):
-    """Predict-only system. Self-invented: NRE inherits LightningModule for the
-    Trainer.fit/validate/test surfaces; we keep just nn.Module since the
-    predict driver invokes hooks directly."""
+    """Predict-only system; the predict driver invokes hooks directly."""
 
     config: GaussiansNRMSystemConfig
     model: KelvinNRM
@@ -120,9 +118,6 @@ class GaussiansNRMSystem(nn.Module):
         if out_batch.meta is None or out_batch.context_rig is None:
             return
 
-        # Helper to export PLY for one chunk. Standalone build does not export
-        # USDZ artifacts and does not render videos (those code paths were
-        # removed in Phase 1 step 4.3).
         def export_chunk(primitive: BaseNRMPrimitive, rig: RigTrajectories, meta: dict, chunk_suffix: str) -> None:
             path = os.path.join(
                 self.out_dir,

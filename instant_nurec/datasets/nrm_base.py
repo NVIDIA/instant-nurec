@@ -132,11 +132,9 @@ class CameraSubsampler:
 
 
 class NRMDataError(Exception):
-    """
-    Exception raised when an error occurs while loading NRM data.
-    Predict-only standalone propagates this directly: the NRE retry-on-error
-    loop made sense for training over millions of samples but not for a
-    single inference run where a bad sample should fail loud.
+    """Raised when an error occurs while loading NRM data.
+
+    Propagated directly to the caller — predict fails loud on a bad sample.
     """
 
     def __init__(self, message: str = "An error occurred while loading NRM data"):

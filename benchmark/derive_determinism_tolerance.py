@@ -17,12 +17,10 @@
 """Derive per-property determinism tolerance from baselines/more_baselines.
 
 The 5 reruns in `baselines/more_baselines/run_{1..5}` are independent invocations
-of the same NRE script on the same input — any per-property diff between two of
-them is run-to-run noise of the *original* pipeline. We take the max of those
+of the same script on the same input — any per-property diff between two of
+them is run-to-run noise of the pipeline. We take the max of those
 diffs across all C(5,2)=10 pairs (per chunk index, per mode) and emit it as
-`tests/tolerance.json`. Subsequent commits on this branch must keep
-`benchmark/validate_parity.py` green within these tolerances; only Phase 2 CUDA →
-torch swaps are allowed to ratchet a property's tolerance upwards.
+`tests/tolerance.json`.
 
 Idempotent. Run from the repo root:
 

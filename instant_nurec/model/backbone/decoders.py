@@ -257,16 +257,10 @@ class KelvinDPTDecoder(nn.Module):
             pos_embed_strength=0.1,
             checkpointing=config.checkpointing,
         )
-        # Time-conditioned motion-offset head (the kelvin_pa_front config sets
-        # `motion_depth = 4`, so the NRE-side `motion_depth == 0` Identity
-        # branch is unreachable; the inverse-flow `target_motion_head` was
-        # also pruned earlier in the strip).
+        # Time-conditioned motion-offset head.
         self.context_motion_head = self.TimeModulatedMotionHead(config, model_config)
 
         # GS-training heads: predict (scale[3], world-quaternion[4], opacity[1]).
-        # NRE additionally predicted higher-order SH bands; the kelvin_pa_front
-        # checkpoint freezes `sh_degree=0`, so the SH band-0 output is captured
-        # via the context head's RGB channels and the specular slice was empty.
         gs_output_dim = 3 + 4 + 1
         self.gaussians_head = DPTFullHead(
             input_dim=embed_dim,
@@ -416,9 +410,6 @@ class KelvinDPTDecoder(nn.Module):
         gs_scale, gs_world_quaternion, gs_opacity = gs_params_tensor.split([3, 4, 1], dim=-1)
         gs_distance = torch.stack([pred_depth[bidx] / renderings[bidx].distance_to_depth_scale for bidx in range(B)])
 
-        # ScaleActivation (the world-space variant) ignores `pixel_scale`; the
-        # NRE-side PixelScaleActivation that consumed it was dropped along with
-        # `config.activations.scale_type`
         gs_scale = self.gaussian_activations.scale(gs_scale, scene_rescale=scene_rescale)
         gs_valid_mask = KelvinSemanticClass.opacity_mask_from_semantic_probs(
             torch.softmax(context_semantic_logits, dim=-1)

@@ -13,9 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""
-This module contains extensions to the torch.nn module that are used in the NRE codebase.
-Its dependencies should be kept minimal to avoid circular dependencies (i.e. depend only on third party and potentially minor internal utils).
+"""Extensions to ``torch.nn``.
+
+Dependencies kept minimal to avoid circular imports (third-party + minor
+internal utils only).
 """
 
 from __future__ import annotations

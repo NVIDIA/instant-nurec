@@ -13,14 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""In-tree replacements for the dataclasses + enums in
-``libs.sensors.kernels.cameras.parameters`` and
-``libs.sensors.kernels.common``.
-
-ray-gen (``_image_points_to_world_rays_torch.py``); the slang kernel and its
-``isinstance`` checks against the libs-side classes are gone from the
-predict path. Field names mirror the libs version so the existing converter
-in ``ncore_sensors_converters.py`` keeps working.
+"""Dataclasses + enums consumed by the in-tree torch ray-gen
+(``_image_points_to_world_rays_torch.py``).
 
 FTheta-only for now (the standalone's predict baseline uses
 ``camera_front_wide_120fov`` which is FTheta). OpenCVPinhole / OpenCVFisheye
@@ -37,7 +31,7 @@ import torch
 
 
 class ShutterType(IntEnum):
-    """Camera shutter behavior (mirrors libs.sensors.kernels.cameras.parameters.ShutterType)."""
+    """Camera shutter behavior."""
 
     ROLLING_TOP_TO_BOTTOM = 1
     ROLLING_LEFT_TO_RIGHT = 2
@@ -229,7 +223,7 @@ class FThetaProjection(CameraProjection):
 
 @dataclass
 class Pose:
-    """Static SE(3) pose — replaces libs.sensors.kernels.common.Pose."""
+    """Static SE(3) pose."""
 
     translation: torch.Tensor  # (3,)
     rotation: torch.Tensor  # (4,) XYZW quaternion
@@ -237,8 +231,7 @@ class Pose:
 
 @dataclass
 class DynamicPose:
-    """Time-varying pose with two control points — replaces
-    libs.sensors.kernels.common.DynamicPose."""
+    """Time-varying pose with two control points."""
 
     start_pose: Pose
     end_pose: Pose

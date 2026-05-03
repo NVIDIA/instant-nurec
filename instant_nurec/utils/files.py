@@ -17,11 +17,7 @@ from upath import UPath
 
 
 def parse_universal_path(path: str) -> UPath:
-    """Parse a local path into a UPath object.
-
-    Predict-only standalone never reads from S3 / s3@profile paths, so the
-    s3-specific cache/block-size kwargs that NRE supported are gone.
-    """
+    """Parse a local path into a UPath object."""
     if "://" not in path:
         # https://github.com/fsspec/universal_pathlib?tab=readme-ov-file#local-paths-and-url-paths
         # Without a protocol prefix, UPath(path) returns PosixUPath/WindowsUPath

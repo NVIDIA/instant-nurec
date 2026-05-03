@@ -63,7 +63,7 @@ class KelvinLayer:
     """
     Base class for all Gaussian layers that contains the following attribute:
         - rotations:            Rotation of each Gaussian represented as a unit quaternion         [n_gaussians, 4]
-                                Note that this follows nrend's convention of wxyz format.
+                                Note that this uses wxyz quaternion format.
         - scales:               XYZ scale of each planar Gaussian                                  [n_gaussians, 3]
         - rgb:                  RGB color of each Gaussian                                         [n_gaussians, 3]
     """

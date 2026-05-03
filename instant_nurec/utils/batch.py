@@ -83,8 +83,8 @@ class RenderingData:
 
     Note: The `rays`, `poses_tquat_startend` and the underlying scene representation (e.g. 3D Gaussians)
     should be in the same coordinate system. For example, the most common case is that it carries `rays`
-    in the NRE space, the `poses_tquat_startend` is the transform from sensor to NRE space, and the underlying
-    scene representation (e.g. 3D Gaussians) is also in the NRE space.
+    in the scene space, the `poses_tquat_startend` is the transform from sensor to scene space, and the
+    underlying scene representation (e.g. 3D Gaussians) is also in the scene space.
 
     The fields are:
 
@@ -339,14 +339,9 @@ class CameraFrameLabels:
 class LidarFrameLabels:
     """Labels for a lidar frame.
 
-    Predict-only standalone keeps just `flags` and `distance`; the NRE-side
-    `intensity`, `raydrop`, `sparse_rays`, `sparse_timestamps`,
-    `sparse_elements` fields were defaulted to None by the dataset and never
-    read elsewhere
-
     The fields are:
     - flags: Optional. Bitmask integer value (see RayFlags). Default is None. [Tensor[int32]]. (B, height, width, 1).
-    - distance: Optional. Metric ray-depth in NRE scale (not z-depth). Default is None. [Tensor[float32]]. (B, height, width, 1).
+    - distance: Optional. Metric ray-depth (not z-depth). Default is None. [Tensor[float32]]. (B, height, width, 1).
     """
 
     flags: torch.Tensor | None = None
@@ -795,7 +790,7 @@ class CameraFreePoseViewGeometry(torch.nn.Module):
             return_timestamps=True,
         )
 
-        rays = unpack_optional(world_rays)  # camera rays are in nre space
+        rays = unpack_optional(world_rays)  # camera rays are in scene space
         rays = rays.reshape(sensorlib_parameters.resolution[1], sensorlib_parameters.resolution[0], 6)
         timestamps = unpack_optional(timestamps_us)
         timestamps = timestamps.reshape(sensorlib_parameters.resolution[1], sensorlib_parameters.resolution[0], 1)
@@ -816,9 +811,6 @@ class NRMDataBatch:
     """
     A batch that contains (B,) groups of context DataBatch(es).
     We also precompute RenderingBatch altogether to hide latency for data preprocessing.
-
-    Predict-only standalone never produces or consumes supervision data;
-    the NRE-side `supervision` / `supervision_rig` fields were dropped
 
     Contains
         - context: list of context images (A DataAndRenderingBatch)
@@ -854,9 +846,7 @@ class NRMDataBatch:
         return len(self.context)
 
     def to(self, device: torch.device, **kwargs) -> Self:
-        """Move all dataclass-aware fields to ``device``. Self-invented: NRE
-        relies on Lightning's auto batch transfer; the standalone predict loop
-        must move tensors explicitly."""
+        """Move all dataclass-aware fields to ``device``."""
 
         def _move_list(items, attr: str | None = None):
             if items is None:
@@ -888,10 +878,7 @@ class NRMDataBatch:
             # Do not re-compute if rendering data already exists.
             if data.rendering is not None:
                 continue
-            # Standalone predict only computes camera rendering data; lidar rendering was the
-            # `LidarFreePoseViewGeometry` path which the prune dropped (and `data.data.lidar`
-            # is None at this point in the standalone predict pipeline).
-            assert data.data.lidar is None, "Lidar rendering data is not supported in the standalone."
+            assert data.data.lidar is None, "Lidar rendering data is not supported."
             camera_rendering_data = (
                 CameraFreePoseViewGeometry.from_rig_trajectories(rig)
                 .to(device=device)

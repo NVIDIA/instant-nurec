@@ -15,23 +15,21 @@
 
 """HuggingFace placeholder mock.
 
-The standalone targets the (eventually-public) HF repo
-``nvidia/instant-nurec-kelvin`` for both the pickled Kelvin system
-(``kelvin_full.pt``) and an ncorev4 sample fixture (``ncorev4_sample/``).
-Until the corp publishes that repo we keep the production import surface
-identical to the real-HF path and stub the resolver in this module:
+Targets the (eventually-public) HF repo ``nvidia/instant-nurec-kelvin``
+for both the pickled Kelvin system (``kelvin_full.pt``) and an ncorev4
+sample fixture (``ncorev4_sample/``). Until that repo is published we
+keep the production import surface identical to the real-HF path and
+stub the resolver in this module:
 
 * ``snapshot_download(repo_id, ...)`` returns a local cache directory
-  populated with whatever the user has already produced (Phase 1 step 5
-  writes ``kelvin_full.pt`` via the ``INSTANT_NUREC_FULL_PT`` env var).
+  populated with whatever the user has already produced (write
+  ``kelvin_full.pt`` via the ``INSTANT_NUREC_FULL_PT`` env var).
 * ``hf_hub_download(repo_id, filename, ...)`` returns the absolute path
   to a single cached artifact.
 
 The mock is selected via the env var ``INSTANT_NUREC_HF_MOCK`` (default
 ``1``). Setting it to ``0`` forwards the call through to
 ``huggingface_hub`` proper if it's installed.
-
-``nre.utils.model_registry``).
 """
 
 from __future__ import annotations
@@ -73,8 +71,6 @@ def _cache_dir() -> Path:
 def _seed_cache_from_full_pt(cache_dir: Path) -> Path:
     """If ``INSTANT_NUREC_FULL_PT`` points at an existing file and the cache
     doesn't already have ``kelvin_full.pt``, copy it in. Returns the cache dir.
-
-    This bridges Phase 1 step 5 (the user's existing pickled system) to the
     """
     src = os.environ.get("INSTANT_NUREC_FULL_PT")
     if not src:
@@ -140,9 +136,8 @@ def hf_hub_download(
     if not file_path.exists():
         raise HFMockError(
             f"HF mock: file {filename!r} not found in {snapshot_root}. "
-            f"Phase 1 step 5 produces ``{_FULL_MODEL_FILENAME}`` via the "
-            f"``INSTANT_NUREC_FULL_PT`` env var; either run with that var set "
-            f"first or copy the file into the cache directory manually."
+            f"Set ``INSTANT_NUREC_FULL_PT`` to a local copy of "
+            f"``{_FULL_MODEL_FILENAME}`` or place it in the cache directory."
         )
     return str(file_path)
 

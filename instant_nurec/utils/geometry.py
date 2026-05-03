@@ -85,20 +85,11 @@ def se3_matrix_to_tquat(se3: torch.Tensor | np.ndarray, unbatch: bool = True) ->
 
 
 def se3pose_from_matrix(matrix: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-    """Pure-torch replacement for ``libs.geometry.kernels.pose.se3pose_from_matrix``.
+    """Decompose SE(3) matrices into translation + XYZW quaternion.
 
-    Mirrors ``libs/geometry/kernels/quaternion.slang::fromMatrix``: Shepperd's
-    method with strict-comparison case selection and ``s = 2*sqrt(1+...)``,
-    followed by ``normalizeSafe``. Computes internally in float64 to keep
-    the f32-rounded output as close to the slang f32 path as possible
-    (empirically ~0-3 ULP per component on GPU; see Phase A.1 diff harness
-    in ``scripts/diff_se3pose.py``).
-
-    Bit-exact match with slang is not achievable: torch and slang lower to
-    different SASS instruction sequences on CUDA, so the f32 results differ
-    by 1 ULP roughly half the time. The downstream consequence is a
-    ~5-30 vertex-count drift per chunk in the predict path, which is
-    absorbed by ``benchmark/validate_parity.py``'s vertex-count tolerance band.
+    Uses Shepperd's method with strict-comparison case selection and
+    ``s = 2*sqrt(1+...)``, followed by safe normalization. Computes
+    internally in float64 and rounds the result to f32.
 
     Args:
         matrix: (N, 4, 4) or (N, 16) SE(3) transformation matrices.

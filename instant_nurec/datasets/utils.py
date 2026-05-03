@@ -32,20 +32,11 @@ def compute_cuboid_df(
     sequence_loader: ncore.data.SequenceLoaderProtocol,
     time_range_us: HalfClosedInterval,
 ) -> pd.DataFrame:
-    """Extracts cuboid observations from the dataset in a given time range.
-
-    Predict-only standalone always uses `vars(observation)` directly; the
-    NRE-side `serialize_observation=True` path that produced JSON dicts via
-    `observation.to_dict()` was unused at predict time and significantly
-    slower The progress bar is also always disabled.
-    """
+    """Extracts cuboid observations from the dataset in a given time range."""
 
     cuboid_observations = sequence_loader.get_cuboid_track_observations(
         timestamp_interval_us=ncore_transformations.HalfClosedInterval(
             start=time_range_us.start,
-            # Note: ncore's HalfClosedInterval type correctly calls this non-exclusive boundary `stop`,
-            # whereas the notion within NRE's HalfClosedInterval with `end` (which is inconsistently used as
-            # inclusive / exclusive) is messy
             stop=time_range_us.end,
         ),
     )

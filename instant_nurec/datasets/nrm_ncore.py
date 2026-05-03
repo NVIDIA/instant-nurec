@@ -113,9 +113,7 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
 
     @dataclass(frozen=True)
     class ExtendedCameraId:
-        """Camera id with a unique sensor index. Predict-only standalone never
-        loads from external ncore archives, so the NRE-side `external_ncore_path`
-        / `sample_ratio` extras are gone"""
+        """Camera id with a unique sensor index."""
 
         camera_id: str
         unique_sensor_idx: int

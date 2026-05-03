@@ -34,17 +34,11 @@ def _compute_poses_and_timestamps_torch(
     frame_idx: torch.Tensor,
     timestamps_startend_us_allviews: torch.Tensor,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """Standalone-only torch replacement for
-    ``libs.sensors.kernels.pose_calib.compute_poses_and_timestamps``.
+    """Per-frame pose + timestamp indexing for the predict pipeline.
 
-    The standalone predict pipeline always pins ``enable_calib=False``,
-    ``rect_points_lb=None``, ``resolution=None``, ``embed_weights=None``,
-    so the slang kernel reduces to ``T_out = T_in[frame_idx]`` and
-    ``ts_out = ts_in[frame_idx]`` — pure indexing. The slang version still
-    rounds-trips the matrices through SE3 (4x4 → quat,t → 4x4) inside the
-    kernel; we skip that since the round-trip is a no-op modulo ULPs and
-    the resulting drift is absorbed by ``tests/tolerance.json``'s
-    ``_vertex_count_delta`` band.
+    Predict pins ``enable_calib=False``, ``rect_points_lb=None``,
+    ``resolution=None``, ``embed_weights=None``, which reduces the kernel
+    to ``T_out = T_in[frame_idx]`` and ``ts_out = ts_in[frame_idx]``.
 
     Args:
         T_sensor_world_startend_allviews: (V, 2, 4, 4) start/end SE(3) per view.
@@ -107,20 +101,14 @@ class SensorModelComputations:
         unique_frame_idx: int,
         unique_frame_idx_tensor: torch.Tensor,
     ) -> SensorModelComputations.PosesAndTimestampsStartendReturn:
-        """GPU rolling-shutter interpolation via the Slang kernel.
+        """GPU rolling-shutter pose + timestamp lookup.
 
-        Standalone predict requires CUDA tensors and pins
-        `FrameMeta.subsample = None`; the NRE-side compiled CPU fallback and
-        the per-pixel-rect `interpolate_rect_timestamps_cpu` path were
-        unreachable and dropped in Phase 1 step 4.3.
+        Predict requires CUDA tensors and pins ``FrameMeta.subsample=None``.
         """
         assert T_sensor_world_startend_allviews.is_cuda, (
-            "get_poses_and_timestamps_startend requires CUDA tensors in the standalone predict pipeline."
+            "get_poses_and_timestamps_startend requires CUDA tensors."
         )
 
-        # Phase A.5: torch replacement for the slang kernel. The standalone
-        # path pins enable_calib=False and rect_points_lb=None, reducing the
-        # kernel to per-sample matrix + timestamp indexing.
         T_sensor_world_startend_batch, timestamps_startend_us_batch = (
             _compute_poses_and_timestamps_torch(
                 T_sensor_world_startend_allviews,

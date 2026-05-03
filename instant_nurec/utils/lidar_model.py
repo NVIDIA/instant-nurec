@@ -22,13 +22,7 @@ import ncore.data.v4
 def get_lidar_model_parameters(
     lidar_sensor: ncore.data.LidarSensorProtocol,
 ) -> ncore.data.ConcreteLidarModelParametersUnion | None:
-    """Read lidar model parameters from a NCore V4 lidar sensor.
-
-    Predict-only standalone reads ncorev4 only; the NRE-side V3 native
-    sensor branch and the cwccw fallback (which fired only for V3
-    datasets generated before `nrs/ncore!363`) were dropped together
-    with the V3 sequence loader
-    """
+    """Read lidar model parameters from a NCore V4 lidar sensor."""
     assert isinstance(lidar_sensor, ncore.data.v4.SequenceLoaderV4.LidarSensor), (
         f"Unsupported lidar sensor type: {type(lidar_sensor)} -- expected NCore V4 LidarSensor"
     )

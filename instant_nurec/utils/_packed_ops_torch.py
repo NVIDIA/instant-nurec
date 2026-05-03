@@ -13,15 +13,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Pure-torch replacements for the two packed-array kernels still consumed by
-the predict path: ``linstep_interleave`` and ``packed_searchsorted_indexed_vals``.
+"""Two packed-array helpers consumed by the predict path:
+``linstep_interleave`` and ``packed_searchsorted_indexed_vals``.
 
-Reference: ``libs/packed_ops/packed_operations.cu`` —
-``kernel_arange_interleave`` (lines 21-58) and
-``kernel_packed_searchsorted_indexed`` (lines 1316-1337). NRE has no torch-only
-equivalent for these helpers (they're a custom packed-array surface invented
-for the rolling-shutter / cuboid-track pipelines), so the impls here are
-self-invented but follow the same per-pack semantics.
+The "pack" surface is a flat tensor partitioned by a (P, 2) packinfo
+tensor of ``(start_offset, count)`` rows. These helpers operate on the
+per-pack semantics without materialising the row-major segments.
 """
 
 from __future__ import annotations
@@ -48,11 +45,6 @@ def linstep_interleave(
 
     Returns:
         (N,) tensor with N = num_steps.sum() and dtype matching ``start``.
-
-    The bazel kernel also returned a per-element pack-index tensor when
-    called with ``return_idx=True``; the standalone never read that
-    output, so the parameter and the second return value were dropped
-    in the final dead-code pass.
     """
     num_packs = start.shape[0]
     if num_packs == 0:
@@ -88,8 +80,7 @@ def packed_searchsorted_indexed_vals(
     For each query ``i``, finds the smallest ``j`` in
     ``[pack_infos[vals_indices[i], 0], pack_infos[vals_indices[i], 0] + pack_infos[vals_indices[i], 1]]``
     such that ``bins[j] >= vals[i]``, and returns ``j`` (a global index into
-    the flat ``bins`` tensor). Matches
-    ``libs.packed_ops.interface.packed_ops.packed_searchsorted_indexed_vals``.
+    the flat ``bins`` tensor).
 
     Args:
         bins: (num_feats,) flat sorted-within-each-pack values (int or float).

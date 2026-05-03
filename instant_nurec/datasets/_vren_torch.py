@@ -13,24 +13,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Pure-torch replacements for two ``libs.vren.interface`` ray/point-cuboid
-intersection kernels used by ``CuboidTracks``.
+"""Ray/point-cuboid intersection helpers for ``CuboidTracks``.
 
-Replaces:
-* ``vren.ray_cuboidtracks_intersection`` (used by
+* ``ray_cuboidtracks_intersection`` (used by
   ``CuboidTracks.ray_intersection``) — per-(ray, track) ray-AABB slab
   intersection in the cuboid's local frame at the ray's timestamp.
-* ``vren.point_cuboidtracks_intersection_interpolate_pose`` (used by
+* ``point_cuboidtracks_intersection_interpolate_pose`` (used by
   ``CuboidTracks.point_intersection_interpolate_pose``) — per-(point, track)
   inside-cuboid test, returning the interpolated pose at the point's
   timestamp.
-
-Math is taken from the corresponding CUDA kernel in
-``libs/vren/intersection_timed.cu`` (lines 164-269 for ray; 536-619 for
-point). NRE has no torch-only equivalent — the predict path always called
-the bazel-built kernel.
-
-binary search, plus quat slerp / quat-rotate-vector helpers.
 """
 
 from __future__ import annotations
@@ -48,9 +39,9 @@ def _slab_aabb_intersection(
     """Per-ray slab method ray-AABB intersection in the cuboid's local frame.
 
     Returns ``(N, 2)`` ``(t_near, t_far)``. On a miss (``t_near > t_far``)
-    returns ``(-1, -1)`` to match ``libs/vren/intersection.cuh::ray_aabb_intersect``;
-    the caller's ``t_far > 0`` check then correctly classifies misses as
-    non-hits regardless of the unfiltered intermediate values.
+    returns ``(-1, -1)``; the caller's ``t_far > 0`` check then correctly
+    classifies misses as non-hits regardless of the unfiltered intermediate
+    values.
     """
     inv_d = 1.0 / torch.where(rays_d.abs() > 0, rays_d, rays_d.new_tensor(1e-30))
     t_lo = (-half_dims - rays_o) * inv_d

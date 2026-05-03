@@ -13,24 +13,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Pure-torch replacements for the slang-side camera projection kernels:
+"""Pure-torch camera projection kernels:
 
 * ``image_points_to_world_rays_shutter_pose`` — inverse projection +
   rolling-shutter pose interp
-* ``camera_rays_to_image_points`` — forward camera projection
-  (Phase A.7's third sub-kernel; consumed by
-  ``instant_nurec/_pkg/nrm/utils/cubemap.py``).
+* ``camera_rays_to_image_points`` — forward camera projection (consumed
+  by ``instant_nurec/utils/cubemap.py``).
 
-FTheta + NoExternalDistortion only for now (the standalone predict baseline
-uses ``camera_front_wide_120fov`` which is FTheta). Other camera models
+FTheta + NoExternalDistortion only for now (the predict baseline uses
+``camera_front_wide_120fov`` which is FTheta). Other camera models
 fall through to ``NotImplementedError`` until a dataset that needs them
 arrives.
-
-The math is taken from ncore's pure-python ``CameraModel`` /
-``FThetaCameraModel.image_points_to_world_rays_shutter_pose`` (NRE-side
-copy at ``/storage/projects/nre/external/ncore/impl/sensors/camera.py``,
-lines 1014-1112 for the rolling-shutter interp; 1347-1377 for the
-FTheta inverse-projection; 1379-1453 for the forward projection).
 """
 
 from __future__ import annotations
@@ -341,20 +334,18 @@ def image_points_to_world_rays_shutter_pose(
 
     Returns ``(world_rays (N, 6), timestamps_us (N,) or None, poses_t or
     None, poses_q or None)``. Camera ray gen is FTheta-only; ``return_poses``
-    is unused in the standalone and not implemented here.
+    is not implemented.
     """
     if not isinstance(projection, FThetaProjection):
         raise NotImplementedError(
-            f"Phase A.6 torch impl: only FThetaProjection supported, got "
-            f"{type(projection).__name__}"
+            f"only FThetaProjection supported, got {type(projection).__name__}"
         )
     if not isinstance(external_distortion, NoExternalDistortion):
         raise NotImplementedError(
-            f"Phase A.6 torch impl: only NoExternalDistortion supported, got "
-            f"{type(external_distortion).__name__}"
+            f"only NoExternalDistortion supported, got {type(external_distortion).__name__}"
         )
     if return_poses:
-        raise NotImplementedError("return_poses=True not used in standalone predict.")
+        raise NotImplementedError("return_poses=True not supported.")
 
     device = dynamic_pose.start_pose.translation.device
     dtype = torch.float32
