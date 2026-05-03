@@ -17,8 +17,8 @@ from typing import Any, List, Self, Sequence, Tuple, TypeAlias, TypeVar, Union, 
 
 import torch
 
-from libs.geometry.kernels.pose import se3pose_from_matrix
 from libs.sensors.kernels.cameras import image_points_to_world_rays_shutter_pose
+from instant_nurec._pkg.utils.geometry import se3pose_from_matrix
 from ncore.data import (
     ConcreteCameraModelParametersUnion,
     ConcreteLidarModelParametersUnion,
@@ -771,6 +771,7 @@ class CameraFreePoseViewGeometry(torch.nn.Module):
             }
 
         translations, rotations = se3pose_from_matrix(T_sensor_world_startend)
+
         poses_tquat_startend = torch.cat([translations, rotations], dim=1)
         poses_tquat_startend = poses_tquat_startend.unsqueeze(0)
 

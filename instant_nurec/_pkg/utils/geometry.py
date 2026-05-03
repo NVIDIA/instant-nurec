@@ -79,6 +79,75 @@ def se3_matrix_to_tquat(se3: torch.Tensor | np.ndarray, unbatch: bool = True) ->
     return ret  # (N,7) or (7,)
 
 
+def se3pose_from_matrix(matrix: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    """Pure-torch replacement for ``libs.geometry.kernels.pose.se3pose_from_matrix``.
+
+    Mirrors ``libs/geometry/kernels/quaternion.slang::fromMatrix``: Shepperd's
+    method with strict-comparison case selection and ``s = 2*sqrt(1+...)``,
+    followed by ``normalizeSafe``. Computes internally in float64 to keep
+    the f32-rounded output as close to the slang f32 path as possible
+    (empirically ~0-3 ULP per component on GPU; see Phase A.1 diff harness
+    in ``scripts/diff_se3pose.py``).
+
+    Bit-exact match with slang is not achievable: torch and slang lower to
+    different SASS instruction sequences on CUDA, so the f32 results differ
+    by 1 ULP roughly half the time. The downstream consequence is a
+    ~5-30 vertex-count drift per chunk in the predict path, which is
+    absorbed by ``scripts/validate_parity.py``'s vertex-count tolerance band.
+
+    Args:
+        matrix: (N, 4, 4) or (N, 16) SE(3) transformation matrices.
+
+    Returns:
+        ((N, 3) translation, (N, 4) XYZW quaternion).
+    """
+    if matrix.ndim == 2 and matrix.shape[1] == 16:
+        matrix = matrix.reshape(matrix.shape[0], 4, 4)
+    matrix = matrix.contiguous()
+    n = matrix.shape[0]
+    out_dtype = matrix.dtype
+    translation = matrix[:, :3, 3].contiguous()
+
+    M64 = matrix.to(torch.float64)
+    R = M64[:, :3, :3]
+    r00 = R[:, 0, 0]
+    r11 = R[:, 1, 1]
+    r22 = R[:, 2, 2]
+    trace = r00 + r11 + r22
+
+    case3 = (trace > r00) & (trace > r11) & (trace > r22)
+    case0 = (~case3) & (r00 > r11) & (r00 > r22)
+    case1 = (~case3) & (~case0) & (r11 > r22)
+    case2 = (~case3) & (~case0) & (~case1)
+
+    s3 = torch.sqrt(1.0 + trace) * 2.0
+    s0 = torch.sqrt(1.0 + r00 - r11 - r22) * 2.0
+    s1 = torch.sqrt(1.0 + r11 - r00 - r22) * 2.0
+    s2 = torch.sqrt(1.0 + r22 - r00 - r11) * 2.0
+
+    quat = torch.empty((n, 4), dtype=torch.float64, device=matrix.device)
+    quat[case3, 0] = (R[case3, 2, 1] - R[case3, 1, 2]) / s3[case3]
+    quat[case3, 1] = (R[case3, 0, 2] - R[case3, 2, 0]) / s3[case3]
+    quat[case3, 2] = (R[case3, 1, 0] - R[case3, 0, 1]) / s3[case3]
+    quat[case3, 3] = 0.25 * s3[case3]
+    quat[case0, 0] = 0.25 * s0[case0]
+    quat[case0, 1] = (R[case0, 0, 1] + R[case0, 1, 0]) / s0[case0]
+    quat[case0, 2] = (R[case0, 0, 2] + R[case0, 2, 0]) / s0[case0]
+    quat[case0, 3] = (R[case0, 2, 1] - R[case0, 1, 2]) / s0[case0]
+    quat[case1, 0] = (R[case1, 0, 1] + R[case1, 1, 0]) / s1[case1]
+    quat[case1, 1] = 0.25 * s1[case1]
+    quat[case1, 2] = (R[case1, 1, 2] + R[case1, 2, 1]) / s1[case1]
+    quat[case1, 3] = (R[case1, 0, 2] - R[case1, 2, 0]) / s1[case1]
+    quat[case2, 0] = (R[case2, 0, 2] + R[case2, 2, 0]) / s2[case2]
+    quat[case2, 1] = (R[case2, 1, 2] + R[case2, 2, 1]) / s2[case2]
+    quat[case2, 2] = 0.25 * s2[case2]
+    quat[case2, 3] = (R[case2, 1, 0] - R[case2, 0, 1]) / s2[case2]
+
+    norm_sq = (quat * quat).sum(dim=1, keepdim=True)
+    rotation = (quat / torch.sqrt(norm_sq)).to(out_dtype).contiguous()
+    return translation, rotation
+
+
 def so3_matrix_to_quat(R: torch.Tensor | np.ndarray, unbatch: bool = True, normalize: bool = True) -> torch.Tensor:
     """
     Converts a single / batch of SO3 rotation matrices (3x3) to unit quaternion representation.

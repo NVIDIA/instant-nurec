@@ -159,15 +159,38 @@ def test_compare_pair_identical_files_returns_no_errors(vp, tmp_path):
     a, b = tmp_path / "a.ply", tmp_path / "b.ply"
     _write_ply(a, n_vertex=3)
     _write_ply(b, n_vertex=3)
-    errors = vp._compare_pair(a, b, tol={}, default_tol=1e-3)
+    errors = vp._compare_pair(a, b, tol={}, default_tol=1e-3, vertex_count_delta=0)
     assert errors == []
+
+
+def test_compare_pair_vertex_count_within_tolerance_passes(vp, tmp_path):
+    """Phase A torch swaps may drift vertex count by ≤ ``vertex_count_delta``.
+
+    When counts differ but the absolute delta is within tolerance, the
+    per-property comparison is skipped (no canonical 1:1 mapping for
+    point clouds of different sizes) and the call returns no errors.
+    """
+    a, b = tmp_path / "a.ply", tmp_path / "b.ply"
+    _write_ply(a, n_vertex=10)
+    _write_ply(b, n_vertex=12)
+    errors = vp._compare_pair(a, b, tol={}, default_tol=1e-3, vertex_count_delta=5)
+    assert errors == []
+
+
+def test_compare_pair_vertex_count_beyond_tolerance_fails(vp, tmp_path):
+    a, b = tmp_path / "a.ply", tmp_path / "b.ply"
+    _write_ply(a, n_vertex=10)
+    _write_ply(b, n_vertex=20)
+    errors = vp._compare_pair(a, b, tol={}, default_tol=1e-3, vertex_count_delta=5)
+    assert len(errors) == 1
+    assert "delta=10 > tolerance=5" in errors[0]
 
 
 def test_compare_pair_vertex_count_mismatch_short_circuits(vp, tmp_path):
     a, b = tmp_path / "a.ply", tmp_path / "b.ply"
     _write_ply(a, n_vertex=3)
     _write_ply(b, n_vertex=4)
-    errors = vp._compare_pair(a, b, tol={}, default_tol=1e-3)
+    errors = vp._compare_pair(a, b, tol={}, default_tol=1e-3, vertex_count_delta=0)
     assert len(errors) == 1
     assert "vertex count mismatch" in errors[0]
 
@@ -179,7 +202,7 @@ def test_compare_pair_property_name_mismatch_short_circuits(vp, tmp_path):
     # b has only x,y,z
     arr = np.zeros(2, dtype=[("x", "f4"), ("y", "f4"), ("z", "f4")])
     PlyData([PlyElement.describe(arr, "vertex")]).write(str(b))
-    errors = vp._compare_pair(a, b, tol={}, default_tol=1e-3)
+    errors = vp._compare_pair(a, b, tol={}, default_tol=1e-3, vertex_count_delta=0)
     assert len(errors) == 1
     assert "property name mismatch" in errors[0]
 
@@ -191,7 +214,7 @@ def test_compare_pair_dtype_mismatch_records_error(vp, tmp_path):
     arr_b = np.zeros(1, dtype=[("p", "f8")])
     PlyData([PlyElement.describe(arr_a, "vertex")]).write(str(a))
     PlyData([PlyElement.describe(arr_b, "vertex")]).write(str(b))
-    errors = vp._compare_pair(a, b, tol={}, default_tol=1e-3)
+    errors = vp._compare_pair(a, b, tol={}, default_tol=1e-3, vertex_count_delta=0)
     assert len(errors) == 1
     assert "dtype mismatch" in errors[0]
 
@@ -200,7 +223,7 @@ def test_compare_pair_diff_above_tol_records_error(vp, tmp_path):
     a, b = tmp_path / "a.ply", tmp_path / "b.ply"
     _write_ply(a, n_vertex=3, perturb=0.0)
     _write_ply(b, n_vertex=3, perturb=0.5)  # x and y both shifted by 0.5
-    errors = vp._compare_pair(a, b, tol={}, default_tol=1e-3)
+    errors = vp._compare_pair(a, b, tol={}, default_tol=1e-3, vertex_count_delta=0)
     # 0.5 >> 1e-3 → diff exceeds tol on x and y
     assert len(errors) >= 1
     assert all("diff exceeds tolerance" in e for e in errors)
@@ -210,7 +233,7 @@ def test_compare_pair_diff_within_tol_passes(vp, tmp_path):
     a, b = tmp_path / "a.ply", tmp_path / "b.ply"
     _write_ply(a, n_vertex=3, perturb=0.0)
     _write_ply(b, n_vertex=3, perturb=1e-5)
-    errors = vp._compare_pair(a, b, tol={}, default_tol=1e-3)
+    errors = vp._compare_pair(a, b, tol={}, default_tol=1e-3, vertex_count_delta=0)
     assert errors == []
 
 
@@ -220,7 +243,7 @@ def test_compare_pair_per_property_tol_overrides_default(vp, tmp_path):
     _write_ply(a, n_vertex=3, perturb=0.0)
     _write_ply(b, n_vertex=3, perturb=0.05)  # diff ~ 0.05
     # x has loose tol → passes; default_tol tight → other props (y) fail
-    errors = vp._compare_pair(a, b, tol={"x": 1.0, "y": 1.0}, default_tol=1e-3)
+    errors = vp._compare_pair(a, b, tol={"x": 1.0, "y": 1.0}, default_tol=1e-3, vertex_count_delta=0)
     # All float props that drift by 0.05 now have generous tols.
     # y is also perturbed via the helper, so it also passes; opacity/z don't drift.
     # z is unperturbed (only x and y get +perturb in our helper) — verify by asserting
@@ -240,7 +263,7 @@ def test_cmd_merge_baseline_missing_returns_1(vp, tmp_path, capsys):
         baseline=tmp_path / "missing.ply",
         proposed=tmp_path / "exists.ply",
         tol_path=tmp_path / "tol.json",
-        default_tol=1e-3,
+        default_tol=1e-3, vertex_count_delta=0,
     )
     captured = capsys.readouterr()
     assert rc == 1
@@ -254,7 +277,7 @@ def test_cmd_merge_proposed_missing_returns_1(vp, tmp_path, capsys):
         baseline=base,
         proposed=tmp_path / "missing.ply",
         tol_path=tmp_path / "tol.json",
-        default_tol=1e-3,
+        default_tol=1e-3, vertex_count_delta=0,
     )
     captured = capsys.readouterr()
     assert rc == 1
@@ -269,7 +292,7 @@ def test_cmd_merge_identical_files_return_0(vp, tmp_path, capsys):
         baseline=a,
         proposed=b,
         tol_path=tmp_path / "tol.json",
-        default_tol=1e-3,
+        default_tol=1e-3, vertex_count_delta=0,
     )
     captured = capsys.readouterr()
     assert rc == 0
@@ -284,7 +307,7 @@ def test_cmd_merge_diff_returns_1_with_fail_messages(vp, tmp_path, capsys):
         baseline=a,
         proposed=b,
         tol_path=tmp_path / "tol.json",
-        default_tol=1e-3,
+        default_tol=1e-3, vertex_count_delta=0,
     )
     captured = capsys.readouterr()
     assert rc == 1
@@ -301,7 +324,7 @@ def test_cmd_no_merge_baseline_dir_missing_returns_1(vp, tmp_path, capsys):
         baseline_dir=tmp_path / "missing",
         proposed_dir=tmp_path,
         tol_path=tmp_path / "tol.json",
-        default_tol=1e-3,
+        default_tol=1e-3, vertex_count_delta=0,
     )
     captured = capsys.readouterr()
     assert rc == 1
@@ -313,7 +336,7 @@ def test_cmd_no_merge_proposed_dir_missing_returns_1(vp, tmp_path, capsys):
         baseline_dir=tmp_path,
         proposed_dir=tmp_path / "missing",
         tol_path=tmp_path / "tol.json",
-        default_tol=1e-3,
+        default_tol=1e-3, vertex_count_delta=0,
     )
     captured = capsys.readouterr()
     assert rc == 1
@@ -332,7 +355,7 @@ def test_cmd_no_merge_file_count_mismatch_returns_1(vp, tmp_path, capsys):
         baseline_dir=base,
         proposed_dir=prop,
         tol_path=tmp_path / "tol.json",
-        default_tol=1e-3,
+        default_tol=1e-3, vertex_count_delta=0,
     )
     captured = capsys.readouterr()
     assert rc == 1
@@ -348,7 +371,7 @@ def test_cmd_no_merge_empty_dirs_return_1(vp, tmp_path, capsys):
         baseline_dir=base,
         proposed_dir=prop,
         tol_path=tmp_path / "tol.json",
-        default_tol=1e-3,
+        default_tol=1e-3, vertex_count_delta=0,
     )
     captured = capsys.readouterr()
     assert rc == 1
@@ -368,7 +391,7 @@ def test_cmd_no_merge_two_pairs_pass(vp, tmp_path, capsys):
         baseline_dir=base,
         proposed_dir=prop,
         tol_path=tmp_path / "tol.json",
-        default_tol=1e-3,
+        default_tol=1e-3, vertex_count_delta=0,
     )
     captured = capsys.readouterr()
     assert rc == 0
@@ -386,7 +409,7 @@ def test_cmd_no_merge_per_pair_diff_records_error(vp, tmp_path, capsys):
         baseline_dir=base,
         proposed_dir=prop,
         tol_path=tmp_path / "tol.json",
-        default_tol=1e-3,
+        default_tol=1e-3, vertex_count_delta=0,
     )
     captured = capsys.readouterr()
     assert rc == 1
