@@ -126,9 +126,9 @@ internal/scripts/release/licenses/
 internal/workflows/cluster_toolbox/*/personal/
 configs/personal/
 
-# Ignore .lock files except top-level uv.lock
+# Ignore .lock files except top-level MODULE.bazel.lock (bazel) — uv.lock
+# was dropped in Phase D.1.d.
 *.lock
-!uv.lock
 !MODULE.bazel.lock
 
 # Stray shell/profile dotfiles that landed in the working dir
