@@ -148,30 +148,40 @@ Iterate until convergence (4.8): try removing one more file/function/import; par
 
 ---
 
-## Phase B — Drop bazel (PARTIAL — prep done, removal blocked on env)
+## Phase B — Drop bazel (DONE — `07c8b20`)
 
-**Status:** Phase A.8 already removed all `from libs.X` imports and the
-``libs/`` subtree. The remaining native-pip blockers — ``lietorch`` and
-``torchvision`` — were both replaced with pure-torch shims in
-``c144996`` and ``b33892f``:
-* ``instant_nurec/utils/_se3_torch.py`` — drop-in for ``lietorch.SE3`` /
-  ``lietorch.SO3`` (XYZW quaternion + translation, exp/log/slerp,
-  composition, point transform).
-* ``_RGBNormalize`` ``nn.Module`` (in-tree, ``persistent=False`` buffers)
-  replaces ``torchvision.transforms.Normalize``;
-  ``F.interpolate(antialias=True)`` replaces
+Phase A.8 removed ``libs/``. Phase B prep replaced the last two
+non-pip-installable native deps with pure-torch shims:
+* ``instant_nurec/utils/_se3_torch.py`` (``c144996``) — drop-in for
+  ``lietorch.SE3`` / ``lietorch.SO3``.
+* ``_RGBNormalize`` ``nn.Module`` + ``F.interpolate(antialias=True)``
+  (``b33892f``) — replaces ``torchvision.transforms.Normalize`` and
   ``torchvision.transforms.functional.resize``.
 
-After both replacements, the predict path imports zero native pip deps
-beyond ``torch`` itself.
+Final removal landed in ``07c8b20`` after a fresh ``.venv-b`` venv was
+brought up with ``pip install -e .`` + ``pip install torch
+--index-url https://download.pytorch.org/whl/cu126``. ``python
+run_inference.py`` runs end-to-end on GPU; both modes parity GREEN.
 
-**Blocked on environment:** ``python run_inference.py …`` requires a
-CUDA-enabled torch venv; the test ``.venv`` here is CPU-only and the
-NVIDIA-internal ``torch==2.11.0+cpu`` wheel doesn't have a matching
-public ``torchvision``-or-CUDA pair, so a fresh CUDA venv setup is
-needed before the bazel ``BUILD.bazel`` files can be safely deleted and
-``pip install -e .`` becomes the canonical install. That last step is
-deferred to a follow-up session that can stand up the CUDA venv.
+**Vertex-count drift via the public CUDA torch wheel:**
+```
+no_merge chunk0=1748398 (target 1748388, +10)
+no_merge chunk1=1428224 (target 1428209, +15)
+merge=2871691         (target 2871662, +29)
+```
+All within the 50-vertex tolerance band. Drift differs slightly from
+the bazel-runtime numbers because public-wheel torch defaults
+TF32/cuDNN differently than the bazel-internal build; the math is
+identical.
+
+**Bug fixed during bring-up:**
+``utils/sensors/_image_points_to_world_rays_torch.py:_ncore_ftheta_to_projection_and_resolution``
+is called from inside ``cubemap.unproject_to_sky_cubemap`` which is
+``@torch.compile``-decorated. Numpy → torch conversions inside that
+compiled frame tripped dynamo's ``___from_numpy`` guard machinery
+(``DispatchKeySet`` mismatch). Fix: convert numpy arrays to plain
+Python lists before ``torch.tensor(...)`` AND wrap the helper with
+``@torch._dynamo.disable`` so dynamo never tries to trace the conversion.
 
 ### B.1 — Verify pip-install runs without bazel
 
