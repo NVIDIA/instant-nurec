@@ -13,11 +13,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TypeAlias, Union, cast
+from typing import TypeAlias, Union
 
 import torch
 
-from ncore.data import ShutterType
 from ncore.sensors import (
     FThetaCameraModel,
     OpenCVFisheyeCameraModel,
@@ -100,10 +99,8 @@ class SensorModelComputations:
         T_sensor_world_startend_allviews: torch.Tensor,
         timestamps_startend_us_allviews: torch.Tensor,
         timestamps_startend_us_allviews_cpu: torch.Tensor,
-        sensor_models: torch.nn.ModuleDict,
         unique_frame_idx: int,
         unique_frame_idx_tensor: torch.Tensor,
-        unique_sensor_idx_str: str,
     ) -> SensorModelComputations.PosesAndTimestampsStartendReturn:
         """GPU rolling-shutter interpolation via the Slang kernel.
 
@@ -115,7 +112,6 @@ class SensorModelComputations:
         assert T_sensor_world_startend_allviews.is_cuda, (
             "get_poses_and_timestamps_startend requires CUDA tensors in the standalone predict pipeline."
         )
-        shutter_type = cast(ShutterType, sensor_models[unique_sensor_idx_str].shutter_type)
 
         # Phase A.5: torch replacement for the slang kernel. The standalone
         # path pins enable_calib=False and rect_points_lb=None, reducing the

@@ -141,16 +141,13 @@ def test_get_poses_and_timestamps_startend_returns_squeezed_tensors(stubbed_sens
     T_views = _CudaLike(torch.zeros(1, 2, 4, 4))
     ts_views = _CudaLike(torch.zeros(1, 2, dtype=torch.int64))
     ts_views_cpu = torch.zeros(1, 2)
-    sensor_models = _FakeModuleDict({"front": _FakeSensorModel(ShutterType.ROLLING)})
 
     out = smc.get_poses_and_timestamps_startend(
         T_sensor_world_startend_allviews=T_views,
         timestamps_startend_us_allviews=ts_views,
         timestamps_startend_us_allviews_cpu=ts_views_cpu,
-        sensor_models=sensor_models,
         unique_frame_idx=0,
         unique_frame_idx_tensor=torch.tensor([0]),
-        unique_sensor_idx_str="front",
     )
     assert out.T_sensor_world_startend.shape == (2, 4, 4)
     assert out.timestamps_startend_us.shape == (2,)
@@ -195,8 +192,6 @@ def test_get_poses_and_timestamps_startend_requires_cuda(stubbed_sensors):
             T_sensor_world_startend_allviews=cpu_tensor,
             timestamps_startend_us_allviews=torch.zeros(1, 2),
             timestamps_startend_us_allviews_cpu=torch.zeros(1, 2),
-            sensor_models=_FakeModuleDict({"front": _FakeSensorModel(ShutterType.ROLLING)}),
             unique_frame_idx=0,
             unique_frame_idx_tensor=torch.tensor([0]),
-            unique_sensor_idx_str="front",
         )
