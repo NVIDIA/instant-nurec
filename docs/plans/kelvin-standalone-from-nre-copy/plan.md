@@ -134,6 +134,7 @@ Commit: `feat(cli): add bazel-launched argparse entrypoint with --merge {none,fr
 Reference: `parsed.yaml` from `baselines/original_baseline/{merge,no_merge}/*/config/`. Anything not transitively touched by either run is a strip candidate.
 
 Sub-iterations (each its own commit; parity-checked after each):
+- **4.0** Drop all files of all types that are not needed by nrm and not within the current path.
 - **4.1** Drop everything not Kelvin: `nre/nrm/models/celsius*`, all non-Kelvin model code, non-Kelvin systems.
 - **4.2** Drop training/val/test paths: `train_step`, `validation_step`, callbacks not used by predict, `Trainer.fit/validate/test`, optimizer/scheduler config, EMA, AMP, distributed strategies (except single-GPU passthrough). The `Trainer.predict` shim is the only PL surface kept here — fully removed in 4.5.
 - **4.3** Drop output-irrelevant code: profiling (`torch.profiler`, perf hooks), W&B/TensorBoard, USDZ export, the entire video render path (`render_video.enabled=false` is hard-coded), `render_rig_trajectories_video`, anything whose deletion does not change the output PLY. Slang in `libs/slang_gaussians/` and `libs/losses/kernel/` is reachable only through training/loss paths (per exploration: `force_disable_cuda=True` in predict's loss base) — drop after their callers are gone.
