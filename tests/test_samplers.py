@@ -1,4 +1,4 @@
-"""Branch-coverage tests for ``instant_nurec.nrm.datasets.samplers``.
+"""Branch-coverage tests for ``instant_nurec.datasets.samplers``.
 
 The module imports from ``instant_nurec.utils.types`` which pulls in
 ``ncore.data``. We stub it via ``sys.modules``. Phase B replaced the
@@ -34,7 +34,7 @@ def _stub_compiled_imports(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setitem(sys.modules, "ncore.data", ncore_data_mod)
 
     # Force fresh import of samplers and types
-    sys.modules.pop("instant_nurec.nrm.datasets.samplers", None)
+    sys.modules.pop("instant_nurec.datasets.samplers", None)
     sys.modules.pop("instant_nurec.utils.types", None)
 
 
@@ -44,14 +44,14 @@ def _stub_compiled_imports(monkeypatch: pytest.MonkeyPatch):
 
 
 def test_get_closest_frame_index_exact_match_returns_that_index():
-    from instant_nurec.nrm.datasets.samplers import get_closest_frame_index
+    from instant_nurec.datasets.samplers import get_closest_frame_index
 
     ts = np.array([0, 100, 200, 300])
     assert get_closest_frame_index(ts, 200) == 2
 
 
 def test_get_closest_frame_index_picks_nearest_neighbor():
-    from instant_nurec.nrm.datasets.samplers import get_closest_frame_index
+    from instant_nurec.datasets.samplers import get_closest_frame_index
 
     ts = np.array([0, 100, 200, 300])
     assert get_closest_frame_index(ts, 110) == 1  # closer to 100 than 200
@@ -59,21 +59,21 @@ def test_get_closest_frame_index_picks_nearest_neighbor():
 
 
 def test_get_closest_frame_index_target_below_min():
-    from instant_nurec.nrm.datasets.samplers import get_closest_frame_index
+    from instant_nurec.datasets.samplers import get_closest_frame_index
 
     ts = np.array([100, 200, 300])
     assert get_closest_frame_index(ts, -50) == 0
 
 
 def test_get_closest_frame_index_target_above_max():
-    from instant_nurec.nrm.datasets.samplers import get_closest_frame_index
+    from instant_nurec.datasets.samplers import get_closest_frame_index
 
     ts = np.array([100, 200, 300])
     assert get_closest_frame_index(ts, 99999) == 2
 
 
 def test_get_closest_frame_index_returns_python_int():
-    from instant_nurec.nrm.datasets.samplers import get_closest_frame_index
+    from instant_nurec.datasets.samplers import get_closest_frame_index
 
     ts = np.array([0, 100], dtype=np.uint64)
     out = get_closest_frame_index(ts, 50)
@@ -87,7 +87,7 @@ def test_get_closest_frame_index_returns_python_int():
 
 def _make_sampler(**overrides):
     from instant_nurec.config_schema.dataset import AdaptiveSequentialFrameBatchSamplerConfig
-    from instant_nurec.nrm.datasets.samplers import AdaptiveSequentialFrameBatchSampler
+    from instant_nurec.datasets.samplers import AdaptiveSequentialFrameBatchSampler
 
     base = dict(
         n_frames_per_sample=4,
@@ -101,7 +101,7 @@ def _make_sampler(**overrides):
 
 def test_sampler_constructor_rejects_zero_frames_per_sample():
     from instant_nurec.config_schema.dataset import AdaptiveSequentialFrameBatchSamplerConfig
-    from instant_nurec.nrm.datasets.samplers import AdaptiveSequentialFrameBatchSampler
+    from instant_nurec.datasets.samplers import AdaptiveSequentialFrameBatchSampler
 
     cfg = AdaptiveSequentialFrameBatchSamplerConfig(
         n_frames_per_sample=0, n_samples_per_sequence=1, max_frame_gap_timestamp_us=1
@@ -112,7 +112,7 @@ def test_sampler_constructor_rejects_zero_frames_per_sample():
 
 def test_sampler_constructor_rejects_zero_samples_per_sequence():
     from instant_nurec.config_schema.dataset import AdaptiveSequentialFrameBatchSamplerConfig
-    from instant_nurec.nrm.datasets.samplers import AdaptiveSequentialFrameBatchSampler
+    from instant_nurec.datasets.samplers import AdaptiveSequentialFrameBatchSampler
 
     cfg = AdaptiveSequentialFrameBatchSamplerConfig(
         n_frames_per_sample=1, n_samples_per_sequence=0, max_frame_gap_timestamp_us=1
@@ -123,7 +123,7 @@ def test_sampler_constructor_rejects_zero_samples_per_sequence():
 
 def test_sampler_constructor_rejects_zero_max_frame_gap():
     from instant_nurec.config_schema.dataset import AdaptiveSequentialFrameBatchSamplerConfig
-    from instant_nurec.nrm.datasets.samplers import AdaptiveSequentialFrameBatchSampler
+    from instant_nurec.datasets.samplers import AdaptiveSequentialFrameBatchSampler
 
     cfg = AdaptiveSequentialFrameBatchSamplerConfig(
         n_frames_per_sample=1, n_samples_per_sequence=1, max_frame_gap_timestamp_us=0

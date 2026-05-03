@@ -11,7 +11,7 @@
 from torch.utils.data import DataLoader
 
 from instant_nurec.config_schema.nrm import NRMConfig
-from instant_nurec.nrm.datasets.nrm_ncore import NCoreNRMDataset
+from instant_nurec.datasets.nrm_ncore import NCoreNRMDataset
 from instant_nurec.utils.batch import NRMDataBatch
 
 

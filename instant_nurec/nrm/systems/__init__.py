@@ -66,7 +66,7 @@ def make(config: "NRMConfig", load_from_checkpoint: Optional[str] = None) -> Gau
         # Override the saved config-derived attributes with the new config: the
         # weight tensors are the only thing that needs to roundtrip via the .pt;
         # out_dir / run_id / merge flag / ncore path all change per invocation.
-        from instant_nurec.nrm.datasets.datamodule import NRMDataModule  # local to avoid bootstrap loops
+        from instant_nurec.datasets.datamodule import NRMDataModule  # local to avoid bootstrap loops
 
         loaded.out_dir = config.out_dir
         loaded.run_id = config.run_id

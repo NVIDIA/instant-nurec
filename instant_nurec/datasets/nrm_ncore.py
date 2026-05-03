@@ -29,8 +29,8 @@ import instant_nurec.utils.ncore_utils as ncore_utils
 from instant_nurec.datasets.tracks import CuboidTracks, CuboidTracksDataPack, TrackFlags
 from instant_nurec.datasets.utils import compute_cuboid_df, consolidate_cuboid_tracks
 from instant_nurec.config_schema.dataset import NCoreNRMDatasetConfig
-from instant_nurec.nrm.datasets.nrm_base import CameraSubsampler, NRMDataError
-from instant_nurec.nrm.datasets.samplers import (
+from instant_nurec.datasets.nrm_base import CameraSubsampler, NRMDataError
+from instant_nurec.datasets.samplers import (
     AdaptiveSequentialFrameBatchSampler,
     SampledSensorFrameIdxs,
 )
