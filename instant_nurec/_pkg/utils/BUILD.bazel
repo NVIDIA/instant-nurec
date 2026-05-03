@@ -153,8 +153,6 @@ py_library(
         pip_requirement("requests"),
         pip_requirement("tqdm"),
         pip_requirement("tinycudann"),
-        "//libs/vren:pylib",
-        "//libs/vren:pylib_cc",
     ],
 )
 

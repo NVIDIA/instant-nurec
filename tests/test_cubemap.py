@@ -26,31 +26,51 @@ sys.path.insert(0, str(REPO_ROOT))
 def _stub_compiled_imports(monkeypatch: pytest.MonkeyPatch):
     """Provide minimal sys.modules stubs so ``import nre.nrm.utils.cubemap``
     succeeds in the cpu-only test venv."""
-    # libs.vren.interface — only camera_rays_to_image_points is referenced
-    # at module load (as an import), and only used inside unproject_to_sky_cubemap
-    # which we don't call in this suite.
-    libs_mod = types.ModuleType("libs")
-    vren_mod = types.ModuleType("libs.vren")
-    vren_iface_mod = types.ModuleType("libs.vren.interface")
-    vren_iface_mod.camera_rays_to_image_points = lambda *args, **kwargs: None  # type: ignore[attr-defined]
-    monkeypatch.setitem(sys.modules, "libs", libs_mod)
-    monkeypatch.setitem(sys.modules, "libs.vren", vren_mod)
-    monkeypatch.setitem(sys.modules, "libs.vren.interface", vren_iface_mod)
+    # ncore.data + ncore.sensors are pulled by the in-tree torch
+    # camera_rays_to_image_points (via the sensors package __init__).
+    ncore_mod = types.ModuleType("ncore")
+    ncore_data_mod = types.ModuleType("ncore.data")
+
+    class _StubShutterType:
+        ROLLING_TOP_TO_BOTTOM = 1
+        GLOBAL = 5
+
+    ncore_data_mod.ShutterType = _StubShutterType
+    ncore_sensors_mod = types.ModuleType("ncore.sensors")
+
+    class _StubCamera:
+        pass
+
+    ncore_sensors_mod.FThetaCameraModel = _StubCamera
+    ncore_sensors_mod.OpenCVFisheyeCameraModel = _StubCamera
+    ncore_sensors_mod.OpenCVPinholeCameraModel = _StubCamera
 
     # ncore.impl.data.types — only the CameraModelParameters type is referenced
-    # for type hinting; a placeholder class is enough.
-    ncore_mod = types.ModuleType("ncore")
+    # for type hinting in cubemap.py; a placeholder class is enough.
     ncore_impl_mod = types.ModuleType("ncore.impl")
     ncore_impl_data_mod = types.ModuleType("ncore.impl.data")
     ncore_types_mod = types.ModuleType("ncore.impl.data.types")
     ncore_types_mod.CameraModelParameters = type("CameraModelParameters", (), {})  # type: ignore[attr-defined]
+    ncore_mod.data = ncore_data_mod
+    ncore_mod.sensors = ncore_sensors_mod
+    ncore_mod.impl = ncore_impl_mod
+
     monkeypatch.setitem(sys.modules, "ncore", ncore_mod)
+    monkeypatch.setitem(sys.modules, "ncore.data", ncore_data_mod)
+    monkeypatch.setitem(sys.modules, "ncore.sensors", ncore_sensors_mod)
     monkeypatch.setitem(sys.modules, "ncore.impl", ncore_impl_mod)
     monkeypatch.setitem(sys.modules, "ncore.impl.data", ncore_impl_data_mod)
     monkeypatch.setitem(sys.modules, "ncore.impl.data.types", ncore_types_mod)
 
     # Force a fresh import (drop any prior cached version).
-    sys.modules.pop("instant_nurec._pkg.nrm.utils.cubemap", None)
+    for name in (
+        "instant_nurec._pkg.nrm.utils.cubemap",
+        "instant_nurec._pkg.utils.sensors",
+        "instant_nurec._pkg.utils.sensors.sensors",
+        "instant_nurec._pkg.utils.sensors._kernel_types",
+        "instant_nurec._pkg.utils.sensors._image_points_to_world_rays_torch",
+    ):
+        sys.modules.pop(name, None)
 
 
 # ---------------------------------------------------------------------------
@@ -222,18 +242,18 @@ class _FakeCameraModelParameters:
 
 @pytest.fixture
 def _vren_with_fake_camera_rays(monkeypatch: pytest.MonkeyPatch):
-    """Replace the no-op ``camera_rays_to_image_points`` stub with one that
-    returns a ``_FakeImagePointsReturn`` for any input rays."""
-    import sys
+    """Patch ``camera_rays_to_image_points`` (after Phase A.7 it lives in
+    ``instant_nurec._pkg.utils.sensors._image_points_to_world_rays_torch``;
+    cubemap.py imports it by name)."""
 
     def fake_camera_rays_to_image_points(camera_params, rays):
         n = rays.shape[0]
-        # Mark the first half valid
         return _FakeImagePointsReturn(n_rays=n, n_valid=n // 2, image_w=16, image_h=16)
 
-    sys.modules["libs.vren.interface"].camera_rays_to_image_points = (  # type: ignore[attr-defined]
-        fake_camera_rays_to_image_points
-    )
+    import importlib
+
+    cubemap_mod = importlib.import_module("instant_nurec._pkg.nrm.utils.cubemap")
+    monkeypatch.setattr(cubemap_mod, "camera_rays_to_image_points", fake_camera_rays_to_image_points)
     yield
 
 
@@ -265,15 +285,15 @@ def test_unproject_to_sky_cubemap_returns_correct_shapes(_vren_with_fake_camera_
 def test_unproject_to_sky_cubemap_zero_valid_rays_yields_empty_mask(monkeypatch):
     """If camera_rays_to_image_points marks nothing valid, the output mask
     is all False and the feature is all zero."""
-    import sys
     import torch
 
     def fake_camera_rays_to_image_points(camera_params, rays):
         return _FakeImagePointsReturn(n_rays=rays.shape[0], n_valid=0, image_w=16, image_h=16)
 
-    sys.modules["libs.vren.interface"].camera_rays_to_image_points = (  # type: ignore[attr-defined]
-        fake_camera_rays_to_image_points
-    )
+    import importlib
+
+    cubemap_mod = importlib.import_module("instant_nurec._pkg.nrm.utils.cubemap")
+    monkeypatch.setattr(cubemap_mod, "camera_rays_to_image_points", fake_camera_rays_to_image_points)
 
     from instant_nurec._pkg.nrm.utils.cubemap import unproject_to_sky_cubemap
 

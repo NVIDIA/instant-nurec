@@ -12,8 +12,11 @@ import torch
 
 from einops import rearrange
 
-from libs.vren.interface import camera_rays_to_image_points
 from ncore.impl.data.types import CameraModelParameters
+
+from instant_nurec._pkg.utils.sensors._image_points_to_world_rays_torch import (
+    camera_rays_to_image_points,
+)
 
 
 def cubemap_ray_directions(size: int, device: torch.device) -> torch.Tensor:

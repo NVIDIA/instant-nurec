@@ -53,7 +53,6 @@ py_library(
     srcs = ["cubemap.py"],
     visibility = DEFAULT_VISIBILITY,
     deps = [
-        "//libs/vren:pylib",
         pip_requirement("torch"),
         pip_requirement("einops"),
         pip_requirement("nvidia-ncore"),

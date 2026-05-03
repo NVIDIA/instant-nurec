@@ -39,7 +39,6 @@ py_library(
         pip_requirement("universal-pathlib"),
         pip_requirement("s3fs"),
         pip_requirement("torch"),
-        "//libs/vren:pylib",
         "//instant_nurec/_pkg/datasets:pylib",
         "//instant_nurec/_pkg/datasets:pylib_tracks",
         "//instant_nurec/_pkg/nrm/config:pylib",

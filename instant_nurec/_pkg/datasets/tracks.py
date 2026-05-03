@@ -17,7 +17,10 @@ import lietorch as lt
 import numpy as np
 import torch
 
-from libs.vren.interface import vren  # type: ignore
+from instant_nurec._pkg.datasets._vren_torch import (
+    point_cuboidtracks_intersection_interpolate_pose as _point_cuboidtracks_intersection_interpolate_pose,
+    ray_cuboidtracks_intersection as _ray_cuboidtracks_intersection,
+)
 from instant_nurec._pkg.utils._packed_ops_torch import (
     packed_searchsorted_indexed_vals as _packed_searchsorted_indexed_vals,
 )
@@ -321,7 +324,7 @@ class CuboidTracks(Tracks):
         Returns:
         - RayIntersectionResult: result of the ray intersection
         """
-        intersection_result = vren.ray_cuboidtracks_intersection(
+        intersection_result = _ray_cuboidtracks_intersection(
             rays_o,
             rays_d,
             rays_timestamps_us,
@@ -362,14 +365,16 @@ class CuboidTracks(Tracks):
         points = points.reshape(-1, 3).contiguous()
         points_timestamps_us = points_timestamps_us.reshape(-1).contiguous()
 
-        interpolated_tracks_pose_data, interpolated_tracks_idx = vren.point_cuboidtracks_intersection_interpolate_pose(
-            points,
-            points_timestamps_us,
-            self.tracks_packinfo,
-            self.tracks_poses.data,
-            self.tracks_timestamps_us,
-            self.cuboids_dims + cuboids_dims_padding,
-            self.max_track_n_poses,
+        interpolated_tracks_pose_data, interpolated_tracks_idx = (
+            _point_cuboidtracks_intersection_interpolate_pose(
+                points,
+                points_timestamps_us,
+                self.tracks_packinfo,
+                self.tracks_poses.data,
+                self.tracks_timestamps_us,
+                self.cuboids_dims + cuboids_dims_padding,
+                self.max_track_n_poses,
+            )
         )
         interpolated_poses = lt.SE3(
             interpolated_tracks_pose_data.reshape(data_shape + (interpolated_tracks_pose_data.shape[-1],))

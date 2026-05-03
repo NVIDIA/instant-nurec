@@ -417,7 +417,7 @@ def test_ray_intersection_calls_vren_and_packs_result(stubbed_tracks, monkeypatc
             torch.zeros(3, max_per_ray, dtype=torch.int32),
         )
 
-    monkeypatch.setattr(mod.vren, "ray_cuboidtracks_intersection", _fake)
+    monkeypatch.setattr(mod, "_ray_cuboidtracks_intersection", _fake)
 
     rays_o = torch.zeros(3, 3)
     rays_d = torch.tensor([[1, 0, 0], [0, 1, 0], [0, 0, 1]], dtype=torch.float32)
@@ -454,7 +454,7 @@ def test_point_intersection_interpolate_pose_reshapes_and_rebuilds_se3(
         )
 
     monkeypatch.setattr(
-        mod.vren, "point_cuboidtracks_intersection_interpolate_pose", _fake
+        mod, "_point_cuboidtracks_intersection_interpolate_pose", _fake
     )
 
     # Multi-dim input: (2, 3, 3)

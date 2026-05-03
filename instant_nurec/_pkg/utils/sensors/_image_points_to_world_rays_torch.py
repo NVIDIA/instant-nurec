@@ -1,5 +1,10 @@
-"""Pure-torch replacement for
-``libs.sensors.kernels.cameras.image_points_to_world_rays_shutter_pose``.
+"""Pure-torch replacements for the slang-side camera projection kernels:
+
+* ``image_points_to_world_rays_shutter_pose`` — inverse projection +
+  rolling-shutter pose interp (Phase A.6).
+* ``camera_rays_to_image_points`` — forward camera projection
+  (Phase A.7's third sub-kernel; consumed by
+  ``instant_nurec/_pkg/nrm/utils/cubemap.py``).
 
 FTheta + NoExternalDistortion only for now (the standalone predict baseline
 uses ``camera_front_wide_120fov`` which is FTheta). Other camera models
@@ -9,8 +14,8 @@ arrives.
 The math is taken from ncore's pure-python ``CameraModel`` /
 ``FThetaCameraModel.image_points_to_world_rays_shutter_pose`` (NRE-side
 copy at ``/storage/projects/nre/external/ncore/impl/sensors/camera.py``,
-lines 1014-1112 for the rolling-shutter interp; lines 1347-1377 for the
-FTheta inverse-projection).
+lines 1014-1112 for the rolling-shutter interp; 1347-1377 for the
+FTheta inverse-projection; 1379-1453 for the forward projection).
 """
 
 from __future__ import annotations
@@ -183,6 +188,164 @@ def _quat_xyzw_to_rotmat(quat: torch.Tensor) -> torch.Tensor:
     R[..., 1, 2] = 2 * (y * z - x * w)
     R[..., 2, 2] = -x2 - y2 + z2 + w2
     return R
+
+
+def _numerically_stable_xy_norm(cam_rays: torch.Tensor) -> torch.Tensor:
+    """Numerically stable ||(x, y)|| per ray for forward FTheta projection.
+
+    Mirrors ``ncore.impl.sensors.camera.CameraModel._numerically_stable_xy_norm``.
+    """
+    xy_norms = torch.zeros_like(cam_rays[:, 0]).unsqueeze(1)
+    abs_pts = torch.abs(cam_rays[:, :2])
+    min_pts = torch.min(abs_pts, dim=1, keepdim=True).values
+    max_pts = torch.max(abs_pts, dim=1, keepdim=True).values
+    non_zero = max_pts > 0
+    min_max_ratio = min_pts[non_zero] / max_pts[non_zero]
+    xy_norms[non_zero, None] = max_pts[non_zero, None] * torch.sqrt(
+        1 + torch.pow(min_max_ratio[:, None], 2)
+    )
+    return xy_norms
+
+
+def _ncore_ftheta_to_projection_and_resolution(
+    ncore_params: object, device: torch.device, dtype: torch.dtype
+) -> tuple[FThetaProjection, tuple[int, int]]:
+    """Build a FThetaProjection + (width, height) from an ncore
+    ``FThetaCameraModelParameters``. Mirrors the relevant portion of
+    ``CameraModelConverter._convert_ftheta`` plus the FTheta initialisation
+    in ``ncore.impl.sensors.camera.FThetaCameraModel.__init__``.
+
+    Defaults match ncore's: ``newton_iterations=3``, ``min_2d_norm=1e-6``.
+    """
+    import numpy as np  # local import to avoid mandatory numpy dep if unused
+
+    # Polynomials (already (N,) torch tensors or numpy).
+    fw_poly_np = ncore_params.angle_to_pixeldist_poly
+    bw_poly_np = ncore_params.pixeldist_to_angle_poly
+
+    fw_poly = torch.as_tensor(fw_poly_np, device=device, dtype=dtype)
+    bw_poly = torch.as_tensor(bw_poly_np, device=device, dtype=dtype)
+
+    # Linear term A = [[c, d], [e, 1]], Ainv = (1/(c-e*d)) * [[1, -d], [-e, c]].
+    c, d_, e = ncore_params.linear_cde
+    A = torch.tensor([[c, d_], [e, 1.0]], device=device, dtype=dtype)
+    det = c - e * d_
+    Ainv = torch.tensor(
+        [[1.0, -d_], [-e, c]], device=device, dtype=dtype
+    ) / float(det)
+
+    # Polynomial derivatives (coefficient-of-power-i = i * c_i for i>=1).
+    fw_list = list(fw_poly_np)
+    bw_list = list(bw_poly_np)
+    dfw_poly = torch.tensor(
+        [i * c for i, c in enumerate(fw_list[1:], start=1)], device=device, dtype=dtype
+    )
+    dbw_poly = torch.tensor(
+        [i * c for i, c in enumerate(bw_list[1:], start=1)], device=device, dtype=dtype
+    )
+
+    # ncore convention: principal-point origin is at the centre of the first
+    # pixel; CameraModel uses top-left-corner origin → +0.5 px.
+    pp = (
+        torch.as_tensor(ncore_params.principal_point, device=device, dtype=dtype)
+        + 0.5
+    )
+
+    # reference_poly mapping.
+    poly_type_str = str(ncore_params.reference_poly)
+    if "ANGLE_TO_PIXELDIST" in poly_type_str:
+        reference_poly = FThetaPolynomialType.FORWARD
+    else:
+        reference_poly = FThetaPolynomialType.BACKWARD
+
+    projection = FThetaProjection(
+        principal_point=pp,
+        fw_poly=fw_poly,
+        bw_poly=bw_poly,
+        A=A,
+        Ainv=Ainv,
+        dfw_poly=dfw_poly,
+        dbw_poly=dbw_poly,
+        reference_poly=reference_poly,
+        max_angle=float(ncore_params.max_angle),
+        newton_iterations=3,
+        min_2d_norm=1e-6,
+    )
+    res_arr = np.asarray(ncore_params.resolution).astype(np.int64).flatten()
+    resolution = (int(res_arr[0]), int(res_arr[1]))
+    return projection, resolution
+
+
+def camera_rays_to_image_points(
+    camera_model_parameters: object,
+    cam_rays: torch.Tensor,
+) -> object:
+    """Forward FTheta camera projection: camera-frame rays → image points + valid mask.
+
+    Accepts an ncore ``FThetaCameraModelParameters`` (matching the libs API)
+    and returns an object with ``.image_points`` and ``.valid_flag``
+    attributes (matching ``ncore.sensors.CameraModel.ImagePointsReturn``).
+
+    Mirrors ``ncore.impl.sensors.camera.FThetaCameraModel._camera_rays_to_image_points_impl``.
+    """
+    cam_rays = cam_rays.to(dtype=torch.float32).contiguous()
+    device = cam_rays.device
+    dtype = cam_rays.dtype
+
+    if isinstance(camera_model_parameters, FThetaProjection):
+        projection = camera_model_parameters
+        resolution = None  # caller didn't pass resolution; skip image-bounds check
+    else:
+        projection, resolution = _ncore_ftheta_to_projection_and_resolution(
+            camera_model_parameters, device, dtype
+        )
+
+    ray_xy_norms = _numerically_stable_xy_norm(cam_rays)
+    eps = torch.finfo(torch.float32).eps
+    ray_xy_norms = torch.where(
+        ray_xy_norms <= 0.0,
+        torch.tensor(eps, device=device, dtype=dtype),
+        ray_xy_norms,
+    )
+
+    thetas_full = torch.atan2(ray_xy_norms[:, 0:1], cam_rays[:, 2:3])
+    max_angle = projection.max_angle
+    thetas = torch.clamp(thetas_full, max=max_angle)
+
+    fw_poly = projection.fw_poly.to(device=device, dtype=dtype)
+    bw_poly = projection.bw_poly.to(device=device, dtype=dtype)
+    dbw_poly = projection.dbw_poly.to(device=device, dtype=dtype)
+
+    if int(projection.reference_poly) == int(FThetaPolynomialType.BACKWARD):
+        deltas = _eval_poly_inverse_horner_newton(
+            bw_poly, dbw_poly, fw_poly, projection.newton_iterations, thetas
+        )
+    else:
+        deltas = _eval_poly_horner(fw_poly, thetas)
+
+    A = projection.A.to(device=device, dtype=dtype)
+    pp = projection.principal_point.to(device=device, dtype=dtype)
+    image_points = (
+        torch.einsum("ij,nj->ni", A, deltas / ray_xy_norms * cam_rays[:, :2])
+        + pp[None, :]
+    )
+
+    valid_thetas = thetas[:, 0] < max_angle
+    if resolution is not None:
+        width, height = resolution
+        valid_x = (image_points[:, 0] >= 0.0) & (image_points[:, 0] < width)
+        valid_y = (image_points[:, 1] >= 0.0) & (image_points[:, 1] < height)
+        valid = valid_x & valid_y & valid_thetas
+    else:
+        valid = valid_thetas
+
+    class _ImagePointsReturn:
+        pass
+
+    out = _ImagePointsReturn()
+    out.image_points = image_points
+    out.valid_flag = valid
+    return out
 
 
 def image_points_to_world_rays_shutter_pose(
