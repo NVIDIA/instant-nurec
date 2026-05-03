@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Direct-import unit tests for the helpers in scripts/validate_parity.py.
+"""Direct-import unit tests for the helpers in benchmark/validate_parity.py.
 
 The existing tests/test_validate_parity.py exercises the script via
 ``subprocess`` (the actual user-facing surface). This file covers the
@@ -37,11 +37,11 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 
 @pytest.fixture(scope="module")
 def vp():
-    """Direct import of scripts/validate_parity.py as a module so we can call
+    """Direct import of benchmark/validate_parity.py as a module so we can call
     its private helpers and verify them in coverage."""
     spec = importlib.util.spec_from_file_location(
         "validate_parity_module_under_test",
-        str(REPO_ROOT / "scripts" / "validate_parity.py"),
+        str(REPO_ROOT / "benchmark" / "validate_parity.py"),
     )
     assert spec is not None and spec.loader is not None
     mod = importlib.util.module_from_spec(spec)

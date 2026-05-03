@@ -104,11 +104,11 @@ python run_inference.py \
 Round-trip output against the reference baselines:
 
 ```bash
-python scripts/validate_parity.py merge \
+python benchmark/validate_parity.py merge \
     baselines/original_baseline/merge/*/ply/*/pai_*.ply \
     /tmp/out/merge/*/ply/*/*.ply
 
-python scripts/validate_parity.py no_merge \
+python benchmark/validate_parity.py no_merge \
     baselines/original_baseline/no_merge/*/ply/*/ \
     /tmp/out/no_merge/*/ply/*/
 ```

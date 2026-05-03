@@ -26,7 +26,7 @@ This follow-up plan delivers all four outcomes, parity-gated at every step.
 
 ## Hard rules (carried over from plan.md, restated)
 
-1. **Parity at every commit.** Run `scripts/validate_parity.py` against `baselines/original_baseline` after each step; commit only on green. Phase 2-style CUDA→torch swaps may ratchet `tests/tolerance.json` upwards (per-property), never downwards. Re-document any tolerance bump in the commit body.
+1. **Parity at every commit.** Run `benchmark/validate_parity.py` against `baselines/original_baseline` after each step; commit only on green. Phase 2-style CUDA→torch swaps may ratchet `tests/tolerance.json` upwards (per-property), never downwards. Re-document any tolerance bump in the commit body.
 2. **NRE@`a54a6af` is source-of-truth.** Before each kernel replacement, read both the bazel-built kernel's slang/cu/cc source under `libs/.../*.slang|*.cu|*.cc` AND its NRE counterpart at the same path under `/storage/projects/nre/`. Self-invented impls only when NRE has no equivalent (commit message: `(self-invented: <reason>)`).
 3. **TDD.** Write the equivalence test first, then the torch impl, then bazel run + parity. Full branch coverage on every new/modified function.
 4. **One commit per substep.** Descriptive messages.
@@ -55,7 +55,7 @@ Ordering: A.4 → A.7 → bundle(A.2+A.3+A.5+A.6) → A.1 → A.8 → A.9.
 - Per-quaternion ULP drift (vs slang on GPU): 0-3 ULP, mostly 0-1.
 - Bit-exact match impossible (different SASS sequences); per-vertex drift
   flips ~5-30 cull-boundary Gaussians. Resolved by adding a
-  ``_vertex_count_delta=50`` band to ``scripts/validate_parity.py``
+  ``_vertex_count_delta=50`` band to ``benchmark/validate_parity.py``
   (per user direction "plan2 > CLAUDE.md").
 - Tests: `tests/test_se3pose_torch.py` (12 branch-coverage tests, revived
   in `7a5d8dc`).
@@ -385,7 +385,7 @@ https://github.com/NVIDIA/asset-harvester:
 - `SECURITY.md` — corp standard security-disclosure policy. DONE.
 - `CONTRIBUTING.md` — short dev guide pointing at `setup.sh`, `pytest`, `ruff`, `validate_parity.py`. DONE — `dd8b5b3` (kept the project-specific NRM body rather than asset-harvester's generic one).
 - `data_samples/` — placeholder directory + README. DONE (the actual ≤50 MB ncorev4 fixture is deferred until the corp publishes `nvidia/instant-nurec-kelvin`; the HF mock at `instant_nurec/_hf_mock.py:get_sample_data_path` is already wired up to look for `ncorev4_sample/` here).
-- *(optional)* `benchmark/` — deliberately skipped. asset-harvester's benchmark is rendering-metrics-specific (DINOv3 / SAM 3D Body for Gaussian splat asset evaluation); the standalone's parity surface is already covered by `scripts/derive_determinism_tolerance.py` + `scripts/validate_parity.py`.
+- *(optional)* `benchmark/` — deliberately skipped. asset-harvester's benchmark is rendering-metrics-specific (DINOv3 / SAM 3D Body for Gaussian splat asset evaluation); the standalone's parity surface is already covered by `benchmark/derive_determinism_tolerance.py` + `benchmark/validate_parity.py`.
 
 A follow-up audit (commit pending) aligned the SPDX file headers across all 110 .py/.sh files to match asset-harvester (Apache-2.0, copyright year 2026), and switched `pyproject.toml`'s `[project].license` to `Apache-2.0`.
 
@@ -434,10 +434,10 @@ mkdir -p /tmp/nurec_iter/merge && \
   python run_inference.py --ncore-path /storage/data/nurec/ncorev4 --output-dir /tmp/nurec_iter/merge --merge frustum-ownership
 
 # Parity (sandboxed):
-python scripts/validate_parity.py merge \
+python benchmark/validate_parity.py merge \
   baselines/original_baseline/merge/oEvmtCL5U5aiZZrLcLgmBm/ply/pai_*/pai_*.ply \
   /tmp/nurec_iter/merge/*/ply/*/*.ply
-python scripts/validate_parity.py no_merge \
+python benchmark/validate_parity.py no_merge \
   baselines/original_baseline/no_merge/e78RJgNGViMA3hsJoQXYVx/ply/pai_*/ \
   /tmp/nurec_iter/no_merge/*/ply/*/
 

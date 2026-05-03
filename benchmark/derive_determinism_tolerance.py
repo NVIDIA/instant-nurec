@@ -21,12 +21,12 @@ of the same NRE script on the same input — any per-property diff between two o
 them is run-to-run noise of the *original* pipeline. We take the max of those
 diffs across all C(5,2)=10 pairs (per chunk index, per mode) and emit it as
 `tests/tolerance.json`. Subsequent commits on this branch must keep
-`scripts/validate_parity.py` green within these tolerances; only Phase 2 CUDA →
+`benchmark/validate_parity.py` green within these tolerances; only Phase 2 CUDA →
 torch swaps are allowed to ratchet a property's tolerance upwards.
 
 Idempotent. Run from the repo root:
 
-    .venv/bin/python scripts/derive_determinism_tolerance.py
+    .venv/bin/python benchmark/derive_determinism_tolerance.py
 
 Writes to `tests/tolerance.json`.
 """

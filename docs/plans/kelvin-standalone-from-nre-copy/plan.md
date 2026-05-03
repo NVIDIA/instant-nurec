@@ -49,7 +49,7 @@ When in doubt during porting, refer to NRE@`a54a6af`. Self-invented fixes only w
 
 ## Hard rules (apply to every step)
 
-1. **Parity at every step.** After each commit, run `scripts/validate_parity.py` against `baselines/original_baseline` (and `more_baselines/run_*` for the determinism tolerance band). If parity breaks, fix before moving on. Use the iteration loop in `CLAUDE.md` §4.1/4.2.
+1. **Parity at every step.** After each commit, run `benchmark/validate_parity.py` against `baselines/original_baseline` (and `more_baselines/run_*` for the determinism tolerance band). If parity breaks, fix before moving on. Use the iteration loop in `CLAUDE.md` §4.1/4.2.
 2. **CLAUDE.md §0:** before any implementation/fix, check NRE@`a54a6af` first.
 3. **CLAUDE.md §1–3:** TDD. Full branch coverage testing on every function, where possible. New code is added test-first.
 4. **One commit per (sub)step**, descriptive messages.
@@ -59,9 +59,9 @@ When in doubt during porting, refer to NRE@`a54a6af`. Self-invented fixes only w
 
 ## Phase 0 — Setup & parity tooling
 
-### Step 1 — `scripts/validate_parity.py`
+### Step 1 — `benchmark/validate_parity.py`
 
-Critical file: `scripts/validate_parity.py` (new).
+Critical file: `benchmark/validate_parity.py` (new).
 
 CLI:
 - `validate_parity.py merge <baseline_ply> <proposed_ply>` — single-file compare.
@@ -80,7 +80,7 @@ Pair files between dirs by sorted filename (stable mapping under both `chunk0/1.
 
 Tests in `tests/test_validate_parity.py` cover: identical files (pass), 1-LSB-perturbed property (fail at tolerance), missing file (fail at count), mismatched dtype (fail at schema), torch-CPU vs torch-CUDA path equivalence.
 
-Commit: `feat(parity): add scripts/validate_parity.py with torch-backed diff`.
+Commit: `feat(parity): add benchmark/validate_parity.py with torch-backed diff`.
 
 ### Step 1.7 — Self-test
 
@@ -300,11 +300,11 @@ mkdir -p /tmp/nurec_iter/merge && \
 
 Parity (sandboxed):
 ```
-python scripts/validate_parity.py merge \
+python benchmark/validate_parity.py merge \
   baselines/original_baseline/merge/oEvmtCL5U5aiZZrLcLgmBm/ply/pai_*/pai_*.ply \
   /tmp/nurec_iter/merge/*/ply/*/merged.ply
 
-python scripts/validate_parity.py no_merge \
+python benchmark/validate_parity.py no_merge \
   baselines/original_baseline/no_merge/e78RJgNGViMA3hsJoQXYVx/ply/pai_*/ \
   /tmp/nurec_iter/no_merge/*/ply/*/
 ```
@@ -321,7 +321,7 @@ Branch is shippable when: parity green for both modes, all tests green, ruff cle
 
 ## Critical files to create / heavily modify
 
-- `scripts/validate_parity.py` (new; torch-backed)
+- `benchmark/validate_parity.py` (new; torch-backed)
 - `tests/tolerance.json` (new; populated 1.8, may bump in 7.4)
 - `instant_nurec/cli.py`, `instant_nurec/model.py`, `instant_nurec/predict/*.py`, `instant_nurec/datasets/*.py`, `instant_nurec/primitives/*.py`, `instant_nurec/utils/*.py` (new package; ported and stripped from NRE)
 - `instant_nurec/BUILD.bazel` (Phase 1 only; deleted in Phase 3.1)

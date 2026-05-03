@@ -61,10 +61,10 @@ python run_inference.py --ncore-path /storage/data/nurec/ncorev4 --output-dir /t
 python run_inference.py --ncore-path /storage/data/nurec/ncorev4 --output-dir /tmp/parity/merge --merge frustum-ownership
 
 # sandboxed
-python scripts/validate_parity.py merge \
+python benchmark/validate_parity.py merge \
     baselines/original_baseline/merge/oEvmtCL5U5aiZZrLcLgmBm/ply/pai_*/pai_*.ply \
     /tmp/parity/merge/*/ply/*/*.ply
-python scripts/validate_parity.py no_merge \
+python benchmark/validate_parity.py no_merge \
     baselines/original_baseline/no_merge/e78RJgNGViMA3hsJoQXYVx/ply/pai_*/ \
     /tmp/parity/no_merge/*/ply/*/
 ```

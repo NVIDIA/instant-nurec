@@ -28,7 +28,7 @@ instant-nurec = "instant_nurec.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["instant_nurec*"]
-exclude = ["tests*", "baselines*", "internal*", "scripts*"]
+exclude = ["tests*", "baselines*", "internal*", "benchmark*"]
 
 [tool.ruff]
 target-version = "py311"
@@ -39,7 +39,7 @@ exclude = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["instant_nurec", "scripts", "ncore"]
+known-first-party = ["instant_nurec", "benchmark", "ncore"]
 default-section = "third-party"
 known-third-party = ["wandb"] # prevent local wandb folders to be treaded as different package - see https://github.com/astral-sh/ruff/issues/8571
 section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]

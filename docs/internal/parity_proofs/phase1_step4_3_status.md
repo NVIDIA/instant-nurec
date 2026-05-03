@@ -68,11 +68,11 @@ bazel run //instant_nurec:run -- --ncore-path /storage/data/nurec/ncorev4 \
 Sandboxed parity:
 
 ```
-.venv/bin/python scripts/validate_parity.py no_merge \
+.venv/bin/python benchmark/validate_parity.py no_merge \
   baselines/original_baseline/no_merge/e78RJgNGViMA3hsJoQXYVx/ply/pai_*/ \
   /tmp/nurec/no_merge/*/ply/*/
 
-.venv/bin/python scripts/validate_parity.py merge \
+.venv/bin/python benchmark/validate_parity.py merge \
   baselines/original_baseline/merge/oEvmtCL5U5aiZZrLcLgmBm/ply/pai_*/pai_*.ply \
   /tmp/nurec/merge/*/ply/*/pai_*.ply
 ```

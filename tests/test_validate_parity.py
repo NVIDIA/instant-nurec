@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Tests for scripts/validate_parity.py.
+"""Tests for benchmark/validate_parity.py.
 
 The parity tool is the contract that gates every commit on this branch, so the
 suite verifies branch coverage of every code path: identical files, count
@@ -35,7 +35,7 @@ from plyfile import PlyData, PlyElement
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-SCRIPT = REPO_ROOT / "scripts" / "validate_parity.py"
+SCRIPT = REPO_ROOT / "benchmark" / "validate_parity.py"
 
 BASELINE_SCHEMA: list[tuple[str, str]] = [
     ("x", "f4"), ("y", "f4"), ("z", "f4"),

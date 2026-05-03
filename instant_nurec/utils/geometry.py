@@ -98,7 +98,7 @@ def se3pose_from_matrix(matrix: torch.Tensor) -> tuple[torch.Tensor, torch.Tenso
     different SASS instruction sequences on CUDA, so the f32 results differ
     by 1 ULP roughly half the time. The downstream consequence is a
     ~5-30 vertex-count drift per chunk in the predict path, which is
-    absorbed by ``scripts/validate_parity.py``'s vertex-count tolerance band.
+    absorbed by ``benchmark/validate_parity.py``'s vertex-count tolerance band.
 
     Args:
         matrix: (N, 4, 4) or (N, 16) SE(3) transformation matrices.
