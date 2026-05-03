@@ -60,7 +60,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     # Lazy imports keep argparse-only invocations (e.g. --help) cheap.
     from instant_nurec.config import load_predict_config
-    from instant_nurec.nrm.run import run_predict
+    from instant_nurec.predict.run import run_predict
 
     config = load_predict_config(
         ncore_path=args.ncore_path,
