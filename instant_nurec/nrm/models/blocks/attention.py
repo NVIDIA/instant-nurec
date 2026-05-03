@@ -23,7 +23,7 @@ import torch.nn as nn
 
 from einops import rearrange
 
-from instant_nurec.models.nn_extensions import module_call_type
+from instant_nurec.utils.nn_extensions import module_call_type
 from instant_nurec.nrm.models.blocks.embeds import RotaryPositionEmbed2D
 from instant_nurec.nrm.models.blocks.layers import FeedForwardMLP, LayerScale
 

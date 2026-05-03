@@ -18,7 +18,7 @@ from instant_nurec.nrm.models.kelvin_backbone.encoders import KelvinDAv3Encoder
 from instant_nurec.nrm.models.kelvin_backbone.sky import CubemapDecoderSky
 from instant_nurec.nrm.models.post_processing import PerCameraAffinePostProcessing
 from instant_nurec.primitives.kelvin_primitive import KelvinNRMPrimitive
-from instant_nurec.nrm.utils.motion import TimeRemapping
+from instant_nurec.utils.motion import TimeRemapping
 from instant_nurec.utils.batch import DataAndRenderingBatch
 from instant_nurec.utils.misc import unpack_optional
 from instant_nurec.utils.types import RayFlags

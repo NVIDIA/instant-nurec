@@ -38,7 +38,7 @@ from instant_nurec.primitives.kelvin_primitive import (
     KelvinSemanticClass,
     KelvinStaticLayer,
 )
-from instant_nurec.nrm.utils.motion import TimeRemapping, warp_points_with_cuboid_tracks
+from instant_nurec.utils.motion import TimeRemapping, warp_points_with_cuboid_tracks
 from instant_nurec.utils.batch import DataAndRenderingBatch
 from instant_nurec.utils.misc import unpack_optional
 

@@ -21,8 +21,8 @@ from ncore.data import ConcreteCameraModelParametersUnion  # type: ignore
 from ncore.sensors import CameraModel  # type: ignore
 from instant_nurec.config_schema.predict import PrimitiveMergeConfig
 from instant_nurec.primitives.kelvin_primitive import KelvinDynamicLayer, KelvinNRMPrimitive, KelvinStaticLayer
-from instant_nurec.nrm.utils.cubemap import unproject_to_sky_cubemap
-from instant_nurec.nrm.utils.trajectory import merge_rig_trajectories, transform_rig_trajectories
+from instant_nurec.utils.cubemap import unproject_to_sky_cubemap
+from instant_nurec.utils.trajectory import merge_rig_trajectories, transform_rig_trajectories
 from instant_nurec.utils.batch import CameraFreePoseViewGeometry, DataAndRenderingBatch, DataBatch, NRMDataBatch, RenderingBatch
 from instant_nurec.utils.geometry import se3_matrix_inverse, tquat_to_se3_matrix
 from instant_nurec.utils.misc import list_of_dicts_to_singleton_dict, unpack_optional

@@ -31,7 +31,7 @@ from instant_nurec.nrm.models.kelvin_backbone.base import (
     KelvinLatent,
     KelvinMultiscaleFeaturesLatent,
 )
-from instant_nurec.nrm.utils.sensor import to_simple_pinhole_model_parameters
+from instant_nurec.utils.sensor import to_simple_pinhole_model_parameters
 from instant_nurec.utils.batch import DataAndRenderingBatch
 from instant_nurec.utils.geometry import tquat_to_se3_matrix
 from instant_nurec.utils.misc import unpack_optional
