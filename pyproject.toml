@@ -19,7 +19,6 @@ dependencies = [
     "scipy",
     "shortuuid",
     "torch",
-    "torchvision",
     "tqdm",
     "universal-pathlib",
     "zarr",
