@@ -54,8 +54,6 @@ py_library(
     deps = [
         ":pylib_geometry",
         ":pylib_misc",
-        "//libs/geometry/kernels:pylib",
-        "//libs/sensors:pylib_slang",
         "//instant_nurec/_pkg/utils/sensors:pylib",
         "//instant_nurec/_pkg/utils/sensors:pylib_ncore_sensors_converters",
         pip_requirement("numpy"),
