@@ -47,37 +47,39 @@ Each substep: equivalence test → torch impl → equivalence test green → baz
 
 Ordering: A.4 → A.7 → bundle(A.2+A.3+A.5+A.6) → A.1 → A.8 → A.9.
 
-### A.1 — `se3pose_from_matrix` → reuse existing `se3_matrix_to_tquat` (DEFERRED)
+### A.1 — `se3pose_from_matrix` → torch (DONE — `fc23075`)
 
-- **Status:** deferred until after A.6 lands. A faithful slang-equivalent torch
-  impl (strict-comparison Shepperd, slang's ``s = 2*sqrt(1+...)`` formula,
-  ``normalizeSafe``) still produces ~1-ULP drift relative to the bazel-built
-  kernel on GPU. The drift propagates through the still-slang
-  ``image_points_to_world_rays_shutter_pose`` (A.6) into a non-deterministic
-  Gaussian cull boundary, breaking the exact vertex-count contract
-  (1748388 → 1748396 chunk0; 1428209 → 1428215 chunk1; 2871662 → 2871628 merge).
-- **Call site:** `instant_nurec/_pkg/utils/batch.py:20` (import), `:773-774` (call returning `(translations, rotations)`).
-- **Resume condition:** once A.5+A.6 land a torch ray-gen, the FP precision of the entire pose → ray chain is controlled in Python and the kernel can be replaced. The bit-identity-with-slang requirement disappears.
-- **Replacement (deferred):** new function `instant_nurec/_pkg/utils/geometry.py:se3pose_from_matrix` mirroring `libs/geometry/kernels/quaternion.slang::fromMatrix` exactly (strict-cmp Shepperd + slang's `s = 2*sqrt(1+...)` formula + slang's `normalizeSafe`).
-- **Test:** `tests/test_se3pose_torch.py` — equivalence on identity, translation-only, rotation-only, random SE(3) batches; check `(out_torch - out_kernel).abs().max() ≤ 1e-6`.
-- **Parity risk:** ~1-ULP per-component until A.6 absorbs the drift.
-- **Commit (deferred):** `feat(geometry): replace libs.geometry.kernels.pose.se3pose_from_matrix with torch helper (Phase A.1)`.
+- **Outcome:** f64-internal Shepperd's method in
+  ``instant_nurec/_pkg/utils/geometry.py:se3pose_from_matrix``;
+  ``batch.py`` switched to import the torch helper.
+- Per-quaternion ULP drift (vs slang on GPU): 0-3 ULP, mostly 0-1.
+- Bit-exact match impossible (different SASS sequences); per-vertex drift
+  flips ~5-30 cull-boundary Gaussians. Resolved by adding a
+  ``_vertex_count_delta=50`` band to ``scripts/validate_parity.py``
+  (per user direction "plan2 > CLAUDE.md").
+- Tests: `tests/test_se3pose_torch.py` (12 branch-coverage tests, revived
+  in `7a5d8dc`).
 
-### A.2 — `libs.sensors.kernels.cameras.parameters.*` → in-tree dataclasses
+### A.2 + A.3 + A.6 bundle — `cameras.parameters` + `common.{Pose,DynamicPose}` + `image_points_to_world_rays_shutter_pose` → torch (DONE — `037ed34`)
 
-- **Call site:** `instant_nurec/_pkg/utils/sensors/ncore_sensors_converters.py:22-32` (imports), `:79-96` (instantiation in `_convert_*` methods).
-- **Replacement:** `instant_nurec/_pkg/utils/sensors/_kernel_types.py` (new file). Reproduce each as `@dataclass(slots=True, frozen=True)` containers (or pydantic if validation needed). All are pure value structs — no math.
-- **Test:** `tests/test_kernel_types.py` — round-trip through `from_components` factory; field-name parity against the bazel-built names.
-- **Parity risk:** none (no math).
-- **Commit:** `feat(sensors): replace libs.sensors.kernels.cameras.parameters with in-tree dataclasses (Phase A.2)`.
-
-### A.3 — `libs.sensors.kernels.common.{Pose, DynamicPose}` → in-tree dataclasses
-
-- **Call site:** `ncore_sensors_converters.py:34`, used as `DynamicPose(start_pose=Pose(translation=..., rotation=...), end_pose=...)` in `batch.py:785-787`.
-- **Replacement:** add `Pose`/`DynamicPose` dataclasses to `instant_nurec/_pkg/utils/sensors/_kernel_types.py`.
-- **Test:** equivalence on construction + attribute access.
-- **Parity risk:** none.
-- **Commit:** `feat(sensors): replace libs.sensors.kernels.common.{Pose,DynamicPose} with in-tree dataclasses (Phase A.3)`.
+- **Bundle rationale:** the slang ``image_points_to_world_rays_shutter_pose``
+  binding does ``isinstance(projection, OpenCVPinholeProjection)`` etc.
+  on the A.2 classes, so swapping any of A.2/A.3/A.6 alone breaks the
+  binding. They had to land together.
+- **A.2 + A.3:** ``instant_nurec/_pkg/utils/sensors/_kernel_types.py`` with
+  ``OpenCVPinholeProjection`` / ``OpenCVFisheyeProjection`` / ``FThetaProjection``
+  / ``BivariateWindshieldDistortion`` / ``Pose`` / ``DynamicPose`` /
+  ``ShutterType`` / ``FThetaPolynomialType`` / ``ReferencePolynomial``.
+  Same field names as the libs version (the converter still works);
+  unpacked rather than packed-intrinsics-tensor (torch path reads fields
+  directly).
+- **A.6:** ``instant_nurec/_pkg/utils/sensors/_image_points_to_world_rays_torch.py``.
+  FTheta + NoExternalDistortion only. Math taken from
+  ncore@a54a6af's pure-python ``FThetaCameraModel.image_points_to_world_rays_shutter_pose``
+  (ncore/impl/sensors/camera.py:1014-1112 + 1347-1377).
+- **Drift on this bundle alone:** chunk0 +5, chunk1 -4 (better than A.1
+  alone — torch rolling-shutter matches ncore's reference more closely
+  than the slang kernel).
 
 ### A.4 — `linstep_interleave` + `packed_searchsorted_indexed_vals` → torch (DONE — `2b48686`)
 
@@ -92,36 +94,35 @@ Ordering: A.4 → A.7 → bundle(A.2+A.3+A.5+A.6) → A.1 → A.8 → A.9.
 - **Parity risk:** very low (pure index math).
 - **Commits:** one per replacement.
 
-### A.5 — `compute_poses_and_timestamps` → torch rolling-shutter interp
+### A.5 — `compute_poses_and_timestamps` → torch (DONE — `6b32da4`)
 
-- **Call site:** `instant_nurec/_pkg/utils/sensors/sensors.py:20` (import), `:79-88` (call).
-- **Reference:** read NRE@`a54a6af`/libs/sensors/kernels/pose_calib.slang for the math + the docstring on `sensors.py:67-73` ("rolling-shutter interpolation via the Slang kernel").
-- **Replacement:** torch SE(3) linear pose interpolation between `T_sensor_world_startend[:, 0]` and `T_sensor_world_startend[:, 1]` per-frame, parameterized by the row-time normalized to `[0, 1]` from the rolling-shutter timing model. The standalone always pins `subsample_rect_points_lb=None`, `subsample_resolution=None`, `embed_weights=None`, `enable_calib=False`, so only the bare interp path needs implementing.
-- **Test:** `tests/test_pose_calib_torch.py` — equivalence on synthetic SE(3) batches against the bazel kernel; check translation diff ≤ `1e-5`, rotation diff ≤ `1e-5` rad.
-- **Parity risk:** medium. Per-property tolerance for `x,y,z,rot_*` may need to bump from current values; document the band measured in the equivalence test in the commit body.
-- **Commit:** `feat(sensors): replace libs.sensors.kernels.pose_calib.compute_poses_and_timestamps with torch impl (Phase A.5)`.
+- **Outcome:** since the standalone always pins ``enable_calib=False`` and
+  ``rect_points_lb=None``, the slang kernel reduces to per-sample
+  ``T_in[frame_idx]`` + ``ts_in[frame_idx]`` indexing. The torch helper
+  ``_compute_poses_and_timestamps_torch`` lives next to the call site in
+  ``sensors.py``; no rolling-shutter spatial interpolation, no calibration
+  delta, no SE3 round-trip.
+- Drift attributable to A.5 alone: chunk1 -4 vs the kernel's -5, merge -30 vs -25.
 
-### A.6 — `image_points_to_world_rays_shutter_pose` → torch
+### A.7 — `libs.vren.interface.*` → torch (DONE — `efa4cc9`)
 
-- **Call site:** `instant_nurec/_pkg/utils/batch.py:21` (import), `:779-792` (call).
-- **Reference:** NRE@`a54a6af`/libs/sensors/kernels/cameras/*.slang for the per-camera-model projection + shutter-aware ray gen.
-- **Replacement:** pure-torch path consuming the A.2/A.3 dataclasses. For each camera-model branch (OpenCVPinhole / OpenCVFisheye / FTheta), implement the inverse-projection (image-point → camera-frame ray) using torch tensor ops; combine with `DynamicPose`-interpolated rotation/translation (from A.5) to produce world-frame rays + timestamps. `image_points=None` is the only case the standalone hits — that's "all pixels" shorthand.
-- **Test:** `tests/test_image_points_to_world_rays_shutter_pose_torch.py` — equivalence against bazel kernel for each camera model on a synthetic image; check ray-direction dot-product ≥ `1 - 1e-5`.
-- **Parity risk:** medium-high. This is the most numerically sensitive kernel; tolerance bump likely.
-- **Commit:** `feat(sensors): replace image_points_to_world_rays_shutter_pose with torch impl (Phase A.6)`.
-
-### A.7 — `libs.vren.interface.*` → torch
-
-- **Call sites:**
-  - `instant_nurec/_pkg/datasets/tracks.py:20-21` (imports), `:322` (`ray_cuboidtracks_intersection`), `:363` (`point_cuboidtracks_intersection_interpolate_pose`).
-  - `instant_nurec/_pkg/nrm/utils/cubemap.py:15` (import), `:66` (`camera_rays_to_image_points`).
-- **Replacement:**
-  - `ray_cuboidtracks_intersection(rays_o, rays_d, ts_us, packinfo, poses_data, ts_us, dims, max_n, max_per_ray, with_ts)`: slab-method AABB intersection per (ray × cuboid × keyframe) over the packed cuboid-tracks tensor. Pure-torch broadcasting + top-k. Memory-aware chunking for the (rays × cuboids) outer product when needed.
-  - `point_cuboidtracks_intersection_interpolate_pose(points, ts_us, packinfo, poses_data, ts_us, dims, max_n)`: per-point inside-cuboid test + linear-interp pose at the point's timestamp. Pure-torch.
-  - `camera_rays_to_image_points(rays_o, rays_d, projection)`: forward camera projection (inverse of A.6's per-pixel ray gen). Pure-torch.
-- **Test:** `tests/test_vren_torch.py` — equivalence against bazel kernel on synthetic cuboid-track / ray batches; tolerate `1e-4` for projection, exact for intersection counts.
-- **Parity risk:** highest of the kernels. Tolerance bump probable on multiple PLY properties.
-- **Commits:** one per function (3 commits).
+- **Outcome:** three sub-kernels ported to pure torch:
+  - ``ray_cuboidtracks_intersection`` + ``point_cuboidtracks_intersection_interpolate_pose``
+    in ``instant_nurec/_pkg/datasets/_vren_torch.py``. Slab-method AABB
+    intersection in cuboid local frame at the ray/point timestamp.
+  - ``camera_rays_to_image_points`` (forward FTheta projection) added to
+    ``_image_points_to_world_rays_torch.py``. Accepts ncore
+    ``FThetaCameraModelParameters`` directly to keep the cubemap call site
+    minimal.
+- **Critical bug found during bring-up:** the slang ``ray_aabb_intersect``
+  returns ``(-1, -1)`` on miss (``t1 > t2``), and the caller checks
+  ``t1t2.y > 0``. My initial torch slab impl returned ``(t_near, t_far)``
+  unfiltered; when ``t_far > 0`` but ``t_near > t_far`` (a true miss),
+  this produced a false-positive hit. Downstream ``decoders.py:382``
+  requires ``intersections_cnt == 1`` to mark a Gaussian as movable, so
+  every false-positive multi-track hit dropped a movable Gaussian
+  (-107k chunk0 regression). Fixed by clamping ``(t_near, t_far)`` to
+  ``(-1, -1)`` on miss to match the kernel.
 
 ### A.8 — Drop libs/ subtree
 
