@@ -567,7 +567,7 @@ class NCoreNRMDataset(torch.utils.data.Dataset[NRMDataBatch]):
         lidar_frame_timestamps_us: dict[str, torch.Tensor] = {}
         all_lidar_model_parameters: dict[str, ncore.data.ConcreteLidarModelParametersUnion | None] = {}
         lidar_idx_mapping: dict[NCoreNRMDataset.UniqueFrameId, int] = {}
-        frame_batch_lidar_ids = [l for l in self.lidar_ids if l in frame_batch.keys()]
+        frame_batch_lidar_ids = [lid for lid in self.lidar_ids if lid in frame_batch.keys()]
 
         current_unique_frame_idx = 0
         for lidar_id in frame_batch_lidar_ids:

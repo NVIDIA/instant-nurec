@@ -245,7 +245,7 @@ class AuxShardDataLoader:
 
                 return depth
 
-            except:
+            except Exception:
                 continue
 
         raise KeyError(f"depth not found for {camera_id} and timestamp {frame_timestamps_us}")
