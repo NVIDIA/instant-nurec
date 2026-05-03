@@ -35,7 +35,7 @@ from instant_nurec.utils.types import CuboidTracksData, CuboidTracksDataPack, Tr
 class Tracks:
     """Manages time-dependent poses and related interpolation / intersection GPU operations for tracks
 
-    This class uses the :class:`nre.utils.types.TracksData` class for storing data.
+    This class uses the :class:`instant_nurec.utils.types.TracksData` class for storing data.
     """
 
     tracks_data: TracksData
@@ -176,7 +176,7 @@ class Tracks:
 class CuboidTracks(Tracks):
     """Manages time-dependent cuboid tracks related GPU intersection operations for tracks
 
-    This class uses the :class:`nre.datasets.tracks.CuboidTracks.Data` class for storing data.
+    This class uses the :class:`instant_nurec.utils.types.CuboidTracksData` class for storing data.
 
     """
 

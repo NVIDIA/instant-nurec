@@ -598,8 +598,6 @@ class DataAndRenderingBatch:
         return self
 
 
-# Note(ruilong): temporarily place this class here because NCORETrainDataset depends on it.
-# Should move it to nre.models.view_geometry after migration.
 class CameraFreePoseViewGeometry(torch.nn.Module):
     """
     FreePoseViewGeometry for camera sensors. It stores raw (un-subsampled) camera extrinsics and intrinsics for all frames & views. [Exist for the new batch format]

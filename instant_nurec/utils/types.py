@@ -241,7 +241,7 @@ class TrackFlags(IntFlag):
 @dataclass(kw_only=True, slots=True)
 class TracksData:
     """
-    Data-components of nre.datasets.tracks.Tracks.
+    Data-components of instant_nurec.datasets.tracks.Tracks.
 
     Args:
         tracks_id: list[str]  - (N_tracks) string identifiers of each track
@@ -305,7 +305,7 @@ class TracksData:
 @dataclass(kw_only=True, slots=True)
 class CuboidTracksData:
     """
-    Data-components of nre.datasets.tracks.CuboidTracks.
+    Data-components of instant_nurec.datasets.tracks.CuboidTracks.
 
     Args:
         cuboids_dims: torch.Tensor  - (N_tracks, 3) containing per-track dimensions in local track-frame
