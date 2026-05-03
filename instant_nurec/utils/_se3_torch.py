@@ -25,20 +25,11 @@ from __future__ import annotations
 
 import torch
 
+from instant_nurec.utils.geometry import quat_mult_xyzw
+
 
 def _quat_normalize(q: torch.Tensor) -> torch.Tensor:
     return q / torch.linalg.norm(q, dim=-1, keepdim=True).clamp_min(1e-12)
-
-
-def _quat_mul_xyzw(q1: torch.Tensor, q2: torch.Tensor) -> torch.Tensor:
-    """Hamilton product ``q1 * q2`` for XYZW quaternions."""
-    x1, y1, z1, w1 = q1[..., 0], q1[..., 1], q1[..., 2], q1[..., 3]
-    x2, y2, z2, w2 = q2[..., 0], q2[..., 1], q2[..., 2], q2[..., 3]
-    x = w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2
-    y = w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2
-    z = w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2
-    w = w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2
-    return torch.stack([x, y, z, w], dim=-1)
 
 
 def _quat_conj(q: torch.Tensor) -> torch.Tensor:
@@ -161,7 +152,7 @@ class SO3:
 
     def __mul__(self, other):
         if isinstance(other, SO3):
-            return SO3(_quat_mul_xyzw(self.data, other.data))
+            return SO3(quat_mult_xyzw(self.data, other.data))
         if isinstance(other, torch.Tensor) and other.shape[-1] == 3:
             return _quat_rotate(self.data, other)
         return NotImplemented
@@ -231,7 +222,7 @@ class SE3:
             q2 = other.data[..., 3:]
             # Composition: T1 * T2 has translation t1 + R1 * t2, rotation q1 * q2.
             t_out = t1 + _quat_rotate(q1, t2)
-            q_out = _quat_mul_xyzw(q1, q2)
+            q_out = quat_mult_xyzw(q1, q2)
             return SE3(torch.cat([t_out, q_out], dim=-1))
         if isinstance(other, torch.Tensor) and other.shape[-1] == 3:
             t = self.data[..., :3]
