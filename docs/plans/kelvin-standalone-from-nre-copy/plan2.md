@@ -231,7 +231,7 @@ Iterate to 4.8 convergence.
 
 ---
 
-## Phase C — Flatten layout to asset-harvester shape (DONE — `e177e4c`)
+## Phase C — Flatten layout to asset-harvester shape (DONE)
 
 Per plan.md §8.2. Basic flatten landed in `e177e4c`:
 
@@ -248,10 +248,37 @@ instant_nurec/_pkg/config/        → instant_nurec/config_schema/
 ``//instant_nurec/_pkg/...`` BUILD labels collapsed to
 ``//instant_nurec/...``. Predict + tests + parity all GREEN.
 
-The further merges plan2 §C.1 calls for — collapsing
-``utils/`` + ``models/`` + ``nrm/utils/`` into one ``utils/``, and
-``nrm/systems/`` + ``nrm/models/kelvin_model.py`` into ``model.py`` —
-are deferred to C.6 re-strip.
+The deferred nested merges (plan2 §C.1) landed across six commits
+`4bd2c91` (config_schema), `22e8748` (primitives), `029878b`
+(predict), `bd0c4c0` (datasets), `02bd658` (utils), `97d4ecb` (model).
+Final layout matches the plan target:
+
+```
+instant_nurec/
+  __init__.py
+  cli.py
+  config.py
+  _hf_mock.py
+  config_schema/   # was nrm/config/* + base_schema.py
+  model/           # was nrm/systems/* + nrm/models/* (kelvin/blocks/backbone)
+  primitives/      # was nrm/primitives/
+  datasets/        # was top-level + nrm/datasets/ MERGED
+  predict/         # was nrm/predict/* + nrm/run.py
+  utils/           # was utils/ + models/ + nrm/utils/ MERGED
+```
+
+Re-pickled `kelvin_full.pt` end-to-end on the GPU; both modes parity
+GREEN within the existing 50-vertex tolerance band:
+
+```
+no_merge chunk0=1748398 (+10), chunk1=1428224 (+15) — PASS
+merge=2871691 (+29) — PASS
+```
+
+The HF mock wired in `aa707aa` is exercised by the second run: after
+the first run writes `kelvin_full.pt` to `INSTANT_NUREC_FULL_PT`, the
+mock seeds the canonical cache (`~/.cache/instant_nurec/kelvin_full.pt`)
+and the second run loads through the HF surface.
 
 ### C.1 — Source moves
 
