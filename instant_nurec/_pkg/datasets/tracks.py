@@ -17,8 +17,10 @@ import lietorch as lt
 import numpy as np
 import torch
 
-from libs.packed_ops.interface import packed_ops  # type: ignore
 from libs.vren.interface import vren  # type: ignore
+from instant_nurec._pkg.utils._packed_ops_torch import (
+    packed_searchsorted_indexed_vals as _packed_searchsorted_indexed_vals,
+)
 from instant_nurec._pkg.utils.geometry import se3_matrix_to_tquat
 from instant_nurec._pkg.utils.misc import get_pack_info_from_n
 from instant_nurec._pkg.utils.packed_ops import linstep_interleave
@@ -390,7 +392,7 @@ class CuboidTracks(Tracks):
         - timestamps_us: timestamps to interpolate the pose at, N_data [int64]
         - tracks_idx: indices of the tracks to interpolate the pose for, N_data [int]
         """
-        tidx_right = packed_ops.packed_searchsorted_indexed_vals(
+        tidx_right = _packed_searchsorted_indexed_vals(
             self.tracks_timestamps_us,
             self.tracks_packinfo,
             timestamps_us,

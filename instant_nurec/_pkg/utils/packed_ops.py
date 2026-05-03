@@ -15,7 +15,9 @@ from dataclasses import dataclass
 
 import torch
 
-from libs.packed_ops.interface import packed_ops  # type: ignore
+from instant_nurec._pkg.utils._packed_ops_torch import (
+    linstep_interleave as _linstep_interleave_torch,
+)
 
 
 @dataclass(slots=True, frozen=True)
@@ -34,11 +36,10 @@ def linstep_interleave(
     """Returns interleaved per-pack arange-style sequences, one step_size apart."""
     if start.numel() == 0:
         return ValuesAndPidx(torch.empty_like(start), torch.empty_like(num_steps))
-    return ValuesAndPidx(
-        *packed_ops.linstep_interleave(
-            start.contiguous(),
-            num_steps.contiguous().long(),
-            step_size.contiguous() if isinstance(step_size, torch.Tensor) else step_size,
-            return_idx,
-        )
+    out, nidx = _linstep_interleave_torch(
+        start.contiguous(),
+        num_steps.contiguous().long(),
+        step_size.contiguous() if isinstance(step_size, torch.Tensor) else step_size,
+        return_idx,
     )
+    return ValuesAndPidx(out, nidx if nidx is not None else torch.empty_like(num_steps))

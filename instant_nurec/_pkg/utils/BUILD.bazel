@@ -24,11 +24,19 @@ filegroup(
 )
 
 py_library(
+    name = "pylib_packed_ops_torch",
+    srcs = ["_packed_ops_torch.py"],
+    deps = [
+        pip_requirement("torch"),
+    ],
+)
+
+py_library(
     name = "pylib_packed_ops",
     srcs = ["packed_ops.py"],
     deps = [
+        ":pylib_packed_ops_torch",
         pip_requirement("torch"),
-        "//libs/packed_ops:pylib_cc",
     ],
 )
 

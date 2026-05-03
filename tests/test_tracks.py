@@ -621,13 +621,14 @@ def test_interpolate_tracks_poses_returns_se3_with_right_shape(
     mod, _ = stubbed_tracks
     ct = _make_cuboid_tracks_with_two(stubbed_tracks)
 
-    # Override packed_searchsorted_indexed_vals to return a controllable index
-    # (1 for everything → tidx_left=0, tidx_right=1).
+    # Override the imported torch helper to return a controllable index
+    # (1 for everything → tidx_left=0, tidx_right=1). The Phase A.4 swap
+    # replaced the kernel call with a module-level binding in tracks.py.
     def _fake_searchsorted(ts_us, packinfo, query_ts, tracks_idx):
         return torch.full((query_ts.shape[0],), 1, dtype=torch.long)
 
     monkeypatch.setattr(
-        mod.packed_ops, "packed_searchsorted_indexed_vals", _fake_searchsorted
+        mod, "_packed_searchsorted_indexed_vals", _fake_searchsorted
     )
 
     timestamps_us = torch.tensor([5, 10], dtype=torch.int64)
