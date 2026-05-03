@@ -37,7 +37,15 @@ This follow-up plan delivers all four outcomes, parity-gated at every step.
 
 ## Phase A — Replace remaining slang/CUDA kernels with torch-native
 
-Each substep: equivalence test → torch impl → equivalence test green → bazel run both modes → `validate_parity.py` → tolerance bump (if needed) → commit. Order is chosen so trivial value-container swaps land first (low risk, parity unchanged) before the math-heavy kernels.
+Each substep: equivalence test → torch impl → equivalence test green → bazel run both modes → `validate_parity.py` → tolerance bump (if needed) → commit.
+
+**Dependency analysis (revised after A.1 deferral):**
+
+- **Independent** (can land in any order, no cross-coupling): A.4 (`packed_ops` in `tracks.py`), A.7 (`vren` in `tracks.py` + `cubemap.py`).
+- **Tightly coupled** (must land in one bundle): A.2 (`cameras.parameters.*` dataclasses) + A.3 (`common.{Pose, DynamicPose}` dataclasses) + A.5 (`compute_poses_and_timestamps`) + A.6 (`image_points_to_world_rays_shutter_pose`). The bazel binding for A.6 does `isinstance(projection, OpenCVPinholeProjection)` etc. on the A.2 classes (`libs/sensors/kernels/cameras/bindings.py:71-90`), so swapping A.2/A.3 without A.5/A.6 breaks the kernel; conversely, A.5/A.6 need the new A.2/A.3 dataclasses to type-narrow the inputs in the torch impl.
+- **Deferred** (until the coupled bundle lands): A.1 (`se3pose_from_matrix`). FP-precision drift between slang and torch on f32 GPU ops only matters while the still-slang ray-gen consumes the rotation; once A.6 is torch the whole pose → ray chain is FP-controlled in Python.
+
+Ordering: A.4 → A.7 → bundle(A.2+A.3+A.5+A.6) → A.1 → A.8 → A.9.
 
 ### A.1 — `se3pose_from_matrix` → reuse existing `se3_matrix_to_tquat` (DEFERRED)
 
@@ -71,7 +79,7 @@ Each substep: equivalence test → torch impl → equivalence test green → baz
 - **Parity risk:** none.
 - **Commit:** `feat(sensors): replace libs.sensors.kernels.common.{Pose,DynamicPose} with in-tree dataclasses (Phase A.3)`.
 
-### A.4 — `linstep_interleave` + `packed_searchsorted_indexed_vals` → torch
+### A.4 — `linstep_interleave` + `packed_searchsorted_indexed_vals` → torch (DONE — `2b48686`)
 
 - **Call sites:**
   - `instant_nurec/_pkg/utils/packed_ops.py:18` (import).
@@ -262,72 +270,61 @@ The end-state of instant-nurec must contain only files in this list (modulo `ins
 
 One commit per logical group; `git rm` each.
 
-#### D.1.a — NRE LLM tooling
-- `prompts.yaml` (≈61 KB of NRE LLM prompts; not used by predict)
+#### D.1.a — NRE LLM tooling (DONE — already gitignored, never tracked)
+- `prompts.yaml` was added to `.gitignore` ahead of plan2 ("Prior-agent prompt history"); not in repo state.
 
-#### D.1.b — NRE GitLab/code-review tooling
+#### D.1.b — NRE GitLab/code-review tooling (DONE — `d8577a7`)
 - `.coderabbit.yaml` (NRE CodeRabbit config)
 - `CODEOWNERS` (NRE GitLab codeowners)
 - `sonar-project.properties` (NRE SonarQube)
 - `.gitlab/` (subdirs `ci/` and `merge_request_templates/` — NRE GitLab artifacts)
 - `.gitlab-ci.yml` (NRE GitLab CI; asset-harvester ships no committed CI — add a minimal CI later if needed)
 
-#### D.1.c — NRE build/dev environment
+#### D.1.c — NRE build/dev environment (DONE — `57d512c`)
 - `.clang-format` (no C++ left after Phase A.8 / Phase B drops `libs/`)
 - `.dockerignore` (NRE Docker workflow)
-- `.gitmodules` (NRE submodules; standalone has none)
+- `.gitmodules` (NRE submodules; in this checkout it appears as a container char-device pseudo-file rather than a tracked file — skipped)
 - `NOTICES` (NRE-side legal notice; replaced by `THIRD_PARTY_LICENSE.txt` in D.4)
 
-#### D.1.d — NRE-side reference + scratch
+#### D.1.d — NRE-side reference + scratch (DONE — `bc07884`)
 - `nre_example_call.sh` (NRE reference invocation; the standalone keeps `instant_nurec_example_call.sh`)
-- `uv.lock` (uv-managed lockfile from the NRE port; pyproject + pip is the asset-harvester pattern; drop unless we explicitly want uv)
+- `uv.lock` (uv-managed lockfile from the NRE port; pyproject + pip is the asset-harvester pattern). Also dropped the now-orphaned `[tool.uv]` block from `pyproject.toml`.
 
-### D.2 — Drop tracked build artifacts
+### D.2 — Drop tracked build artifacts (DONE — already covered)
 
-`git rm` if tracked; ensure `.gitignore` covers them so they don't reappear:
-- `.coverage` (pytest-cov output)
-- `.pytest_cache/`
-- `.ruff_cache/`
-- `.venv/` (the local virtual env)
+None of `.coverage`, `.pytest_cache/`, `.ruff_cache/`, `.venv/` are tracked; all four are already in `.gitignore`. No-op.
 
-Verify `.gitignore` includes all of `.coverage`, `.pytest_cache/`, `.ruff_cache/`, `.venv/` and amend if missing.
+### D.3 — Drop IDE/user state (DONE — already covered)
 
-### D.3 — Drop IDE/user state
-
-`git rm` (if tracked) and add to `.gitignore`:
-- `.idea/` (JetBrains)
-- `.vscode/`
-- `.ripgreprc`
-- `.mcp.json` (Claude/Anthropic MCP config — user-machine state)
-- Container shell config that appears as character-device pseudo-files in the current container mount: `.bashrc`, `.bash_profile`, `.zshrc`, `.zprofile`, `.profile`, `.gitconfig` (these aren't real tracked files but they appear in `git ls-files` listings; verify and clean up).
+None of the listed paths are tracked. `.gitignore` already excludes `.idea/`, `.vscode/`, `.ripgreprc`, `.mcp.json`, `.bashrc`, `.bash_profile`, `.zshrc`, `.zprofile`, `.profile`, `.gitconfig`. No-op.
 
 ### D.4 — Add asset-harvester-style files
 
 asset-harvester has these; we don't:
-- `LICENSE.txt` — NVIDIA proprietary text. Source from corp / asset-harvester's own copy.
-- `THIRD_PARTY_LICENSE.txt` — replaces the dropped `NOTICES`. Source from corp / asset-harvester.
-- `SECURITY.md` — corp standard security-disclosure policy.
-- `CONTRIBUTING.md` (or `CONTRIBUTING.MD` to match asset-harvester's casing) — short dev guide pointing at `setup.sh`, `pytest`, `ruff`, `validate_parity.py`.
-- `data_samples/` — small ncorev4 fixture (1 sequence, ≤ 50 MB) to make the README quickstart self-contained. Source: extract from `/storage/data/nurec/ncorev4` using the same sample that produced the baselines. The HF mock (`instant_nurec/_hf_mock.py:get_sample_data_path`) already references this name.
+- `LICENSE.txt` — NVIDIA proprietary text. Source from corp / asset-harvester's own copy. **Pending — needs corp source material.**
+- `THIRD_PARTY_LICENSE.txt` — replaces the dropped `NOTICES`. Source from corp / asset-harvester. **Pending — needs corp source material.**
+- `SECURITY.md` — corp standard security-disclosure policy. **Pending — needs corp source material.**
+- `CONTRIBUTING.md` — short dev guide pointing at `setup.sh`, `pytest`, `ruff`, `validate_parity.py`. **DONE — `dd8b5b3`.**
+- `data_samples/` — small ncorev4 fixture (1 sequence, ≤ 50 MB) to make the README quickstart self-contained. Source: extract from `/storage/data/nurec/ncorev4` using the same sample that produced the baselines. The HF mock (`instant_nurec/_hf_mock.py:get_sample_data_path`) already references this name. **Pending — needs user direction on size/extraction strategy.**
 - *(optional)* `benchmark/` — relocate `scripts/derive_determinism_tolerance.py` here, plus a `benchmark/parity.py` that wraps `validate_parity.py` for repeatable benchmarking. Keep the underlying script in `scripts/` if simpler.
 
-### D.5 — Resolve `internal/`
+### D.5 — Resolve `internal/` (DONE — `33a30e8`)
 
-Plan.md §8.3 reserved `internal/` for migration scaffolding (NRE provenance markers, parity helpers — anything used to *reach* parity but not at runtime). asset-harvester has no `internal/`. Decision:
-- Move anything still useful into `docs/internal/` (read-only notes; e.g. `internal/parity_proofs/` becomes `docs/internal/parity_proofs/`).
-- `git rm -rf internal/`.
-- Hard rule from plan.md: `rm -rf internal/` must not break `python run_inference.py …`. Verify before commit.
+Plan.md §8.3 reserved `internal/` for migration scaffolding (NRE provenance markers, parity helpers — anything used to *reach* parity but not at runtime). asset-harvester has no `internal/`.
+- Moved `internal/parity_proofs/` → `docs/internal/parity_proofs/`.
+- `internal/` directory removed.
+- Updated `instant_nurec/_pkg/nrm/utils/cubemap.py` comment reference to the new path.
+- Verified `python run_inference.py` CLI imports still work; 759/759 tests pass.
 
-- **Commit:** `chore(internal): drop internal/, move parity_proofs → docs/internal/ (Phase D.5)`.
-
-### D.6 — Re-strip pass (plan.md Phase 1 Step 4.0–4.8) against the post-D codebase
+### D.6 — Re-strip pass (plan.md Phase 1 Step 4.0–4.8) against the post-D codebase (PARTIAL — `3b0b484`)
 
 After file hygiene, re-run the strip iteration one final time. Most of the deletions in D will have surfaced extra cleanups:
 
 - Test fixtures referencing removed config files.
 - README/docs sections referencing removed files.
-- Stale `.gitignore` entries for paths that no longer exist.
+- Stale `.gitignore` entries for paths that no longer exist. **DONE: dropped `!uv.lock` exception in `3b0b484`.**
 - pyproject.toml dev-dep entries (`coverage`, `pytest-cov`, etc.) that are now redundant.
+- Orphan scripts referencing dropped or renamed targets. **DONE: removed `scripts/run_nre_predict_local.sh` (referenced the deleted `//nre/nrm:run` target) in `3b0b484`.**
 
 Iterate to 4.8 convergence.
 
