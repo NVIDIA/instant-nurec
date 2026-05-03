@@ -9,7 +9,26 @@
 # its affiliates is strictly prohibited.
 
 import torch
-import torchvision.transforms as transforms
+import torch.nn as _nn
+
+
+class _RGBNormalize(_nn.Module):
+    """Pure-torch ``transforms.Normalize`` for RGB tensors of shape (..., C, H, W).
+
+    Replaces ``torchvision.transforms.Normalize(mean, std)``. The
+    ``mean``/``std`` are non-persistent buffers — they move with
+    ``.to(device)`` like real ``torchvision.transforms.Normalize`` would
+    (via per-tensor device on use), but never appear in ``state_dict()``,
+    so existing pickled checkpoints load without spurious missing-key errors.
+    """
+
+    def __init__(self, mean, std):
+        super().__init__()
+        self.register_buffer("_mean", torch.tensor(mean).view(1, -1, 1, 1), persistent=False)
+        self.register_buffer("_std", torch.tensor(std).view(1, -1, 1, 1), persistent=False)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return (x - self._mean) / self._std
 
 from einops import rearrange, repeat
 from torch import nn
@@ -98,7 +117,7 @@ class CubemapDecoderSky(nn.Module):
         )
 
         # Skip connections for RGB information
-        self.rgb_normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225], inplace=False)
+        self.rgb_normalize = _RGBNormalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         self.patch_embed_img = PatchEmbed(
             patch_shape=self.patch_shape,
             input_dim=3,

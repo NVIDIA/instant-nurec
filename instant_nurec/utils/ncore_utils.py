@@ -22,8 +22,6 @@ from typing import DefaultDict, Tuple
 import numpy as np
 import PIL.Image as PILImage
 import torch
-import torchvision
-import torchvision.transforms.functional
 import zarr
 import zarr.storage
 
@@ -224,10 +222,16 @@ class AuxShardDataLoader:
 
                 if target_width_height:
                     depth_tensor = torch.from_numpy(depth).unsqueeze(0).unsqueeze(0)
-
+                    # Pure-torch replacement for torchvision.transforms.functional.resize
+                    # with antialias=True: bilinear F.interpolate has antialias since
+                    # torch 1.11. Output shape is [1, 1, target_height, target_width].
                     depth = (
-                        torchvision.transforms.functional.resize(
-                            depth_tensor, [target_width_height[1], target_width_height[0]], antialias=True
+                        torch.nn.functional.interpolate(
+                            depth_tensor,
+                            size=(target_width_height[1], target_width_height[0]),
+                            mode="bilinear",
+                            antialias=True,
+                            align_corners=False,
                         )
                         .squeeze(0)
                         .squeeze(0)

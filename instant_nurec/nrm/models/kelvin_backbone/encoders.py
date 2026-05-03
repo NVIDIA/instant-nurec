@@ -14,9 +14,25 @@ from typing import cast
 
 import numpy as np
 import torch
-import torchvision.transforms as transforms
+import torch.nn as _nn
 
 from einops import rearrange
+
+
+class _RGBNormalize(_nn.Module):
+    """Pure-torch ``transforms.Normalize`` for RGB tensors (..., C, H, W).
+
+    Non-persistent buffers — kept out of ``state_dict()`` so existing
+    pickled checkpoints load without spurious missing-key errors.
+    """
+
+    def __init__(self, mean, std):
+        super().__init__()
+        self.register_buffer("_mean", torch.tensor(mean).view(1, -1, 1, 1), persistent=False)
+        self.register_buffer("_std", torch.tensor(std).view(1, -1, 1, 1), persistent=False)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return (x - self._mean) / self._std
 from torch import nn
 
 from ncore.data import ConcreteCameraModelParametersUnion, OpenCVPinholeCameraModelParameters
@@ -43,7 +59,7 @@ logger = logging.getLogger(__name__)
 class KelvinDAv3Encoder(nn.Module):
     def __init__(self, config: KelvinDAv3EncoderConfig, model_config: KelvinModelConfig):
         super().__init__()
-        self.rgb_normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225], inplace=False)
+        self.rgb_normalize = _RGBNormalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 
         embed_dim = config.embed_dim // 2
         patch_shape = model_config.patch_shape
