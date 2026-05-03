@@ -131,16 +131,16 @@ instant_nurec/                  # standalone package
     predict/                    # predict loop + PLY export + frustum-ownership merge
     primitives/                 # KelvinNRMPrimitive
     utils/                      # batch / geometry / sensors / nn-extensions
-scripts/
+benchmark/
     validate_parity.py          # torch-backed PLY parity check
     derive_determinism_tolerance.py
 tests/                          # branch-coverage tests
     tolerance.json
 baselines/                      # reference PLYs + parsed configs (not modified)
 data_samples/                   # ncorev4 fixture placeholder (HF mock target)
-docs/
+internal/                       # migration scaffolding — runtime is decoupled
     plans/                      # plan.md + plan2.md (project history)
-    internal/                   # parity-proof notes (migration scaffolding)
+    parity_proofs/              # parity-proof notes
 run_inference.py                # canonical Python entrypoint
 run.sh                          # input-validation wrapper
 setup.sh                        # venv bootstrap

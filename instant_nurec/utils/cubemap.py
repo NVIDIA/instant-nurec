@@ -108,7 +108,7 @@ def rotate_sky_cubemap(cubemap: torch.Tensor, rotation: torch.Tensor) -> torch.T
     Per-face (u, v) projection follows the conventions established by
     ``cubemap_ray_directions`` (the NRE face order is +X, -X, -Y, +Y, +Z, -Z;
     note that indices 2/3 are swapped relative to OpenGL). See
-    ``docs/internal/parity_proofs/phase2_7_cubemap_research.md`` for the full
+    ``internal/parity_proofs/phase2_7_cubemap_research.md`` for the full
     derivation.
 
     Phase 2 step 7: replaced ``nvdiffrast.dr.texture(boundary_mode="cube")``
