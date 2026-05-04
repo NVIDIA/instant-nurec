@@ -1,0 +1,98 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+"""Resolve the pretrained Kelvin model artifact.
+
+``download_kelvin_full_pt()`` returns the local path to ``kelvin_full.pt``,
+downloading from Hugging Face on first use and caching under
+``~/.cache/huggingface/nvidia/instant_nurec/kelvin/``. Setting
+``INSTANT_NUREC_FULL_PT`` to an existing local path short-circuits the
+download (useful for offline use).
+"""
+
+from __future__ import annotations
+
+import logging
+import os
+
+from pathlib import Path
+from typing import Optional
+
+
+logger = logging.getLogger(__name__)
+
+
+KELVIN_REPO_ID = "nvidia/instant-nurec-kelvin"
+KELVIN_FILENAME = "kelvin_full.pt"
+
+# Cache root: ``~/.cache/huggingface/nvidia/instant_nurec/kelvin/``. Files end
+# up nested under HF's standard layout (``models--<owner>--<repo>/...``)
+# inside this directory.
+DEFAULT_CACHE_DIR = (
+    Path(os.path.expanduser("~/.cache"))
+    / "huggingface"
+    / "nvidia"
+    / "instant_nurec"
+    / "kelvin"
+)
+
+
+class PretrainedModelError(RuntimeError):
+    """Raised when ``kelvin_full.pt`` cannot be resolved."""
+
+
+def _cache_dir() -> Path:
+    return Path(os.environ.get("INSTANT_NUREC_HF_CACHE_DIR", str(DEFAULT_CACHE_DIR)))
+
+
+def download_kelvin_full_pt(*, cache_dir: Optional[str | Path] = None) -> str:
+    """Return the local path to ``kelvin_full.pt``.
+
+    Resolution order:
+
+    1. ``INSTANT_NUREC_FULL_PT`` env var, if set and pointing at an
+       existing file — used verbatim (offline override).
+    2. ``huggingface_hub.hf_hub_download`` from :data:`KELVIN_REPO_ID`
+       into ``cache_dir`` (defaults to :data:`DEFAULT_CACHE_DIR`).
+    """
+
+    env_path = os.environ.get("INSTANT_NUREC_FULL_PT")
+    if env_path and Path(env_path).exists():
+        return env_path
+
+    target = Path(cache_dir) if cache_dir else _cache_dir()
+    target.mkdir(parents=True, exist_ok=True)
+
+    try:
+        from huggingface_hub import hf_hub_download
+    except ImportError as e:
+        raise PretrainedModelError(
+            "huggingface_hub is required to download Kelvin: "
+            "pip install huggingface_hub"
+        ) from e
+
+    try:
+        logger.info("Downloading %s/%s ...", KELVIN_REPO_ID, KELVIN_FILENAME)
+        return hf_hub_download(
+            repo_id=KELVIN_REPO_ID,
+            filename=KELVIN_FILENAME,
+            cache_dir=str(target),
+        )
+    except Exception as e:
+        raise PretrainedModelError(
+            f"Could not download {KELVIN_REPO_ID}/{KELVIN_FILENAME}. "
+            f"Set INSTANT_NUREC_FULL_PT to a local copy of "
+            f"{KELVIN_FILENAME} as a fallback. Underlying error: {e}"
+        ) from e

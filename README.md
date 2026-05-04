@@ -110,7 +110,7 @@ python run_inference.py \
 instant-nurec/
 ├── instant_nurec/                  # main package
 │   ├── cli.py                      # argparse entrypoint
-│   ├── _hf_mock.py                 # HF resolver (auto-downloads on first run)
+│   ├── pretrained.py               # auto-downloads kelvin_full.pt from HF on first run
 │   ├── config_schema/              # pydantic schemas + defaults
 │   ├── datasets/                   # ncorev4 ingest + cuboid-track helpers
 │   ├── model/                      # GaussiansInstantNuRecSystem + KelvinInstantNuRec + blocks

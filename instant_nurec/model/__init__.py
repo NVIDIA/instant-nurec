@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Optional
 
 import torch
 
-from instant_nurec import _hf_mock
+from instant_nurec import pretrained
 from instant_nurec.model.system import GaussiansInstantNuRecSystem
 
 
@@ -32,15 +32,14 @@ logger = logging.getLogger(__name__)
 
 
 class FullModelNotFoundError(RuntimeError):
-    """The pretrained ``kelvin_full.pt`` couldn't be resolved through any
-    supported channel (HF cache or ``INSTANT_NUREC_FULL_PT``)."""
+    """``kelvin_full.pt`` couldn't be resolved (no HF download, no env override)."""
 
 
 def _resolve_full_pt_path() -> Optional[str]:
-    """Resolve the ``kelvin_full.pt`` path via the HF resolver."""
+    """Return the local path to ``kelvin_full.pt`` or ``None`` on failure."""
     try:
-        return _hf_mock.get_full_model_path()
-    except _hf_mock.HFMockError:
+        return pretrained.download_kelvin_full_pt()
+    except pretrained.PretrainedModelError:
         return None
 
 
@@ -48,19 +47,14 @@ def make(config: "InstantNuRecConfig") -> GaussiansInstantNuRecSystem:
     """Load the pretrained ``kelvin_full.pt`` and patch in the per-invocation
     config (output dir / merge toggle / ncore paths).
 
-    Single supported artifact: a torch-pickled ``GaussiansInstantNuRecSystem`` saved
-    via ``torch.save(system, path)``. Resolved through the HF mock
-    (placeholder repo ``nvidia/instant-nurec-kelvin``) or the
-    ``INSTANT_NUREC_FULL_PT`` env var.
-
-    Raises ``FullModelNotFoundError`` if no .pt file can be resolved.
+    The artifact is a torch-pickled ``GaussiansInstantNuRecSystem`` resolved
+    via :func:`instant_nurec.pretrained.download_kelvin_full_pt`.
     """
     full_pt_path = _resolve_full_pt_path()
     if not full_pt_path or not os.path.exists(full_pt_path):
         raise FullModelNotFoundError(
-            "kelvin_full.pt not found. Either set INSTANT_NUREC_FULL_PT to a "
-            "local .pt path or wait for the corp-published HF repo "
-            f"{_hf_mock.PLACEHOLDER_REPO_ID!r} to provide it."
+            f"kelvin_full.pt not found. Either set INSTANT_NUREC_FULL_PT to a "
+            f"local .pt path or ensure {pretrained.KELVIN_REPO_ID!r} is reachable."
         )
 
     logger.info("Loading full system from %s.", full_pt_path)
@@ -71,7 +65,7 @@ def make(config: "InstantNuRecConfig") -> GaussiansInstantNuRecSystem:
 
     # Per-invocation overrides — the .pt only round-trips weight tensors;
     # out_dir / run_id / merge flag / ncore path change every run.
-    from instant_nurec.datasets.datamodule import InstantNuRecDataModule  # local to avoid bootstrap loops
+    from instant_nurec.datasets.datamodule import InstantNuRecDataModule
 
     loaded.out_dir = config.out_dir
     loaded.run_id = config.run_id
