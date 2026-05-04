@@ -69,6 +69,7 @@ def test_env_var_pointing_at_missing_file_falls_through(monkeypatch, tmp_path):
 
     fake_hf = types.ModuleType("huggingface_hub")
     fake_hf.hf_hub_download = lambda **kw: f"DOWNLOADED:{kw['repo_id']}/{kw['filename']}"
+    fake_hf.try_to_load_from_cache = lambda **kw: None
     monkeypatch.setitem(sys.modules, "huggingface_hub", fake_hf)
 
     out = pretrained.download_kelvin_full_pt()
@@ -86,6 +87,7 @@ def test_download_returns_path_from_hf_hub_download(monkeypatch, tmp_path):
 
     fake_hf = types.ModuleType("huggingface_hub")
     fake_hf.hf_hub_download = _fake_dl
+    fake_hf.try_to_load_from_cache = lambda **kw: None  # uncached
     monkeypatch.setitem(sys.modules, "huggingface_hub", fake_hf)
 
     out = pretrained.download_kelvin_full_pt()
@@ -93,6 +95,20 @@ def test_download_returns_path_from_hf_hub_download(monkeypatch, tmp_path):
     assert captured["repo_id"] == pretrained.KELVIN_REPO_ID
     assert captured["filename"] == pretrained.KELVIN_FILENAME
     assert captured["cache_dir"] == str(tmp_path / "cache")
+
+
+def test_cached_copy_short_circuits_download(monkeypatch, tmp_path):
+    """If the file is in the HF cache, return it without calling hf_hub_download."""
+    monkeypatch.setenv("INSTANT_NUREC_HF_CACHE_DIR", str(tmp_path / "cache"))
+
+    fake_hf = types.ModuleType("huggingface_hub")
+    fake_hf.try_to_load_from_cache = lambda **kw: "/cached/kelvin_full.pt"
+    fake_hf.hf_hub_download = lambda **kw: pytest.fail(
+        "hf_hub_download must not be called when the file is already cached"
+    )
+    monkeypatch.setitem(sys.modules, "huggingface_hub", fake_hf)
+
+    assert pretrained.download_kelvin_full_pt() == "/cached/kelvin_full.pt"
 
 
 def test_explicit_cache_dir_kwarg_overrides_env(monkeypatch, tmp_path):
@@ -106,6 +122,7 @@ def test_explicit_cache_dir_kwarg_overrides_env(monkeypatch, tmp_path):
 
     fake_hf = types.ModuleType("huggingface_hub")
     fake_hf.hf_hub_download = _fake_dl
+    fake_hf.try_to_load_from_cache = lambda **kw: None
     monkeypatch.setitem(sys.modules, "huggingface_hub", fake_hf)
 
     pretrained.download_kelvin_full_pt(cache_dir=tmp_path / "explicit")
@@ -120,6 +137,7 @@ def test_download_failure_raises_pretrained_model_error(monkeypatch, tmp_path):
 
     fake_hf = types.ModuleType("huggingface_hub")
     fake_hf.hf_hub_download = _fail
+    fake_hf.try_to_load_from_cache = lambda **kw: None
     monkeypatch.setitem(sys.modules, "huggingface_hub", fake_hf)
 
     with pytest.raises(pretrained.PretrainedModelError, match="network down"):

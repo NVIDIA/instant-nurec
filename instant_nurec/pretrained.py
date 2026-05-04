@@ -76,12 +76,21 @@ def download_kelvin_full_pt(*, cache_dir: Optional[str | Path] = None) -> str:
     target.mkdir(parents=True, exist_ok=True)
 
     try:
-        from huggingface_hub import hf_hub_download
+        from huggingface_hub import hf_hub_download, try_to_load_from_cache
     except ImportError as e:
         raise PretrainedModelError(
             "huggingface_hub is required to download Kelvin: "
             "pip install huggingface_hub"
         ) from e
+
+    # If a cached copy exists, use it as-is — no network roundtrip.
+    cached = try_to_load_from_cache(
+        repo_id=KELVIN_REPO_ID,
+        filename=KELVIN_FILENAME,
+        cache_dir=str(target),
+    )
+    if isinstance(cached, str):
+        return cached
 
     try:
         logger.info("Downloading %s/%s ...", KELVIN_REPO_ID, KELVIN_FILENAME)
