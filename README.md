@@ -36,7 +36,7 @@ NCore V4 Sequence ─► Frame Batching ─► Kelvin Forward Pass ─► 3D Gau
 
 #### Prerequisites
 
-- **Python** 3.12
+- **Python** 3.11
 - **NVIDIA driver** >= 570 (CUDA 12.8 compatible)
 - **GPU VRAM** ≥ 16 GB
 
