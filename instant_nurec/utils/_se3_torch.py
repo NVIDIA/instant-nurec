@@ -19,9 +19,7 @@ We *would* have used ``pip install lietorch``, but the public PyPI
 ``lietorch==0.8.2`` (the latest release) hard-pins ``torch==2.6.*`` and
 ``torchvision==0.21.*``. This project pins ``torch==2.7.0+cu128`` for
 compute-stack stability; pulling lietorch would force a torch downgrade
-and break the cu128 wheel choice. (The custom build of lietorch
-compatible with torch 2.7.0+cu128 is published only to NVIDIA's internal
-package index and is therefore not available to this codebase.)
+and break the cu128 wheel choice.
 
 To avoid the version clash we re-implement only the small subset of the
 lietorch API the predict path actually exercises:
