@@ -16,10 +16,9 @@
 """Dataclasses + enums consumed by the in-tree torch ray-gen
 (``_image_points_to_world_rays_torch.py``).
 
-FTheta-only for now (the standalone's predict baseline uses
-``camera_front_wide_120fov`` which is FTheta). OpenCVPinhole / OpenCVFisheye
-+ BivariateWindshieldDistortion stubs raise on use; add them when a
-non-FTheta dataset comes through.
+FTheta-only for now (predict uses ``camera_front_wide_120fov``).
+OpenCVPinhole / OpenCVFisheye + BivariateWindshieldDistortion stubs
+raise on use; add them when a non-FTheta dataset comes through.
 """
 
 from __future__ import annotations

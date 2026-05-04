@@ -43,10 +43,9 @@ from instant_nurec.utils.misc import unpack_optional
 
 
 class _RGBNormalize(_nn.Module):
-    """Pure-torch ``transforms.Normalize`` for RGB tensors (..., C, H, W).
-
-    Non-persistent buffers — kept out of ``state_dict()`` so existing
-    pickled checkpoints load without spurious missing-key errors.
+    """Wraps ``torchvision.transforms.v2.Normalize`` for tensors of shape
+    ``(..., C, H, W)``. The mean/std are stored as non-persistent buffers
+    so they don't appear in ``state_dict()``.
     """
 
     def __init__(self, mean, std):
@@ -55,7 +54,13 @@ class _RGBNormalize(_nn.Module):
         self.register_buffer("_std", torch.tensor(std).view(1, -1, 1, 1), persistent=False)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return (x - self._mean) / self._std
+        import torchvision.transforms.functional as TF
+
+        return TF.normalize(
+            x,
+            mean=self._mean.flatten().tolist(),
+            std=self._std.flatten().tolist(),
+        )
 
 
 logger = logging.getLogger(__name__)

@@ -17,7 +17,7 @@
 
 The abstract ``KelvinLatent`` base class only contains abstract properties;
 the concrete ``KelvinMultiscaleFeaturesLatent`` is the only implementation
-in the predict-only standalone.
+in the predict-only path.
 
 Pure torch / dataclass — no compiled-lib stubs needed.
 """

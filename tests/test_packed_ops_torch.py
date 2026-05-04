@@ -15,7 +15,7 @@
 
 """Branch-coverage tests for the pure-torch packed-ops replacements.
 
-The bazel kernel is GPU-only, so we test contract-level equivalence using
+The kernel is GPU-only, so we test contract-level equivalence using
 hand-crafted small inputs whose expected outputs we compute via the kernel
 spec docstring (per-pack arange / per-pack lower-bound binary search).
 """

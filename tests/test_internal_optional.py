@@ -13,12 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""``internal/`` is migration scaffolding (plans, parity proofs, NRE
-provenance notes); plan.md §8.3 says ``rm -rf internal/`` must not
-break the runtime package. This test renames the directory aside,
-drops cached imports, imports ``instant_nurec.cli`` + the
-``run_predict`` entrypoint, and asserts both succeed. The tree is
-restored on teardown.
+"""``internal/`` holds project-internal scaffolding (plans, parity proofs,
+benchmark/parity tooling); ``rm -rf internal/`` must not break the runtime
+package. This test renames the directory aside, drops cached imports,
+imports ``instant_nurec.cli`` + the ``run_predict`` entrypoint, and
+asserts both succeed. The tree is restored on teardown.
 """
 
 from __future__ import annotations

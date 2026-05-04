@@ -15,7 +15,7 @@
 
 """Branch-coverage tests for ``instant_nurec.utils.types``.
 
-The module imports ``ncore.data`` at module load (the lietorch dep was
+The module imports ``ncore.data`` at module load 
 replaced by the in-tree ``_se3_torch`` shim in Phase B and no longer
 needs stubbing). The two pure-python / pure-numpy types we exercise
 (``HalfClosedInterval`` and ``FrameConversion``) don't actually use the

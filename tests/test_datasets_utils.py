@@ -19,7 +19,7 @@ The module orchestrates ncore-side cuboid-track ingest into pandas DataFrames
 and per-track dicts. The dependencies (`ncore.data`, `ncore.impl.common.
 transformations`) are compiled extensions we don't ship in the test venv;
 we stub them via ``sys.modules`` and feed lightweight ``CuboidTrackObservation``
-dataclass instances through the real (pandas-backed) function bodies.
+dataclass instances through the real function bodies.
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ sys.path.insert(0, str(REPO_ROOT))
 
 
 # ---------------------------------------------------------------------------
-# ncore stubs that work for both functions in nre/datasets/utils.py.
+# ncore stubs that work for both functions in datasets/utils.py.
 # Installed once per test via the fixture below.
 # ---------------------------------------------------------------------------
 

@@ -44,7 +44,7 @@ sys.path.insert(0, str(REPO_ROOT))
 
 # ---------------------------------------------------------------------------
 # Stub fixture — installs ncore.* unions, then loads
-# ``instant_nurec.utils.ncore_utils``. Phase B's torchvision/lietorch
+# ``instant_nurec.utils.ncore_utils``. 
 # removals dropped the prior stubs from this fixture.
 # ---------------------------------------------------------------------------
 

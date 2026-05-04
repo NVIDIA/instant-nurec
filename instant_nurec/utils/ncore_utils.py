@@ -222,17 +222,15 @@ class AuxShardDataLoader:
                     depth = np.asarray(ds).astype(np.float32)
 
                 if target_width_height:
+                    import torchvision.transforms.functional as TF
+
                     depth_tensor = torch.from_numpy(depth).unsqueeze(0).unsqueeze(0)
-                    # Pure-torch replacement for torchvision.transforms.functional.resize
-                    # with antialias=True: bilinear F.interpolate has antialias since
-                    # torch 1.11. Output shape is [1, 1, target_height, target_width].
                     depth = (
-                        torch.nn.functional.interpolate(
+                        TF.resize(
                             depth_tensor,
-                            size=(target_width_height[1], target_width_height[0]),
-                            mode="bilinear",
+                            size=[target_width_height[1], target_width_height[0]],
+                            interpolation=TF.InterpolationMode.BILINEAR,
                             antialias=True,
-                            align_corners=False,
                         )
                         .squeeze(0)
                         .squeeze(0)
@@ -352,7 +350,7 @@ def get_camera_sensor_mask(
     The mask image is converted to grayscale and resized to match the camera sensor's resolution if their aspect ratios are sufficiently close.
     The resulting mask is returned as a NumPy boolean array, where `True` indicates masked-out regions.
 
-    Predict-only standalone reads ncorev4 only; the V3 native sensor branch
+    Predict-only reads ncorev4 only; the V3 native sensor branch
     was dropped together with the V3 sequence loader
 
     Returns:

@@ -47,24 +47,13 @@ cd instant-nurec
 source .venv/bin/activate
 ```
 
-`setup.sh` creates a Python venv, installs the pinned CUDA torch wheel
-(`torch==2.7.0+cu128`), and `pip install -e .`. All other runtime
-dependencies are pure Python or torch wheels — no bazel, no compiled
-kernels, no `nvdiffrast` / `gsplat` / `torch_scatter`.
+`setup.sh` creates a Python venv and runs `pip install -e .`. The only
+CUDA dependency is whatever the pinned `torch` wheel ships with.
 
-#### Download the pretrained model
-
-The pipeline loads a single artifact: a torch-pickled `GaussiansNRMSystem`
-saved as `kelvin_full.pt`. Either fetch it from Hugging Face:
-
-```bash
-pip install huggingface_hub[cli]
-hf auth login
-hf download nvidia/instant-nurec-kelvin --local-dir ~/.cache/instant_nurec
-```
-
-…or point `INSTANT_NUREC_FULL_PT` at a local path; the file will be
-copied into the cache on first run.
+The pretrained model `kelvin_full.pt` is fetched on first inference run
+from the Hugging Face repo `nvidia/instant-nurec-kelvin` and cached at
+`~/.cache/instant_nurec/`. Set `INSTANT_NUREC_FULL_PT` to a local path
+to override the auto-download.
 
 </details>
 
@@ -110,35 +99,7 @@ python run_inference.py \
 
 | variable | purpose |
 | --- | --- |
-| `INSTANT_NUREC_FULL_PT` | Absolute path to a local `kelvin_full.pt`. Takes priority over the HF cache. |
-| `INSTANT_NUREC_HF_MOCK` | `1` (default) selects the in-tree placeholder mock; `0` forwards through to real `huggingface_hub`. |
-
-</details>
-
-<details>
-<summary><b>Benchmark / Parity</b></summary>
-
-`benchmark/validate_parity.py` checks bit-for-bit (within tolerance)
-agreement between a fresh inference run and the reference baselines
-under `baselines/original_baseline/`:
-
-```bash
-python benchmark/validate_parity.py merge \
-    baselines/original_baseline/merge/*/ply/*/pai_*.ply \
-    /tmp/out/merge/*/ply/*/*.ply
-
-python benchmark/validate_parity.py no_merge \
-    baselines/original_baseline/no_merge/*/ply/*/ \
-    /tmp/out/no_merge/*/ply/*/
-```
-
-Tolerances live in `tests/tolerance.json` and are derived from the
-run-to-run noise floor of the original pipeline (10 pairwise comparisons
-across 5 reruns in `baselines/more_baselines/`).
-
-`benchmark/compare_clouds.py` provides quality metrics for attributed
-point clouds of differing vertex counts (bidirectional Chamfer + F-score
-@ τ, NN-attribute residuals, and marginal Wasserstein-1 per attribute).
+| `INSTANT_NUREC_FULL_PT` | Absolute path to a local `kelvin_full.pt`. Takes priority over the auto-downloaded copy. |
 
 </details>
 
@@ -149,20 +110,15 @@ point clouds of differing vertex counts (bidirectional Chamfer + F-score
 instant-nurec/
 ├── instant_nurec/                  # main package
 │   ├── cli.py                      # argparse entrypoint
-│   ├── _hf_mock.py                 # placeholder HF resolver
+│   ├── _hf_mock.py                 # HF resolver (auto-downloads on first run)
 │   ├── config_schema/              # pydantic schemas + defaults
 │   ├── datasets/                   # ncorev4 ingest + cuboid-track helpers
-│   ├── model/                      # GaussiansNRMSystem + KelvinNRM + blocks
+│   ├── model/                      # GaussiansInstantNuRecSystem + KelvinInstantNuRec + blocks
 │   ├── predict/                    # predict loop + PLY export + merge
-│   ├── primitives/                 # KelvinNRMPrimitive
+│   ├── primitives/                 # KelvinInstantNuRecPrimitive
 │   └── utils/                      # batch / geometry / sensors / nn-extensions
-├── benchmark/
-│   ├── validate_parity.py          # PLY parity check
-│   ├── compare_clouds.py           # quality metrics for attributed point clouds
-│   └── derive_determinism_tolerance.py
 ├── tests/                          # branch-coverage tests
 │   └── tolerance.json
-├── baselines/                      # reference PLYs + parsed configs
 ├── run_inference.py                # main inference entry point
 ├── run.sh                          # input-validation wrapper
 ├── setup.sh                        # venv bootstrap

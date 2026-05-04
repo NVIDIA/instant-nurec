@@ -34,8 +34,8 @@ import pytest
 from plyfile import PlyData, PlyElement
 
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-SCRIPT = REPO_ROOT / "benchmark" / "validate_parity.py"
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+SCRIPT = REPO_ROOT / "internal" / "benchmark" / "validate_parity.py"
 
 BASELINE_SCHEMA: list[tuple[str, str]] = [
     ("x", "f4"), ("y", "f4"), ("z", "f4"),

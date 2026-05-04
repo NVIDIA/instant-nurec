@@ -20,10 +20,9 @@
 * ``camera_rays_to_image_points`` — forward camera projection (consumed
   by ``instant_nurec/utils/cubemap.py``).
 
-FTheta + NoExternalDistortion only for now (the predict baseline uses
-``camera_front_wide_120fov`` which is FTheta). Other camera models
-fall through to ``NotImplementedError`` until a dataset that needs them
-arrives.
+FTheta + NoExternalDistortion only for now (predict uses
+``camera_front_wide_120fov``). Other camera models fall through to
+``NotImplementedError`` until a dataset that needs them arrives.
 """
 
 from __future__ import annotations

@@ -37,14 +37,7 @@ class FullModelNotFoundError(RuntimeError):
 
 
 def _resolve_full_pt_path() -> Optional[str]:
-    """Resolve the ``kelvin_full.pt`` path.
-
-    An explicit ``INSTANT_NUREC_FULL_PT`` env var wins; otherwise route the
-    lookup through the HF mock.
-    """
-    env_path = os.environ.get("INSTANT_NUREC_FULL_PT")
-    if env_path and os.path.exists(env_path):
-        return env_path
+    """Resolve the ``kelvin_full.pt`` path via the HF resolver."""
     try:
         return _hf_mock.get_full_model_path()
     except _hf_mock.HFMockError:

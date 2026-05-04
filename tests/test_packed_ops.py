@@ -15,7 +15,7 @@
 
 """Branch-coverage tests for ``instant_nurec.utils.packed_ops``.
 
-After Phase A.4 the wrapper delegates to the pure-torch impl in
+The wrapper delegates to the pure-torch impl in
 ``_packed_ops_torch``; the kernel-stub fixture is no longer needed.
 The wrapper used to return a ``ValuesAndPidx`` dataclass with a
 secondary ``.pidx`` field — both that field and the underlying

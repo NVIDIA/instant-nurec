@@ -49,29 +49,12 @@ def test_resolve_returns_hf_mock_path_when_mock_succeeds(monkeypatch, tmp_path):
     assert _resolve_full_pt_path() == str(fake_pt)
 
 
-def test_resolve_env_var_wins_when_set_to_existing_path(monkeypatch, tmp_path):
-    """Explicit INSTANT_NUREC_FULL_PT pointing at an existing file wins over the HF mock."""
-    fallback = tmp_path / "fallback.pt"
-    fallback.write_bytes(b"")
-    monkeypatch.setenv("INSTANT_NUREC_FULL_PT", str(fallback))
-
-    def _should_not_run(**kwargs):
-        raise AssertionError("HF mock must not be consulted when env var resolves")
-
-    monkeypatch.setattr(_hf_mock, "get_full_model_path", _should_not_run)
-    assert _resolve_full_pt_path() == str(fallback)
-
-
-def test_resolve_falls_through_when_env_var_points_to_missing_file(monkeypatch, tmp_path):
-    """Env var set but path doesn't exist → fall through to the HF mock."""
-    missing = tmp_path / "missing.pt"
-    monkeypatch.setenv("INSTANT_NUREC_FULL_PT", str(missing))
-
-    def _raise(**kwargs):
-        raise _hf_mock.HFMockError("not in cache")
-
-    monkeypatch.setattr(_hf_mock, "get_full_model_path", _raise)
-    assert _resolve_full_pt_path() is None
+def test_resolve_returns_path_from_hf_mock(monkeypatch, tmp_path):
+    """Resolver delegates to the HF mock — env-var override is handled inside."""
+    fake_pt = tmp_path / "kelvin_full.pt"
+    fake_pt.write_bytes(b"")
+    monkeypatch.setattr(_hf_mock, "get_full_model_path", lambda **kw: str(fake_pt))
+    assert _resolve_full_pt_path() == str(fake_pt)
 
 
 def test_resolve_returns_none_when_mock_raises_and_env_unset(monkeypatch):
@@ -82,18 +65,6 @@ def test_resolve_returns_none_when_mock_raises_and_env_unset(monkeypatch):
 
     monkeypatch.setattr(_hf_mock, "get_full_model_path", _raise)
     monkeypatch.delenv("INSTANT_NUREC_FULL_PT", raising=False)
-
-    assert _resolve_full_pt_path() is None
-
-
-def test_resolve_returns_none_when_mock_raises_and_env_is_empty_string(monkeypatch):
-    """Empty env var should be treated the same as unset."""
-
-    def _raise(**kwargs):
-        raise _hf_mock.HFMockError("not in cache")
-
-    monkeypatch.setattr(_hf_mock, "get_full_model_path", _raise)
-    monkeypatch.setenv("INSTANT_NUREC_FULL_PT", "")
 
     assert _resolve_full_pt_path() is None
 

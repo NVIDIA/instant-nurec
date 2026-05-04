@@ -290,7 +290,7 @@ def test_base_config_schema_is_hashable():
 # ---------------------------------------------------------------------------
 
 
-def _make_nrm_kwargs(out_dir, **extra):
+def _make_config_kwargs(out_dir, **extra):
     base = dict(
         out_dir=str(out_dir),
         system=GaussiansInstantNuRecSystemConfig(),
@@ -301,16 +301,16 @@ def _make_nrm_kwargs(out_dir, **extra):
     return base
 
 
-def test_nrm_config_post_init_no_env(tmp_path, monkeypatch):
+def test_config_post_init_no_env(tmp_path, monkeypatch):
     monkeypatch.delenv("INSTANT_NUREC_RUN_ID", raising=False)
-    cfg = InstantNuRecConfig(**_make_nrm_kwargs(tmp_path))
+    cfg = InstantNuRecConfig(**_make_config_kwargs(tmp_path))
     # config_dir auto-derives to out_dir/run_id/config
     assert cfg.config_dir == os.path.join(str(tmp_path), cfg.run_id, "config")
     assert cfg.run_id  # auto-generated shortuuid
 
 
-def test_nrm_config_post_init_env_run_id_overrides(tmp_path, monkeypatch):
+def test_config_post_init_env_run_id_overrides(tmp_path, monkeypatch):
     monkeypatch.setenv("INSTANT_NUREC_RUN_ID", "fixed-run-123")
-    cfg = InstantNuRecConfig(**_make_nrm_kwargs(tmp_path))
+    cfg = InstantNuRecConfig(**_make_config_kwargs(tmp_path))
     assert cfg.run_id == "fixed-run-123"
     assert cfg.config_dir == os.path.join(str(tmp_path), "fixed-run-123", "config")

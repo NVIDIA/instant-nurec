@@ -15,9 +15,9 @@
 
 """Branch-coverage tests for ``instant_nurec.utils.geometry.se3pose_from_matrix``.
 
-Phase A.1 replacement for ``libs.geometry.kernels.pose.se3pose_from_matrix``.
+
 The helper does Shepperd's method in float64 internally and casts the
-final quaternion to f32, mirroring ``libs/geometry/kernels/quaternion.slang::fromMatrix``.
+final quaternion to f32.
 
 Bit-exact match with slang on GPU is provably impossible (different SASS
 instruction sequences); the residual ~1-3 ULP drift is absorbed by

@@ -15,7 +15,7 @@
 
 """Branch-coverage tests for ``instant_nurec.datasets.tracks``.
 
-After Phase A.7/A.8 dropped ``libs/`` and Phase B replaced lietorch with
+Tests use
 the in-tree ``_se3_torch`` shim, the only thing this fixture still has
 to stub is ``ncore.data`` (transitively imported by
 ``instant_nurec.utils.types``). The heavier interface-equivalent
@@ -376,7 +376,7 @@ def test_ray_intersection_calls_vren_and_packs_result(stubbed_tracks, monkeypatc
     assert out.intersections_tracks_idx.shape == (3, 8)
     assert captured["max_n"] == ct.max_track_n_poses
     assert captured["max_per_ray"] == 8
-    assert captured["with_ts"] is False  # standalone never reads .intersections_ts
+    assert captured["with_ts"] is False  # predict path never reads .intersections_ts
 
 
 # ---------------------------------------------------------------------------
@@ -570,7 +570,7 @@ def test_interpolate_tracks_poses_returns_se3_with_right_shape(
     ct = _make_cuboid_tracks_with_two(stubbed_tracks)
 
     # Override the imported torch helper to return a controllable index
-    # (1 for everything → tidx_left=0, tidx_right=1). The Phase A.4 swap
+    # (1 for everything → tidx_left=0, tidx_right=1)
     # replaced the kernel call with a module-level binding in tracks.py.
     def _fake_searchsorted(ts_us, packinfo, query_ts, tracks_idx):
         return torch.full((query_ts.shape[0],), 1, dtype=torch.long)
@@ -583,7 +583,7 @@ def test_interpolate_tracks_poses_returns_se3_with_right_shape(
     tracks_idx = torch.tensor([0, 0], dtype=torch.long)
     out = ct.interpolate_tracks_poses(timestamps_us, tracks_idx)
     # SUT returns lt.SE3.InitFromVec(torch.cat([t, R], dim=1)).
-    # After Phase B's lietorch shim, ``lt`` is ``_se3_torch.SE3`` (in-tree).
+    # ``lt`` is ``_se3_torch.SE3`` (in-tree).
     assert hasattr(out, "data")
     assert out.data.shape == (2, 7)
 

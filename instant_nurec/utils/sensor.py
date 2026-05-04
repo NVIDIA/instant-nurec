@@ -26,7 +26,7 @@ def to_simple_pinhole_model_parameters(
     """Convert any camera model parameters to simple pinhole model parameters
     (equal focal lengths, principal point at image center).
 
-    Predict-only standalone always uses the `method="horizontal"`, `reduce="min"`,
+    Predict-only always uses the `method="horizontal"`, `reduce="min"`,
     `percentile=1.0` configuration that the encoder calls with; the
     `corner`/`vertical` methods, the `max`/`mean` reductions, and the
     sub-1.0 percentile path were all dead.

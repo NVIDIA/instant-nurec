@@ -218,7 +218,7 @@ def cmd_no_merge(
 
 
 def _default_tolerance_path() -> Path:
-    return Path(__file__).resolve().parent.parent / "tests" / "tolerance.json"
+    return Path(__file__).resolve().parent.parent.parent / "tests" / "tolerance.json"
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -15,10 +15,10 @@
 
 """Tests for ``instant_nurec.cli``.
 
-The CLI builds a ``InstantNuRecConfig`` directly from the pydantic schemas in
-``config_schema/`` and hands it to ``predict.run.run_predict``. We
-stub ``predict.run`` so the test doesn't need GPU / NRE deps, then
-inspect the constructed ``InstantNuRecConfig``.
+The CLI builds an ``InstantNuRecConfig`` directly from the pydantic schemas
+in ``config_schema/`` and hands it to ``predict.run.run_predict``. We stub
+``predict.run`` so the test doesn't need GPU, then inspect the constructed
+``InstantNuRecConfig``.
 """
 
 from __future__ import annotations

@@ -15,7 +15,7 @@
 
 """Branch-coverage tests for ``instant_nurec.utils.batch``.
 
-After Phase A.8 dropped ``libs/`` and Phase B replaced lietorch with the
+Tests use the
 in-tree ``_se3_torch`` shim, the only external surface batch.py still
 needs is the ncore ingest API. We stub ncore via ``sys.modules`` and
 exercise the testable dataclass logic with plain torch tensors.

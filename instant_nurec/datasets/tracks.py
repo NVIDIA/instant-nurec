@@ -340,7 +340,7 @@ class CuboidTracks(Tracks):
             self.cuboids_dims,
             self.max_track_n_poses,
             max_intersections_per_ray,
-            False,  # with_intersections_ts: standalone never reads .intersections_ts
+            False,  # with_intersections_ts: predict path never reads .intersections_ts
         )
 
         return CuboidTracks.RayIntersectionResult(

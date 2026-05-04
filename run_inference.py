@@ -14,16 +14,13 @@
 # limitations under the License.
 
 #!/usr/bin/env python3
-"""Standalone Kelvin predict entrypoint.
+"""InstantNuRec Kelvin predict entrypoint.
 
 Invocation::
 
     python run_inference.py --ncore-path <path> --output-dir <path> --merge {none,frustum-ownership}
 
-Phase 3 step 8.4: this is the canonical invocation. The Phase 1 ``bazel run
-//instant_nurec:run -- ...`` form remains supported through Phase 3
-transition; ``run_inference.py`` defers to ``instant_nurec.cli.main`` and so
-runs whichever tree is currently importable on ``sys.path``.
+Defers to ``instant_nurec.cli.main``.
 """
 
 from __future__ import annotations

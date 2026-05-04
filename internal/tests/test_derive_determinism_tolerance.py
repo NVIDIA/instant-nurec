@@ -34,10 +34,10 @@ import torch
 from plyfile import PlyData, PlyElement
 
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from benchmark.derive_determinism_tolerance import _glob_one, _max_pair_diff, _read_props
+from internal.benchmark.derive_determinism_tolerance import _glob_one, _max_pair_diff, _read_props
 
 
 # ---------------------------------------------------------------------------
@@ -128,7 +128,7 @@ def test_read_props_widens_multibyte_int_dtypes_to_int64(tmp_path: Path):
 def test_read_props_raises_on_unsupported_dtype(tmp_path: Path, monkeypatch):
     """Defensive ValueError branch (line 50): if the PLY has a property whose
     val_dtype isn't ``f*`` / ``u1`` / ``u*`` / ``i*``, _read_props must raise."""
-    import benchmark.derive_determinism_tolerance as ddt
+    import internal.benchmark.derive_determinism_tolerance as ddt
 
     class _FakeProp:
         name = "weird"
@@ -307,7 +307,7 @@ def _build_run_tree(tmp_path: Path, n_runs: int = 2, n_chunks: int = 1) -> Path:
 def test_main_writes_tolerance_json(tmp_path, monkeypatch, capsys):
     """End-to-end: monkey-patch RUNS and OUT, run main(), verify tolerance.json
     is written with all expected property keys."""
-    import benchmark.derive_determinism_tolerance as ddt
+    import internal.benchmark.derive_determinism_tolerance as ddt
 
     fake_repo = _build_run_tree(tmp_path, n_runs=3, n_chunks=2)
     runs = sorted((fake_repo / "baselines" / "more_baselines").glob("run_*/"))
@@ -326,7 +326,7 @@ def test_main_writes_tolerance_json(tmp_path, monkeypatch, capsys):
 def test_main_with_drift_records_max_diff(tmp_path, monkeypatch):
     """Two runs with the same property but slightly different values — main()
     should record the larger diff into tolerance.json."""
-    import benchmark.derive_determinism_tolerance as ddt
+    import internal.benchmark.derive_determinism_tolerance as ddt
 
     base = tmp_path / "baselines" / "more_baselines"
     # run_1: x = 0
@@ -361,7 +361,7 @@ def test_main_no_merge_bumped_print_branch(tmp_path, monkeypatch, capsys):
     no_merge chunk-pair ratchets tolerance higher than the merge step did.
     Build identical merge PLYs (no merge ratchet) but differing no_merge
     chunks (forces a no_merge ratchet) and assert the print fires."""
-    import benchmark.derive_determinism_tolerance as ddt
+    import internal.benchmark.derive_determinism_tolerance as ddt
 
     base = tmp_path / "baselines" / "more_baselines"
 
@@ -395,7 +395,7 @@ def test_main_no_merge_bumped_print_branch(tmp_path, monkeypatch, capsys):
 
 
 def test_main_rejects_fewer_than_2_runs(tmp_path, monkeypatch):
-    import benchmark.derive_determinism_tolerance as ddt
+    import internal.benchmark.derive_determinism_tolerance as ddt
 
     base = tmp_path / "baselines" / "more_baselines"
     _write_ply(

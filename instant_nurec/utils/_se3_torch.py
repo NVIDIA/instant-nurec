@@ -37,7 +37,7 @@ lietorch API the predict path actually exercises:
 * ``SO3 * SO3`` (composition).
 * ``SO3.inv()``.
 
-Quaternion convention: XYZW (matches lietorch and the slang/ncore code).
+Quaternion convention: XYZW (matches lietorch and ncore).
 
 All intellectual credit for the lietorch interface, the SE3/SO3 group
 algebra and the underlying numerics belongs to the original lietorch

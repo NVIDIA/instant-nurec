@@ -132,7 +132,7 @@ class GaussianParams:
 class GaussianActivations(nn.Module):
     """Combined activation functions for Gaussian parameters.
 
-    Predict-only standalone calls the per-attribute submodules directly
+    Predict-only calls the per-attribute submodules directly
     (`self.gaussian_activations.{rgb,scale,opacity,rotation}` from the
     decoder); `forward` was unused, so the `xyz` / `distance` activation
     classes that fed it are gone

@@ -17,7 +17,7 @@
 
 The module imports from ``instant_nurec.utils.types`` which pulls in
 ``ncore.data``. We stub it via ``sys.modules``. Phase B replaced the
-lietorch dep with the in-tree ``_se3_torch`` shim, so no lietorch stub
+
 is needed.
 """
 

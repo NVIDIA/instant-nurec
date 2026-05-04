@@ -15,12 +15,9 @@
 
 """Branch-coverage tests for instant_nurec.utils.cubemap.
 
-The module imports ``libs.vren.interface`` and ``ncore.impl.data.types``
-at the top level for the unrelated ``unproject_to_sky_cubemap`` helper;
-those are compiled .so / ncore Python bindings that aren't available in
-the cpu-only test venv. We stub them via sys.modules so we can import
-the pure-torch ``cubemap_ray_directions`` and ``rotate_sky_cubemap``
-without pulling in the bazel runtime.
+``ncore.impl.data.types`` is a compiled extension that isn't available in
+the cpu-only test venv. We stub it via ``sys.modules`` so we can import
+``cubemap_ray_directions`` and ``rotate_sky_cubemap`` directly.
 """
 
 from __future__ import annotations
@@ -114,8 +111,8 @@ def test_cubemap_ray_directions_unit_length():
 
 def test_cubemap_ray_directions_face_centers_align_with_dominant_axis():
     """The center pixel of each face should produce a ray dominated by the
-    expected axis. NRE face order is (right=+X, left=-X, top=-Y, bottom=+Y,
-    front=+Z, back=-Z)."""
+    expected axis. Face order: right=+X, left=-X, top=-Y, bottom=+Y,
+    front=+Z, back=-Z."""
     import torch
 
     from instant_nurec.utils.cubemap import cubemap_ray_directions
@@ -232,7 +229,7 @@ def test_rotate_sky_cubemap_supports_arbitrary_channel_count():
 
 
 class _FakeImagePointsReturn:
-    """Stand-in for the namedtuple returned by libs.vren camera_rays_to_image_points."""
+    """Stand-in for the namedtuple returned by camera_rays_to_image_points."""
 
     def __init__(self, n_rays: int, n_valid: int, image_w: int, image_h: int):
         # All-True valid_flag for the first n_valid; rest invalid.
@@ -257,7 +254,7 @@ class _FakeCameraModelParameters:
 
 @pytest.fixture
 def _vren_with_fake_camera_rays(monkeypatch: pytest.MonkeyPatch):
-    """Patch ``camera_rays_to_image_points`` (after Phase A.7 it lives in
+    """Patch ``camera_rays_to_image_points`` (lives in
     ``instant_nurec.utils.sensors._image_points_to_world_rays_torch``;
     cubemap.py imports it by name)."""
 

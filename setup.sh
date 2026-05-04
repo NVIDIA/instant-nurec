@@ -15,13 +15,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Standalone Kelvin predict — environment setup.
+# InstantNuRec Kelvin predict — environment setup.
 #
-# Bootstraps a venv and ``pip install -e .``. All slang/CUDA kernels
-# in ``libs/`` were replaced with pure-torch equivalents (Phase A);
-# the only CUDA dependency left is whatever ``torch`` ships with the
-# CUDA build you choose. ``run_inference.py`` is the canonical
-# entrypoint.
+# Bootstraps a venv and ``pip install -e .``. The only CUDA dependency
+# is whatever ``torch`` ships with the CUDA build you choose.
+# ``run_inference.py`` is the canonical entrypoint.
 
 set -euo pipefail
 
@@ -40,7 +38,7 @@ python -m pip install --upgrade pip
 # Install the pinned CUDA torch build first (the cu128 wheel is published
 # on PyTorch's own index, not pypi.org). pyproject.toml pins
 # ``torch==2.7.0+cu128`` so this index is required during install.
-python -m pip install torch==2.7.0+cu128 --index-url https://download.pytorch.org/whl/cu128
+python -m pip install torch==2.7.0+cu128 torchvision==0.22.0+cu128 --index-url https://download.pytorch.org/whl/cu128
 
 python -m pip install -e .
 

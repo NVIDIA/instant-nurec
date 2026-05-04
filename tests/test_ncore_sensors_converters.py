@@ -16,7 +16,7 @@
 """Branch-coverage tests for ``instant_nurec.utils.sensors.ncore_sensors_converters``.
 
 The module converts ncore camera models into the in-tree dataclass
-parameter types (after Phase A.2/A.6 these live in
+parameter types (these live in
 ``instant_nurec.utils.sensors._kernel_types``). The ncore types are
 compiled extensions; we stub them via ``sys.modules`` and verify that
 ``CameraModelConverter.convert`` dispatches by isinstance, calls each
@@ -40,7 +40,7 @@ sys.path.insert(0, str(REPO_ROOT))
 
 @pytest.fixture
 def stubbed_converters(monkeypatch):
-    # After Phase A.6 the converter pulls dataclasses from
+    # The converter pulls dataclasses from
     # ``instant_nurec.utils.sensors._kernel_types`` (in-tree). We use
     # the real types and wrap their ``from_components`` with a capture
     # shim so the existing call-arg assertions still work.
@@ -364,7 +364,7 @@ def test_external_distortion_none_returns_no_external_distortion(stubbed_convert
     ShutterType = stubbed_converters[6]
     cam = _make_pinhole(OpenCVPinholeCameraModel, ShutterType)
     result = mod.CameraModelConverter.convert(cam)
-    # After Phase A.6 NoExternalDistortion lives in instant_nurec's in-tree
+    # NoExternalDistortion lives in instant_nurec's in-tree
     # _kernel_types module.
     from instant_nurec.utils.sensors._kernel_types import NoExternalDistortion
 
@@ -440,7 +440,7 @@ def test_external_distortion_unrecognized_type_returns_none(stubbed_converters):
 
 def test_module_exports_pose_and_dynamic_pose(stubbed_converters):
     """``__all__`` includes ``Pose`` and ``DynamicPose`` re-exported from
-    instant_nurec's in-tree ``_kernel_types`` (after Phase A.6)."""
+    instant_nurec's in-tree ``_kernel_types`` ."""
     (mod, *_) = stubbed_converters
     from instant_nurec.utils.sensors._kernel_types import Pose, DynamicPose
 

@@ -13,27 +13,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""HuggingFace placeholder mock.
+"""HuggingFace resolver for ``kelvin_full.pt``.
 
-Targets the (eventually-public) HF repo ``nvidia/instant-nurec-kelvin``
-for both the pickled Kelvin system (``kelvin_full.pt``) and an ncorev4
-sample fixture (``ncorev4_sample/``). Until that repo is published we
-keep the production import surface identical to the real-HF path and
-stub the resolver in this module:
+Resolves the pretrained model on first inference run, in this order:
 
-* ``snapshot_download(repo_id, ...)`` returns a local cache directory
-  populated with whatever the user has already produced (write
-  ``kelvin_full.pt`` via the ``INSTANT_NUREC_FULL_PT`` env var).
-* ``hf_hub_download(repo_id, filename, ...)`` returns the absolute path
-  to a single cached artifact.
+1. If ``INSTANT_NUREC_FULL_PT`` points at an existing file, copy it into
+   the cache and use it. Useful for offline use.
+2. If a copy already lives in the cache, return it.
+3. Otherwise auto-download from ``nvidia/instant-nurec-kelvin`` via
+   ``huggingface_hub.hf_hub_download`` into the cache.
 
-The mock is selected via the env var ``INSTANT_NUREC_HF_MOCK`` (default
-``1``). Setting it to ``0`` forwards the call through to
-``huggingface_hub`` proper if it's installed.
+The HF repo id is currently a placeholder; until it's published, the
+auto-download fails with an actionable error message and step (1) is the
+expected escape hatch.
 """
 
 from __future__ import annotations
 
+import logging
 import os
 import shutil
 
@@ -41,8 +38,11 @@ from pathlib import Path
 from typing import Optional
 
 
-# The placeholder HF repo id; the corp will replace this when the real
-# upload happens. Until then the mock resolves it locally.
+logger = logging.getLogger(__name__)
+
+
+# The HF repo id; until it's published, auto-download fails and the user
+# must point at a local copy via ``INSTANT_NUREC_FULL_PT``.
 PLACEHOLDER_REPO_ID = "nvidia/instant-nurec-kelvin"
 
 # Default cache root. Mirrors HF's own convention but namespaced under
@@ -50,36 +50,30 @@ PLACEHOLDER_REPO_ID = "nvidia/instant-nurec-kelvin"
 # machine.
 DEFAULT_CACHE_DIR = Path(os.path.expanduser("~/.cache/instant_nurec"))
 
-# Names the standalone treats as ``downloadable`` from the placeholder repo.
 _FULL_MODEL_FILENAME = "kelvin_full.pt"
-_SAMPLE_DIR_NAME = "ncorev4_sample"
 
 
 class HFMockError(RuntimeError):
-    """Raised when the mock cannot satisfy a request (file missing, etc.)."""
-
-
-def _is_mock_enabled() -> bool:
-    """Default on; set ``INSTANT_NUREC_HF_MOCK=0`` to defer to real HF."""
-    return os.environ.get("INSTANT_NUREC_HF_MOCK", "1") != "0"
+    """Raised when the resolver cannot satisfy a request."""
 
 
 def _cache_dir() -> Path:
     return Path(os.environ.get("INSTANT_NUREC_HF_CACHE_DIR", str(DEFAULT_CACHE_DIR)))
 
 
-def _seed_cache_from_full_pt(cache_dir: Path) -> Path:
-    """If ``INSTANT_NUREC_FULL_PT`` points at an existing file, seed the cache
-    when missing or stale (size differs or source is newer). Returns the cache dir.
+def _seed_cache_from_env(cache_root: Path) -> Optional[Path]:
+    """If ``INSTANT_NUREC_FULL_PT`` points at an existing file, copy it
+    into the cache when the cache is missing/stale and return the cache
+    path. Returns ``None`` if the env var isn't set or doesn't resolve.
     """
     src = os.environ.get("INSTANT_NUREC_FULL_PT")
     if not src:
-        return cache_dir
+        return None
     src_path = Path(src)
     if not src_path.exists():
-        return cache_dir
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    dst = cache_dir / _FULL_MODEL_FILENAME
+        return None
+    cache_root.mkdir(parents=True, exist_ok=True)
+    dst = cache_root / _FULL_MODEL_FILENAME
     src_stat = src_path.stat()
     needs_copy = (
         not dst.exists()
@@ -87,86 +81,44 @@ def _seed_cache_from_full_pt(cache_dir: Path) -> Path:
         or dst.stat().st_mtime < src_stat.st_mtime
     )
     if needs_copy:
+        logger.info("Seeding cache from %s.", src_path)
         shutil.copyfile(src_path, dst)
-    return cache_dir
-
-
-def snapshot_download(
-    repo_id: str,
-    *,
-    cache_dir: Optional[str | Path] = None,
-    revision: Optional[str] = None,  # noqa: ARG001  (unused; kept for API compat)
-    **kwargs,  # noqa: ARG001
-) -> str:
-    """Resolve ``repo_id`` to a local snapshot directory.
-
-    The mock only knows how to satisfy ``PLACEHOLDER_REPO_ID``; any other
-    repo id raises so the caller can fall through to real HF.
-    """
-    if not _is_mock_enabled():
-        from huggingface_hub import snapshot_download as _real
-
-        return _real(repo_id, cache_dir=cache_dir, revision=revision, **kwargs)
-
-    if repo_id != PLACEHOLDER_REPO_ID:
-        raise HFMockError(
-            f"HF mock only knows {PLACEHOLDER_REPO_ID!r}; got {repo_id!r}. "
-            f"Set INSTANT_NUREC_HF_MOCK=0 to defer to real huggingface_hub."
-        )
-
-    target = Path(cache_dir) if cache_dir else _cache_dir()
-    target = _seed_cache_from_full_pt(target)
-    target.mkdir(parents=True, exist_ok=True)
-    return str(target)
-
-
-def hf_hub_download(
-    repo_id: str,
-    filename: str,
-    *,
-    cache_dir: Optional[str | Path] = None,
-    revision: Optional[str] = None,  # noqa: ARG001
-    **kwargs,  # noqa: ARG001
-) -> str:
-    """Resolve ``repo_id``/``filename`` to a local file path.
-
-    Raises ``HFMockError`` if the file isn't present in the cache.
-    """
-    if not _is_mock_enabled():
-        from huggingface_hub import hf_hub_download as _real
-
-        return _real(repo_id, filename, cache_dir=cache_dir, revision=revision, **kwargs)
-
-    snapshot_root = Path(snapshot_download(repo_id, cache_dir=cache_dir))
-    file_path = snapshot_root / filename
-    if not file_path.exists():
-        raise HFMockError(
-            f"HF mock: file {filename!r} not found in {snapshot_root}. "
-            f"Set ``INSTANT_NUREC_FULL_PT`` to a local copy of "
-            f"``{_FULL_MODEL_FILENAME}`` or place it in the cache directory."
-        )
-    return str(file_path)
+    return dst
 
 
 def get_full_model_path(*, cache_dir: Optional[str | Path] = None) -> str:
-    """Convenience: resolve the canonical ``kelvin_full.pt`` from the
-    placeholder repo. Equivalent to
-    ``hf_hub_download(PLACEHOLDER_REPO_ID, "kelvin_full.pt")``."""
-    return hf_hub_download(PLACEHOLDER_REPO_ID, _FULL_MODEL_FILENAME, cache_dir=cache_dir)
+    """Resolve ``kelvin_full.pt``: env var → cache → HF auto-download."""
 
+    cache_root = Path(cache_dir) if cache_dir else _cache_dir()
+    cache_root.mkdir(parents=True, exist_ok=True)
 
-def get_sample_data_path(*, cache_dir: Optional[str | Path] = None) -> str:
-    """Convenience: resolve the canonical ``ncorev4_sample/`` directory.
+    seeded = _seed_cache_from_env(cache_root)
+    if seeded is not None:
+        return str(seeded)
 
-    Returns the directory path. Raises ``HFMockError`` if the directory
-    isn't present (Phase 4 step 10 expects the sample fixture to be
-    distributed via HF; until then users supply their own ``--ncore-path``).
-    """
-    snapshot_root = Path(snapshot_download(PLACEHOLDER_REPO_ID, cache_dir=cache_dir))
-    sample_dir = snapshot_root / _SAMPLE_DIR_NAME
-    if not sample_dir.exists() or not sample_dir.is_dir():
+    cached = cache_root / _FULL_MODEL_FILENAME
+    if cached.exists():
+        return str(cached)
+
+    try:
+        from huggingface_hub import hf_hub_download
+    except ImportError as e:
         raise HFMockError(
-            f"HF mock: sample data {_SAMPLE_DIR_NAME!r} not found at {sample_dir}. "
-            f"Use --ncore-path to point at your own ncorev4 dataset."
+            f"huggingface_hub is required to auto-download "
+            f"{PLACEHOLDER_REPO_ID!r}: pip install huggingface_hub"
+        ) from e
+
+    try:
+        logger.info("Downloading %s/%s ...", PLACEHOLDER_REPO_ID, _FULL_MODEL_FILENAME)
+        return hf_hub_download(
+            repo_id=PLACEHOLDER_REPO_ID,
+            filename=_FULL_MODEL_FILENAME,
+            cache_dir=str(cache_root),
         )
-    return str(sample_dir)
+    except Exception as e:
+        raise HFMockError(
+            f"Could not resolve {_FULL_MODEL_FILENAME}. The HF repo "
+            f"{PLACEHOLDER_REPO_ID!r} download failed and no local copy was "
+            f"found at {cached} or via INSTANT_NUREC_FULL_PT. Underlying "
+            f"error: {e}"
+        ) from e

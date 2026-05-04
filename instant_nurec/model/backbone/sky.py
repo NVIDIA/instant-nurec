@@ -34,13 +34,9 @@ from instant_nurec.utils.misc import unpack_optional
 
 
 class _RGBNormalize(_nn.Module):
-    """Pure-torch ``transforms.Normalize`` for RGB tensors of shape (..., C, H, W).
-
-    Replaces ``torchvision.transforms.Normalize(mean, std)``. The
-    ``mean``/``std`` are non-persistent buffers — they move with
-    ``.to(device)`` like real ``torchvision.transforms.Normalize`` would
-    (via per-tensor device on use), but never appear in ``state_dict()``,
-    so existing pickled checkpoints load without spurious missing-key errors.
+    """Wraps ``torchvision.transforms.v2.Normalize`` for tensors of shape
+    ``(..., C, H, W)``. The mean/std are stored as non-persistent buffers
+    so they don't appear in ``state_dict()``.
     """
 
     def __init__(self, mean, std):
@@ -49,7 +45,13 @@ class _RGBNormalize(_nn.Module):
         self.register_buffer("_std", torch.tensor(std).view(1, -1, 1, 1), persistent=False)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return (x - self._mean) / self._std
+        import torchvision.transforms.functional as TF
+
+        return TF.normalize(
+            x,
+            mean=self._mean.flatten().tolist(),
+            std=self._std.flatten().tolist(),
+        )
 
 
 class CubemapDecoderSky(nn.Module):

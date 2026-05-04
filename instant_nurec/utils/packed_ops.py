@@ -28,13 +28,7 @@ def linstep_interleave(
     num_steps: torch.Tensor,
     step_size: torch.Tensor | int | float,
 ) -> torch.Tensor:
-    """Returns interleaved per-pack arange-style sequences, one step_size apart.
-
-    The bazel kernel also accepted a ``return_idx`` flag that returned a
-    per-element pack-index tensor; the standalone never read that tensor
-    so the parameter and the wrapper's ``ValuesAndPidx`` dataclass were
-    deleted (final dead-code pass).
-    """
+    """Returns interleaved per-pack arange-style sequences, one step_size apart."""
     if start.numel() == 0:
         return torch.empty_like(start)
     return _linstep_interleave_torch(

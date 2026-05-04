@@ -81,7 +81,7 @@ def test_get_lidar_model_parameters_returns_attribute(stubbed_ncore):
 
 
 def test_get_lidar_model_parameters_passes_through_none(stubbed_ncore):
-    """A V4 sensor with model_parameters=None returns None — matches NRE."""
+    """A V4 sensor with model_parameters=None returns None."""
     mod, LidarSensor = stubbed_ncore
     sensor = LidarSensor(model_parameters=None)
     assert mod.get_lidar_model_parameters(sensor) is None

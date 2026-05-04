@@ -15,7 +15,7 @@
 
 """Branch-coverage tests for ``instant_nurec.utils.sensors`` (sensors.py + __init__.py).
 
-After Phase A.5 the slang ``compute_poses_and_timestamps`` kernel is replaced
+Tests for the in-tree ``compute_poses_and_timestamps``
 with a torch helper (matrix indexing); we no longer need the kernel stub.
 ``ncore`` is still stubbed via ``sys.modules`` for CPU-only test venvs.
 The CUDA assertion in ``get_poses_and_timestamps_startend`` is exercised
@@ -39,7 +39,7 @@ sys.path.insert(0, str(REPO_ROOT))
 @pytest.fixture
 def stubbed_sensors(monkeypatch):
     # ncore.data.ShutterType + ncore.sensors camera models stubs (the only
-    # external imports left after Phase A.5).
+    # external imports).
     ncore_mod = types.ModuleType("ncore")
     ncore_data_mod = types.ModuleType("ncore.data")
     ncore_sensors_mod = types.ModuleType("ncore.sensors")
@@ -171,7 +171,7 @@ def test_get_poses_and_timestamps_startend_returns_squeezed_tensors(stubbed_sens
 
 
 def test_compute_poses_and_timestamps_torch_indexes_views(stubbed_sensors):
-    """Phase A.5 helper: per-sample matrix and timestamp indexing."""
+    """per-sample matrix and timestamp indexing."""
     sensors_pkg, _ = stubbed_sensors
     helper = sensors_pkg.sensors._compute_poses_and_timestamps_torch
     T = torch.arange(96).reshape(3, 2, 4, 4).to(torch.float32)

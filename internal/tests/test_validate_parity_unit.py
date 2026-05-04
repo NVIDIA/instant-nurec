@@ -32,7 +32,7 @@ import torch
 from plyfile import PlyData, PlyElement
 
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
 @pytest.fixture(scope="module")
@@ -41,7 +41,7 @@ def vp():
     its private helpers and verify them in coverage."""
     spec = importlib.util.spec_from_file_location(
         "validate_parity_module_under_test",
-        str(REPO_ROOT / "benchmark" / "validate_parity.py"),
+        str(REPO_ROOT / "internal" / "benchmark" / "validate_parity.py"),
     )
     assert spec is not None and spec.loader is not None
     mod = importlib.util.module_from_spec(spec)

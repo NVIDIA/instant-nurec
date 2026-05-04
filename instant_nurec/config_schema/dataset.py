@@ -108,7 +108,7 @@ class NCoreInstantNuRecDatasetConfig(BaseConfigSchema):
 
 
 class InstantNuRecSplitsConfig(BaseConfigSchema):
-    """Splits configuration. Predict-only standalone keeps just the predict
+    """Splits configuration. Predict-only keeps just the predict
     split; pydantic ``extras="ignore"`` drops the train/val/test entries
     that the pretrained ``parsed.yaml`` still carries."""
 
