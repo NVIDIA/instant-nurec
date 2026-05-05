@@ -42,7 +42,8 @@ original-frame meters; multiply by 6.667 to get back to meters).
 | 07c8b20 | drop bazel + cu128 wheel       | 32.5 / 33.5             |   −2     |   +7     |  −21    | 5.09e-3 / 6.26e-3 / 4.61e-3       | 0.903 / 0.851 / 0.907             | sweep ✓    |
 | 7ea7a65 | single-.pt artifact            | 29.1 / 33.1             |   −2     |   +7     |  −21    | 5.09e-3 / 6.26e-3 / 4.61e-3       | 0.903 / 0.851 / 0.907             | sweep ✓    |
 | e58736e | NRM → InstantNuRec rename      | 28.5 / 33.1             |   −2     |   +7     |  −21    | 5.09e-3 / 6.26e-3 / 4.61e-3       | 0.903 / 0.851 / 0.907             | smoke ✓    |
-| 7d713e5 | uv pins → NRE-bazel exact       | 28.5 / 33.1             |   +5     |   −4     |  −30    | 4.75e-3 / 6.50e-3 / 4.60e-3       | 0.901 / 0.848 / 0.900             | smoke ✓    |
+| 69c7601 | migrate to uv (loose pins)     | 49.7 / 28.0             |   +5     |   −4     |  −30    | 4.75e-3 / 6.50e-3 / 4.60e-3       | 0.901 / 0.848 / 0.900             | smoke ✓    |
+| 7d713e5 | uv pins → NRE-bazel exact      | 28.5 / 33.1             |   +5     |   −4     |  −30    | 4.75e-3 / 6.50e-3 / 4.60e-3       | 0.901 / 0.848 / 0.900             | smoke ✓    |
 | HEAD    | (current)                      | 28.5 / 33.1             |   +5     |   −4     |  −30    | 4.75e-3 / 6.50e-3 / 4.60e-3       | 0.901 / 0.848 / 0.900             | smoke ✓    |
 
 ## Sweep coverage notes
@@ -95,18 +96,29 @@ maps to `torch.nn.functional.interpolate(antialias=True)` (same kernel).
   transitive Python tree fresh — newer numpy / scipy / pandas / zarr /
   numcodecs / nvidia-ncore than NRE bazel pinned. Drift redistributed
   from +5/−4/−30 to −2/+7/−21. Originally attributed to the cu128
-  wheel; we later disproved that — see ``7d713e5`` below.
+  wheel; we later disproved that — see ``69c7601`` and ``7d713e5``
+  below.
+* **`69c7601` migrate to uv (loose pins)** — *parity returns*. uv
+  resolved the dep tree deterministically into versions much closer
+  to NRE's bazel pins than free-form pip had picked at ``07c8b20``
+  (e.g. numpy 1.26.4 / pandas 2.3.3 / nvidia-ncore 18.7.0 instead of
+  numpy 2.x / pandas 3.0 / nvidia-ncore 19.0). With those NRE-aligned
+  transitive versions, parity snaps back to **+5/−4/−30** — same
+  pattern as Phase A.5–A.8. The (still-newer) scipy 1.11.4 /
+  numcodecs 0.15.1 / pyyaml 6.0.2 / huggingface_hub 1.13.0 turn out
+  to be parity-neutral relative to NRE's 1.11.1 / 0.11.0 / 6.0 /
+  0.36.2.
 * **`7d713e5` uv pins → NRE-bazel exact** — *closed loop on the
   ``07c8b20`` attribution*. Same public ``torch==2.7.0+cu128`` wheel
-  as ``07c8b20``, but with every other dep pinned exactly to NRE's
-  bazel-resolved versions (``scipy==1.11.1``, ``numcodecs==0.11.0``,
-  ``pyyaml==6.0``, ``huggingface_hub==0.36.2``, ``numpy==1.26.4``,
-  ``nvidia-ncore==18.7.0``, ``pandas==2.3.3``, etc., on Python 3.11.15)
-  via uv lockfile. Result: parity returns to **+5/−4/−30** — the same
-  pattern that held throughout Phase A.5–A.8. So the apparent
-  ``07c8b20`` drift was caused by the transitive dep tree, not by the
-  public-vs-internal cu128 wheel difference; the wheel difference is
-  effectively parity-neutral when the rest of the deps match NRE.
+  as ``07c8b20``, with every dep tightened to NRE's exact bazel pins
+  (``scipy==1.11.1``, ``numcodecs==0.11.0``, ``pyyaml==6.0``,
+  ``huggingface_hub==0.36.2`` etc., on Python 3.11.15). Vertex deltas
+  unchanged from ``69c7601``: **+5/−4/−30**. So the public-vs-internal
+  cu128 wheel difference is parity-neutral, and the four scipy /
+  numcodecs / pyyaml / hf_hub patch-version deltas are also
+  parity-neutral. The drift moved at ``07c8b20`` was driven by the
+  *major* transitive-dep version jumps (numpy / pandas / ncore) that
+  happened the moment we left bazel for unconstrained pip.
 
 ## Where runtime changed
 
