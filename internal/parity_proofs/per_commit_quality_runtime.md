@@ -42,7 +42,8 @@ original-frame meters; multiply by 6.667 to get back to meters).
 | 07c8b20 | drop bazel + cu128 wheel       | 32.5 / 33.5             |   −2     |   +7     |  −21    | 5.09e-3 / 6.26e-3 / 4.61e-3       | 0.903 / 0.851 / 0.907             | sweep ✓    |
 | 7ea7a65 | single-.pt artifact            | 29.1 / 33.1             |   −2     |   +7     |  −21    | 5.09e-3 / 6.26e-3 / 4.61e-3       | 0.903 / 0.851 / 0.907             | sweep ✓    |
 | e58736e | NRM → InstantNuRec rename      | 28.5 / 33.1             |   −2     |   +7     |  −21    | 5.09e-3 / 6.26e-3 / 4.61e-3       | 0.903 / 0.851 / 0.907             | smoke ✓    |
-| HEAD    | (current)                      | 28.5 / 33.1             |   −2     |   +7     |  −21    | 5.09e-3 / 6.26e-3 / 4.61e-3       | 0.903 / 0.851 / 0.907             | sweep ✓    |
+| 7d713e5 | uv pins → NRE-bazel exact       | 28.5 / 33.1             |   +5     |   −4     |  −30    | 4.75e-3 / 6.50e-3 / 4.60e-3       | 0.901 / 0.848 / 0.900             | smoke ✓    |
+| HEAD    | (current)                      | 28.5 / 33.1             |   +5     |   −4     |  −30    | 4.75e-3 / 6.50e-3 / 4.60e-3       | 0.901 / 0.848 / 0.900             | smoke ✓    |
 
 ## Sweep coverage notes
 
@@ -86,11 +87,26 @@ maps to `torch.nn.functional.interpolate(antialias=True)` (same kernel).
   + the supporting dataclasses. Torch rolling-shutter pose-interp
   matches ncore's pure-python reference more faithfully than the slang
   kernel did → chunk0 drift improved (+8 → +5).
-* **`07c8b20` Phase B.2** — *cuda runtime swap, not a math change*.
-  Same Phase A torch impls, run via the public `torch==2.7.0+cu128`
-  wheel instead of NRE's internal `torch==2.7.0+cu128.gitc41f6e01287`
-  build. Different TF32/cuDNN heuristics → drift redistribution from
-  +5/−4/−30 to −2/+7/−21. Same 50-vertex band held.
+* **`07c8b20` Phase B.2** — *cuda runtime + transitive-dep swap, not a
+  math change*. Same Phase A torch impls. Two things changed at once:
+  (a) public `torch==2.7.0+cu128` wheel instead of NRE's internal
+  `torch==2.7.0+cu128.gitc41f6e01287` build, and (b) the first
+  `pip install -e .` after dropping bazel resolved the entire
+  transitive Python tree fresh — newer numpy / scipy / pandas / zarr /
+  numcodecs / nvidia-ncore than NRE bazel pinned. Drift redistributed
+  from +5/−4/−30 to −2/+7/−21. Originally attributed to the cu128
+  wheel; we later disproved that — see ``7d713e5`` below.
+* **`7d713e5` uv pins → NRE-bazel exact** — *closed loop on the
+  ``07c8b20`` attribution*. Same public ``torch==2.7.0+cu128`` wheel
+  as ``07c8b20``, but with every other dep pinned exactly to NRE's
+  bazel-resolved versions (``scipy==1.11.1``, ``numcodecs==0.11.0``,
+  ``pyyaml==6.0``, ``huggingface_hub==0.36.2``, ``numpy==1.26.4``,
+  ``nvidia-ncore==18.7.0``, ``pandas==2.3.3``, etc., on Python 3.11.15)
+  via uv lockfile. Result: parity returns to **+5/−4/−30** — the same
+  pattern that held throughout Phase A.5–A.8. So the apparent
+  ``07c8b20`` drift was caused by the transitive dep tree, not by the
+  public-vs-internal cu128 wheel difference; the wheel difference is
+  effectively parity-neutral when the rest of the deps match NRE.
 
 ## Where runtime changed
 

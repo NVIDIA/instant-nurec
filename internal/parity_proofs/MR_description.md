@@ -50,11 +50,35 @@ HEAD numbers vs baseline:
 
 | mode      | Δ vertices | Chamfer (½ sum, PLY units) | F1@0.01 |
 |-----------|------------|----------------------------|---------|
-| chunk0    | −2         | 5.09e-3                    | 0.903   |
-| chunk1    | +7         | 6.26e-3                    | 0.851   |
-| merge     | −21        | 4.61e-3                    | 0.907   |
+| chunk0    | +5         | 4.75e-3                    | 0.901   |
+| chunk1    | −4         | 6.50e-3                    | 0.848   |
+| merge     | −30        | 4.60e-3                    | 0.900   |
 
 `validate_parity.py` exits 0 in both `merge` and `no_merge` modes.
+
+### Note on intermediate parity transitions
+
+Three commits in the chain showed parity moving and then returning:
+
+* `07c8b20` (drop bazel) shifted the deltas from +5/−4/−30 to
+  −2/+7/−21. The commit body originally attributed this to the public
+  `torch==2.7.0+cu128` wheel replacing NRE's internal cu128 build.
+  This was wrong: dropping bazel also reset the entire transitive
+  Python dep tree (numpy, scipy, pandas, zarr, numcodecs, nvidia-ncore
+  jumped past NRE's bazel-pinned versions because we hadn't pinned
+  them).
+* `69c7601` migrated to uv with loose pins. Parity stayed near
+  −2/+7/−21.
+* `7d713e5` tightened uv pins to NRE-bazel exact (`scipy==1.11.1`,
+  `numcodecs==0.11.0`, `pyyaml==6.0`, `huggingface_hub==0.36.2`,
+  `numpy==1.26.4`, `nvidia-ncore==18.7.0`, `pandas==2.3.3` on
+  Python 3.11.15). Parity returned to +5/−4/−30, identical to the
+  pre-bazel-drop A.5–A.8 pattern.
+
+So the residual drift vs the bazel reference is +5/−4/−30, attributable
+to the slang→torch swaps in Phase A. The public-vs-internal cu128
+wheel difference is effectively parity-neutral when the rest of the
+deps match NRE.
 
 ## Runtime
 
