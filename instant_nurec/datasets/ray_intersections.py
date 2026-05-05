@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import torch
 
-from instant_nurec.utils._se3_torch import quat_xyzw_slerp, quat_xyzw_to_rotmat
+from instant_nurec.utils.se3 import quat_xyzw_slerp, quat_xyzw_to_rotmat
 
 
 def _slab_aabb_intersection(

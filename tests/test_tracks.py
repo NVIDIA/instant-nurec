@@ -16,7 +16,7 @@
 """Branch-coverage tests for ``instant_nurec.datasets.tracks``.
 
 Tests use
-the in-tree ``_se3_torch`` shim, the only thing this fixture still has
+the in-tree ``se3`` shim, the only thing this fixture still has
 to stub is ``ncore.data`` (transitively imported by
 ``instant_nurec.utils.types``). The heavier interface-equivalent
 ``_FakeSE3`` / ``_FakeSO3`` classes below remain as test stand-ins
@@ -583,7 +583,7 @@ def test_interpolate_tracks_poses_returns_se3_with_right_shape(
     tracks_idx = torch.tensor([0, 0], dtype=torch.long)
     out = ct.interpolate_tracks_poses(timestamps_us, tracks_idx)
     # SUT returns lt.SE3.InitFromVec(torch.cat([t, R], dim=1)).
-    # ``lt`` is ``_se3_torch.SE3`` (in-tree).
+    # ``lt`` is ``se3.SE3`` (in-tree).
     assert hasattr(out, "data")
     assert out.data.shape == (2, 7)
 

@@ -21,13 +21,13 @@ from typing import Literal, Self, cast
 import numpy as np
 import torch
 
-from instant_nurec.utils import _se3_torch as lt
+from instant_nurec.utils import se3 as lt
 
-from instant_nurec.datasets._vren_torch import (
+from instant_nurec.datasets.ray_intersections import (
     point_cuboidtracks_intersection_interpolate_pose as _point_cuboidtracks_intersection_interpolate_pose,
     ray_cuboidtracks_intersection as _ray_cuboidtracks_intersection,
 )
-from instant_nurec.utils._packed_ops_torch import (
+from instant_nurec.utils.packed_ops import (
     packed_searchsorted_indexed_vals as _packed_searchsorted_indexed_vals,
 )
 from instant_nurec.utils.geometry import se3_matrix_to_tquat

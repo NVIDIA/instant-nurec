@@ -79,8 +79,8 @@ def _stub_compiled_imports(monkeypatch: pytest.MonkeyPatch):
         "instant_nurec.utils.cubemap",
         "instant_nurec.utils.sensors",
         "instant_nurec.utils.sensors.sensors",
-        "instant_nurec.utils.sensors._kernel_types",
-        "instant_nurec.utils.sensors._image_points_to_world_rays_torch",
+        "instant_nurec.utils.sensors.kernel_types",
+        "instant_nurec.utils.sensors.ray_gen",
     ):
         sys.modules.pop(name, None)
 
@@ -255,7 +255,7 @@ class _FakeCameraModelParameters:
 @pytest.fixture
 def _vren_with_fake_camera_rays(monkeypatch: pytest.MonkeyPatch):
     """Patch ``camera_rays_to_image_points`` (lives in
-    ``instant_nurec.utils.sensors._image_points_to_world_rays_torch``;
+    ``instant_nurec.utils.sensors.ray_gen``;
     cubemap.py imports it by name)."""
 
     def fake_camera_rays_to_image_points(camera_params, rays):

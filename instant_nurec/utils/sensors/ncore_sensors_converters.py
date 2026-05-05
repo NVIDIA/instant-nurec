@@ -24,7 +24,7 @@ from typing import Optional
 
 import torch
 
-from instant_nurec.utils.sensors._kernel_types import (
+from instant_nurec.utils.sensors.kernel_types import (
     BivariateWindshieldDistortion,
     CameraProjection,
     DynamicPose,

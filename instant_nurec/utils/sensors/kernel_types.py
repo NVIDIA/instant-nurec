@@ -14,7 +14,7 @@
 # limitations under the License.
 
 """Dataclasses + enums consumed by the in-tree torch ray-gen
-(``_image_points_to_world_rays_torch.py``).
+(``ray_gen.py``).
 
 FTheta-only for now (predict uses ``camera_front_wide_120fov``).
 OpenCVPinhole / OpenCVFisheye + BivariateWindshieldDistortion stubs

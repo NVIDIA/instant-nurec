@@ -23,7 +23,7 @@ from typing import Any, List, Self, Sequence, Tuple, TypeAlias, TypeVar, Union, 
 import torch
 
 from instant_nurec.utils.geometry import se3pose_from_matrix
-from instant_nurec.utils.sensors._image_points_to_world_rays_torch import (
+from instant_nurec.utils.sensors.ray_gen import (
     image_points_to_world_rays_shutter_pose,
 )
 from ncore.data import (

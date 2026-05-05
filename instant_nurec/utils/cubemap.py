@@ -19,7 +19,7 @@ from einops import rearrange
 
 from ncore.impl.data.types import CameraModelParameters
 
-from instant_nurec.utils.sensors._image_points_to_world_rays_torch import (
+from instant_nurec.utils.sensors.ray_gen import (
     camera_rays_to_image_points,
 )
 

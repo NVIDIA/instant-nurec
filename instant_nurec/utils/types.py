@@ -20,7 +20,7 @@ from typing import Optional, OrderedDict, Self
 from dataclasses import dataclass
 from enum import IntFlag, auto
 
-from instant_nurec.utils import _se3_torch as lt
+from instant_nurec.utils import se3 as lt
 import numpy as np
 import numpy.typing as npt
 import torch
