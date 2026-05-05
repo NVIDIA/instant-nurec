@@ -23,13 +23,17 @@ extend the test surface.
 ## Local setup
 
 ```bash
-./setup.sh                # creates .venv and installs runtime + dev deps
+./setup.sh                # uv sync --frozen → .venv/
 source .venv/bin/activate
 ```
 
-`setup.sh` uses `pip install -e .`; the build backend is plain
-`setuptools`. Every kernel is pure torch — no compiled extensions to
+`setup.sh` calls `uv sync --frozen`, which installs the locked
+dependency tree from `uv.lock`. The build backend is plain `setuptools`
+and every kernel is pure torch, so there are no compiled extensions to
 build.
+
+To bump a dependency, edit `pyproject.toml` and run `uv lock` to
+regenerate the lockfile, then commit both files together.
 
 ## Running tests
 

@@ -39,6 +39,9 @@ NCore V4 Sequence ─► Frame Batching ─► Kelvin Forward Pass ─► 3D Gau
 - **Python** 3.11
 - **NVIDIA driver** >= 570 (CUDA 12.8 compatible)
 - **GPU VRAM** ≥ 16 GB
+- **uv** — the [Astral Python package manager](https://docs.astral.sh/uv/).
+  Install with `curl -LsSf https://astral.sh/uv/install.sh | sh` or
+  `pip install uv`.
 
 ```bash
 git clone https://github.com/NVIDIA/instant-nurec.git
@@ -47,8 +50,9 @@ cd instant-nurec
 source .venv/bin/activate
 ```
 
-`setup.sh` creates a Python venv and runs `pip install -e .`. The only
-CUDA dependency is whatever the pinned `torch` wheel ships with.
+`setup.sh` runs `uv sync --frozen`, which installs the locked dependency
+tree from `uv.lock` into `.venv/`. The only CUDA dependency is whatever
+the pinned `torch` wheel ships with.
 
 The pretrained model `kelvin_full.pt` is fetched on first inference run
 from the Hugging Face repo `nvidia/instant-nurec-kelvin` and cached at

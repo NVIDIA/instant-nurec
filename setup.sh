@@ -17,8 +17,8 @@
 
 # InstantNuRec Kelvin predict — environment setup.
 #
-# Bootstraps a venv and ``pip install -e .``. The only CUDA dependency
-# is whatever ``torch`` ships with the CUDA build you choose.
+# Bootstraps a venv and installs the locked dependency tree via ``uv sync``.
+# The only CUDA dependency is whatever ``torch`` ships with the cu128 wheel.
 # ``run_inference.py`` is the canonical entrypoint.
 
 set -euo pipefail
@@ -26,25 +26,22 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$REPO_ROOT"
 
-if [[ ! -d ".venv" ]]; then
-    python3 -m venv .venv
+if ! command -v uv >/dev/null 2>&1; then
+    echo "uv not found. Install it first:" >&2
+    echo "    curl -LsSf https://astral.sh/uv/install.sh | sh" >&2
+    echo "  or" >&2
+    echo "    pip install uv" >&2
+    exit 1
 fi
 
-# shellcheck disable=SC1091
-source .venv/bin/activate
-
-python -m pip install --upgrade pip
-
-# Install the pinned CUDA torch build first (the cu128 wheel is published
-# on PyTorch's own index, not pypi.org). pyproject.toml pins
-# ``torch==2.7.0+cu128`` so this index is required during install.
-python -m pip install torch==2.7.0+cu128 torchvision==0.22.0+cu128 --index-url https://download.pytorch.org/whl/cu128
-
-python -m pip install -e .
+# ``uv sync --frozen`` installs exactly what ``uv.lock`` records, fails if
+# the lock and ``pyproject.toml`` disagree. This is the right gate for
+# reproducibility — to update deps, run ``uv lock`` and commit the new lock.
+uv sync --frozen
 
 cat <<'EOF'
 
-instant_nurec setup complete.
+InstantNuRec setup complete.
 
 Activate the venv with:
 
