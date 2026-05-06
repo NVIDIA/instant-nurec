@@ -15,7 +15,10 @@
 
 # Re-export shim -- see instant_nurec/model/kelvin.py for context. Removed in commit 8.
 
-from instant_nurec_internal.model.backbone.sky import CubemapDecoderSky
+from instant_nurec_internal.model.backbone.sky import (
+    CubemapDecoderSky,
+    _RGBNormalize,  # private submodule type baked into the kelvin_full.pt pickle
+)
 
 
-__all__ = ["CubemapDecoderSky"]
+__all__ = ["CubemapDecoderSky", "_RGBNormalize"]

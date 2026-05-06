@@ -15,7 +15,10 @@
 
 # Re-export shim -- see instant_nurec/model/kelvin.py for context. Removed in commit 8.
 
-from instant_nurec_internal.model.backbone.encoders import KelvinDAv3Encoder
+from instant_nurec_internal.model.backbone.encoders import (
+    KelvinDAv3Encoder,
+    _RGBNormalize,  # private submodule type baked into the kelvin_full.pt pickle
+)
 
 
-__all__ = ["KelvinDAv3Encoder"]
+__all__ = ["KelvinDAv3Encoder", "_RGBNormalize"]
