@@ -136,6 +136,36 @@ class KelvinInstantNuRec(nn.Module):
 
         return num_imgs, num_views, torch.stack(batch_camera_idxs, dim=0), time_remappings
 
+    def _compute_affine_matrix(
+        self,
+        encoded_latent,
+        camera_idxs: torch.Tensor,
+    ) -> torch.Tensor:
+        # Lives on the static-only path: post_processing parameters ship inside the JIT artifact.
+        _, affine_latents = self.post_processing.transform_tokens(
+            rearrange(encoded_latent.deepest, "B V h w C -> B (V h w) C"), camera_idxs
+        )
+        affine_matrix_3, affine_bias = self.post_processing.decode_affine(affine_latents)
+        return torch.cat([affine_matrix_3, affine_bias[..., None]], dim=-1)
+
+    @staticmethod
+    def _build_primitives(
+        context: list[DataAndRenderingBatch],
+        decoder_returns,
+        sky_cubemaps: torch.Tensor,
+        affine_matrix: torch.Tensor,
+    ) -> list[KelvinInstantNuRecPrimitive]:
+        primitives: list[KelvinInstantNuRecPrimitive] = []
+        for bidx in range(len(context)):
+            primitive = KelvinInstantNuRecPrimitive(
+                static_layer=unpack_optional(decoder_returns[bidx].static_layer),
+                dynamic_layers=decoder_returns[bidx].dynamic_layers,
+                sky_cubemap=sky_cubemaps[bidx],
+                affine_matrix=affine_matrix[bidx],
+            )
+            primitives.append(primitive)
+        return primitives
+
     def reconstruct(
         self,
         context: list[DataAndRenderingBatch],
@@ -144,10 +174,8 @@ class KelvinInstantNuRec(nn.Module):
         # Add assertions about input context -- num_images and num_views should match
         num_imgs, num_views, camera_idxs, time_remappings = self._grab_metainfo(context)
 
-        # Encode the inputs
         encoded_latent = self.encoder.encode(context, self.scene_rescale)
 
-        # Forward the decoder
         decoder_returns = self.decoder.decode(
             encoded_latent,
             context,
@@ -155,28 +183,12 @@ class KelvinInstantNuRec(nn.Module):
             time_remappings,
             self.scene_rescale,
         )
-        static_layers = [return_value.static_layer for return_value in decoder_returns]
-        dynamic_layers = [return_value.dynamic_layers for return_value in decoder_returns]
 
-        # Forward sky
+        # Non-static heads (sky cubemap, dynamic layers in decoder_returns) -- relocated to
+        # internal/ in a follow-up commit; produced eagerly here so reconstruct() stays
+        # bitwise-identical with the pre-refactor output.
         sky_cubemaps = self.sky.decode(encoded_latent, context).contiguous()
 
-        # Per-camera affine RGB
-        _, affine_latents = self.post_processing.transform_tokens(
-            rearrange(encoded_latent.deepest, "B V h w C -> B (V h w) C"), camera_idxs
-        )
-        affine_matrix_3, affine_bias = self.post_processing.decode_affine(affine_latents)
-        affine_matrix = torch.cat([affine_matrix_3, affine_bias[..., None]], dim=-1)
+        affine_matrix = self._compute_affine_matrix(encoded_latent, camera_idxs)
 
-        # Build the primitives
-        primitives: list[KelvinInstantNuRecPrimitive] = []
-        for bidx in range(len(context)):
-            primitive = KelvinInstantNuRecPrimitive(
-                static_layer=unpack_optional(static_layers[bidx]),
-                dynamic_layers=dynamic_layers[bidx],
-                sky_cubemap=sky_cubemaps[bidx],
-                affine_matrix=affine_matrix[bidx],
-            )
-            primitives.append(primitive)
-
-        return primitives
+        return self._build_primitives(context, decoder_returns, sky_cubemaps, affine_matrix)
