@@ -19,77 +19,50 @@ The shipped Kelvin artifact only feeds ``static_layer`` + ``affine_matrix`` into
 the PLY export -- ``sky_cubemap`` and ``dynamic_layers`` are computed today but
 never reach disk (see ``predict/export_ply.py:75`` and the commit-7 contract).
 ``KelvinStaticCore`` packages the encoder + (static parts of the) decoder +
-per-camera affine post-processing as a single ``nn.Module`` so the next commit
-can hand it to ``torch.jit.trace`` and persist the result as ``kelvin_jit.pt``.
+per-camera affine post-processing as a single ``nn.Module`` so the export
+script can hand it to ``torch.jit.trace`` and persist the result as
+``kelvin_jit.pt``.
 
-Two entry points:
-
-- ``forward(context)``: dataclass-input convenience that runs ``encoder.encode``
-  / ``decoder.decode`` (existing eager APIs). Used as the parity-reference
-  during artifact export.
-- ``forward_tensors(...)``: pure-tensor entry point that reimplements the
-  static path using the encoder/decoder/post_processing submodules directly,
-  so trace can cross the boundary. The artifact-export script in commit 5
-  traces ``forward_tensors``.
+Output design: the JIT artifact produces *unmasked* per-pixel gaussian
+fields plus the semantic argmax. Final masking (semantic + optional
+cuboid-track-based refinement) happens in the Python-side adapter
+(``instant_nurec/model/jit_adapter.py``). This split keeps the JIT
+artifact free of variable-length data-dependent loops over cuboid_tracks
+while letting the runtime apply the same mask as the eager pickle path.
 
 Submodule ownership: ``__init__`` registers the encoder/decoder/post_processing
 as submodules of this instance, so callers must transfer ownership rather than
 share references with another parent (otherwise ``state_dict()`` surfaces
-duplicate keys for the same parameters). The export script in commit 5
-constructs fresh submodules and copies ``state_dict``s out of the loaded
-``kelvin_full.pt``.
+duplicate keys for the same parameters). The export script constructs fresh
+submodules and copies ``state_dict``s out of the loaded ``kelvin_full.pt``.
 
 B=1 assumption: ``forward_tensors`` is shaped for ``predict_config.chunk_size=1``
-(the only value the predict driver uses). A single per-batch loop iteration of
-``decoder.decode``'s static path is unrolled.
+(the only value the predict driver uses).
 """
 
 from __future__ import annotations
 
 import math
 
-from dataclasses import dataclass
-
 import torch
 
 from einops import rearrange
 from torch import nn
 
-from instant_nurec.utils.batch import DataAndRenderingBatch
-from instant_nurec.utils.misc import unpack_optional
 from instant_nurec_internal.model.backbone.decoders import KelvinDPTDecoder
 from instant_nurec_internal.model.backbone.encoders import KelvinDAv3Encoder
 from instant_nurec_internal.model.post_processing import PerCameraAffinePostProcessing
 
 
-@dataclass
-class StaticLayerTensors:
-    """Per-batch tensor bundle for the static-layer fields the PLY exporter reads.
-
-    Mirrors the ``KelvinStaticLayer`` dataclass but as a flat tensor tuple, which
-    is what ``torch.jit.trace`` can persist: dataclasses do not survive
-    serialization, so the JIT module returns these tensors directly and the
-    Python-side adapter repackages them into ``KelvinStaticLayer`` after load.
-    """
-
-    positions: torch.Tensor
-    rotations: torch.Tensor
-    scales: torch.Tensor
-    densities: torch.Tensor
-    rgb: torch.Tensor
-    semantic_class: torch.Tensor
-    normals: torch.Tensor
-
-
 class KelvinStaticCore(nn.Module):
     """Static-only Kelvin forward suitable for JIT export."""
 
-    # Class index for KelvinSemanticClass.MOVABLE -- pulled in as a constant
-    # to keep ``forward_tensors`` free of imports that re-trigger module
-    # initialization on the JIT-load side.
-    _SEMANTIC_MOVABLE: int = 4
+    # Class indices for KelvinSemanticClass.{EGO,SKY,MOVABLE} -- pulled in as
+    # constants to keep ``forward_tensors`` free of imports that re-trigger
+    # module initialization on the JIT-load side.
     _SEMANTIC_EGO: int = 1
     _SEMANTIC_SKY: int = 2
+    _SEMANTIC_MOVABLE: int = 4
 
     def __init__(
         self,
@@ -105,91 +78,6 @@ class KelvinStaticCore(nn.Module):
         self.scene_rescale = scene_rescale
 
     # ------------------------------------------------------------------
-    # forward(context) -- eager dataclass-input entry, used as parity ref
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def _grab_camera_idxs(context: list[DataAndRenderingBatch]) -> torch.Tensor:
-        batch_camera_idxs: list[torch.Tensor] = []
-        for batch in context:
-            data = unpack_optional(batch.data.camera)
-            unique_sensor_idx = torch.tensor(
-                [meta.unique_sensor_idx for meta in data.meta], dtype=torch.int64
-            )
-            batch_camera_idxs.append(unique_sensor_idx)
-        return torch.stack(batch_camera_idxs, dim=0)
-
-    def _compute_affine_matrix(
-        self, encoded_latent, camera_idxs: torch.Tensor
-    ) -> torch.Tensor:
-        _, affine_latents = self.post_processing.transform_tokens(
-            rearrange(encoded_latent.deepest, "B V h w C -> B (V h w) C"), camera_idxs
-        )
-        affine_matrix_3, affine_bias = self.post_processing.decode_affine(affine_latents)
-        return torch.cat([affine_matrix_3, affine_bias[..., None]], dim=-1)
-
-    def forward(
-        self, context: list[DataAndRenderingBatch]
-    ) -> tuple[list[StaticLayerTensors], torch.Tensor]:
-        """Run the static-only Kelvin pipeline via the dataclass entry points
-        (encoder.encode + decoder.decode). The result matches
-        ``forward_tensors``'s output to within numerical noise; the export
-        script verifies this on a real batch.
-        """
-        encoded_latent = self.encoder.encode(context, self.scene_rescale)
-
-        time_remappings = self._build_time_remappings(context)
-        decoder_returns = self.decoder.decode(
-            encoded_latent,
-            context,
-            None,  # cuboid_tracks
-            time_remappings,
-            self.scene_rescale,
-        )
-
-        camera_idxs = self._grab_camera_idxs(context).to(encoded_latent.deepest.device)
-        affine_matrix = self._compute_affine_matrix(encoded_latent, camera_idxs)
-
-        static_bundles: list[StaticLayerTensors] = []
-        for ret in decoder_returns:
-            sl = unpack_optional(ret.static_layer)
-            static_bundles.append(
-                StaticLayerTensors(
-                    positions=sl.positions,
-                    rotations=sl.rotations,
-                    scales=sl.scales,
-                    densities=sl.densities,
-                    rgb=sl.rgb,
-                    semantic_class=sl.semantic_class
-                    if sl.semantic_class is not None
-                    else torch.zeros(len(sl), 1, dtype=torch.uint8, device=sl.device()),
-                    normals=sl.normals
-                    if sl.normals is not None
-                    else torch.zeros(len(sl), 3, device=sl.device()),
-                )
-            )
-
-        return static_bundles, affine_matrix
-
-    @staticmethod
-    def _build_time_remappings(context: list[DataAndRenderingBatch]):
-        from instant_nurec.utils.motion import TimeRemapping
-
-        time_remappings = []
-        for batch in context:
-            data = unpack_optional(batch.data.camera)
-            unique_sensor_idx = torch.tensor(
-                [meta.unique_sensor_idx for meta in data.meta], dtype=torch.int64
-            )
-            rendering = unpack_optional(unpack_optional(batch.rendering).camera)
-            time_remappings.append(
-                TimeRemapping.from_timestamps_startend_us(
-                    rendering.timestamps_startend_us_cpu, unique_sensor_idx
-                )
-            )
-        return time_remappings
-
-    # ------------------------------------------------------------------
     # forward_tensors(...) -- pure-tensor entry, JIT-traceable
     # ------------------------------------------------------------------
 
@@ -202,14 +90,14 @@ class KelvinStaticCore(nn.Module):
         distance_to_depth_scale: torch.Tensor,
         camera_idxs: torch.Tensor,
     ) -> tuple[
-        torch.Tensor,  # positions   (N_static, 3)
-        torch.Tensor,  # rotations   (N_static, 4)
-        torch.Tensor,  # scales      (N_static, 3)
-        torch.Tensor,  # densities   (N_static, 1)
-        torch.Tensor,  # rgb         (N_static, 3)
-        torch.Tensor,  # semantic    (N_static, 1) uint8
-        torch.Tensor,  # normals     (N_static, 3)
-        torch.Tensor,  # affine      (1, n_affine_tokens, 3, 4)
+        torch.Tensor,  # gs_xyz             (B, V, H, W, 3)
+        torch.Tensor,  # gs_rotations       (B, V, H, W, 4)
+        torch.Tensor,  # gs_scales          (B, V, H, W, 3)
+        torch.Tensor,  # gs_densities       (B, V, H, W, 1)
+        torch.Tensor,  # gs_rgb             (B, V, H, W, 3)
+        torch.Tensor,  # semantic_argmax    (B, V, H, W)   int64
+        torch.Tensor,  # normals            (B, V, H, W, 3)
+        torch.Tensor,  # affine             (B, n_affine_tokens, 3, 4)
     ]:
         """Static-only forward consuming pre-extracted tensors.
 
@@ -221,11 +109,11 @@ class KelvinStaticCore(nn.Module):
             distance_to_depth_scale: (1, V, H, W, 1)
             camera_idxs:             (1, V) int64
 
-        Returns the static-layer tensor fields (positions/rotations/scales/
-        densities/rgb/semantic_class/normals) followed by the affine_matrix.
-        Output tuple-of-tensors mirrors what ``torch.jit.trace`` can persist;
-        the loader-side adapter (commit 7) repackages it back into a
-        ``KelvinStaticLayer`` + ``KelvinInstantNuRecPrimitive``.
+        Returns the *unmasked* per-pixel gaussian fields plus the affine
+        matrix. Static/dynamic split, cuboid-track-based mask refinement,
+        and final flatten + gather happen in the Python-side adapter
+        (commit 7) so the JIT artifact stays free of data-dependent
+        cuboid_tracks logic.
         """
         scene_rescale = self.scene_rescale
 
@@ -236,7 +124,6 @@ class KelvinStaticCore(nn.Module):
         x = self.encoder.patch_embed_img(
             self.encoder.rgb_normalize(rearrange(rgb, "B V H W C -> (B V) C H W"))
         )
-        _, h, w, _ = x.shape
         x = rearrange(x, "(B V) h w C -> B V h w C", B=B, V=V)
         camera_encodings = self.encoder.embed_camera.forward(c2w, fov)
         with torch.autocast("cuda", enabled=True):
@@ -245,12 +132,13 @@ class KelvinStaticCore(nn.Module):
                 block_indices=self.encoder.take_block_indices,
                 global_cls_token=camera_encodings.unsqueeze(2),
             )
-        # Mirror of KelvinMultiscaleFeaturesLatent.deepest:
         encoded_deepest = img_feats[-1]
 
         # ----- Decoder static path -----
-        # Mirror of KelvinDPTDecoder.decode (lines 296-456 of decoders.py),
-        # static-only: no motion head, no dynamic-layer construction.
+        # Mirror of KelvinDPTDecoder.decode (lines 296-421 of decoders.py)
+        # restricted to the heads that feed static_layer; the per-pixel
+        # masking step (lines 432-456) is done by the Python adapter so it
+        # can incorporate cuboid_tracks-based mask refinement.
         img_feats_flat = [rearrange(feat, "B V h w C -> (B V) h w C") for feat in img_feats]
         chunk_size = self.decoder.config.dpt_chunk_size
 
@@ -263,7 +151,7 @@ class KelvinStaticCore(nn.Module):
             depth_and_dconf[:, :, 0].unsqueeze(-1) - math.log(scene_rescale)
         )  # (B, V, H, W, 1)
 
-        # Context head -- inference-only path: never checkpointed.
+        # Context head
         rgb_in_flat = rearrange(rgb, "B V H W C -> (B V) C H W")
         rgb_fusion_features = self.decoder.rgb_fusion(rgb_in_flat)
         context_features_tensor = self.decoder.context_head(
@@ -281,10 +169,7 @@ class KelvinStaticCore(nn.Module):
         )
         context_rgb = self.decoder.gaussian_activations.rgb(context_rgb)
         context_world_normal = torch.nn.functional.normalize(context_world_normal, dim=-1)
-
-        context_dynamic_mask = (
-            torch.argmax(context_semantic_logits, dim=-1) == self._SEMANTIC_MOVABLE
-        )  # (B, V, H, W)
+        semantic_argmax = torch.argmax(context_semantic_logits, dim=-1)  # (B, V, H, W)
 
         # Gaussian heads
         gs_params_tensor = self.decoder.gaussians_head(
@@ -307,29 +192,7 @@ class KelvinStaticCore(nn.Module):
         gs_world_quaternion = self.decoder.gaussian_activations.rotation(gs_world_quaternion)
         gs_xyz = rays[..., :3] + rays[..., 3:] * gs_distance  # (B, V, H, W, 3)
 
-        # Per-batch (B=1) static-layer extraction -- unrolled for trace.
-        # ``[0]`` indices match ``for bidx in range(1)`` with ``bidx=0``.
-        gs_xyz_flat = gs_xyz[0].reshape(-1, 3)
-        gs_rotation_flat = gs_world_quaternion[0].reshape(-1, 4)
-        gs_scale_flat = gs_scale[0].reshape(-1, 3)
-        gs_opacity_flat = gs_opacity[0].reshape(-1, 1)
-        gs_rgb_flat = context_rgb[0].reshape(-1, 3)
-
-        dynamic_mask_flat = context_dynamic_mask[0].reshape(-1)
-        static_mask = torch.where(~dynamic_mask_flat)[0]
-
-        sem_class_flat = torch.argmax(context_semantic_logits[0], dim=-1).reshape(-1)
-        semantic_class_static = sem_class_flat[static_mask].unsqueeze(-1).to(torch.uint8)
-        normals_static = context_world_normal[0].reshape(-1, 3)[static_mask]
-
-        positions = gs_xyz_flat[static_mask]
-        rotations = gs_rotation_flat[static_mask]
-        scales = gs_scale_flat[static_mask]
-        densities = gs_opacity_flat[static_mask]
-        out_rgb = gs_rgb_flat[static_mask]
-
         # ----- Per-camera affine post-processing -----
-        # Mirror of KelvinInstantNuRec._compute_affine_matrix.
         encoded_deepest_tokens = rearrange(encoded_deepest, "B V h w C -> B (V h w) C")
         _, affine_latents = self.post_processing.transform_tokens(
             encoded_deepest_tokens, camera_idxs
@@ -338,13 +201,13 @@ class KelvinStaticCore(nn.Module):
         affine_matrix = torch.cat([affine_matrix_3, affine_bias[..., None]], dim=-1)
 
         return (
-            positions,
-            rotations,
-            scales,
-            densities,
-            out_rgb,
-            semantic_class_static,
-            normals_static,
+            gs_xyz,
+            gs_world_quaternion,
+            gs_scale,
+            gs_opacity,
+            context_rgb,
+            semantic_argmax,
+            context_world_normal,
             affine_matrix,
         )
 
