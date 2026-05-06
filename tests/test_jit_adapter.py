@@ -13,17 +13,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Branch-coverage tests for ``instant_nurec.model.jit_adapter`` and the
-JIT-vs-pickle archive detection in ``instant_nurec.model.make``.
+"""Branch-coverage tests for ``instant_nurec.model.jit_adapter``.
 
 End-to-end inference exercises the adapter on GPU; here we cover the
-shape-correctness, masking branches, and dispatch logic in isolation.
+shape-correctness and masking branches in isolation.
 """
 
 from __future__ import annotations
 
 import sys
-import zipfile
 
 from pathlib import Path
 
@@ -35,7 +33,6 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 
-from instant_nurec.model import _is_jit_archive  # noqa: E402
 from instant_nurec.model.jit_adapter import (  # noqa: E402
     _PLACEHOLDER_SKY_CUBEMAP_SIZE,
     JITKelvinAdapter,
@@ -45,35 +42,6 @@ from instant_nurec.primitives.kelvin_primitive import (  # noqa: E402
     KelvinSemanticClass,
     KelvinStaticLayer,
 )
-
-
-# ---------- _is_jit_archive ----------
-
-
-def test_is_jit_archive_true_for_torchscript_layout(tmp_path):
-    p = tmp_path / "kelvin_jit.pt"
-    with zipfile.ZipFile(p, "w") as z:
-        z.writestr("kelvin_jit/data.pkl", b"x")
-        z.writestr("kelvin_jit/code/__torch__/foo.py", b"x")
-    assert _is_jit_archive(str(p)) is True
-
-
-def test_is_jit_archive_false_for_pickle_layout(tmp_path):
-    p = tmp_path / "kelvin_full.pt"
-    with zipfile.ZipFile(p, "w") as z:
-        z.writestr("kelvin_full/data.pkl", b"x")
-        z.writestr("kelvin_full/byteorder", b"little")
-    assert _is_jit_archive(str(p)) is False
-
-
-def test_is_jit_archive_false_for_nonexistent_file():
-    assert _is_jit_archive("/tmp/__definitely_not_there__.pt") is False
-
-
-def test_is_jit_archive_false_for_non_zip(tmp_path):
-    p = tmp_path / "garbage.pt"
-    p.write_text("not a zip")
-    assert _is_jit_archive(str(p)) is False
 
 
 # ---------- JITKelvinAdapter (CPU-only, mocked jit_module) ----------

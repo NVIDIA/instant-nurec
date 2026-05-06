@@ -15,7 +15,6 @@
 
 import logging
 import os
-import zipfile
 
 from typing import TYPE_CHECKING, Optional
 
@@ -36,49 +35,45 @@ logger = logging.getLogger(__name__)
 
 
 class FullModelNotFoundError(RuntimeError):
-    """``kelvin_full.pt`` couldn't be resolved (no HF download, no env override)."""
+    """``kelvin_jit.pt`` couldn't be resolved (no HF download, no env override)."""
 
 
 def _resolve_full_pt_path() -> Optional[str]:
-    """Return the local path to ``kelvin_full.pt`` or ``None`` on failure."""
+    """Return the local path to ``kelvin_jit.pt`` or ``None`` on failure."""
     try:
         return pretrained.download_kelvin_full_pt()
     except pretrained.PretrainedModelError:
         return None
 
 
-def _is_jit_archive(path: str) -> bool:
-    """Return True if ``path`` is a TorchScript zip archive (has ``code/``
-    entries -- the serialized IR sources) rather than a torch-pickle
-    archive (which only has ``data.pkl`` + tensor blobs).
+def make(config: "InstantNuRecConfig") -> GaussiansInstantNuRecSystem:
+    """Load ``kelvin_jit.pt`` and build a ``GaussiansInstantNuRecSystem``.
 
-    Both formats nest entries under a top-level directory named after the
-    archive's file stem (``kelvin_jit/...`` vs ``kelvin_full/...``), so
-    matching ``/code/`` anywhere in the path covers either layout."""
-    try:
-        with zipfile.ZipFile(path) as z:
-            names = z.namelist()
-    except (zipfile.BadZipFile, FileNotFoundError):
-        return False
-    return any("/code/" in n for n in names)
+    Resolution: ``INSTANT_NUREC_FULL_PT`` env var takes priority; otherwise
+    the artifact is fetched from Hugging Face. The artifact is a TorchScript
+    archive of ``TraceableStaticCore`` (see
+    ``internal/scripts/export_kelvin_jit.py``); the legacy pickled-system
+    path was retired once the JIT artifact reached PLY parity against the
+    eager baseline.
 
-
-def _make_from_jit(jit_path: str, config: "InstantNuRecConfig") -> GaussiansInstantNuRecSystem:
-    """Build a ``GaussiansInstantNuRecSystem``-shaped object whose ``model`` is a
-    ``JITKelvinAdapter`` wrapping the loaded TorchScript artifact.
-
-    The full ``GaussiansInstantNuRecSystem.__init__`` would instantiate a
-    fresh ``KelvinInstantNuRec`` (encoder + decoder + sky + post_processing)
-    purely to throw it away; ``__new__`` + manual attribute assignment
-    bypasses that wasted construction.
+    The full ``GaussiansInstantNuRecSystem.__init__`` is bypassed via
+    ``__new__`` + manual attribute assignment because the system class no
+    longer constructs an in-process model -- it just orchestrates a
+    ``JITKelvinAdapter`` that wraps the loaded TorchScript module.
     """
+    full_pt_path = _resolve_full_pt_path()
+    if not full_pt_path or not os.path.exists(full_pt_path):
+        raise FullModelNotFoundError(
+            f"kelvin_jit.pt not found. Either set INSTANT_NUREC_FULL_PT to a "
+            f"local .pt path or ensure {pretrained.KELVIN_REPO_ID!r} is reachable."
+        )
+
     from instant_nurec.datasets.datamodule import InstantNuRecDataModule
 
-    jit_module = torch.jit.load(jit_path, map_location="cpu")
-    # The JIT artifact preserves KelvinDPTDecoder.cuboids_dims_padding as a
-    # buffer on the traced module; the adapter needs it for cuboid-track-based
-    # dynamic-mask refinement.
+    logger.info("Loading JIT system from %s.", full_pt_path)
+    jit_module = torch.jit.load(full_pt_path, map_location="cpu")
     cuboids_dims_padding = jit_module.static_core.decoder.cuboids_dims_padding
+
     system: GaussiansInstantNuRecSystem = GaussiansInstantNuRecSystem.__new__(
         GaussiansInstantNuRecSystem
     )
@@ -95,52 +90,3 @@ def _make_from_jit(jit_path: str, config: "InstantNuRecConfig") -> GaussiansInst
         cuboids_dims_padding=cuboids_dims_padding,
     )
     return system
-
-
-def _make_from_pickle(
-    pickle_path: str, config: "InstantNuRecConfig"
-) -> GaussiansInstantNuRecSystem:
-    """Legacy path: load the pickled ``GaussiansInstantNuRecSystem`` and patch
-    in per-invocation config. Retired in commit 8 once the JIT artifact has
-    fully replaced the pickle on the HF side."""
-    from instant_nurec.datasets.datamodule import InstantNuRecDataModule
-
-    loaded = torch.load(pickle_path, map_location="cpu", weights_only=False)
-    assert isinstance(loaded, GaussiansInstantNuRecSystem), (
-        f"Expected GaussiansInstantNuRecSystem from {pickle_path}, got {type(loaded).__name__}"
-    )
-
-    loaded.out_dir = config.out_dir
-    loaded.run_id = config.run_id
-    loaded.config = config.system
-    loaded.predict_config = config.predict
-    loaded.export_preprocess = config.model.export_preprocess
-    loaded.datamodule = InstantNuRecDataModule(config)
-    return loaded
-
-
-def make(config: "InstantNuRecConfig") -> GaussiansInstantNuRecSystem:
-    """Resolve the pretrained checkpoint and build a system.
-
-    Auto-detects whether the checkpoint is a TorchScript artifact
-    (``kelvin_jit.pt`` from ``internal/scripts/export_kelvin_jit.py``) or a
-    pickled ``GaussiansInstantNuRecSystem`` (legacy ``kelvin_full.pt``);
-    builds the system accordingly.
-
-    Resolution: ``INSTANT_NUREC_FULL_PT`` env var, then HF download.
-    Both env-var override and HF artifact use the same name -- file format
-    is auto-detected.
-    """
-    full_pt_path = _resolve_full_pt_path()
-    if not full_pt_path or not os.path.exists(full_pt_path):
-        raise FullModelNotFoundError(
-            f"kelvin_full.pt not found. Either set INSTANT_NUREC_FULL_PT to a "
-            f"local .pt path or ensure {pretrained.KELVIN_REPO_ID!r} is reachable."
-        )
-
-    if _is_jit_archive(full_pt_path):
-        logger.info("Loading JIT system from %s.", full_pt_path)
-        return _make_from_jit(full_pt_path, config)
-
-    logger.info("Loading pickled system from %s.", full_pt_path)
-    return _make_from_pickle(full_pt_path, config)

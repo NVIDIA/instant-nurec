@@ -14,10 +14,11 @@
 # limitations under the License.
 
 # pytest auto-loads this before collection so the in-tree packages resolve
-# without an editable install. ``internal/`` is on the path so the
-# proprietary-architecture package (`instant_nurec_internal`) imports
-# during the move-and-shim transition. The shims under instant_nurec/model/
-# re-export from there until commit 7 retires the pickle path.
+# without an editable install. ``internal/`` is on the path so the tests
+# under ``internal/tests/`` can import the proprietary-architecture package
+# (``instant_nurec_internal``); the public ``instant_nurec`` package no
+# longer depends on it -- it's referenced only by the artifact-export
+# script and its tests.
 
 import sys
 
