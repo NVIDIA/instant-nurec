@@ -26,10 +26,10 @@ from pathlib import Path
 import torch
 
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from instant_nurec.model.blocks.layers import FeedForwardMLP, LayerNorm2d, LayerScale
+from instant_nurec_internal.model.blocks.layers import FeedForwardMLP, LayerNorm2d, LayerScale
 
 
 # ---------------------------------------------------------------------------

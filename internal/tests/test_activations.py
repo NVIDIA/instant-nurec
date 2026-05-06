@@ -29,11 +29,11 @@ import pytest
 import torch
 
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 from instant_nurec.config_schema.models import GaussiansActivationConfig
-from instant_nurec.model.activations import (
+from instant_nurec_internal.model.activations import (
     GaussianActivations,
     GaussianParams,
     OpacityActivation,

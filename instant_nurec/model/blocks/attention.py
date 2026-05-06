@@ -23,7 +23,6 @@ from instant_nurec_internal.model.blocks.attention import (
     KVProjector,
     ModulatedAttentionBlock,
     SelfAttention,
-    _maybe_layer_scale,  # exposed for tests/test_attention.py until commit 3 relocates it
 )
 
 
@@ -35,5 +34,4 @@ __all__ = [
     "KVProjector",
     "ModulatedAttentionBlock",
     "SelfAttention",
-    "_maybe_layer_scale",
 ]
