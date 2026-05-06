@@ -143,8 +143,6 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
         lidar_sensors: dict[str, ncore.data.LidarSensorProtocol]
 
     def __init__(self, config: NCoreInstantNuRecDatasetConfig):
-        self.ncore_json_list_path = parse_universal_path(config.ncore_json_list_path)
-        self.ncore_json_base_path = parse_universal_path(config.ncore_json_base_path)
         self.open_consolidated = config.open_consolidated
         self.camera_max_fov_deg = config.camera_max_fov_deg
         self.n_camera_mask_dilation_iterations = config.n_camera_mask_dilation_iterations
@@ -171,11 +169,8 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
         # Standalone predict pins exactly one lidar (used for cuboid-track sourcing).
         self.lidar_ids: list[str] = [self.cuboid_tracks_params.lidar_id]
 
-        self.ncore_json_paths: list[UPath] = []
-        with self.ncore_json_list_path.open("r") as f:
-            for line in f.readlines():
-                self.ncore_json_paths.append(self.ncore_json_base_path / line.strip())
-        logger.info(f"Loaded {len(self.ncore_json_paths)} samples from {self.ncore_json_list_path}")
+        self.ncore_json_paths: list[UPath] = [parse_universal_path(p) for p in config.ncore_json_paths]
+        logger.info(f"Loaded {len(self.ncore_json_paths)} sequence(s).")
 
         self.num_samples_per_sequence: int = config.frame_batch_sampler.n_samples_per_sequence
         self.config = config

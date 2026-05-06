@@ -64,18 +64,21 @@ to override the auto-download.
 <details>
 <summary><b>Inference</b></summary>
 
-The two canonical invocations:
+`--ncore-path` accepts either a single ncorev4 sequence metadata
+`.json` (NuRec-aligned) or a `.lst` manifest with one JSON path per
+line (each absolute or relative-to-the-LST-file's directory; `#`-
+prefixed and blank lines are skipped).
 
 ```bash
-# Per-chunk PLYs.
+# Single sequence — per-chunk PLYs.
 ./run.sh \
-    --ncore-path /path/to/ncorev4 \
+    --ncore-path /path/to/sequence.json \
     --output-dir /tmp/out/no_merge \
     --merge none
 
-# Single merged PLY per sequence.
+# Batch (multiple sequences listed in a .lst) — single merged PLY per sequence.
 ./run.sh \
-    --ncore-path /path/to/ncorev4 \
+    --ncore-path /path/to/sequences.lst \
     --output-dir /tmp/out/merge \
     --merge frustum-ownership
 ```
@@ -85,7 +88,7 @@ can also call the CLI directly:
 
 ```bash
 python run_inference.py \
-    --ncore-path /path/to/ncorev4 \
+    --ncore-path /path/to/sequence.json \
     --output-dir /tmp/out \
     --merge none
 ```
@@ -94,7 +97,7 @@ python run_inference.py \
 
 | flag | purpose |
 | --- | --- |
-| `--ncore-path` | ncorev4 dataset root containing `debug.lst`. Required. |
+| `--ncore-path` | Single sequence `.json` or a `.lst` manifest of JSON paths. Required. |
 | `--output-dir` | Directory the pipeline writes PLYs (and the resolved config) into. Required. |
 | `--merge` | `none` (default) for per-chunk PLYs, `frustum-ownership` for a single merged PLY. |
 | `--log-level` | `DEBUG` / `INFO` (default) / `WARNING` / `ERROR` / `CRITICAL`. |

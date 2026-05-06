@@ -50,10 +50,17 @@ if [[ -z "$NCORE_PATH" ]] || [[ -z "$OUTPUT_DIR" ]]; then
     exit 64
 fi
 
-if [[ ! -d "$NCORE_PATH" ]]; then
-    echo "error: --ncore-path '$NCORE_PATH' does not exist or is not a directory" >&2
+if [[ ! -f "$NCORE_PATH" ]]; then
+    echo "error: --ncore-path '$NCORE_PATH' does not exist or is not a file" >&2
     exit 65
 fi
+case "$NCORE_PATH" in
+    *.json|*.lst) ;;
+    *)
+        echo "error: --ncore-path '$NCORE_PATH' must end in .json or .lst" >&2
+        exit 65
+        ;;
+esac
 
 mkdir -p "$OUTPUT_DIR"
 if [[ ! -w "$OUTPUT_DIR" ]]; then

@@ -63,16 +63,15 @@ class CameraSubsamplerConfig(BaseConfigSchema):
 class NCoreInstantNuRecDatasetConfig(BaseConfigSchema):
     """Predict-side config for the NCorev4 dataset loader.
 
-    Required fields (no default): ``ncore_json_list_path`` /
-    ``ncore_json_base_path`` — these are the dataset roots and must be
-    supplied by the caller (CLI / API).
+    Required field: ``ncore_json_paths`` — an explicit list of absolute
+    sequence-metadata JSON paths. The CLI's ``resolve_ncore_paths``
+    helper resolves a ``--ncore-path`` (single ``.json`` or ``.lst``)
+    into this list before constructing the config.
     """
 
-    ncore_json_list_path: str = Field(
-        description="The path to a file that contains the list of sequence meta json files to load.",
-    )
-    ncore_json_base_path: str = Field(
-        description="Base path used to resolve relative paths in the ncore_json_list_path.",
+    ncore_json_paths: list[str] = Field(
+        description="Absolute paths to ncorev4 sequence metadata JSON files.",
+        min_length=1,
     )
     open_consolidated: bool = Field(default=True)
     camera_max_fov_deg: float = Field(

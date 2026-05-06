@@ -116,34 +116,64 @@ def test_parser_requires_output_dir() -> None:
 # ---------- end-to-end main() with runtime stubbed ----------
 
 
+def _make_json_path(tmp_path: Path) -> Path:
+    p = tmp_path / "seq.json"
+    p.write_text("{}")
+    return p
+
+
 def test_main_no_merge_constructs_config_with_disabled_merge(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
 ) -> None:
     fake_run_predict = _install_runtime_stubs(monkeypatch)
+    json_path = _make_json_path(tmp_path)
     from instant_nurec.cli import main
-    rc = main(["--ncore-path", "/d", "--output-dir", "/o"])
+    rc = main(["--ncore-path", str(json_path), "--output-dir", "/o"])
     assert rc == 0
     fake_run_predict.assert_called_once()
     cfg = fake_run_predict.call_args.args[0]
     assert cfg.out_dir == "/o"
-    assert cfg.dataset.predict.ncore_json_base_path == "/d"
-    assert cfg.dataset.predict.ncore_json_list_path == "/d/debug.lst"
+    assert cfg.dataset.predict.ncore_json_paths == [str(json_path.resolve())]
     assert cfg.predict.primitive_merge.enabled is False
 
 
-def test_main_frustum_ownership_constructs_config_with_enabled_merge(
-    monkeypatch: pytest.MonkeyPatch,
+def test_main_lst_path_resolves_each_line(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
 ) -> None:
+    """A ``.lst`` input is resolved into a list of JSON paths in the config."""
+    a = tmp_path / "a.json"
+    b = tmp_path / "b.json"
+    a.write_text("{}")
+    b.write_text("{}")
+    lst = tmp_path / "all.lst"
+    lst.write_text(f"{a}\nb.json\n")  # one absolute, one relative-to-lst-dir
+
     fake_run_predict = _install_runtime_stubs(monkeypatch)
     from instant_nurec.cli import main
-    rc = main(["--ncore-path", "/d", "--output-dir", "/o", "--merge", "frustum-ownership"])
+    rc = main(["--ncore-path", str(lst), "--output-dir", "/o"])
+    assert rc == 0
+    cfg = fake_run_predict.call_args.args[0]
+    assert cfg.dataset.predict.ncore_json_paths == [
+        str(a.resolve()),
+        str(b.resolve()),
+    ]
+
+
+def test_main_frustum_ownership_constructs_config_with_enabled_merge(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    fake_run_predict = _install_runtime_stubs(monkeypatch)
+    json_path = _make_json_path(tmp_path)
+    from instant_nurec.cli import main
+    rc = main(["--ncore-path", str(json_path), "--output-dir", "/o", "--merge", "frustum-ownership"])
     assert rc == 0
     cfg = fake_run_predict.call_args.args[0]
     assert cfg.predict.primitive_merge.enabled is True
 
 
-def test_main_configures_log_level(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_main_configures_log_level(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     _install_runtime_stubs(monkeypatch)
+    json_path = _make_json_path(tmp_path)
     captured: dict[str, object] = {}
     real_basic_config = logging.basicConfig
 
@@ -153,12 +183,24 @@ def test_main_configures_log_level(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(logging, "basicConfig", fake_basic_config)
     from instant_nurec.cli import main
-    main(["--ncore-path", "/d", "--output-dir", "/o", "--log-level", "DEBUG"])
+    main(["--ncore-path", str(json_path), "--output-dir", "/o", "--log-level", "DEBUG"])
     assert captured.get("level") == logging.DEBUG
 
 
-def test_main_returns_zero_on_clean_exit(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_main_returns_zero_on_clean_exit(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     _install_runtime_stubs(monkeypatch)
+    json_path = _make_json_path(tmp_path)
     from instant_nurec.cli import main
-    rc = main(["--ncore-path", "/d", "--output-dir", "/o"])
+    rc = main(["--ncore-path", str(json_path), "--output-dir", "/o"])
     assert rc == 0
+
+
+def test_main_unrecognised_suffix_raises(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    _install_runtime_stubs(monkeypatch)
+    bogus = tmp_path / "data.yaml"
+    bogus.write_text("{}")
+    from instant_nurec.cli import main
+    with pytest.raises(ValueError, match="must end in .json or .lst"):
+        main(["--ncore-path", str(bogus), "--output-dir", "/o"])

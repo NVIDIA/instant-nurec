@@ -138,9 +138,9 @@ contributor at +24 s no_merge cold-cache) is in the linked report.
 source .venv/bin/activate
 
 mkdir -p /tmp/out/no_merge /tmp/out/merge
-python run_inference.py --ncore-path /storage/data/nurec/ncorev4 \
+python run_inference.py --ncore-path /storage/data/nurec/ncorev4/debug.lst \
     --output-dir /tmp/out/no_merge --merge none
-python run_inference.py --ncore-path /storage/data/nurec/ncorev4 \
+python run_inference.py --ncore-path /storage/data/nurec/ncorev4/debug.lst \
     --output-dir /tmp/out/merge   --merge frustum-ownership
 
 python benchmark/validate_parity.py merge \

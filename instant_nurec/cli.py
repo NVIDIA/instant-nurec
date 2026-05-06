@@ -15,15 +15,9 @@
 
 """Standalone argparse CLI.
 
-Builds a default-populated ``InstantNuRecConfig`` from the
-``instant_nurec.config_schema`` pydantic models and overrides only the
-three fields that genuinely vary per invocation: ``out_dir``,
-``dataset.predict.ncore_json_*``, and ``predict.primitive_merge.enabled``.
-
-Canonical invocation:
-
-    python run_inference.py --ncore-path <path> --output-dir <path> \\
-                            --merge {none,frustum-ownership}
+``--ncore-path`` accepts either a single ``.json`` ncorev4 sequence
+metadata file (NuRec-aligned) or a ``.lst`` manifest listing one JSON
+path per line (each absolute or relative-to-the-LST-file's directory).
 """
 
 from __future__ import annotations
@@ -44,7 +38,12 @@ def make_parser() -> argparse.ArgumentParser:
         "--ncore-path",
         type=Path,
         required=True,
-        help="ncorev4 dataset root (must contain debug.lst).",
+        help=(
+            "ncorev4 input. Either a single sequence ``.json`` (NuRec-aligned) "
+            "or a ``.lst`` manifest with one JSON path per line "
+            "(absolute or relative-to-the-LST-file's directory; "
+            "``#``-prefixed and blank lines skipped)."
+        ),
     )
     parser.add_argument(
         "--output-dir",
@@ -81,14 +80,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     from instant_nurec.config_schema.instantnurec import InstantNuRecConfig
     from instant_nurec.config_schema.predict import PredictConfig, PrimitiveMergeConfig
+    from instant_nurec.ncore_input import resolve_ncore_paths
     from instant_nurec.predict.run import run_predict
+
+    json_paths = resolve_ncore_paths(args.ncore_path)
 
     config = InstantNuRecConfig(
         out_dir=str(args.output_dir),
         dataset=InstantNuRecSplitsConfig(
             predict=NCoreInstantNuRecDatasetConfig(
-                ncore_json_base_path=str(args.ncore_path),
-                ncore_json_list_path=str(args.ncore_path / "debug.lst"),
+                ncore_json_paths=[str(p) for p in json_paths],
             ),
         ),
         predict=PredictConfig(
