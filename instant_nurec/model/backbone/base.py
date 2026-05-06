@@ -13,58 +13,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from abc import ABC, abstractmethod
-from dataclasses import dataclass
+# Re-export shim -- see instant_nurec/model/kelvin.py for context. Removed in commit 8.
 
-import torch
-
-
-@dataclass(kw_only=True, slots=True)
-class KelvinLatent(ABC):
-    @property
-    @abstractmethod
-    def batch_size(self) -> int:
-        """
-        Get the batch size of the latent.
-        """
-
-    @property
-    @abstractmethod
-    def device(self) -> torch.device:
-        """
-        Get the device of the latent.
-        """
-
-    @property
-    @abstractmethod
-    def deepest(self) -> torch.Tensor:
-        """
-        Get the deepest feature of the latent.
-        Note this is not necessarily normalized via layer norm.
-        Size will be (B, V, h, w, C)
-        """
+from instant_nurec_internal.model.backbone.base import (
+    KelvinLatent,
+    KelvinMultiscaleFeaturesLatent,
+)
 
 
-@dataclass(kw_only=True, slots=True)
-class KelvinMultiscaleFeaturesLatent(KelvinLatent):
-    """
-    Features means transformed queries (i.e. output of the attention block).
-    """
-
-    # (B, V, h, w, C)
-    features: list[torch.Tensor]
-
-    # (B, V, n_cls_tokens, C)
-    cls_tokens: list[torch.Tensor] | None = None
-
-    @property
-    def batch_size(self) -> int:
-        return self.features[0].shape[0]
-
-    @property
-    def device(self) -> torch.device:
-        return self.features[0].device
-
-    @property
-    def deepest(self) -> torch.Tensor:
-        return self.features[-1]
+__all__ = ["KelvinLatent", "KelvinMultiscaleFeaturesLatent"]

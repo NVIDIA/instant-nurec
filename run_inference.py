@@ -31,6 +31,10 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(REPO_ROOT))
+# `instant_nurec_internal` lives under internal/; it's excluded from the
+# wheel and only present in source-tree runs (commits 2-7). Commit 7
+# retires the dependency once the JIT artifact ships.
+sys.path.insert(0, str(REPO_ROOT / "internal"))
 
 
 from instant_nurec.cli import main

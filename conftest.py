@@ -13,9 +13,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Re-export shim -- see instant_nurec/model/kelvin.py for context. Removed in commit 8.
+# pytest auto-loads this before collection so the in-tree packages resolve
+# without an editable install. ``internal/`` is on the path so the
+# proprietary-architecture package (`instant_nurec_internal`) imports
+# during the move-and-shim transition. The shims under instant_nurec/model/
+# re-export from there until commit 7 retires the pickle path.
 
-from instant_nurec_internal.model.backbone.sky import CubemapDecoderSky
+import sys
+
+from pathlib import Path
 
 
-__all__ = ["CubemapDecoderSky"]
+_REPO_ROOT = Path(__file__).resolve().parent
+
+for _p in (_REPO_ROOT, _REPO_ROOT / "internal"):
+    _s = str(_p)
+    if _s not in sys.path:
+        sys.path.insert(0, _s)
