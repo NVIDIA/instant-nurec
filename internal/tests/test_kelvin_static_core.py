@@ -41,6 +41,7 @@ sys.path.insert(0, str(REPO_ROOT / "internal"))
 from instant_nurec_internal.jit.kelvin_static_core import (  # noqa: E402
     KelvinStaticCore,
     StaticLayerTensors,
+    TraceableStaticCore,
 )
 from instant_nurec_internal.model.backbone.base import KelvinMultiscaleFeaturesLatent  # noqa: E402
 
@@ -324,3 +325,61 @@ def test_forward_returns_only_static_tensors_and_affine():
     bundles, affine = out
     assert isinstance(bundles, list)
     assert isinstance(affine, torch.Tensor)
+
+
+# ---------- TraceableStaticCore ----------
+
+
+def test_traceable_wraps_static_core_forward_tensors(monkeypatch):
+    """``TraceableStaticCore.forward`` must call into
+    ``KelvinStaticCore.forward_tensors`` exactly once with the same arguments.
+    Numerical correctness of ``forward_tensors`` is gated by
+    ``internal/scripts/export_kelvin_jit.py``'s parity gate."""
+
+    class _NopStaticCore(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.calls: list[tuple] = []
+
+        def forward_tensors(self, *args):
+            self.calls.append(args)
+            # Return placeholder 8-tuple so the call signature is satisfied.
+            return tuple(torch.zeros(1) for _ in range(8))
+
+    nop = _NopStaticCore()
+    wrap = TraceableStaticCore(nop)
+
+    rgb = torch.zeros(1, 2, 4, 4, 3)
+    c2w = torch.eye(4)[None, None].expand(1, 2, 4, 4)
+    fov = torch.zeros(1, 2, 2)
+    rays = torch.zeros(1, 2, 4, 4, 6)
+    distance_to_depth_scale = torch.ones(1, 2, 4, 4, 1)
+    camera_idxs = torch.zeros(1, 2, dtype=torch.int64)
+
+    out = wrap(rgb, c2w, fov, rays, distance_to_depth_scale, camera_idxs)
+
+    assert len(nop.calls) == 1
+    args = nop.calls[0]
+    assert args[0] is rgb
+    assert args[1] is c2w
+    assert args[5] is camera_idxs
+    assert len(out) == 8
+
+
+def test_traceable_module_registers_static_core_as_submodule():
+    """For ``torch.jit.trace`` to find the parameter tree, ``static_core``
+    must be a registered submodule (not a closure attribute)."""
+
+    class _MiniCore(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.linear = nn.Linear(2, 2)
+
+        def forward_tensors(self, *args):
+            return (self.linear(torch.zeros(1, 2)),) * 8
+
+    core = _MiniCore()
+    wrap = TraceableStaticCore(core)
+    submodule_names = {name for name, _ in wrap.named_modules()}
+    assert "static_core" in submodule_names
+    assert "static_core.linear" in submodule_names
