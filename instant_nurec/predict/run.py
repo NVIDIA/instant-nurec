@@ -14,12 +14,10 @@
 # limitations under the License.
 
 import logging
-import os
 import random
 
 import numpy as np
 import torch
-import yaml
 
 import instant_nurec.datasets  # noqa: F401  (populates dataset registry)
 import instant_nurec.model as instantnurec_systems
@@ -39,10 +37,6 @@ def _seed_everything(seed: int) -> None:
 
 def run_predict(config: InstantNuRecConfig) -> None:
     """Run the Kelvin predict pipeline against an already-typed config."""
-    os.makedirs(config.config_dir, exist_ok=True)
-    with open(os.path.join(config.config_dir, "parsed.yaml"), "w") as fp:
-        yaml.safe_dump(config.model_dump(mode="json"), fp, sort_keys=False)
-
     _seed_everything(config.seed)
     logger.info("InstantNuRec RUN \U0001f194: %s", config.run_id)
 

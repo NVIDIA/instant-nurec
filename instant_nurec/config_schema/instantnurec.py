@@ -25,9 +25,6 @@ from instant_nurec.config_schema.models import KelvinModelConfig
 from instant_nurec.config_schema.predict import PredictConfig
 
 
-SENTINEL = "<sentinel>"
-
-
 class GaussiansInstantNuRecSystemConfig(BaseConfigSchema):
     """Predict-only system config; just dataloader knobs."""
 
@@ -56,10 +53,6 @@ class InstantNuRecConfig(BaseConfigSchema):
         description="Configuration for predict-time-only functionality such as primitive merging",
     )
 
-    config_dir: str = Field(
-        default=SENTINEL,
-        description="Directory where parsed.yaml is dumped. Auto-derived as out_dir/run_id/config.",
-    )
     run_id: str = Field(
         default_factory=shortuuid.uuid,
         description=(
@@ -71,4 +64,3 @@ class InstantNuRecConfig(BaseConfigSchema):
     def model_post_init(self, __context) -> None:
         if (env_run_id := os.environ.get("INSTANT_NUREC_RUN_ID")) is not None:
             self.run_id = env_run_id
-        self.config_dir = os.path.join(self.out_dir, self.run_id, "config")
