@@ -20,8 +20,8 @@ from einops import rearrange, repeat
 from torch import nn
 
 from instant_nurec.utils.nn_extensions import TypedModuleList
-from instant_nurec.config_schema.models import (
-    KelvinModelConfig,
+from instant_nurec_internal.config_schema.models import (
+    KelvinFullModelConfig as KelvinModelConfig,
     KelvinSkyCubemapDecoderConfig,
 )
 from instant_nurec_internal.model.blocks.attention import CrossAttentionBlock, KVProjector

@@ -25,10 +25,10 @@ from einops import rearrange
 from torch import nn
 
 from instant_nurec.datasets.tracks import CuboidTracks, TrackFlags
-from instant_nurec.config_schema.models import (
+from instant_nurec_internal.config_schema.models import (
     KelvinDAv3EncoderConfig,
     KelvinDPTDecoderConfig,
-    KelvinModelConfig,
+    KelvinFullModelConfig as KelvinModelConfig,
 )
 from instant_nurec_internal.model.activations import GaussianActivations, GaussianParams
 from instant_nurec_internal.model.blocks.aa_vit import AlternateAttentionVisionTransformer

@@ -72,7 +72,6 @@ def make(config: "InstantNuRecConfig") -> GaussiansInstantNuRecSystem:
 
     logger.info("Loading JIT system from %s.", full_pt_path)
     jit_module = torch.jit.load(full_pt_path, map_location="cpu")
-    cuboids_dims_padding = jit_module.static_core.decoder.cuboids_dims_padding
 
     system: GaussiansInstantNuRecSystem = GaussiansInstantNuRecSystem.__new__(
         GaussiansInstantNuRecSystem
@@ -84,9 +83,8 @@ def make(config: "InstantNuRecConfig") -> GaussiansInstantNuRecSystem:
     system.predict_config = config.predict
     system.export_preprocess = config.model.export_preprocess
     system.datamodule = InstantNuRecDataModule(config)
-    system.model = JITKelvinAdapter(
-        jit_module=jit_module,
-        scene_rescale=config.model.scene_rescale,
-        cuboids_dims_padding=cuboids_dims_padding,
-    )
+    # The adapter pulls ``scene_rescale`` and ``cuboids_dims_padding`` off
+    # the loaded JIT module's preserved buffers; the public config doesn't
+    # carry architecture-side fields anymore.
+    system.model = JITKelvinAdapter(jit_module=jit_module)
     return system

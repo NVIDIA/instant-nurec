@@ -53,6 +53,52 @@ sys.path.insert(0, str(REPO_ROOT))
 sys.path.insert(0, str(REPO_ROOT / "internal"))
 
 
+# Legacy ``kelvin_full.pt`` pickle baked in qualnames that no longer
+# exist on the public surface after commit 8 (architecture sources +
+# config classes were relocated under ``internal/instant_nurec_internal``).
+# Pre-register sys.modules aliases + class-attribute aliases so
+# ``torch.load(kelvin_full.pt)`` can resolve the saved qualnames against
+# the corresponding internal classes. Done up-front -- before the rest
+# of the script's imports trigger the unpickling import chain.
+import sys as _sys  # noqa: E402
+
+import instant_nurec.config_schema.models as _public_models  # noqa: E402
+import instant_nurec_internal.config_schema.models as _full_models  # noqa: E402
+import instant_nurec_internal.model.activations as _act_mod  # noqa: E402
+import instant_nurec_internal.model.backbone.base as _backbone_base_mod  # noqa: E402
+import instant_nurec_internal.model.backbone.decoders as _decoders_mod  # noqa: E402
+import instant_nurec_internal.model.backbone.encoders as _encoders_mod  # noqa: E402
+import instant_nurec_internal.model.backbone.sky as _sky_mod  # noqa: E402
+import instant_nurec_internal.model.blocks.aa_vit as _aa_vit_mod  # noqa: E402
+import instant_nurec_internal.model.blocks.attention as _attention_mod  # noqa: E402
+import instant_nurec_internal.model.blocks.dav3 as _dav3_mod  # noqa: E402
+import instant_nurec_internal.model.blocks.dpt as _dpt_mod  # noqa: E402
+import instant_nurec_internal.model.blocks.embeds as _embeds_mod  # noqa: E402
+import instant_nurec_internal.model.blocks.layers as _layers_mod  # noqa: E402
+import instant_nurec_internal.model.kelvin as _kelvin_mod  # noqa: E402
+import instant_nurec_internal.model.post_processing as _post_proc_mod  # noqa: E402
+
+_public_models.KelvinModelConfig = _full_models.KelvinFullModelConfig
+_public_models.GaussiansActivationConfig = _full_models.GaussiansActivationConfig
+_public_models.KelvinDAv3EncoderConfig = _full_models.KelvinDAv3EncoderConfig
+_public_models.KelvinDPTDecoderConfig = _full_models.KelvinDPTDecoderConfig
+_public_models.KelvinSkyCubemapDecoderConfig = _full_models.KelvinSkyCubemapDecoderConfig
+
+_sys.modules.setdefault("instant_nurec.model.kelvin", _kelvin_mod)
+_sys.modules.setdefault("instant_nurec.model.activations", _act_mod)
+_sys.modules.setdefault("instant_nurec.model.post_processing", _post_proc_mod)
+_sys.modules.setdefault("instant_nurec.model.backbone.base", _backbone_base_mod)
+_sys.modules.setdefault("instant_nurec.model.backbone.decoders", _decoders_mod)
+_sys.modules.setdefault("instant_nurec.model.backbone.encoders", _encoders_mod)
+_sys.modules.setdefault("instant_nurec.model.backbone.sky", _sky_mod)
+_sys.modules.setdefault("instant_nurec.model.blocks.aa_vit", _aa_vit_mod)
+_sys.modules.setdefault("instant_nurec.model.blocks.attention", _attention_mod)
+_sys.modules.setdefault("instant_nurec.model.blocks.dav3", _dav3_mod)
+_sys.modules.setdefault("instant_nurec.model.blocks.dpt", _dpt_mod)
+_sys.modules.setdefault("instant_nurec.model.blocks.embeds", _embeds_mod)
+_sys.modules.setdefault("instant_nurec.model.blocks.layers", _layers_mod)
+
+
 from instant_nurec.config_schema.dataset import (  # noqa: E402
     InstantNuRecSplitsConfig,
     NCoreInstantNuRecDatasetConfig,

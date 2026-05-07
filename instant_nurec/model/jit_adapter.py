@@ -72,23 +72,24 @@ class JITKelvinAdapter(nn.Module):
             ``(gs_xyz, gs_rotations, gs_scales, gs_densities, gs_rgb,
             semantic_argmax, normals, affine_matrix)`` with the per-pixel
             tensors at ``(B, V, H, W, *)`` shape.
-        scene_rescale: Same value the model was trained / traced with.
-        cuboids_dims_padding: 3-vector buffer from
-            ``KelvinDPTDecoder.cuboids_dims_padding``; needed to apply
-            cuboid-track-based dynamic mask refinement.
+
+    The adapter reads ``scene_rescale`` and ``cuboids_dims_padding`` off
+    the JIT module's preserved buffers -- both are baked into the JIT
+    trace itself; the public package never needs to know either value.
     """
 
-    def __init__(
-        self,
-        jit_module: torch.jit.ScriptModule,
-        scene_rescale: float,
-        cuboids_dims_padding: torch.Tensor,
-    ):
+    def __init__(self, jit_module: torch.jit.ScriptModule):
         super().__init__()
         self.jit_module = jit_module
-        self.scene_rescale = scene_rescale
+        # Both values are persistent buffers on the traced module; reading
+        # them back avoids leaking architecture parameters through the
+        # public config.
+        scene_rescale_buffer = jit_module.static_core.scene_rescale_buffer
+        self.scene_rescale = float(scene_rescale_buffer.item())
         self.register_buffer(
-            "cuboids_dims_padding", cuboids_dims_padding.detach().clone(), persistent=False
+            "cuboids_dims_padding",
+            jit_module.static_core.decoder.cuboids_dims_padding.detach().clone(),
+            persistent=False,
         )
 
     # ------------------------------------------------------------------

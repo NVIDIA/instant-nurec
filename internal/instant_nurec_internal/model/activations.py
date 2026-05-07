@@ -23,7 +23,7 @@ import torch.nn as nn
 
 from torch import Tensor
 
-from instant_nurec.config_schema.models import GaussiansActivationConfig
+from instant_nurec_internal.config_schema.models import GaussiansActivationConfig
 
 
 class OpacityActivation(nn.Module):

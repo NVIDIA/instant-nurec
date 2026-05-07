@@ -13,18 +13,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Branch-coverage tests for the predict-only InstantNuRec pydantic config schemas.
+"""Branch-coverage tests for the predict-only InstantNuRec public pydantic
+config schemas.
 
-Covers ``instant_nurec.config_schema.predict`` (``PrimitiveMergeConfig`` + ``PredictConfig``),
-``instant_nurec.config_schema.models`` (``KelvinDPTDecoderConfig.model_post_init`` +
-default-fields paths), and ``instant_nurec.config_schema.instantnurec.InstantNuRecConfig.model_post_init``
-(resume / .ckpt suffix / INSTANT_NUREC_RUN_ID env override / config_dir derivation).
+Architecture-side configs (encoder/decoder/sky/activations) live under
+``instant_nurec_internal.config_schema.models`` and are covered by
+``internal/tests/test_config_models.py`` -- they are not part of the
+shipped surface.
 """
 
 from __future__ import annotations
 
 import os
 import sys
+
 from pathlib import Path
 
 import pytest
@@ -40,15 +42,11 @@ from instant_nurec.config_schema.dataset import (
     CameraSubsamplerConfig,
     NCoreInstantNuRecCuboidTracksParamsConfig,
 )
+from instant_nurec.config_schema.instantnurec import GaussiansInstantNuRecSystemConfig, InstantNuRecConfig
 from instant_nurec.config_schema.models import (
-    GaussiansActivationConfig,
-    KelvinDAv3EncoderConfig,
-    KelvinDPTDecoderConfig,
     KelvinModelConfig,
-    KelvinSkyCubemapDecoderConfig,
     PrimitiveExportPreprocessConfig,
 )
-from instant_nurec.config_schema.instantnurec import GaussiansInstantNuRecSystemConfig, InstantNuRecConfig
 from instant_nurec.config_schema.predict import PredictConfig, PrimitiveMergeConfig
 
 
@@ -92,55 +90,6 @@ def test_predict_config_custom_chunk_size():
 
 
 # ---------------------------------------------------------------------------
-# KelvinDPTDecoderConfig
-# ---------------------------------------------------------------------------
-
-
-def test_kelvin_dpt_decoder_post_init_accepts_positive_dpt_dim():
-    cfg = KelvinDPTDecoderConfig(dpt_dim=128, dpt_reassemble_hidden_dims=[8, 16, 32, 64])
-    assert cfg.dpt_dim == 128
-    # defaults
-    assert cfg.checkpointing is True
-    assert cfg.dpt_chunk_size == 4
-    assert cfg.time_encoding_dim == 256
-    assert cfg.motion_depth == 4
-
-
-def test_kelvin_dpt_decoder_post_init_rejects_zero_dpt_dim():
-    """pydantic wraps the AssertionError into a ValidationError."""
-    with pytest.raises(ValidationError, match="must be positive"):
-        KelvinDPTDecoderConfig(dpt_dim=0, dpt_reassemble_hidden_dims=[8, 16, 32, 64])
-
-
-def test_kelvin_dpt_decoder_post_init_rejects_negative_dpt_dim():
-    with pytest.raises(ValidationError, match="must be positive"):
-        KelvinDPTDecoderConfig(dpt_dim=-1, dpt_reassemble_hidden_dims=[8, 16, 32, 64])
-
-
-# ---------------------------------------------------------------------------
-# GaussiansActivationConfig defaults
-# ---------------------------------------------------------------------------
-
-
-def test_activation_config_defaults():
-    cfg = GaussiansActivationConfig()
-    assert cfg.opacity_shift == -2.0
-    assert cfg.scale_shift_log_ratio == -2.9
-    assert cfg.scale_max == 0.045
-    assert cfg.scale_min == 0.0
-
-
-def test_activation_config_custom_values():
-    cfg = GaussiansActivationConfig(
-        opacity_shift=1.0, scale_shift_log_ratio=0.0, scale_max=0.5, scale_min=0.01
-    )
-    assert cfg.opacity_shift == 1.0
-    assert cfg.scale_shift_log_ratio == 0.0
-    assert cfg.scale_max == 0.5
-    assert cfg.scale_min == 0.01
-
-
-# ---------------------------------------------------------------------------
 # PrimitiveExportPreprocessConfig
 # ---------------------------------------------------------------------------
 
@@ -151,44 +100,20 @@ def test_primitive_export_preprocess_default():
 
 
 # ---------------------------------------------------------------------------
-# KelvinModelConfig (defaults + composed)
+# KelvinModelConfig (slim, post-architecture-split)
 # ---------------------------------------------------------------------------
 
 
-def _make_model_cfg(**overrides):
-    return KelvinModelConfig(
-        sky=KelvinSkyCubemapDecoderConfig(cubemap_size=256, embed_dim=64, depth=2),
-        encoder=KelvinDAv3EncoderConfig(
-            depth=4,
-            n_heads=8,
-            embed_dim=128,
-            take_block_indices=[0, 1, 2, 3],
-            aa_start_block_idx=0,
-        ),
-        decoder=KelvinDPTDecoderConfig(
-            dpt_dim=128, dpt_reassemble_hidden_dims=[8, 16, 32, 64]
-        ),
-        **overrides,
-    )
-
-
-def test_kelvin_model_default_track_padding_and_scene_rescale():
-    cfg = _make_model_cfg()
-    assert cfg.track_padding_m == [1.0, 1.0, 1.0]
-    assert cfg.scene_rescale == 0.15
-    assert cfg.patch_shape == (14, 14)
-    assert isinstance(cfg.activations, GaussiansActivationConfig)
+def test_kelvin_model_config_default_only_carries_export_preprocess():
+    cfg = KelvinModelConfig()
     assert isinstance(cfg.export_preprocess, PrimitiveExportPreprocessConfig)
-
-
-def test_kelvin_model_rejects_track_padding_not_3_long():
-    with pytest.raises(ValidationError):
-        _make_model_cfg(track_padding_m=[1.0, 1.0])
-
-
-def test_kelvin_model_rejects_track_padding_too_long():
-    with pytest.raises(ValidationError):
-        _make_model_cfg(track_padding_m=[1.0, 1.0, 1.0, 1.0])
+    # No architecture fields -- those live in
+    # instant_nurec_internal.config_schema.models.KelvinFullModelConfig.
+    assert not hasattr(cfg, "encoder")
+    assert not hasattr(cfg, "decoder")
+    assert not hasattr(cfg, "sky")
+    assert not hasattr(cfg, "scene_rescale")
+    assert not hasattr(cfg, "track_padding_m")
 
 
 # ---------------------------------------------------------------------------
@@ -277,11 +202,8 @@ def test_base_config_schema_is_hashable():
     cfg1 = PrimitiveMergeConfig(enabled=False)
     cfg2 = PrimitiveMergeConfig(enabled=False)
     cfg3 = PrimitiveMergeConfig(enabled=True)
-    # Same content → same hash.
     assert hash(cfg1) == hash(cfg2)
-    # Different content → different hash (almost always; depends on __repr__ diff).
     assert hash(cfg1) != hash(cfg3)
-    # And both are hashable in a set / dict
     assert len({cfg1, cfg2, cfg3}) == 2
 
 
@@ -295,7 +217,7 @@ def _make_config_kwargs(out_dir, **extra):
         out_dir=str(out_dir),
         system=GaussiansInstantNuRecSystemConfig(),
         dataset={"predict": None},
-        model=_make_model_cfg(),
+        model=KelvinModelConfig(),
     )
     base.update(extra)
     return base
@@ -304,9 +226,8 @@ def _make_config_kwargs(out_dir, **extra):
 def test_config_post_init_no_env(tmp_path, monkeypatch):
     monkeypatch.delenv("INSTANT_NUREC_RUN_ID", raising=False)
     cfg = InstantNuRecConfig(**_make_config_kwargs(tmp_path))
-    # config_dir auto-derives to out_dir/run_id/config
     assert cfg.config_dir == os.path.join(str(tmp_path), cfg.run_id, "config")
-    assert cfg.run_id  # auto-generated shortuuid
+    assert cfg.run_id
 
 
 def test_config_post_init_env_run_id_overrides(tmp_path, monkeypatch):

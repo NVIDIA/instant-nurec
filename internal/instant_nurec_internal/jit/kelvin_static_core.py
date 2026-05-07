@@ -75,6 +75,18 @@ class KelvinStaticCore(nn.Module):
         self.encoder = encoder
         self.decoder = decoder
         self.post_processing = post_processing
+        # Plain Python attributes don't survive ``torch.jit.save`` -- only
+        # parameters / buffers do. Registering ``scene_rescale`` as a buffer
+        # (1-element tensor) lets the loader-side adapter read it back from
+        # the JIT module via ``jit_module.static_core.scene_rescale_buffer``,
+        # so the public package never needs to know its value. The trace
+        # still bakes the float into ``math.log(scene_rescale)`` etc., so
+        # this is purely informational at load time.
+        self.register_buffer(
+            "scene_rescale_buffer",
+            torch.tensor(scene_rescale, dtype=torch.float32),
+            persistent=True,
+        )
         self.scene_rescale = scene_rescale
 
     # ------------------------------------------------------------------
