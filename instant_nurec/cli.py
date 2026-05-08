@@ -54,7 +54,7 @@ def make_parser() -> argparse.ArgumentParser:
         "--output-dir",
         type=Path,
         required=True,
-        help="Directory for PLY output and parsed config.",
+        help="Directory for PLY output.",
     )
     parser.add_argument(
         "--merge",
