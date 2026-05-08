@@ -47,8 +47,15 @@ class AdaptiveSequentialFrameBatchSampler:
     n_frames_per_sample frame slots with max_frame_gap_timestamp_us spacing. Each sample index returns one chunk.
     """
 
-    def __init__(self, config: AdaptiveSequentialFrameBatchSamplerConfig):
-        self.n_frames_per_sample: int = config.n_frames_per_sample
+    def __init__(
+        self,
+        config: AdaptiveSequentialFrameBatchSamplerConfig,
+        n_frames_per_sample: int,
+    ):
+        # ``n_frames_per_sample`` is JIT-baked (V dim of the trace), passed in
+        # by the dataset rather than read from the config; the runtime sources
+        # it from the loaded ``kelvin_jit.pt``'s ``expected_v`` buffer.
+        self.n_frames_per_sample: int = n_frames_per_sample
         self.n_samples_per_sequence: int = config.n_samples_per_sequence
         self.max_frame_gap_timestamp_us: int = config.max_frame_gap_timestamp_us
         assert self.n_frames_per_sample > 0, "n_frames_per_sample must be positive"

@@ -38,9 +38,6 @@ class PredictConfig(BaseConfigSchema):
     Configuration for inference functionality typically used only in "predict" mode.
     """
 
-    chunk_size: int = Field(
-        default=1, description="Size of the chunk/mini-batch for reconstruction for large batch sizes."
-    )
     primitive_merge: PrimitiveMergeConfig = Field(
         default_factory=PrimitiveMergeConfig, description="Configuration for primitive merging"
     )

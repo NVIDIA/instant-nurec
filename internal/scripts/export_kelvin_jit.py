@@ -62,8 +62,24 @@ sys.path.insert(0, str(REPO_ROOT / "internal"))
 # of the script's imports trigger the unpickling import chain.
 import sys as _sys  # noqa: E402
 
+import instant_nurec.config_schema.dataset as _public_dataset  # noqa: E402
 import instant_nurec.config_schema.models as _public_models  # noqa: E402
 import instant_nurec_internal.config_schema.models as _full_models  # noqa: E402
+
+# ``CameraSubsamplerConfig`` was a public Pydantic model that the legacy
+# pickle stored under ``NCoreInstantNuRecDatasetConfig.camera_subsampler``.
+# After the JIT-shape-buffer split it's gone from the public schema; provide
+# a transient stub at the legacy qualname so the unpickle resolves.
+from instant_nurec.config_schema.base_schema import BaseConfigSchema as _BaseConfigSchema  # noqa: E402
+from pydantic import Field as _PydField  # noqa: E402
+
+
+class _LegacyCameraSubsamplerConfig(_BaseConfigSchema):
+    frame_width: int = _PydField(default=784)
+    frame_height: int = _PydField(default=448)
+
+
+_public_dataset.CameraSubsamplerConfig = _LegacyCameraSubsamplerConfig
 import instant_nurec_internal.model.activations as _act_mod  # noqa: E402
 import instant_nurec_internal.model.backbone.base as _backbone_base_mod  # noqa: E402
 import instant_nurec_internal.model.backbone.decoders as _decoders_mod  # noqa: E402
@@ -157,11 +173,25 @@ def _build_fresh_static_core(loaded_kelvin) -> KelvinStaticCore:
     )
     post.load_state_dict(loaded_kelvin.post_processing.state_dict())
 
+    # JIT-baked input-shape constraints. ``expected_v`` is jointly determined
+    # by ``len(context_camera_ids)`` (here always 1 in the canonical predict
+    # config) and ``frame_batch_sampler.n_frames_per_sample`` (= 18 by
+    # design). The adapter reads these buffers back at load time and the
+    # dataloader is configured against them so a shape-mismatched input
+    # never reaches the model.
+    expected_b = 1
+    expected_v = 18
+    expected_h, expected_w = 448, 784
+
     return KelvinStaticCore(
         encoder=encoder,
         decoder=decoder,
         post_processing=post,
         scene_rescale=cfg.scene_rescale,
+        expected_b=expected_b,
+        expected_v=expected_v,
+        expected_h=expected_h,
+        expected_w=expected_w,
     )
 
 
@@ -336,9 +366,17 @@ def main() -> int:
     static_core = _build_fresh_static_core(kelvin).to(args.device)
     static_core.eval()
 
-    # Build a real batch via the predict dataloader.
+    # Build a real batch via the predict dataloader. The export-side shapes
+    # mirror what the JIT artifact's ``expected_*`` buffers will carry; the
+    # runtime adapter reads them back from the saved artifact.
     config = _build_config(args.ncore_path, "/tmp/export_kelvin_jit_run")
-    datamodule = InstantNuRecDataModule(config)
+    datamodule = InstantNuRecDataModule(
+        config,
+        frame_width=int(static_core.expected_w.item()),
+        frame_height=int(static_core.expected_h.item()),
+        n_frames_per_sample=int(static_core.expected_v.item())
+        // len(config.dataset.predict.context_camera_ids),
+    )
     loader = datamodule.predict_dataloader()
     full_batch = next(iter(loader)).to(torch.device(args.device))
     full_batch.maybe_compute_rendering_data(device=torch.device(args.device))

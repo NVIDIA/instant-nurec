@@ -81,16 +81,34 @@ class JITKelvinAdapter(nn.Module):
     def __init__(self, jit_module: torch.jit.ScriptModule):
         super().__init__()
         self.jit_module = jit_module
-        # Both values are persistent buffers on the traced module; reading
-        # them back avoids leaking architecture parameters through the
-        # public config.
-        scene_rescale_buffer = jit_module.static_core.scene_rescale_buffer
-        self.scene_rescale = float(scene_rescale_buffer.item())
+        # All values are persistent buffers on the traced module; reading
+        # them back avoids leaking architecture parameters / trace-baked
+        # shapes through the public config.
+        self.scene_rescale = float(jit_module.static_core.scene_rescale_buffer.item())
+        self.expected_b = int(jit_module.static_core.expected_b.item())
+        self.expected_v = int(jit_module.static_core.expected_v.item())
+        self.expected_h = int(jit_module.static_core.expected_h.item())
+        self.expected_w = int(jit_module.static_core.expected_w.item())
         self.register_buffer(
             "cuboids_dims_padding",
             jit_module.static_core.decoder.cuboids_dims_padding.detach().clone(),
             persistent=False,
         )
+
+    def _validate_input_shape(self, rgb: torch.Tensor) -> None:
+        """Trace-baked shape check: the JIT graph mismatches silently if the
+        input doesn't match the recorded shapes."""
+        b, v, h, w, c = rgb.shape
+        if (b, v, h, w, c) != (self.expected_b, self.expected_v, self.expected_h, self.expected_w, 3):
+            raise ValueError(
+                f"JIT input shape mismatch: got rgb {tuple(rgb.shape)}, "
+                f"expected (B={self.expected_b}, V={self.expected_v}, "
+                f"H={self.expected_h}, W={self.expected_w}, 3). "
+                f"The kelvin_jit.pt artifact is shape-locked at trace time; "
+                f"check that ``len(context_camera_ids) * n_frames_per_sample`` "
+                f"equals {self.expected_v} and that the image resize matches "
+                f"({self.expected_h}, {self.expected_w})."
+            )
 
     # ------------------------------------------------------------------
     # prepare_context: copy of KelvinInstantNuRec._maybe_derive_normals_from_distance
@@ -265,6 +283,7 @@ class JITKelvinAdapter(nn.Module):
         primitives: list[KelvinInstantNuRecPrimitive] = []
         for bidx, batch in enumerate(context):
             tensors = self._extract_tensors(batch)
+            self._validate_input_shape(tensors[0])
             (
                 gs_xyz,
                 gs_rotations,

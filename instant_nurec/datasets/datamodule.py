@@ -21,15 +21,35 @@ from instant_nurec.utils.batch import InstantNuRecDataBatch
 
 
 class InstantNuRecDataModule:
-    def __init__(self, instantnurec_config: InstantNuRecConfig) -> None:
+    """``frame_width`` / ``frame_height`` / ``n_frames_per_sample`` are
+    JIT-baked input-shape constraints; ``instant_nurec.model.make`` reads
+    them off the loaded ``kelvin_jit.pt``'s buffers and threads them
+    through to the dataset."""
+
+    def __init__(
+        self,
+        instantnurec_config: InstantNuRecConfig,
+        *,
+        frame_width: int,
+        frame_height: int,
+        n_frames_per_sample: int,
+    ) -> None:
         self.instantnurec_config = instantnurec_config
+        self._frame_width = frame_width
+        self._frame_height = frame_height
+        self._n_frames_per_sample = n_frames_per_sample
         self.predict_dataset: NCoreInstantNuRecDataset | None = None
 
     def predict_dataloader(self) -> DataLoader:
         dataset_config = self.instantnurec_config.dataset.predict
         assert dataset_config is not None, "dataset.predict has to be specified in the config to use the predict mode"
 
-        self.predict_dataset = NCoreInstantNuRecDataset(dataset_config)
+        self.predict_dataset = NCoreInstantNuRecDataset(
+            dataset_config,
+            frame_width=self._frame_width,
+            frame_height=self._frame_height,
+            n_frames_per_sample=self._n_frames_per_sample,
+        )
         return DataLoader(
             self.predict_dataset,
             num_workers=self.instantnurec_config.system.predict_num_workers,

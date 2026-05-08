@@ -100,58 +100,44 @@ def test_get_closest_frame_index_returns_python_int():
 # ---------------------------------------------------------------------------
 
 
-def _make_sampler(**overrides):
+def _make_sampler(*, n_frames_per_sample: int = 4, **cfg_overrides):
+    """``n_frames_per_sample`` is no longer a config field -- it's a JIT-baked
+    constructor arg, sourced from the loaded artifact's ``expected_v`` buffer
+    at runtime. Tests pass it directly."""
     from instant_nurec.config_schema.dataset import AdaptiveSequentialFrameBatchSamplerConfig
     from instant_nurec.datasets.samplers import AdaptiveSequentialFrameBatchSampler
 
     base = dict(
-        n_frames_per_sample=4,
         n_samples_per_sequence=8,
         max_frame_gap_timestamp_us=200_000,
     )
-    base.update(overrides)
+    base.update(cfg_overrides)
     cfg = AdaptiveSequentialFrameBatchSamplerConfig(**base)
-    return AdaptiveSequentialFrameBatchSampler(cfg)
+    return AdaptiveSequentialFrameBatchSampler(cfg, n_frames_per_sample=n_frames_per_sample)
 
 
 def test_sampler_constructor_rejects_zero_frames_per_sample():
-    from instant_nurec.config_schema.dataset import AdaptiveSequentialFrameBatchSamplerConfig
-    from instant_nurec.datasets.samplers import AdaptiveSequentialFrameBatchSampler
-
-    cfg = AdaptiveSequentialFrameBatchSamplerConfig(
-        n_frames_per_sample=0, n_samples_per_sequence=1, max_frame_gap_timestamp_us=1
-    )
     with pytest.raises(AssertionError, match="n_frames_per_sample"):
-        AdaptiveSequentialFrameBatchSampler(cfg)
+        _make_sampler(n_frames_per_sample=0)
 
 
 def test_sampler_constructor_rejects_zero_samples_per_sequence():
-    from instant_nurec.config_schema.dataset import AdaptiveSequentialFrameBatchSamplerConfig
-    from instant_nurec.datasets.samplers import AdaptiveSequentialFrameBatchSampler
-
-    cfg = AdaptiveSequentialFrameBatchSamplerConfig(
-        n_frames_per_sample=1, n_samples_per_sequence=0, max_frame_gap_timestamp_us=1
-    )
     with pytest.raises(AssertionError, match="n_samples_per_sequence"):
-        AdaptiveSequentialFrameBatchSampler(cfg)
+        _make_sampler(n_samples_per_sequence=0)
 
 
 def test_sampler_constructor_rejects_zero_max_frame_gap():
-    from instant_nurec.config_schema.dataset import AdaptiveSequentialFrameBatchSamplerConfig
-    from instant_nurec.datasets.samplers import AdaptiveSequentialFrameBatchSampler
-
-    cfg = AdaptiveSequentialFrameBatchSamplerConfig(
-        n_frames_per_sample=1, n_samples_per_sequence=1, max_frame_gap_timestamp_us=0
-    )
     with pytest.raises(AssertionError, match="max_frame_gap_timestamp_us"):
-        AdaptiveSequentialFrameBatchSampler(cfg)
+        _make_sampler(max_frame_gap_timestamp_us=0)
 
 
 def test_sample_frame_batch_returns_correct_indices_per_camera():
     from instant_nurec.utils.types import HalfClosedInterval
 
     sampler = _make_sampler(
-        n_frames_per_sample=4, n_samples_per_sequence=2, max_frame_gap_timestamp_us=200_000
+        n_frames_per_sample=4,
+        n_samples_per_sequence=2,
+        max_frame_gap_timestamp_us=200_000,
     )
     cam_a_ts = np.array([0, 100_000, 200_000, 300_000, 400_000, 500_000, 600_000, 700_000])
     cam_b_ts = np.array([50_000, 150_000, 250_000, 350_000, 450_000, 550_000, 650_000, 750_000])
@@ -206,7 +192,9 @@ def test_sample_frame_batch_returns_empty_when_chunk_count_under_sample_idx():
     from instant_nurec.utils.types import HalfClosedInterval
 
     sampler = _make_sampler(
-        n_frames_per_sample=4, n_samples_per_sequence=8, max_frame_gap_timestamp_us=10_000_000
+        n_frames_per_sample=4,
+        n_samples_per_sequence=8,
+        max_frame_gap_timestamp_us=10_000_000,
     )
     cams = {"a": np.array([0, 100_000])}
     # 100us span with 40,000,000us max_chunk_timespan → only 1 chunk needed
@@ -228,7 +216,9 @@ def test_sample_frame_batch_multi_interval_uses_min_start_max_end():
     from instant_nurec.utils.types import HalfClosedInterval
 
     sampler = _make_sampler(
-        n_frames_per_sample=2, n_samples_per_sequence=4, max_frame_gap_timestamp_us=500_000
+        n_frames_per_sample=2,
+        n_samples_per_sequence=4,
+        max_frame_gap_timestamp_us=500_000,
     )
     cams = {"a": np.array([0, 100_000, 200_000, 300_000, 400_000, 500_000, 600_000, 700_000, 800_000])}
     # Two intervals with a gap → min start 0, max end 800_000

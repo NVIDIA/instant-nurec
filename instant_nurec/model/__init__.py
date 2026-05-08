@@ -73,6 +73,22 @@ def make(config: "InstantNuRecConfig") -> GaussiansInstantNuRecSystem:
     logger.info("Loading JIT system from %s.", full_pt_path)
     jit_module = torch.jit.load(full_pt_path, map_location="cpu")
 
+    # The adapter pulls all trace-baked scalars + shapes off the loaded JIT
+    # module's preserved buffers; the public config doesn't carry them.
+    adapter = JITKelvinAdapter(jit_module=jit_module)
+
+    # ``expected_v`` is jointly determined by ``len(context_camera_ids)``
+    # and ``n_frames_per_sample``; here we derive ``n_frames_per_sample``
+    # so the dataset/sampler produce inputs that match the JIT's V dim.
+    n_context_cams = len(config.dataset.predict.context_camera_ids)
+    if adapter.expected_v % n_context_cams != 0:
+        raise FullModelNotFoundError(
+            f"JIT artifact expects V={adapter.expected_v} but len(context_camera_ids)="
+            f"{n_context_cams} doesn't divide it. Update context_camera_ids so that "
+            f"len(context_camera_ids) divides {adapter.expected_v}."
+        )
+    n_frames_per_sample = adapter.expected_v // n_context_cams
+
     system: GaussiansInstantNuRecSystem = GaussiansInstantNuRecSystem.__new__(
         GaussiansInstantNuRecSystem
     )
@@ -82,9 +98,11 @@ def make(config: "InstantNuRecConfig") -> GaussiansInstantNuRecSystem:
     system.config = config.system
     system.predict_config = config.predict
     system.export_preprocess = config.model.export_preprocess
-    system.datamodule = InstantNuRecDataModule(config)
-    # The adapter pulls ``scene_rescale`` and ``cuboids_dims_padding`` off
-    # the loaded JIT module's preserved buffers; the public config doesn't
-    # carry architecture-side fields anymore.
-    system.model = JITKelvinAdapter(jit_module=jit_module)
+    system.datamodule = InstantNuRecDataModule(
+        config,
+        frame_width=adapter.expected_w,
+        frame_height=adapter.expected_h,
+        n_frames_per_sample=n_frames_per_sample,
+    )
+    system.model = adapter
     return system

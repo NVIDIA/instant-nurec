@@ -69,13 +69,17 @@ class GaussiansInstantNuRecSystem(nn.Module):
         # In the future maybe rendering data is not required any more for model forwarding.
         batch.maybe_compute_rendering_data(device=self.device)
 
-        # For large batch sizes, process in chunks
+        # The kelvin_jit.pt artifact is shape-locked at B=1 (the inner-loop
+        # slice into model forward passes). Hardcoded constant rather than a
+        # config field; the JIT module's ``expected_b`` buffer carries the
+        # canonical value.
+        _CHUNK_SIZE = 1
         primitives_list: list[BaseInstantNuRecPrimitive] = []
 
         inner_batch_idx: int = 0
         progress_bar = tqdm(total=len(batch), desc="Predicting in chunks")
         while inner_batch_idx < len(batch):
-            batch_chunk = batch[inner_batch_idx : inner_batch_idx + self.predict_config.chunk_size]
+            batch_chunk = batch[inner_batch_idx : inner_batch_idx + _CHUNK_SIZE]
             primitives_chunk_list = self.forward(batch_chunk)
             context_rig_list = batch_chunk.context_rig if batch_chunk.context_rig is not None else None
             for i in range(len(primitives_chunk_list)):
@@ -84,8 +88,8 @@ class GaussiansInstantNuRecSystem(nn.Module):
                     batch_chunk.context[i], self.export_preprocess, context_rig=context_rig_i
                 )
             primitives_list.extend(primitives_chunk_list)
-            inner_batch_idx += self.predict_config.chunk_size
-            progress_bar.update(self.predict_config.chunk_size)
+            inner_batch_idx += _CHUNK_SIZE
+            progress_bar.update(_CHUNK_SIZE)
         progress_bar.close()
 
         # Merge the primitives if enabled

@@ -58,7 +58,16 @@ def _make_static_core() -> KelvinStaticCore:
     encoder = _Stub()
     decoder = _Stub()
     post = _Stub()
-    return KelvinStaticCore(encoder, decoder, post, scene_rescale=0.5)
+    return KelvinStaticCore(
+        encoder,
+        decoder,
+        post,
+        scene_rescale=0.5,
+        expected_b=1,
+        expected_v=18,
+        expected_h=448,
+        expected_w=784,
+    )
 
 
 # ---------- KelvinStaticCore structural invariants ----------

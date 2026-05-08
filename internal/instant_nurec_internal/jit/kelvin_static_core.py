@@ -70,22 +70,39 @@ class KelvinStaticCore(nn.Module):
         decoder: KelvinDPTDecoder,
         post_processing: PerCameraAffinePostProcessing,
         scene_rescale: float,
+        expected_b: int,
+        expected_v: int,
+        expected_h: int,
+        expected_w: int,
     ):
         super().__init__()
         self.encoder = encoder
         self.decoder = decoder
         self.post_processing = post_processing
         # Plain Python attributes don't survive ``torch.jit.save`` -- only
-        # parameters / buffers do. Registering ``scene_rescale`` as a buffer
-        # (1-element tensor) lets the loader-side adapter read it back from
-        # the JIT module via ``jit_module.static_core.scene_rescale_buffer``,
-        # so the public package never needs to know its value. The trace
-        # still bakes the float into ``math.log(scene_rescale)`` etc., so
-        # this is purely informational at load time.
+        # parameters / buffers do. Registering as buffers lets the loader-side
+        # adapter read them back from the JIT module, so the public package
+        # never has to carry these JIT-baked shapes / scalars in its config.
         self.register_buffer(
             "scene_rescale_buffer",
             torch.tensor(scene_rescale, dtype=torch.float32),
             persistent=True,
+        )
+        # Trace-baked input shape constraints: any input not matching these
+        # will silently shape-mismatch (or worse, miscompute) inside the
+        # frozen graph. The adapter validates against these on every call
+        # and the dataloader builds inputs to match.
+        self.register_buffer(
+            "expected_b", torch.tensor(expected_b, dtype=torch.int64), persistent=True
+        )
+        self.register_buffer(
+            "expected_v", torch.tensor(expected_v, dtype=torch.int64), persistent=True
+        )
+        self.register_buffer(
+            "expected_h", torch.tensor(expected_h, dtype=torch.int64), persistent=True
+        )
+        self.register_buffer(
+            "expected_w", torch.tensor(expected_w, dtype=torch.int64), persistent=True
         )
         self.scene_rescale = scene_rescale
 

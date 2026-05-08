@@ -83,13 +83,16 @@ class _FakeJITModule(torch.nn.Module):
 
 
 def _make_adapter(jit_module: _FakeJITModule, scene_rescale: float = 0.5) -> JITKelvinAdapter:
-    """Adapter constructor reads ``scene_rescale_buffer`` and
-    ``decoder.cuboids_dims_padding`` off the JIT module; we attach those
-    onto the fake before instantiation."""
+    """Adapter constructor reads buffers off the JIT module; attach mocks
+    sized to match the fake module's per-pixel output."""
     from types import SimpleNamespace
 
     jit_module.static_core = SimpleNamespace(
         scene_rescale_buffer=torch.tensor(scene_rescale, dtype=torch.float32),
+        expected_b=torch.tensor(jit_module.B, dtype=torch.int64),
+        expected_v=torch.tensor(jit_module.V, dtype=torch.int64),
+        expected_h=torch.tensor(jit_module.H, dtype=torch.int64),
+        expected_w=torch.tensor(jit_module.W, dtype=torch.int64),
         decoder=SimpleNamespace(cuboids_dims_padding=torch.tensor([0.1, 0.1, 0.1])),
     )
     return JITKelvinAdapter(jit_module=jit_module)

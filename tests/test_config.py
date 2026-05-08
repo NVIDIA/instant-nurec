@@ -38,7 +38,6 @@ from pydantic import ValidationError
 
 from instant_nurec.config_schema.dataset import (
     AdaptiveSequentialFrameBatchSamplerConfig,
-    CameraSubsamplerConfig,
     NCoreInstantNuRecCuboidTracksParamsConfig,
 )
 from instant_nurec.config_schema.instantnurec import GaussiansInstantNuRecSystemConfig, InstantNuRecConfig
@@ -78,14 +77,8 @@ def test_primitive_merge_rejects_negative_diff():
 
 def test_predict_config_defaults():
     cfg = PredictConfig()
-    assert cfg.chunk_size == 1
     assert isinstance(cfg.primitive_merge, PrimitiveMergeConfig)
     assert cfg.primitive_merge.enabled is False
-
-
-def test_predict_config_custom_chunk_size():
-    cfg = PredictConfig(chunk_size=4)
-    assert cfg.chunk_size == 4
 
 
 # ---------------------------------------------------------------------------
@@ -165,18 +158,12 @@ def test_cuboid_tracks_params_default_extrapolate_us():
 # ---------------------------------------------------------------------------
 
 
-def test_camera_subsampler_basic():
-    cfg = CameraSubsamplerConfig(frame_width=1920, frame_height=1080)
-    assert cfg.frame_width == 1920
-    assert cfg.frame_height == 1080
-
-
 def test_adaptive_sequential_frame_batch_sampler_basic():
     cfg = AdaptiveSequentialFrameBatchSamplerConfig(
-        n_frames_per_sample=4, n_samples_per_sequence=2, max_frame_gap_timestamp_us=200000
+        n_samples_per_sequence=2, max_frame_gap_timestamp_us=200000
     )
-    assert cfg.n_frames_per_sample == 4
     assert cfg.n_samples_per_sequence == 2
+    assert cfg.max_frame_gap_timestamp_us == 200000
 
 
 # ---------------------------------------------------------------------------

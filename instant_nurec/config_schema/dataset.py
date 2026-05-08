@@ -41,23 +41,26 @@ class NCoreInstantNuRecCuboidTracksParamsConfig(BaseConfigSchema):
 
 
 class AdaptiveSequentialFrameBatchSamplerConfig(BaseConfigSchema):
-    n_frames_per_sample: int = Field(
-        default=18,
-        description="Number of frames in each dataset sample (i.e. one return from get_item of the dataset)",
-    )
+    """``n_frames_per_sample`` is no longer here -- it's a JIT-baked input
+    shape (the V dim of the encoder trace) and is sourced from the loaded
+    ``kelvin_jit.pt`` artifact's ``expected_v`` buffer at runtime."""
+
     n_samples_per_sequence: int = Field(
         default=8,
-        description="Number of samples to return for each sequence (i.e. one recording from the full dataset)",
+        description=(
+            "Maximum number of time-chunks processed per sequence. Clips longer than "
+            "n_samples_per_sequence * n_frames_per_sample * max_frame_gap_timestamp_us "
+            "(approx 108 s with defaults) are silently truncated -- bump this for long clips."
+        ),
     )
     max_frame_gap_timestamp_us: int = Field(
         default=750_000,
-        description="Maximum gap between adjacent sampled frames in the batch, in microseconds.",
+        description=(
+            "Max spacing (us) between adjacent frames inside one sample. Multiplied by "
+            "n_frames_per_sample (JIT-baked), this sets each chunk's max timespan; "
+            "tighter values mean more chunks needed to cover a clip."
+        ),
     )
-
-
-class CameraSubsamplerConfig(BaseConfigSchema):
-    frame_width: int = Field(default=784, description="Width of the image to subsample (aspect-preserving center crop)")
-    frame_height: int = Field(default=448, description="Height of the image to subsample (aspect-preserving center crop)")
 
 
 class NCoreInstantNuRecDatasetConfig(BaseConfigSchema):
@@ -80,11 +83,6 @@ class NCoreInstantNuRecDatasetConfig(BaseConfigSchema):
         "max_angle = min(max_fov / 2, camera_model.max_angle). This will make boundary pixels classified as invalid",
     )
     n_camera_mask_dilation_iterations: int = Field(default=10)
-
-    camera_subsampler: CameraSubsamplerConfig = Field(
-        default_factory=CameraSubsamplerConfig,
-        description="Image resize to a given height/width.",
-    )
 
     context_camera_ids: list[str] = Field(
         default_factory=lambda: ["camera_front_wide_120fov"],

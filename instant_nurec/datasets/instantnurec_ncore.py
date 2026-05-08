@@ -142,7 +142,22 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
         camera_sensors: dict["NCoreInstantNuRecDataset.ExtendedCameraId", ncore.data.CameraSensorProtocol]
         lidar_sensors: dict[str, ncore.data.LidarSensorProtocol]
 
-    def __init__(self, config: NCoreInstantNuRecDatasetConfig):
+    def __init__(
+        self,
+        config: NCoreInstantNuRecDatasetConfig,
+        frame_width: int,
+        frame_height: int,
+        n_frames_per_sample: int,
+    ):
+        # ``frame_width`` / ``frame_height`` / ``n_frames_per_sample`` are
+        # JIT-baked input shape constraints; the runtime threads them in
+        # from the loaded ``kelvin_jit.pt``'s ``expected_w`` / ``expected_h``
+        # / ``expected_v`` buffers via ``instant_nurec.model.make``. The
+        # public config no longer carries them.
+        self._frame_width = frame_width
+        self._frame_height = frame_height
+        self._n_frames_per_sample = n_frames_per_sample
+
         self.open_consolidated = config.open_consolidated
         self.camera_max_fov_deg = config.camera_max_fov_deg
         self.n_camera_mask_dilation_iterations = config.n_camera_mask_dilation_iterations
@@ -174,6 +189,17 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
 
         self.num_samples_per_sequence: int = config.frame_batch_sampler.n_samples_per_sequence
         self.config = config
+
+    def _build_frame_batch_sampler(self) -> AdaptiveSequentialFrameBatchSampler:
+        return AdaptiveSequentialFrameBatchSampler(
+            self.config.frame_batch_sampler,
+            n_frames_per_sample=self._n_frames_per_sample,
+        )
+
+    def _build_camera_subsampler(self):
+        from instant_nurec.datasets.instantnurec_base import CameraSubsampler
+
+        return CameraSubsampler(frame_width=self._frame_width, frame_height=self._frame_height)
 
     def __len__(self) -> int:
         return len(self.ncore_json_paths) * self.num_samples_per_sequence
@@ -738,7 +764,7 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
         sequence_idx: int = batch_idx // self.num_samples_per_sequence
         sample_idx: int = batch_idx % self.num_samples_per_sequence
 
-        frame_batch_sampler = AdaptiveSequentialFrameBatchSampler(self.config.frame_batch_sampler)
+        frame_batch_sampler = self._build_frame_batch_sampler()
         assert sample_idx < frame_batch_sampler.n_samples_per_sequence, "Sample index out of bounds"
 
         context_id_lookup = {str(c): c for c in self.all_context_camera_ids}
@@ -803,7 +829,7 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
         )
 
         # Load context frames.
-        context_camera_subsampler = CameraSubsampler(self.config.camera_subsampler)
+        context_camera_subsampler = self._build_camera_subsampler()
         context_rig_trajectory, context_camera_mapping, context_lidar_mapping = self._get_rig_trajectory(
             "context-",
             context_frame_batch,

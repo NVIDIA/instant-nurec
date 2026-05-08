@@ -25,7 +25,6 @@ import torch.nn.functional as F
 
 import ncore.data
 
-from instant_nurec.config_schema.dataset import CameraSubsamplerConfig
 from instant_nurec.utils.sensors import RectSubsampledSensor
 
 
@@ -36,11 +35,17 @@ class CameraSubsampler:
     """
     Dedicated class to subsample camera parameters or the images (currently center crop is used).
     This could be later extended to include more complex subsampling strategies (e.g. for progressive training).
+
+    Target ``frame_width`` / ``frame_height`` are passed in directly rather
+    than read from a config field: the kelvin_jit.pt artifact is shape-locked
+    at trace time, so these dimensions are sourced from the loaded JIT
+    module's ``expected_h`` / ``expected_w`` buffers via
+    ``instant_nurec.model.make`` rather than user-tunable config.
     """
 
-    def __init__(self, config: CameraSubsamplerConfig):
-        self.frame_width = config.frame_width
-        self.frame_height = config.frame_height
+    def __init__(self, frame_width: int, frame_height: int):
+        self.frame_width = frame_width
+        self.frame_height = frame_height
 
     def _compute_pixel_rect(
         self, original_width: int, original_height: int
