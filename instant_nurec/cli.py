@@ -29,6 +29,11 @@ from pathlib import Path
 from typing import Sequence
 
 
+_DEFAULT_CAMERA_ID = "camera_front_wide_120fov"
+_DEFAULT_LIDAR_ID = "lidar_top_360fov"
+_DEFAULT_MAX_CHUNKS = 8
+
+
 def make_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="instant_nurec",
@@ -61,6 +66,41 @@ def make_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--camera-id",
+        type=str,
+        default=_DEFAULT_CAMERA_ID,
+        help=(
+            f"ncorev4 context-camera id used as model input "
+            f"(default: '{_DEFAULT_CAMERA_ID}'). Wires both "
+            f"context_camera_ids and supervision_camera_ids to [CAMERA_ID]. "
+            f"The kelvin_jit.pt artifact is shape-locked to a single context "
+            f"camera; the id may differ across datasets but exactly one "
+            f"camera is required."
+        ),
+    )
+    parser.add_argument(
+        "--lidar-id",
+        type=str,
+        default=_DEFAULT_LIDAR_ID,
+        help=(
+            f"ncorev4 LiDAR sensor id used to source cuboid tracks for "
+            f"dynamic-mask refinement (default: '{_DEFAULT_LIDAR_ID}'). "
+            f"Must exist in the sequence's lidar_sensors."
+        ),
+    )
+    parser.add_argument(
+        "--max-chunks",
+        type=int,
+        default=_DEFAULT_MAX_CHUNKS,
+        help=(
+            f"Maximum number of time-chunks processed per clip "
+            f"(default: {_DEFAULT_MAX_CHUNKS}). One chunk spans up to 13.5 s, "
+            f"so the default covers 8 * 13.5 = 108 s. Clips longer than that "
+            f"are silently truncated unless this is increased -- bump it to "
+            f"ceil(clip_seconds / 13.5) for longer clips."
+        ),
+    )
+    parser.add_argument(
         "--log-level",
         choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
         default="INFO",
@@ -75,6 +115,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     # Lazy imports keep argparse-only invocations (e.g. --help) cheap.
     from instant_nurec.config_schema.dataset import (
+        AdaptiveSequentialFrameBatchSamplerConfig,
+        NCoreInstantNuRecCuboidTracksParamsConfig,
         NCoreInstantNuRecDatasetConfig,
         InstantNuRecSplitsConfig,
     )
@@ -90,6 +132,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         dataset=InstantNuRecSplitsConfig(
             predict=NCoreInstantNuRecDatasetConfig(
                 ncore_json_paths=[str(p) for p in json_paths],
+                context_camera_ids=[args.camera_id],
+                supervision_camera_ids=[args.camera_id],
+                cuboid_tracks_params=NCoreInstantNuRecCuboidTracksParamsConfig(
+                    lidar_id=args.lidar_id,
+                ),
+                frame_batch_sampler=AdaptiveSequentialFrameBatchSamplerConfig(
+                    n_samples_per_sequence=args.max_chunks,
+                ),
             ),
         ),
         predict=PredictConfig(
