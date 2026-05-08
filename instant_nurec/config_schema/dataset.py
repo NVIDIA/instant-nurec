@@ -41,9 +41,10 @@ class NCoreInstantNuRecCuboidTracksParamsConfig(BaseConfigSchema):
 
 
 class AdaptiveSequentialFrameBatchSamplerConfig(BaseConfigSchema):
-    """``n_frames_per_sample`` is no longer here -- it's a JIT-baked input
-    shape (the V dim of the encoder trace) and is sourced from the loaded
-    ``kelvin_jit.pt`` artifact's ``expected_v`` buffer at runtime."""
+    """Adaptive sequential frame-batch sampler config.
+
+    ``n_frames_per_sample`` is sourced by the runtime, not via this config.
+    """
 
     n_samples_per_sequence: int = Field(
         default=8,
@@ -57,8 +58,8 @@ class AdaptiveSequentialFrameBatchSamplerConfig(BaseConfigSchema):
         default=750_000,
         description=(
             "Max spacing (us) between adjacent frames inside one sample. Multiplied by "
-            "n_frames_per_sample (JIT-baked), this sets each chunk's max timespan; "
-            "tighter values mean more chunks needed to cover a clip."
+            "n_frames_per_sample, this sets each chunk's max timespan; tighter values "
+            "mean more chunks needed to cover a clip."
         ),
     )
 

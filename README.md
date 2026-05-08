@@ -22,9 +22,7 @@ time and interchanged with existing simulation pipelines.
 
 This repository is the public reference implementation of the predict
 side of the **Kelvin** model: ncorev4 ingest → frame batch prep →
-forward pass → 3D-Gaussian PLY export. The shipped model is a
-TorchScript artifact (`kelvin_jit.pt`); the Python source for the
-encoder/decoder/heads is not part of the wheel. It is sufficient to
+forward pass → 3D-Gaussian PLY export. It is sufficient to
 reproduce the paper's reconstruction outputs from a recorded ncorev4
 sequence.
 
@@ -122,7 +120,7 @@ Output layout: PLYs only, under `out_dir/<run_id>/ply/<sequence_id>/...ply`.
 | `--ncore-path` | (required) | A `.json` file (single sequence) or a `.lst` manifest (one JSON path per line). |
 | `--output-dir` | (required) | Directory the pipeline writes PLYs into. |
 | `--merge` | `none` | `none` writes per-chunk PLYs (`<seq>_chunk{N}.ply`); `frustum-ownership` writes a single merged PLY per sequence (`<seq>.ply`). |
-| `--camera-id` | `camera_front_wide_120fov` | ncorev4 context-camera id used as model input. The shipped JIT artifact is shape-locked to a single context camera, so the id may differ across datasets but exactly one camera is required. |
+| `--camera-id` | `camera_front_wide_120fov` | ncorev4 context-camera id used as model input. Exactly one camera is required. |
 | `--lidar-id` | `lidar_top_360fov` | ncorev4 LiDAR sensor id used to source cuboid tracks for dynamic-mask refinement. Must exist in the sequence's `lidar_sensors`. |
 | `--max-chunks` | `8` | Maximum number of time-chunks processed per clip. One chunk spans up to 13.5 s, so the default covers 8 × 13.5 = 108 s. Clips longer than that are silently truncated unless this is increased — bump to `ceil(clip_seconds / 13.5)` for longer clips. |
 | `--log-level` | `INFO` | `DEBUG` / `INFO` / `WARNING` / `ERROR` / `CRITICAL`. |
@@ -162,10 +160,6 @@ instant-nurec/
 ├── LICENSE.txt
 └── THIRD_PARTY_LICENSE.txt
 ```
-
-The encoder / decoder / per-attribute heads / activation sub-modules
-are baked into ``kelvin_jit.pt`` and not part of the shipped Python
-package.
 
 </details>
 

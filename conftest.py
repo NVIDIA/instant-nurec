@@ -15,10 +15,9 @@
 
 # pytest auto-loads this before collection so the in-tree packages resolve
 # without an editable install. ``internal/`` is on the path so the tests
-# under ``internal/tests/`` can import the proprietary-architecture package
+# under ``internal/tests/`` can import the internal-only package
 # (``instant_nurec_internal``); the public ``instant_nurec`` package no
-# longer depends on it -- it's referenced only by the artifact-export
-# script and its tests.
+# longer depends on it.
 
 import sys
 

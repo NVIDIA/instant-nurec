@@ -13,21 +13,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""``JITKelvinAdapter``: thin wrapper that exposes a JIT-loaded
-``KelvinStaticCore`` as a ``KelvinInstantNuRec``-shaped object.
+"""``JITKelvinAdapter``: thin Python wrapper around the loaded model.
 
-The shipped Kelvin artifact -- ``kelvin_jit.pt`` -- is a TorchScript
-archive of ``TraceableStaticCore``. It produces the *unmasked* per-pixel
-gaussian fields plus the semantic argmax; this adapter applies the
-final mask (semantic + optional cuboid-track-based refinement) in
-Python so the JIT artifact stays free of variable-length cuboid_tracks
-data dependence.
-
-Sky cubemap and dynamic layers are not produced by the JIT artifact
-(static-only output contract). To satisfy the
-``KelvinInstantNuRecPrimitive`` invariants and the chunk-merge code
-path that reads these fields, the adapter fills them with zero
-placeholders; ``export_ply.py`` reads only ``static_layer``.
+Applies semantic + optional cuboid-track-based dynamic-mask refinement
+to the per-pixel outputs and packages them into
+``KelvinInstantNuRecPrimitive``. Sky cubemap and dynamic-layer slots
+are filled with zero placeholders to satisfy the primitive invariants
+and the chunk-merge code path; ``export_ply.py`` reads only
+``static_layer``.
 """
 
 from __future__ import annotations
@@ -63,27 +56,15 @@ _PLACEHOLDER_SKY_CUBEMAP_SIZE = 16
 
 
 class JITKelvinAdapter(nn.Module):
-    """Adapter exposing a JIT-loaded ``KelvinStaticCore`` as a
-    ``KelvinInstantNuRec``-shaped object.
+    """Adapter wrapping a ``torch.jit.load`` output.
 
     Args:
-        jit_module: Output of ``torch.jit.load(kelvin_jit.pt)``. Must be a
-            traced ``TraceableStaticCore`` returning the 8-tuple
-            ``(gs_xyz, gs_rotations, gs_scales, gs_densities, gs_rgb,
-            semantic_argmax, normals, affine_matrix)`` with the per-pixel
-            tensors at ``(B, V, H, W, *)`` shape.
-
-    The adapter reads ``scene_rescale`` and ``cuboids_dims_padding`` off
-    the JIT module's preserved buffers -- both are baked into the JIT
-    trace itself; the public package never needs to know either value.
+        jit_module: Output of ``torch.jit.load(kelvin_jit.pt)``.
     """
 
     def __init__(self, jit_module: torch.jit.ScriptModule):
         super().__init__()
         self.jit_module = jit_module
-        # All values are persistent buffers on the traced module; reading
-        # them back avoids leaking architecture parameters / trace-baked
-        # shapes through the public config.
         self.scene_rescale = float(jit_module.static_core.scene_rescale_buffer.item())
         self.expected_b = int(jit_module.static_core.expected_b.item())
         self.expected_v = int(jit_module.static_core.expected_v.item())
@@ -96,18 +77,15 @@ class JITKelvinAdapter(nn.Module):
         )
 
     def _validate_input_shape(self, rgb: torch.Tensor) -> None:
-        """Trace-baked shape check: the JIT graph mismatches silently if the
-        input doesn't match the recorded shapes."""
         b, v, h, w, c = rgb.shape
-        if (b, v, h, w, c) != (self.expected_b, self.expected_v, self.expected_h, self.expected_w, 3):
+        expected = (self.expected_b, self.expected_v, self.expected_h, self.expected_w, 3)
+        if (b, v, h, w, c) != expected:
             raise ValueError(
-                f"JIT input shape mismatch: got rgb {tuple(rgb.shape)}, "
-                f"expected (B={self.expected_b}, V={self.expected_v}, "
-                f"H={self.expected_h}, W={self.expected_w}, 3). "
-                f"The kelvin_jit.pt artifact is shape-locked at trace time; "
+                f"Input shape mismatch: got rgb {tuple(rgb.shape)}, "
+                f"expected {expected}. Model expects {self.expected_v} "
+                f"input frames at {self.expected_h}x{self.expected_w}; "
                 f"check that ``len(context_camera_ids) * n_frames_per_sample`` "
-                f"equals {self.expected_v} and that the image resize matches "
-                f"({self.expected_h}, {self.expected_w})."
+                f"equals {self.expected_v}."
             )
 
     # ------------------------------------------------------------------
@@ -161,13 +139,12 @@ class JITKelvinAdapter(nn.Module):
         return [self._maybe_derive_normals_from_distance(batch) for batch in context]
 
     # ------------------------------------------------------------------
-    # reconstruct: tensor-extraction adapter around the JIT artifact
+    # reconstruct: tensor-extraction adapter
     # ------------------------------------------------------------------
 
     def _extract_tensors(self, batch: DataAndRenderingBatch):
-        """Mirror of ``internal/scripts/export_kelvin_jit.py:_extract_trace_tensors``,
-        scoped to a single ``DataAndRenderingBatch`` (the JIT artifact was
-        traced at chunk_size=1)."""
+        """Extract the model's input tensors from a single
+        ``DataAndRenderingBatch`` (chunk_size=1)."""
         data = unpack_optional(batch.data.camera)
         rendering = unpack_optional(unpack_optional(batch.rendering).camera)
 
@@ -206,15 +183,13 @@ class JITKelvinAdapter(nn.Module):
         rendering_camera,
         cuboid_tracks_b: CuboidTracks | None,
     ) -> torch.Tensor:
-        """Mirror of ``KelvinDPTDecoder.decode``'s dynamic-mask computation
-        (lines 339-400 of decoders.py).
+        """Compute the dynamic mask.
 
         Without ``cuboid_tracks_b``: dynamic_mask is purely the semantic
-        head's argmax-equals-MOVABLE.
+        argmax-equals-MOVABLE.
 
         With ``cuboid_tracks_b``: refine via point-cuboid intersection
-        (and fallback ray-cuboid intersection on movable rays) so the
-        static layer matches the cuboid-aware eager output.
+        (and fallback ray-cuboid intersection on movable rays).
         """
         # Single-batch slice: shapes (V, H, W, 3) and (V, H, W).
         gs_xyz_v = gs_xyz[0]
@@ -260,8 +235,7 @@ class JITKelvinAdapter(nn.Module):
 
     def _empty_dynamic_layer(self, device: torch.device) -> KelvinDynamicLayer:
         """Zero-gaussian KelvinDynamicLayer placeholder. Required because
-        ``KelvinPrimitiveMerge`` asserts ``len(primitive.dynamic_layers) == 1``;
-        the JIT artifact does not produce dynamic layers."""
+        ``KelvinPrimitiveMerge`` asserts ``len(primitive.dynamic_layers) == 1``."""
         return KelvinDynamicLayer(
             max_densities=torch.zeros(0, 1, device=device),
             keyframe_positions=torch.zeros(0, 3, 3, device=device),

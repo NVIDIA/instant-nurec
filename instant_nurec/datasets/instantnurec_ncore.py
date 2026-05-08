@@ -150,10 +150,8 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
         n_frames_per_sample: int,
     ):
         # ``frame_width`` / ``frame_height`` / ``n_frames_per_sample`` are
-        # JIT-baked input shape constraints; the runtime threads them in
-        # from the loaded ``kelvin_jit.pt``'s ``expected_w`` / ``expected_h``
-        # / ``expected_v`` buffers via ``instant_nurec.model.make``. The
-        # public config no longer carries them.
+        # passed in by the caller (typically ``instant_nurec.model.make``),
+        # not via the dataset config.
         self._frame_width = frame_width
         self._frame_height = frame_height
         self._n_frames_per_sample = n_frames_per_sample

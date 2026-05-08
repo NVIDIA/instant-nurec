@@ -22,9 +22,8 @@ from instant_nurec.utils.batch import InstantNuRecDataBatch
 
 class InstantNuRecDataModule:
     """``frame_width`` / ``frame_height`` / ``n_frames_per_sample`` are
-    JIT-baked input-shape constraints; ``instant_nurec.model.make`` reads
-    them off the loaded ``kelvin_jit.pt``'s buffers and threads them
-    through to the dataset."""
+    passed in by the caller; ``instant_nurec.model.make`` is the
+    canonical caller."""
 
     def __init__(
         self,

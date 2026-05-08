@@ -21,12 +21,7 @@ defaults are encoded directly on each schema; `cli.py` only specifies the
 fields it overrides via CLI flags (input dataset path, output directory,
 merge mode, camera id, lidar id, max chunks).
 
-Architecture-side parameters (encoder / decoder / sky / activations /
-patch_shape / scene_rescale / track_padding_m, plus the JIT-locked input
-shapes B / V / H / W) are **not** part of these schemas. They are baked
-into the shipped TorchScript artifact (`kelvin_jit.pt`) at trace time;
-the runtime adapter reads the trace-baked shape buffers off the loaded
-artifact and threads them into the dataloader.
+Model parameters are sourced by the runtime, not via these schemas.
 
 ## What's in scope here
 

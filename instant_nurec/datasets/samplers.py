@@ -52,9 +52,8 @@ class AdaptiveSequentialFrameBatchSampler:
         config: AdaptiveSequentialFrameBatchSamplerConfig,
         n_frames_per_sample: int,
     ):
-        # ``n_frames_per_sample`` is JIT-baked (V dim of the trace), passed in
-        # by the dataset rather than read from the config; the runtime sources
-        # it from the loaded ``kelvin_jit.pt``'s ``expected_v`` buffer.
+        # ``n_frames_per_sample`` is passed in by the dataset rather than
+        # read from the config.
         self.n_frames_per_sample: int = n_frames_per_sample
         self.n_samples_per_sequence: int = config.n_samples_per_sequence
         self.max_frame_gap_timestamp_us: int = config.max_frame_gap_timestamp_us

@@ -14,13 +14,7 @@
 # limitations under the License.
 
 """Branch-coverage tests for the predict-only InstantNuRec public pydantic
-config schemas.
-
-Architecture-side configs (encoder/decoder/sky/activations) live under
-``instant_nurec_internal.config_schema.models`` and are covered by
-``internal/tests/test_config_models.py`` -- they are not part of the
-shipped surface.
-"""
+config schemas."""
 
 from __future__ import annotations
 

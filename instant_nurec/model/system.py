@@ -43,10 +43,7 @@ class GaussiansInstantNuRecSystem(nn.Module):
     """Predict-only system; the predict driver invokes hooks directly.
 
     Instances are constructed by ``instant_nurec.model.make`` via
-    ``__new__`` + manual attribute assignment -- the system no longer
-    builds the model itself. The ``model`` attribute is a
-    ``JITKelvinAdapter`` wrapping a ``torch.jit.load``-ed
-    ``TraceableStaticCore``.
+    ``__new__`` + manual attribute assignment.
     """
 
     config: GaussiansInstantNuRecSystemConfig
@@ -69,11 +66,7 @@ class GaussiansInstantNuRecSystem(nn.Module):
         # In the future maybe rendering data is not required any more for model forwarding.
         batch.maybe_compute_rendering_data(device=self.device)
 
-        # The kelvin_jit.pt artifact is shape-locked at B=1 (the inner-loop
-        # slice into model forward passes). Hardcoded constant rather than a
-        # config field; the JIT module's ``expected_b`` buffer carries the
-        # canonical value.
-        _CHUNK_SIZE = 1
+        _CHUNK_SIZE = 1  # not a config knob; the model expects B=1.
         primitives_list: list[BaseInstantNuRecPrimitive] = []
 
         inner_batch_idx: int = 0

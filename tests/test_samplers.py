@@ -101,9 +101,7 @@ def test_get_closest_frame_index_returns_python_int():
 
 
 def _make_sampler(*, n_frames_per_sample: int = 4, **cfg_overrides):
-    """``n_frames_per_sample`` is no longer a config field -- it's a JIT-baked
-    constructor arg, sourced from the loaded artifact's ``expected_v`` buffer
-    at runtime. Tests pass it directly."""
+    """``n_frames_per_sample`` is a constructor arg; tests pass it directly."""
     from instant_nurec.config_schema.dataset import AdaptiveSequentialFrameBatchSamplerConfig
     from instant_nurec.datasets.samplers import AdaptiveSequentialFrameBatchSampler
 

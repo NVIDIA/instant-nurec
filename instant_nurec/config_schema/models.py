@@ -13,16 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Public model configs.
-
-Only the post-JIT runtime knobs live here: architecture parameters
-(encoder dims, decoder dims, activation shifts, scene_rescale,
-patch_shape, track_padding_m, ...) are baked into the JIT artifact at
-trace time and therefore moved to
-``instant_nurec_internal.config_schema.models``. The runtime adapter
-reads ``scene_rescale`` and ``cuboids_dims_padding`` directly off the
-loaded JIT module's buffers; users have no reason to override either.
-"""
+"""Public model configs."""
 
 from __future__ import annotations
 
@@ -30,8 +21,8 @@ from instant_nurec.config_schema.base_schema import BaseConfigSchema, Field
 
 
 class PrimitiveExportPreprocessConfig(BaseConfigSchema):
-    """Per-chunk primitive preprocessing applied *after* the JIT call,
-    before export and (optionally) chunk merge."""
+    """Per-chunk primitive preprocessing applied before export and
+    (optionally) chunk merge."""
 
     density_prune_threshold: float = Field(
         default=0.01, description="Density threshold for pruning Gaussians in each chunk."
@@ -39,13 +30,7 @@ class PrimitiveExportPreprocessConfig(BaseConfigSchema):
 
 
 class KelvinModelConfig(BaseConfigSchema):
-    """Slim runtime config for the Kelvin model.
-
-    Architecture-side fields (encoder/decoder/sky/activations/patch_shape/
-    scene_rescale/track_padding_m) are baked into the JIT artifact and
-    live in ``instant_nurec_internal.config_schema.models.KelvinFullModelConfig``;
-    only the post-JIT preprocess knob is user-exposed here.
-    """
+    """Slim runtime config; only ``export_preprocess`` is user-exposed."""
 
     export_preprocess: PrimitiveExportPreprocessConfig = Field(
         default_factory=PrimitiveExportPreprocessConfig,

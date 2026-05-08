@@ -50,16 +50,10 @@ def make(config: "InstantNuRecConfig") -> GaussiansInstantNuRecSystem:
     """Load ``kelvin_jit.pt`` and build a ``GaussiansInstantNuRecSystem``.
 
     Resolution: ``INSTANT_NUREC_FULL_PT`` env var takes priority; otherwise
-    the artifact is fetched from Hugging Face. The artifact is a TorchScript
-    archive of ``TraceableStaticCore`` (see
-    ``internal/scripts/export_kelvin_jit.py``); the legacy pickled-system
-    path was retired once the JIT artifact reached PLY parity against the
-    eager baseline.
+    the artifact is fetched from Hugging Face.
 
     The full ``GaussiansInstantNuRecSystem.__init__`` is bypassed via
-    ``__new__`` + manual attribute assignment because the system class no
-    longer constructs an in-process model -- it just orchestrates a
-    ``JITKelvinAdapter`` that wraps the loaded TorchScript module.
+    ``__new__`` + manual attribute assignment.
     """
     full_pt_path = _resolve_full_pt_path()
     if not full_pt_path or not os.path.exists(full_pt_path):
@@ -72,20 +66,15 @@ def make(config: "InstantNuRecConfig") -> GaussiansInstantNuRecSystem:
 
     logger.info("Loading JIT system from %s.", full_pt_path)
     jit_module = torch.jit.load(full_pt_path, map_location="cpu")
-
-    # The adapter pulls all trace-baked scalars + shapes off the loaded JIT
-    # module's preserved buffers; the public config doesn't carry them.
     adapter = JITKelvinAdapter(jit_module=jit_module)
 
-    # ``expected_v`` is jointly determined by ``len(context_camera_ids)``
-    # and ``n_frames_per_sample``; here we derive ``n_frames_per_sample``
-    # so the dataset/sampler produce inputs that match the JIT's V dim.
     n_context_cams = len(config.dataset.predict.context_camera_ids)
     if adapter.expected_v % n_context_cams != 0:
         raise FullModelNotFoundError(
-            f"JIT artifact expects V={adapter.expected_v} but len(context_camera_ids)="
-            f"{n_context_cams} doesn't divide it. Update context_camera_ids so that "
-            f"len(context_camera_ids) divides {adapter.expected_v}."
+            f"Model expects {adapter.expected_v} input frames; "
+            f"len(context_camera_ids)={n_context_cams} doesn't divide it. "
+            f"Update context_camera_ids so its length divides "
+            f"{adapter.expected_v}."
         )
     n_frames_per_sample = adapter.expected_v // n_context_cams
 

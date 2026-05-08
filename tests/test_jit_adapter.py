@@ -48,8 +48,7 @@ from instant_nurec.primitives.kelvin_primitive import (  # noqa: E402
 
 
 class _FakeJITModule(torch.nn.Module):
-    """Stand-in for a loaded ``TraceableStaticCore`` -- emits per-pixel
-    tensors of the same shape the real artifact would, so the adapter's
+    """Fake JIT module emitting per-pixel tensors so the adapter's
     flatten + gather logic can be exercised without GPU."""
 
     def __init__(self, B: int, V: int, H: int, W: int, n_cams: int, dynamic_pixel_idx: int = -1):

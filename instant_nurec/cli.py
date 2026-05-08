@@ -73,9 +73,7 @@ def make_parser() -> argparse.ArgumentParser:
             f"ncorev4 context-camera id used as model input "
             f"(default: '{_DEFAULT_CAMERA_ID}'). Wires both "
             f"context_camera_ids and supervision_camera_ids to [CAMERA_ID]. "
-            f"The kelvin_jit.pt artifact is shape-locked to a single context "
-            f"camera; the id may differ across datasets but exactly one "
-            f"camera is required."
+            f"Exactly one camera is required."
         ),
     )
     parser.add_argument(
