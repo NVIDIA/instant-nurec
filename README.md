@@ -22,12 +22,15 @@ time and interchanged with existing simulation pipelines.
 
 This repository is the public reference implementation of the predict
 side of the **Kelvin** model: ncorev4 ingest → frame batch prep →
-forward pass → 3D-Gaussian PLY export. It is sufficient to reproduce
-the paper's reconstruction outputs from a recorded ncorev4 sequence.
+forward pass → 3D-Gaussian PLY export. The shipped model is a
+TorchScript artifact (`kelvin_jit.pt`); the Python source for the
+encoder/decoder/heads is not part of the wheel. It is sufficient to
+reproduce the paper's reconstruction outputs from a recorded ncorev4
+sequence.
 
 ## Pipeline Overview
 
-NCore V4 Sequence ─► Frame Batching ─► Kelvin Forward Pass ─► 3D Gaussians ─► PLY (per-chunk or merged)
+NCore V4 Sequence ─► Frame Batching ─► Kelvin Forward Pass (JIT) ─► 3D Gaussians ─► PLY (per-chunk or merged)
 
 ## User Guide
 
@@ -54,37 +57,54 @@ source .venv/bin/activate
 tree from `uv.lock` into `.venv/`. The only CUDA dependency is whatever
 the pinned `torch` wheel ships with.
 
-The pretrained model `kelvin_full.pt` is fetched on first inference run
-from the Hugging Face repo `nvidia/instant-nurec-kelvin` and cached at
-`~/.cache/instant_nurec/`. Set `INSTANT_NUREC_FULL_PT` to a local path
-to override the auto-download.
+The pretrained model `kelvin_jit.pt` (a TorchScript archive of the
+Kelvin static-only forward) is fetched on first inference run from the
+Hugging Face repo `nvidia/instant-nurec-kelvin` and cached at
+`~/.cache/huggingface/nvidia/instant_nurec/kelvin/`. Set
+`INSTANT_NUREC_FULL_PT` to a local path to override the auto-download.
 
 </details>
 
 <details>
 <summary><b>Inference</b></summary>
 
-`--ncore-path` accepts either a single ncorev4 sequence metadata
-`.json` (NuRec-aligned) or a `.lst` manifest with one JSON path per
-line (each absolute or relative-to-the-LST-file's directory; `#`-
-prefixed and blank lines are skipped).
+`--ncore-path` accepts two input shapes:
+
+##### Mode 1 — single sequence `.json` (NuRec-aligned)
+
+The path is treated as one ncorev4 sequence metadata file.
+This matches NuRec's own input convention.
 
 ```bash
-# Single sequence — per-chunk PLYs.
 ./run.sh \
-    --ncore-path /path/to/sequence.json \
-    --output-dir /tmp/out/no_merge \
+    --ncore-path /path/to/clips/<uuid>/pai_<uuid>.json \
+    --output-dir /tmp/out \
     --merge none
+```
 
-# Batch (multiple sequences listed in a .lst) — single merged PLY per sequence.
+##### Mode 2 — `.lst` manifest (batch)
+
+The path is treated as a list of sequence JSON paths, one per line.
+Each line may be absolute, relative-to-the-LST-file's directory, or
+`~/`-prefixed; lines starting with `#` and blank lines are skipped;
+mixed absolute + relative entries in a single LST are supported.
+
+```
+# example_manifest.lst
+/abs/path/to/clips/<uuid_a>/pai_<uuid_a>.json
+relative/path/to/clips/<uuid_b>/pai_<uuid_b>.json
+~/symlinked/clips/<uuid_c>/pai_<uuid_c>.json
+```
+
+```bash
 ./run.sh \
-    --ncore-path /path/to/sequences.lst \
-    --output-dir /tmp/out/merge \
+    --ncore-path /path/to/example_manifest.lst \
+    --output-dir /tmp/out \
     --merge frustum-ownership
 ```
 
-`run.sh` validates the inputs and execs `python run_inference.py`; you
-can also call the CLI directly:
+`run.sh` validates the input + output paths and execs
+`python run_inference.py`. You can also call the CLI directly:
 
 ```bash
 python run_inference.py \
@@ -93,20 +113,26 @@ python run_inference.py \
     --merge none
 ```
 
+Output layout: PLYs only, under `out_dir/<run_id>/ply/<sequence_id>/...ply`.
+
 #### CLI reference
 
-| flag | purpose |
-| --- | --- |
-| `--ncore-path` | Single sequence `.json` or a `.lst` manifest of JSON paths. Required. |
-| `--output-dir` | Directory the pipeline writes PLYs (and the resolved config) into. Required. |
-| `--merge` | `none` (default) for per-chunk PLYs, `frustum-ownership` for a single merged PLY. |
-| `--log-level` | `DEBUG` / `INFO` (default) / `WARNING` / `ERROR` / `CRITICAL`. |
+| flag | default | purpose |
+| --- | --- | --- |
+| `--ncore-path` | (required) | A `.json` file (single sequence) or a `.lst` manifest (one JSON path per line). |
+| `--output-dir` | (required) | Directory the pipeline writes PLYs into. |
+| `--merge` | `none` | `none` writes per-chunk PLYs (`<seq>_chunk{N}.ply`); `frustum-ownership` writes a single merged PLY per sequence (`<seq>.ply`). |
+| `--camera-id` | `camera_front_wide_120fov` | ncorev4 context-camera id used as model input. The shipped JIT artifact is shape-locked to a single context camera, so the id may differ across datasets but exactly one camera is required. |
+| `--lidar-id` | `lidar_top_360fov` | ncorev4 LiDAR sensor id used to source cuboid tracks for dynamic-mask refinement. Must exist in the sequence's `lidar_sensors`. |
+| `--max-chunks` | `8` | Maximum number of time-chunks processed per clip. One chunk spans up to 13.5 s, so the default covers 8 × 13.5 = 108 s. Clips longer than that are silently truncated unless this is increased — bump to `ceil(clip_seconds / 13.5)` for longer clips. |
+| `--log-level` | `INFO` | `DEBUG` / `INFO` / `WARNING` / `ERROR` / `CRITICAL`. |
 
 #### Environment variables
 
 | variable | purpose |
 | --- | --- |
-| `INSTANT_NUREC_FULL_PT` | Absolute path to a local `kelvin_full.pt`. Takes priority over the auto-downloaded copy. |
+| `INSTANT_NUREC_FULL_PT` | Absolute path to a local `kelvin_jit.pt`. Takes priority over the auto-downloaded copy. |
+| `INSTANT_NUREC_RUN_ID` | Override the per-run shortuuid; useful when scripting reproducible output paths. |
 
 </details>
 
@@ -115,17 +141,19 @@ python run_inference.py \
 
 ```
 instant-nurec/
-├── instant_nurec/                  # main package
+├── instant_nurec/                  # main package (what ships in the wheel)
 │   ├── cli.py                      # argparse entrypoint
-│   ├── pretrained.py               # auto-downloads kelvin_full.pt from HF on first run
-│   ├── config_schema/              # pydantic schemas + defaults
+│   ├── pretrained.py               # auto-downloads kelvin_jit.pt from HF on first run
+│   ├── config_schema/              # pydantic schemas + defaults (post-JIT runtime knobs only)
 │   ├── datasets/                   # ncorev4 ingest + cuboid-track helpers
-│   ├── model/                      # GaussiansInstantNuRecSystem + KelvinInstantNuRec + blocks
+│   ├── model/
+│   │   ├── __init__.py             # make() — torch.jit.load + JITKelvinAdapter wiring
+│   │   ├── jit_adapter.py          # KelvinInstantNuRec-shaped wrapper around the JIT module
+│   │   └── system.py               # GaussiansInstantNuRecSystem (predict-loop harness)
 │   ├── predict/                    # predict loop + PLY export + merge
 │   ├── primitives/                 # KelvinInstantNuRecPrimitive
 │   └── utils/                      # batch / geometry / sensors / nn-extensions
 ├── tests/                          # branch-coverage tests
-│   └── tolerance.json
 ├── run_inference.py                # main inference entry point
 ├── run.sh                          # input-validation wrapper
 ├── setup.sh                        # venv bootstrap
@@ -134,6 +162,10 @@ instant-nurec/
 ├── LICENSE.txt
 └── THIRD_PARTY_LICENSE.txt
 ```
+
+The encoder / decoder / per-attribute heads / activation sub-modules
+are baked into ``kelvin_jit.pt`` and not part of the shipped Python
+package.
 
 </details>
 

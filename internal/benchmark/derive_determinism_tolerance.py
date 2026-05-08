@@ -40,9 +40,9 @@ import torch
 from plyfile import PlyData
 
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 RUNS = sorted(REPO_ROOT.glob("baselines/more_baselines/run_*/"))
-OUT = REPO_ROOT / "tests" / "tolerance.json"
+OUT = REPO_ROOT / "internal" / "tests" / "tolerance.json"
 
 
 def _read_props(path: Path) -> dict[str, tuple[str, torch.Tensor]]:

@@ -53,8 +53,14 @@ of tests) covering each branch of any new code.
 The `ruff` config lives in `pyproject.toml` (`[tool.ruff]`). Please keep
 lint clean before opening an MR.
 
+## End-to-end inference / parity
+
+Final correctness checks require a GPU and a real ncorev4 clip.
+
 ## Commit hygiene
 
 - One logical change per commit.
 - Subject line: `<type>(<area>): <imperative one-liner>`. Types in use:
   `feat`, `fix`, `refactor`, `chore`, `test`, `docs`.
+- Use `git commit --fixup=<SHA>` to amend an earlier commit on the same
+  branch; otherwise a fresh commit per logical change.

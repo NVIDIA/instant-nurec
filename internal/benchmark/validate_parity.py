@@ -18,7 +18,7 @@
 
 Every commit that touches runtime code must keep this script green against
 `baselines/original_baseline` within the tolerances recorded in
-`tests/tolerance.json` (derived from the run-to-run noise floor across the
+`internal/tests/tolerance.json` (derived from the run-to-run noise floor across the
 5 reruns in `baselines/more_baselines/run_{1..5}`).
 
 Usage::
@@ -142,7 +142,7 @@ def _vertex_count_delta(tol: Mapping[str, float], cli_override: int | None) -> i
 
     Resolution order:
       1. CLI ``--vertex-count-delta`` if provided (highest priority).
-      2. ``_vertex_count_delta`` key in ``tests/tolerance.json``.
+      2. ``_vertex_count_delta`` key in ``internal/tests/tolerance.json``.
       3. Default 0 (exact-match).
     """
     if cli_override is not None:
@@ -218,7 +218,7 @@ def cmd_no_merge(
 
 
 def _default_tolerance_path() -> Path:
-    return Path(__file__).resolve().parent.parent.parent / "tests" / "tolerance.json"
+    return Path(__file__).resolve().parent.parent / "tests" / "tolerance.json"
 
 
 def main(argv: list[str] | None = None) -> int:

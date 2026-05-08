@@ -18,13 +18,30 @@ limitations under the License.
 
 The runtime config is constructed in code from `pydantic` models. Field
 defaults are encoded directly on each schema; `cli.py` only specifies the
-fields it needs to override (the input dataset path and the merge mode).
+fields it overrides via CLI flags (input dataset path, output directory,
+merge mode, camera id, lidar id, max chunks).
+
+Architecture-side parameters (encoder / decoder / sky / activations /
+patch_shape / scene_rescale / track_padding_m, plus the JIT-locked input
+shapes B / V / H / W) are **not** part of these schemas. They are baked
+into the shipped TorchScript artifact (`kelvin_jit.pt`) at trace time;
+the runtime adapter reads the trace-baked shape buffers off the loaded
+artifact and threads them into the dataloader.
+
+## What's in scope here
+
+| File | Schemas |
+| --- | --- |
+| `instantnurec.py` | `InstantNuRecConfig` (top-level), `GaussiansInstantNuRecSystemConfig` |
+| `dataset.py` | `InstantNuRecSplitsConfig`, `NCoreInstantNuRecDatasetConfig`, `AdaptiveSequentialFrameBatchSamplerConfig`, `NCoreInstantNuRecCuboidTracksParamsConfig` |
+| `predict.py` | `PredictConfig`, `PrimitiveMergeConfig` |
+| `models.py` | `KelvinModelConfig` (slim — only `export_preprocess`), `PrimitiveExportPreprocessConfig` |
 
 ## BaseConfigSchema
 
 `base_schema.py:BaseConfigSchema` is the base for every config struct. It
-behaves like a `pydantic.BaseModel` with strict validation and uses two
-advanced features: literals and discriminated unions.
+behaves like a `pydantic.BaseModel` with strict validation and supports
+literals and discriminated unions.
 
 ```python
 class SubconfigA(BaseConfigSchema):
