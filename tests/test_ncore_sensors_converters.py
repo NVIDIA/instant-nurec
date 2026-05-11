@@ -65,9 +65,7 @@ def stubbed_converters(monkeypatch):
 
     data_mod.FThetaCameraModelParameters = _FThetaCameraModelParameters
     data_mod.ReferencePolynomial = _NcoreReferencePolynomial
-    # instant_nurec.utils.types pulls these unions in too.
     data_mod.ConcreteCameraModelParametersUnion = object
-    data_mod.ConcreteLidarModelParametersUnion = object
 
     class _ShutterTypeNcore:
         # Match the in-tree kernel_types.ShutterType IntEnum values (1-5);

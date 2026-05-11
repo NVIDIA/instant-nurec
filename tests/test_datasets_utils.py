@@ -135,10 +135,9 @@ def stubbed_datasets_utils(monkeypatch):
         pass
 
     data_mod.SequenceLoaderProtocol = _SequenceLoaderProtocol
-    # instant_nurec.utils.types pulls these unions in too — shape doesn't matter, we
+    # instant_nurec.utils.types pulls this union in too — shape doesn't matter, we
     # just need the names to resolve at import time.
     data_mod.ConcreteCameraModelParametersUnion = object
-    data_mod.ConcreteLidarModelParametersUnion = object
     ncore_mod.data = data_mod
 
     impl_mod = types.ModuleType("ncore.impl")

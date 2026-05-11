@@ -19,7 +19,7 @@ limitations under the License.
 The runtime config is constructed in code from `pydantic` models. Field
 defaults are encoded directly on each schema; `cli.py` only specifies the
 fields it overrides via CLI flags (input dataset path, output directory,
-merge mode, camera id, lidar id, max chunks).
+merge mode, camera id, max chunks).
 
 Model parameters are sourced by the runtime, not via these schemas.
 

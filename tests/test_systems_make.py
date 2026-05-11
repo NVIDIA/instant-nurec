@@ -14,7 +14,7 @@
 # limitations under the License.
 
 """Branch-coverage tests for ``instant_nurec.model._resolve_full_pt_path`` and
-``instant_nurec.model._validate_sensor_ids``.
+``instant_nurec.model._validate_camera_ids``.
 
 The full ``make()`` body GPU-loads a real GaussiansInstantNuRecSystem so we
 don't exercise it in the cpu-only test venv. The thin pure-Python helpers
@@ -34,7 +34,7 @@ sys.path.insert(0, str(REPO_ROOT))
 
 
 from instant_nurec import pretrained  # noqa: E402
-from instant_nurec.model import _resolve_full_pt_path, _validate_sensor_ids  # noqa: E402
+from instant_nurec.model import _resolve_full_pt_path, _validate_camera_ids  # noqa: E402
 
 
 def test_resolve_returns_path_when_download_succeeds(monkeypatch, tmp_path):
@@ -65,56 +65,38 @@ def test_resolve_only_calls_downloader_once_per_invocation(monkeypatch):
     assert calls["n"] == 1
 
 
-# ---------- _validate_sensor_ids ----------
+# ---------- _validate_camera_ids ----------
 
 
 _BASE_CAMERAS = ["cam_a", "cam_b", "cam_c"]
-_BASE_LIDARS = ["lidar_top_360fov", "lidar_top_640"]
 
 
 def _validate(**overrides):
     kwargs = dict(
         context_camera_ids=["cam_a"],
         supervision_camera_ids=["cam_a"],
-        lidar_id="lidar_top_360fov",
         available_cameras=list(_BASE_CAMERAS),
-        available_lidars=list(_BASE_LIDARS),
         sequence_path="/seq/x.json",
     )
     kwargs.update(overrides)
-    _validate_sensor_ids(**kwargs)
+    _validate_camera_ids(**kwargs)
 
 
-def test_validate_sensor_ids_happy_path_does_not_raise():
+def test_validate_camera_ids_happy_path_does_not_raise():
     _validate()
 
 
-def test_validate_sensor_ids_rejects_missing_context_camera():
+def test_validate_camera_ids_rejects_missing_context_camera():
     with pytest.raises(ValueError, match="camera_id 'cam_zzz' not found"):
         _validate(context_camera_ids=["cam_zzz"])
 
 
-def test_validate_sensor_ids_rejects_missing_supervision_camera():
+def test_validate_camera_ids_rejects_missing_supervision_camera():
     with pytest.raises(ValueError, match="camera_id 'cam_zzz' not found"):
         _validate(supervision_camera_ids=["cam_a", "cam_zzz"])
 
 
-def test_validate_sensor_ids_rejects_missing_lidar():
-    with pytest.raises(ValueError, match="lidar_id 'NOPE' not found"):
-        _validate(lidar_id="NOPE")
-
-
-def test_validate_sensor_ids_lidar_semicolon_alternatives_pass_when_any_present():
-    # Second candidate matches; the first doesn't.
-    _validate(lidar_id="NOPE;lidar_top_360fov")
-
-
-def test_validate_sensor_ids_lidar_semicolon_alternatives_fail_when_none_present():
-    with pytest.raises(ValueError, match="lidar_id 'NOPE_A;NOPE_B' not found"):
-        _validate(lidar_id="NOPE_A;NOPE_B")
-
-
-def test_validate_sensor_ids_error_message_lists_available_cameras_sorted():
+def test_validate_camera_ids_error_message_lists_available_cameras_sorted():
     with pytest.raises(ValueError) as exc:
         _validate(
             context_camera_ids=["cam_zzz"],
@@ -124,7 +106,7 @@ def test_validate_sensor_ids_error_message_lists_available_cameras_sorted():
     assert "['cam_a', 'cam_b']" in str(exc.value)
 
 
-def test_validate_sensor_ids_error_message_anchors_to_sequence_path():
+def test_validate_camera_ids_error_message_anchors_to_sequence_path():
     with pytest.raises(ValueError, match="/some/seq.json"):
         _validate(
             context_camera_ids=["cam_zzz"],

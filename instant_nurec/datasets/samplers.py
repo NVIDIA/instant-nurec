@@ -35,7 +35,7 @@ def get_closest_frame_index(frame_timestamps_us: np.ndarray, target_timestamp_us
     return int(np.abs(frame_timestamps_us.astype(np.int64) - target_timestamp_us).argmin())
 
 
-# `sampled_sensor_frame_idxs` mapping: sensor id (camera or lidar) → frame indices.
+# `sampled_sensor_frame_idxs` mapping: camera id → frame indices.
 SampledSensorFrameIdxs = dict[str, list[int]]
 
 
@@ -96,5 +96,4 @@ class AdaptiveSequentialFrameBatchSampler:
                 )
 
         return sampled_sensor_frame_idxs
-
 

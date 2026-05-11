@@ -26,7 +26,6 @@ logger = logging.getLogger(__name__)
 
 
 class NCoreInstantNuRecCuboidTracksParamsConfig(BaseConfigSchema):
-    lidar_id: str = Field(default="lidar_top_360fov")
     track_min_travel_distance_m: float = Field(default=1.5, ge=0.0)
     track_min_centroid_rig_dist_m: float = Field(
         default=3.0,

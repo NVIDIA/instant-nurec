@@ -124,7 +124,6 @@ def stubbed_tracks(monkeypatch):
     ncore_mod = types.ModuleType("ncore")
     ncore_data_mod = types.ModuleType("ncore.data")
     ncore_data_mod.ConcreteCameraModelParametersUnion = object
-    ncore_data_mod.ConcreteLidarModelParametersUnion = object
     ncore_mod.data = ncore_data_mod
     monkeypatch.setitem(sys.modules, "ncore", ncore_mod)
     monkeypatch.setitem(sys.modules, "ncore.data", ncore_data_mod)

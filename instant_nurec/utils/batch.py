@@ -26,10 +26,7 @@ from instant_nurec.utils.geometry import se3pose_from_matrix
 from instant_nurec.utils.sensors.ray_gen import (
     image_points_to_world_rays_shutter_pose,
 )
-from ncore.data import (
-    ConcreteCameraModelParametersUnion,
-    ConcreteLidarModelParametersUnion,
-)
+from ncore.data import ConcreteCameraModelParametersUnion
 from ncore.impl.common.transformations import PoseInterpolator
 from ncore.sensors import (
     CameraModel,
@@ -52,7 +49,7 @@ from instant_nurec.utils.types import (
 
 
 ConcreteCameraModelsUnion: TypeAlias = FThetaCameraModel | OpenCVFisheyeCameraModel | OpenCVPinholeCameraModel
-ConcreteSensorModelParametersUnion: TypeAlias = ConcreteCameraModelParametersUnion | ConcreteLidarModelParametersUnion
+ConcreteSensorModelParametersUnion: TypeAlias = ConcreteCameraModelParametersUnion
 
 
 def generate_grid_2d_indices(
@@ -79,7 +76,7 @@ def generate_grid_2d_indices(
 
 @dataclass(kw_only=True, slots=True)
 class RenderingData:
-    """Data for rendering. Shared between camera and lidar.
+    """Camera data for rendering.
 
     Note: The `rays`, `poses_tquat_startend` and the underlying scene representation (e.g. 3D Gaussians)
     should be in the same coordinate system. For example, the most common case is that it carries `rays`
@@ -88,8 +85,8 @@ class RenderingData:
 
     The fields are:
 
-    - rays: Ray origins and directions for the camera or lidar. [Tensor[float32]]. (B, height, width, 6).
-    - sensor_model_parameters: List of model parameters for the camera or lidar. List of length B.
+    - rays: Ray origins and directions for the camera. [Tensor[float32]]. (B, height, width, 6).
+    - sensor_model_parameters: List of camera model parameters. List of length B.
     - poses_tquat_startend: Start and end poses of the frame. [Tensor[float32]]. (B, 2, 7)
     - timestamps_startend_us: Start and end timestamps of the frame in microseconds. [Tensor[int64]]. (B, 2)
     """
@@ -207,7 +204,7 @@ class RenderingData:
 
 @dataclass(kw_only=True, slots=True)
 class FrameMeta:
-    """Metadata for a frame. Shared between camera and lidar.
+    """Metadata for a camera frame.
 
     The fields are:
     - unique_sensor_idx: Index of the sensor that captured the frame. int32
@@ -336,58 +333,8 @@ class CameraFrameLabels:
 
 
 @dataclass(kw_only=True, slots=True)
-class LidarFrameLabels:
-    """Labels for a lidar frame.
-
-    The fields are:
-    - flags: Optional. Bitmask integer value (see RayFlags). Default is None. [Tensor[int32]]. (B, height, width, 1).
-    - distance: Optional. Metric ray-depth (not z-depth). Default is None. [Tensor[float32]]. (B, height, width, 1).
-    """
-
-    flags: torch.Tensor | None = None
-    distance: torch.Tensor | None = None
-
-    def __post_init__(self):
-        if self.flags is not None:
-            assert self.flags.ndim == 4 and self.flags.shape[3] == 1, "Flags must be a 4D tensor (B, height, width, 1)"
-            assert self.flags.dtype == torch.int32, "Flags must be a int32 tensor"
-        if self.distance is not None:
-            assert self.distance.ndim == 4 and self.distance.shape[3] == 1, (
-                "Distance must be a 4D tensor (B, height, width, 1)"
-            )
-            assert self.distance.dtype == torch.float32, "Distance must be a float32 tensor"
-
-    @classmethod
-    def collate_fn(
-        cls,
-        seq: List[Self],
-        device: torch.device = torch.device("cpu"),
-    ) -> Self:
-        return cls(
-            flags=collate_fn([item.flags for item in seq], device),
-            distance=collate_fn([item.distance for item in seq], device),
-        )
-
-    def to(self, *args, **kwargs) -> Self:
-        return self.__class__(
-            flags=self.flags.to(*args, **kwargs) if self.flags is not None else None,
-            distance=self.distance.to(*args, **kwargs) if self.distance is not None else None,
-        )
-
-    def __getitem__(self, item: Union[int, slice, torch.Tensor]) -> Self:
-        """Allows indexing into the dataclass to get a subset of the data."""
-        if isinstance(item, int):
-            item = slice(item, item + 1)
-
-        return self.__class__(
-            flags=self.flags[item] if self.flags is not None else None,
-            distance=self.distance[item] if self.distance is not None else None,
-        )
-
-
-@dataclass(kw_only=True, slots=True)
 class DataBatch:
-    """Data for both camera and lidar frames."""
+    """Data for camera frames."""
 
     @dataclass(kw_only=True, slots=True)
     class Camera:
@@ -424,46 +371,7 @@ class DataBatch:
 
             return self.__class__(meta=self.meta[item], labels=self.labels[item])
 
-    @dataclass(kw_only=True, slots=True)
-    class Lidar:
-        """Data for a lidar frame. Includes the frame meta and labels."""
-
-        meta: List[FrameMeta]
-        labels: LidarFrameLabels
-
-        @property
-        def b(self) -> int:
-            return len(self.meta)
-
-        @classmethod
-        def collate_fn(
-            cls,
-            seq: List[DataBatch.Lidar],
-            device: torch.device = torch.device("cpu"),
-        ) -> DataBatch.Lidar:
-            return cls(
-                meta=FrameMeta.collate_fn([meta for item in seq for meta in item.meta], device),
-                labels=LidarFrameLabels.collate_fn([item.labels for item in seq], device),
-            )
-
-        def to(self, *args, **kwargs) -> Self:
-            return self.__class__(
-                meta=[meta.to(*args, **kwargs) for meta in self.meta],
-                labels=self.labels.to(*args, **kwargs),
-            )
-
-        def __getitem__(self, item: Union[int, slice]) -> Self:
-            """Allows indexing into the dataclass to get a subset of the data."""
-            if isinstance(item, int):
-                item = slice(item, item + 1)
-
-            return self.__class__(
-                meta=self.meta[item],
-                labels=self.labels[item],
-            )
-
     camera: Camera | None = None
-    lidar: Lidar | None = None
 
     @classmethod
     def collate_fn(
@@ -476,28 +384,21 @@ class DataBatch:
         else:
             camera = DataBatch.Camera.collate_fn([unpack_optional(item.camera) for item in seq], device)
 
-        if any(item.lidar is None for item in seq):
-            lidar = None
-        else:
-            lidar = DataBatch.Lidar.collate_fn([unpack_optional(item.lidar) for item in seq], device)
-
-        return cls(camera=camera, lidar=lidar)
+        return cls(camera=camera)
 
     def to(self, *args, **kwargs) -> Self:
         return self.__class__(
             camera=self.camera.to(*args, **kwargs) if self.camera is not None else None,
-            lidar=self.lidar.to(*args, **kwargs) if self.lidar is not None else None,
         )
 
 
 @dataclass(kw_only=True, slots=True)
 class RenderingBatch:
     """
-    A RenderingBatch is a collection of RenderingData for camera and lidar.
+    A RenderingBatch is a collection of camera RenderingData.
     """
 
     camera: RenderingData | None = None
-    lidar: RenderingData | None = None
 
     @classmethod
     def collate_fn(
@@ -510,17 +411,11 @@ class RenderingBatch:
         else:
             camera = RenderingData.collate_fn([unpack_optional(item.camera) for item in seq], device)
 
-        if any(item.lidar is None for item in seq):
-            lidar = None
-        else:
-            lidar = RenderingData.collate_fn([unpack_optional(item.lidar) for item in seq], device)
-
-        return cls(camera=camera, lidar=lidar)
+        return cls(camera=camera)
 
     def to(self, *args, **kwargs) -> Self:
         return self.__class__(
             camera=self.camera.to(*args, **kwargs) if self.camera is not None else None,
-            lidar=self.lidar.to(*args, **kwargs) if self.lidar is not None else None,
         )
 
 
@@ -878,7 +773,6 @@ class InstantNuRecDataBatch:
             # Do not re-compute if rendering data already exists.
             if data.rendering is not None:
                 continue
-            assert data.data.lidar is None, "Lidar rendering data is not supported."
             camera_rendering_data = (
                 CameraFreePoseViewGeometry.from_rig_trajectories(rig)
                 .to(device=device)
@@ -886,7 +780,7 @@ class InstantNuRecDataBatch:
                 if data.data.camera is not None
                 else None
             )
-            data.rendering = RenderingBatch(camera=camera_rendering_data, lidar=None)
+            data.rendering = RenderingBatch(camera=camera_rendering_data)
 
     @classmethod
     def collate_fn(

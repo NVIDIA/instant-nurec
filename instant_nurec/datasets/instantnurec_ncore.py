@@ -21,7 +21,6 @@ from dataclasses import dataclass
 from typing import cast
 
 import numpy as np
-import numpy.typing as npt
 import torch
 
 from scipy import ndimage
@@ -44,12 +43,10 @@ from instant_nurec.utils.batch import (
     DataAndRenderingBatch,
     DataBatch,
     FrameMeta,
-    LidarFrameLabels,
     InstantNuRecDataBatch,
 )
 from instant_nurec.utils.files import parse_universal_path
 from instant_nurec.utils.geometry import se3_matrix_inverse
-from instant_nurec.utils.lidar_model import get_lidar_model_parameters
 from instant_nurec.utils.misc import to_torch, unpack_optional
 from instant_nurec.utils.types import FrameConversion, HalfClosedInterval, RayFlags, RigTrajectories
 
@@ -69,20 +66,6 @@ def interval_list_intersect(
         if intersection is not None:
             intersected_intervals.append(intersection)
     return intersected_intervals
-
-
-def get_lidar_sensor_from_sequence_loader(
-    sequence_loader: ncore.data.SequenceLoaderProtocol, lidar_id_candidates: list[str]
-) -> ncore.data.LidarSensorProtocol:
-    """
-    Get the lidar sensor from the sequence loader by the lidar id, the function will return the first available lidar sensor.
-    """
-    for lidar_id in lidar_id_candidates:
-        if lidar_id in sequence_loader.lidar_ids:
-            return sequence_loader.get_lidar_sensor(lidar_id)
-    raise ValueError(
-        f"Lidar sensor with id candidates {lidar_id_candidates} not found in the sequence loader, available lidar ids: {sequence_loader.lidar_ids}"
-    )
 
 
 class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
@@ -140,7 +123,6 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
         sequence_loader: ncore.data.SequenceLoaderProtocol
         aux_loader: ncore_utils.AuxShardDataLoader
         camera_sensors: dict["NCoreInstantNuRecDataset.ExtendedCameraId", ncore.data.CameraSensorProtocol]
-        lidar_sensors: dict[str, ncore.data.LidarSensorProtocol]
 
     def __init__(
         self,
@@ -179,9 +161,6 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
 
         self.cuboid_tracks_params = config.cuboid_tracks_params
 
-        # Standalone predict pins exactly one lidar (used for cuboid-track sourcing).
-        self.lidar_ids: list[str] = [self.cuboid_tracks_params.lidar_id]
-
         self.ncore_json_paths: list[UPath] = [parse_universal_path(p) for p in config.ncore_json_paths]
         logger.info(f"Loaded {len(self.ncore_json_paths)} sequence(s).")
 
@@ -207,15 +186,12 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
         context_frame_batch: SampledSensorFrameIdxs,
         sequence_loader: ncore.data.SequenceLoaderProtocol,
         camera_sensors: dict[ExtendedCameraId, ncore.data.CameraSensorProtocol],
-        lidar_sensors: dict[str, ncore.data.LidarSensorProtocol],
         T_world_ref: np.ndarray,
     ) -> CuboidTracksDataPack:
-        assert self.cuboid_tracks_params.lidar_id in lidar_sensors, "Required LiDAR sensor not found in the dataset"
-
         frame_batch_min_timestamps_us: int = int(1e16)
         frame_batch_max_timestamps_us: int = 0
         for sensor_id, frame_idxs in context_frame_batch.items():
-            sensor = [v for k, v in (camera_sensors | lidar_sensors).items() if str(k) == sensor_id][0]
+            sensor = [v for k, v in camera_sensors.items() if str(k) == sensor_id][0]
             sensor_min_timestamp_us = sensor.get_frame_timestamp_us(min(frame_idxs), ncore.data.FrameTimepoint.START)
             sensor_max_timestamp_us = sensor.get_frame_timestamp_us(max(frame_idxs), ncore.data.FrameTimepoint.END)
             frame_batch_min_timestamps_us = min(frame_batch_min_timestamps_us, sensor_min_timestamp_us)
@@ -313,17 +289,12 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
         frame_batch: SampledSensorFrameIdxs,
         camera_idx_mapping: dict[UniqueFrameId, int],
         camera_sensors: dict[ExtendedCameraId, ncore.data.CameraSensorProtocol],
-        lidar_idx_mapping: dict[UniqueFrameId, int],
-        lidar_sensors: dict[str, ncore.data.LidarSensorProtocol],
         aux_loader: ncore_utils.AuxShardDataLoader,
         camera_subsampler: CameraSubsampler,
     ) -> DataBatch:
         """
         Load actual data batch given the sampled frame batch. idx_mapping is used to determine the unique frame index for the frame meta.
         """
-        # Used to spawn a warning if both depth aux and lidar is loaded.
-        depth_aux_loaded: bool = False
-
         ## Load cameras
 
         # This determines the ordering of images in the actual batch.
@@ -435,88 +406,22 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
                     )
                 )
 
-        ## Load lidars
-        lidar_batch_list: list[DataBatch.Lidar] = []
-        for unique_sensor_idx, lidar_id in enumerate(self.lidar_ids):
-            if lidar_id not in frame_batch.keys():
-                continue
-            if lidar_id not in lidar_sensors:
-                continue
-
-            lidar_sensor = lidar_sensors[lidar_id]
-
-            lidar_model_parameters = get_lidar_model_parameters(lidar_sensor)
-            if lidar_model_parameters is None:
-                continue
-
-            height, width = lidar_model_parameters.n_rows, lidar_model_parameters.n_columns
-
-            for frame_idx in frame_batch[lidar_id]:
-                pc = lidar_sensor.get_frame_point_cloud(
-                    frame_index=frame_idx,
-                    motion_compensation=True,
-                    with_start_points=True,
-                    return_index=0,  # closest returns only
-                )
-                _xyz_s: np.ndarray = unpack_optional(pc.xyz_m_start)
-                _xyz_e = pc.xyz_m_end
-                if len(_xyz_s) == 0 or len(_xyz_e) == 0:
-                    continue
-
-                model_elements: npt.NDArray[np.uint16] = unpack_optional(
-                    lidar_sensor.get_frame_ray_bundle_model_element(frame_idx),
-                    msg="Lidar sensor must provide model elements",
-                )
-                if depth_aux_loaded:
-                    logger.warning(
-                        f"Both depth aux data and lidar data from {lidar_id} are loaded, which might cause inefficiencies in data loading."
-                    )
-                rows, cols = model_elements[:, 0], model_elements[:, 1]
-
-                _distance = np.linalg.norm(_xyz_e - _xyz_s, axis=1, keepdims=True)
-                distance = np.full((height, width, 1), fill_value=np.nan, dtype=np.float32)
-                distance[rows, cols, :] = _distance
-
-                flags = torch.full((height, width, 1), RayFlags.DROPPED.value, dtype=torch.int32, device="cpu")
-                flags[rows, cols, :] = 0  # set flags for non-dropped rays
-
-                lidar_batch_list.append(
-                    DataBatch.Lidar(
-                        meta=[
-                            FrameMeta(
-                                unique_sensor_idx=unique_sensor_idx,
-                                unique_frame_idx=lidar_idx_mapping[
-                                    self.UniqueFrameId(sensor_id=lidar_id, frame_idx=frame_idx)
-                                ],
-                            )
-                        ],
-                        labels=LidarFrameLabels(
-                            flags=flags.unsqueeze(0),
-                            distance=to_torch(distance, device="cpu").unsqueeze(0),
-                        ),
-                    )
-                )
-
-        return DataBatch(
-            camera=DataBatch.Camera.collate_fn(camera_batch_list),
-            lidar=DataBatch.Lidar.collate_fn(lidar_batch_list) if len(lidar_batch_list) > 0 else None,
-        )
+        return DataBatch(camera=DataBatch.Camera.collate_fn(camera_batch_list))
 
     def _get_rig_trajectory(
         self,
         sequence_id_prefix: str,
         frame_batch: SampledSensorFrameIdxs,
         camera_sensors: dict[ExtendedCameraId, ncore.data.CameraSensorProtocol],
-        lidar_sensors: dict[str, ncore.data.LidarSensorProtocol],
         T_world_ref: np.ndarray,
         T_rig_worlds_with_timestamps_us: tuple[np.ndarray, np.ndarray],
         camera_subsampler: CameraSubsampler,
-    ) -> tuple[RigTrajectories, dict[UniqueFrameId, int], dict[UniqueFrameId, int]]:
+    ) -> tuple[RigTrajectories, dict[UniqueFrameId, int]]:
         """
         Obtain rig-trajectory based on the sampled sensors.
-        The rig trajectory will contain the full rig poses, frame_batch-sampled and subsampled cameras/lidars.
+        The rig trajectory will contain the full rig poses and frame_batch-sampled cameras.
 
-        This will additionally return a UniqueFrameId to index mapping, which matches the logic of Camera/LidarFreePoseViewGeometry
+        This will additionally return a UniqueFrameId to index mapping, which matches the logic of CameraFreePoseViewGeometry
         so we can properly query a frame via its unique frame idx.
         """
         ## Load cameras
@@ -580,34 +485,6 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
                 frame_timestamps_us_list, dtype=torch.int64, device="cpu"
             )
 
-        ## Load lidars (always assume loader key is "main")
-        lidar_frame_timestamps_us: dict[str, torch.Tensor] = {}
-        all_lidar_model_parameters: dict[str, ncore.data.ConcreteLidarModelParametersUnion | None] = {}
-        lidar_idx_mapping: dict[NCoreInstantNuRecDataset.UniqueFrameId, int] = {}
-        frame_batch_lidar_ids = [lid for lid in self.lidar_ids if lid in frame_batch.keys()]
-
-        current_unique_frame_idx = 0
-        for lidar_id in frame_batch_lidar_ids:
-            lidar_sensor = lidar_sensors[lidar_id]
-            all_lidar_model_parameters[lidar_id] = get_lidar_model_parameters(lidar_sensor)
-            frame_timestamps_us_list = []
-            for frame_idx in frame_batch[lidar_id]:
-                frame_start_timestamp_us = int(
-                    lidar_sensor.get_frame_timestamp_us(frame_idx, ncore.data.FrameTimepoint.START)
-                )
-                frame_end_timestamp_us = int(
-                    lidar_sensor.get_frame_timestamp_us(frame_idx, ncore.data.FrameTimepoint.END)
-                )
-                frame_timestamps_us_list.append((frame_start_timestamp_us, frame_end_timestamp_us))
-                lidar_idx_mapping[NCoreInstantNuRecDataset.UniqueFrameId(sensor_id=lidar_id, frame_idx=frame_idx)] = (
-                    current_unique_frame_idx
-                )
-                current_unique_frame_idx += 1
-
-            lidar_frame_timestamps_us[lidar_id] = torch.tensor(
-                frame_timestamps_us_list, dtype=torch.int64, device="cpu"
-            )
-
         # Standalone predict has a single loader keyed `"main"` (no external archives).
         T_rig_worlds, T_rig_world_timestamps_us = T_rig_worlds_with_timestamps_us
 
@@ -632,7 +509,6 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
             RigTrajectories.RigTrajectory(
                 sequence_id=sequence_id_prefix + "main",
                 cameras_frame_timestamps_us=camera_frame_timestamps_us,
-                lidars_frame_timestamps_us=lidar_frame_timestamps_us,
                 T_rig_worlds=to_torch(T_world_ref @ T_rig_worlds, device="cpu", dtype=torch.float64),
                 T_rig_world_timestamps_us=to_torch(T_rig_world_timestamps_us, device="cpu", dtype=torch.int64),
             )
@@ -653,21 +529,6 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
             ]
         )
 
-        lidar_calibrations = OrderedDict(
-            [
-                (
-                    str(lidar_id),
-                    RigTrajectories.LidarCalibration(
-                        sequence_id=sequence_id_prefix + "main",
-                        unique_sensor_idx=self.lidar_ids.index(lidar_id),
-                        T_sensor_rig=to_torch(unpack_optional(lidar_sensors[lidar_id].T_sensor_rig), device="cpu"),
-                        lidar_model_parameters=all_lidar_model_parameters[lidar_id],
-                    ),
-                )
-                for lidar_id in frame_batch_lidar_ids
-            ]
-        )
-
         return (
             RigTrajectories(
                 # Since world coordinates are already transformed to scene space,
@@ -677,10 +538,8 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
                 world_to_scene=FrameConversion(matrix=np.eye(4, dtype=np.float32)),
                 rig_trajectories=rig_trajectores,
                 camera_calibrations=camera_calibrations,
-                lidar_calibrations=lidar_calibrations,
             ),
             camera_idx_mapping,
-            lidar_idx_mapping,
         )
 
     def _get_loaders_and_sensors(
@@ -737,14 +596,6 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
         camera_sensors = {
             camera_id: sequence_loader.get_camera_sensor(camera_id.camera_id) for camera_id in all_camera_ids
         }
-        # Allow multiple possibilities of lidar ids separated by semicolon.
-        lidar_sensors = {
-            lidar_id: get_lidar_sensor_from_sequence_loader(
-                sequence_loader,
-                lidar_id_candidates=lidar_id.split(";"),
-            )
-            for lidar_id in self.lidar_ids
-        }
 
         root_logger.setLevel(logging.INFO)
         return NCoreInstantNuRecDataset.LoadersAndSensorsResult(
@@ -752,7 +603,6 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
             sequence_loader=sequence_loader,
             aux_loader=aux_loader,
             camera_sensors=camera_sensors,
-            lidar_sensors=lidar_sensors,
         )
 
     def __getitem__(self, batch_idx: int) -> InstantNuRecDataBatch:
@@ -791,7 +641,6 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
         sequence_loader = loaders_sensors.sequence_loader
         aux_loader = loaders_sensors.aux_loader
         camera_sensors = loaders_sensors.camera_sensors
-        lidar_sensors = loaders_sensors.lidar_sensors
 
         # Determine the timestamps interval to select frames from.
         context_camera_frame_timestamps_us: dict[str, np.ndarray] = {}
@@ -828,11 +677,10 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
 
         # Load context frames.
         context_camera_subsampler = self._build_camera_subsampler()
-        context_rig_trajectory, context_camera_mapping, context_lidar_mapping = self._get_rig_trajectory(
+        context_rig_trajectory, context_camera_mapping = self._get_rig_trajectory(
             "context-",
             context_frame_batch,
             camera_sensors,
-            lidar_sensors,
             T_world_ref,
             T_rig_worlds_with_timestamps_us,
             context_camera_subsampler,
@@ -842,8 +690,6 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
                 context_frame_batch,
                 context_camera_mapping,
                 camera_sensors,
-                context_lidar_mapping,
-                lidar_sensors,
                 aux_loader,
                 context_camera_subsampler,
             )
@@ -853,7 +699,6 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
             context_frame_batch,
             sequence_loader,
             camera_sensors,
-            lidar_sensors,
             T_world_ref,
         )
 

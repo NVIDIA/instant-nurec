@@ -110,7 +110,6 @@ def test_kelvin_model_config_default_only_carries_export_preprocess():
 def test_cuboid_tracks_params_rejects_negative_travel_distance():
     with pytest.raises(ValidationError):
         NCoreInstantNuRecCuboidTracksParamsConfig(
-            lidar_id="lidar_top",
             track_min_travel_distance_m=-1.0,
             track_min_centroid_rig_dist_m=0.5,
             track_label_source="AUTOLABEL",
@@ -120,7 +119,6 @@ def test_cuboid_tracks_params_rejects_negative_travel_distance():
 def test_cuboid_tracks_params_rejects_negative_centroid_dist():
     with pytest.raises(ValidationError):
         NCoreInstantNuRecCuboidTracksParamsConfig(
-            lidar_id="lidar_top",
             track_min_travel_distance_m=0.5,
             track_min_centroid_rig_dist_m=-0.1,
             track_label_source="AUTOLABEL",
@@ -130,7 +128,6 @@ def test_cuboid_tracks_params_rejects_negative_centroid_dist():
 def test_cuboid_tracks_params_rejects_invalid_label_source():
     with pytest.raises(ValidationError):
         NCoreInstantNuRecCuboidTracksParamsConfig(
-            lidar_id="lidar_top",
             track_min_travel_distance_m=0.5,
             track_min_centroid_rig_dist_m=0.5,
             track_label_source="MADE_UP_SOURCE",  # type: ignore[arg-type]
@@ -139,7 +136,6 @@ def test_cuboid_tracks_params_rejects_invalid_label_source():
 
 def test_cuboid_tracks_params_default_extrapolate_us():
     cfg = NCoreInstantNuRecCuboidTracksParamsConfig(
-        lidar_id="lidar_top",
         track_min_travel_distance_m=0.5,
         track_min_centroid_rig_dist_m=0.5,
         track_label_source="AUTOLABEL",

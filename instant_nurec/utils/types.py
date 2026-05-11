@@ -25,10 +25,7 @@ import numpy as np
 import numpy.typing as npt
 import torch
 
-from ncore.data import (
-    ConcreteCameraModelParametersUnion,
-    ConcreteLidarModelParametersUnion,
-)
+from ncore.data import ConcreteCameraModelParametersUnion
 
 
 
@@ -178,7 +175,6 @@ class RigTrajectories:
         sequence_id: str  # the source sequence id of the current trajectory (might be shared with other trajectories)
 
         cameras_frame_timestamps_us: dict[str, torch.Tensor]
-        lidars_frame_timestamps_us: dict[str, torch.Tensor]
 
         # Timestamped trajectory of the rig frame in NCore world coordinates
         T_rig_worlds: torch.Tensor
@@ -190,10 +186,6 @@ class RigTrajectories:
             assert all(
                 camera_frame_timestamps_us.shape[1:] == (2,)
                 for camera_frame_timestamps_us in self.cameras_frame_timestamps_us.values()
-            )
-            assert all(
-                lidar_frame_timestamps_us.shape[1:] == (2,)
-                for lidar_frame_timestamps_us in self.lidars_frame_timestamps_us.values()
             )
 
     rig_trajectories: list[RigTrajectory]  # indexed by trajectory index
@@ -215,21 +207,11 @@ class RigTrajectories:
 
     camera_calibrations: OrderedDict[str, CameraCalibration]  # indexed by *unique* camera sensor ids
 
-    @dataclass(slots=True, kw_only=True)
-    class LidarCalibration(SensorCalibration):
-        """Represents a lidar-associated calibration"""
-
-        lidar_model_parameters: Optional[ConcreteLidarModelParametersUnion] = None  # intrinsics [conditional]
-
-    lidar_calibrations: OrderedDict[str, LidarCalibration]  # indexed by *unique* lidar sensor ids
-
     def __post_init__(self):
         # make sure sensors referenced by trajectories are available
         for rig_trajectory in self.rig_trajectories:
             for camera_id in rig_trajectory.cameras_frame_timestamps_us.keys():
                 assert camera_id in self.camera_calibrations, f"Missing camera {camera_id} in camera calibrations"
-            for lidar_id in rig_trajectory.lidars_frame_timestamps_us.keys():
-                assert lidar_id in self.lidar_calibrations, f"Missing lidar {lidar_id} in lidar calibrations"
 
 
 
@@ -359,5 +341,3 @@ class CuboidTracksDataPack:
             raise ValueError(
                 f"Number of tracks ({self.tracks_data.n_tracks}) does not match number of cuboid tracks ({self.cuboidtracks_data.n_tracks})"
             )
-
-

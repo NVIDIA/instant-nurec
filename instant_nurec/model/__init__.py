@@ -46,27 +46,20 @@ def _resolve_full_pt_path() -> Optional[str]:
         return None
 
 
-def _validate_sensor_ids(
+def _validate_camera_ids(
     *,
     context_camera_ids: list[str],
     supervision_camera_ids: list[str],
-    lidar_id: str,
     available_cameras: list[str],
-    available_lidars: list[str],
     sequence_path: str,
 ) -> None:
-    """Verify configured camera + lidar ids exist in the sequence.
-
-    ``lidar_id`` may carry semicolon-separated alternatives (matching the
-    runtime's ``lidar_id_candidates=lidar_id.split(';')`` behavior); the
-    check passes if at least one candidate is present.
+    """Verify configured camera ids exist in the sequence.
 
     Raises ``ValueError`` with a sequence-path-anchored message that lists
     the ids actually available in the bag, so a typo can be fixed without
     waiting for the dataloader to fail at first ``__getitem__``.
     """
     avail_cameras_sorted = sorted(available_cameras)
-    avail_lidars_sorted = sorted(available_lidars)
 
     for cam in list(context_camera_ids) + list(supervision_camera_ids):
         if cam not in available_cameras:
@@ -75,17 +68,10 @@ def _validate_sensor_ids(
                 f"Available cameras: {avail_cameras_sorted}."
             )
 
-    candidates = lidar_id.split(";")
-    if not any(c in available_lidars for c in candidates):
-        raise ValueError(
-            f"lidar_id {lidar_id!r} not found in sequence {sequence_path}. "
-            f"Available lidars: {avail_lidars_sorted}."
-        )
 
-
-def _preflight_validate_sensor_ids(config: "InstantNuRecConfig") -> None:
-    """Open the first ncorev4 sequence, enumerate its cameras + lidars,
-    and run ``_validate_sensor_ids``. Cheap relative to a full inference
+def _preflight_validate_camera_ids(config: "InstantNuRecConfig") -> None:
+    """Open the first ncorev4 sequence, enumerate its cameras,
+    and run ``_validate_camera_ids``. Cheap relative to a full inference
     run; runs once in the main process before workers spin up."""
     dataset_cfg = config.dataset.predict
     if dataset_cfg is None or not dataset_cfg.ncore_json_paths:
@@ -117,12 +103,10 @@ def _preflight_validate_sensor_ids(config: "InstantNuRecConfig") -> None:
     finally:
         root_logger.setLevel(prev_level)
 
-    _validate_sensor_ids(
+    _validate_camera_ids(
         context_camera_ids=list(dataset_cfg.context_camera_ids),
         supervision_camera_ids=list(dataset_cfg.supervision_camera_ids),
-        lidar_id=dataset_cfg.cuboid_tracks_params.lidar_id,
         available_cameras=list(seq.camera_ids),
-        available_lidars=list(seq.lidar_ids),
         sequence_path=str(first_path),
     )
 
@@ -145,7 +129,7 @@ def make(config: "InstantNuRecConfig") -> GaussiansInstantNuRecSystem:
 
     from instant_nurec.datasets.datamodule import InstantNuRecDataModule
 
-    _preflight_validate_sensor_ids(config)
+    _preflight_validate_camera_ids(config)
 
     logger.info("Loading JIT system from %s.", full_pt_path)
     jit_module = torch.jit.load(full_pt_path, map_location="cpu")

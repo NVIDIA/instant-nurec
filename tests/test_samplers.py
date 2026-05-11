@@ -42,9 +42,6 @@ def _stub_compiled_imports(monkeypatch: pytest.MonkeyPatch):
     ncore_data_mod.ConcreteCameraModelParametersUnion = type(  # type: ignore[attr-defined]
         "X", (), {}
     )
-    ncore_data_mod.ConcreteLidarModelParametersUnion = type(  # type: ignore[attr-defined]
-        "Y", (), {}
-    )
     monkeypatch.setitem(sys.modules, "ncore", ncore_mod)
     monkeypatch.setitem(sys.modules, "ncore.data", ncore_data_mod)
 

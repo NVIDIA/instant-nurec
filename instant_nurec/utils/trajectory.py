@@ -75,7 +75,6 @@ def merge_rig_trajectories(
     for traj_idx, rig_trajectory in enumerate(first_trajectories.rig_trajectories):
         time_t_tuple_list: list[tuple[int, torch.Tensor]] = []
         cameras_frame_timestamps_us_list: dict[str, list[torch.Tensor]] = defaultdict(list)
-        lidars_frame_timestamps_us_list: dict[str, list[torch.Tensor]] = defaultdict(list)
 
         # Iterate over all the chunks
         for other_rig_trajectories in rig_trajectories_list:
@@ -95,11 +94,9 @@ def merge_rig_trajectories(
             ]
             time_t_tuple_list.extend(missing_time_T_tuple)
 
-            # Get related camera and lidar ids for this rig trajectory
+            # Get related camera ids for this rig trajectory
             for camera_id, frame_timestamps_us in other_rig_trajectory.cameras_frame_timestamps_us.items():
                 cameras_frame_timestamps_us_list[camera_id].append(frame_timestamps_us)
-            for lidar_id, frame_timestamps_us in other_rig_trajectory.lidars_frame_timestamps_us.items():
-                lidars_frame_timestamps_us_list[lidar_id].append(frame_timestamps_us)
 
         time_t_tuple_list.sort(key=lambda x: x[0])
         merged_sequence_id = rig_trajectory.sequence_id
@@ -111,16 +108,11 @@ def merge_rig_trajectories(
             camera_id: torch.cat(frame_timestamps_us_list, dim=0)
             for camera_id, frame_timestamps_us_list in cameras_frame_timestamps_us_list.items()
         }
-        merged_lidars_frame_timestamps_us = {
-            lidar_id: torch.cat(frame_timestamps_us_list, dim=0)
-            for lidar_id, frame_timestamps_us_list in lidars_frame_timestamps_us_list.items()
-        }
 
         merged_rig_trajectories.append(
             RigTrajectories.RigTrajectory(
                 sequence_id=merged_sequence_id,
                 cameras_frame_timestamps_us=merged_cameras_frame_timestamps_us,
-                lidars_frame_timestamps_us=merged_lidars_frame_timestamps_us,
                 T_rig_worlds=merged_T_rig_worlds,
                 T_rig_world_timestamps_us=merged_T_rig_world_timestamps_us,
             )
@@ -146,7 +138,6 @@ def merge_rig_trajectories(
         world_to_scene=merged_world_to_scene,
         rig_trajectories=merged_rig_trajectories,
         camera_calibrations=merged_camera_calibrations,
-        lidar_calibrations=first_trajectories.lidar_calibrations,
     )
 
     # Compute a mapping of unique_frame_idx
@@ -182,4 +173,3 @@ def merge_rig_trajectories(
                 current_unique_frame_idx += 1
 
     return final_rig_trajectories, old_idx_to_new_idx
-

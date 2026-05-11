@@ -30,7 +30,6 @@ from typing import Sequence
 
 
 _DEFAULT_CAMERA_ID = "camera_front_wide_120fov"
-_DEFAULT_LIDAR_ID = "lidar_top_360fov"
 _DEFAULT_MAX_CHUNKS = 8
 
 
@@ -77,16 +76,6 @@ def make_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
-        "--lidar-id",
-        type=str,
-        default=_DEFAULT_LIDAR_ID,
-        help=(
-            f"ncorev4 LiDAR sensor id used to source cuboid tracks for "
-            f"dynamic-mask refinement (default: '{_DEFAULT_LIDAR_ID}'). "
-            f"Must exist in the sequence's lidar_sensors."
-        ),
-    )
-    parser.add_argument(
         "--max-chunks",
         type=int,
         default=_DEFAULT_MAX_CHUNKS,
@@ -114,7 +103,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     # Lazy imports keep argparse-only invocations (e.g. --help) cheap.
     from instant_nurec.config_schema.dataset import (
         AdaptiveSequentialFrameBatchSamplerConfig,
-        NCoreInstantNuRecCuboidTracksParamsConfig,
         NCoreInstantNuRecDatasetConfig,
         InstantNuRecSplitsConfig,
     )
@@ -132,9 +120,6 @@ def main(argv: Sequence[str] | None = None) -> int:
                 ncore_json_paths=[str(p) for p in json_paths],
                 context_camera_ids=[args.camera_id],
                 supervision_camera_ids=[args.camera_id],
-                cuboid_tracks_params=NCoreInstantNuRecCuboidTracksParamsConfig(
-                    lidar_id=args.lidar_id,
-                ),
                 frame_batch_sampler=AdaptiveSequentialFrameBatchSamplerConfig(
                     n_samples_per_sequence=args.max_chunks,
                 ),

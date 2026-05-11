@@ -13,11 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Converters from ncore sensor models to kernel-compatible parameter types.
-
-This module provides converter classes that transform ncore camera and lidar models
-into the working parameter dataclasses used by Layer 0 GPU kernels.
-"""
+"""Converters from ncore camera models to kernel-compatible parameter types."""
 
 from dataclasses import dataclass
 from typing import Optional

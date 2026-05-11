@@ -122,7 +122,6 @@ Output layout: PLYs only, under `out_dir/<run_id>/ply/<sequence_id>/...ply`.
 | `--output-dir` | (required) | Directory the pipeline writes PLYs into. |
 | `--merge` | `none` | `none` writes per-chunk PLYs (`<seq>_chunk{N}.ply`); `frustum-ownership` writes a single merged PLY per sequence (`<seq>.ply`). |
 | `--camera-id` | `camera_front_wide_120fov` | ncorev4 context-camera id used as model input. Exactly one camera is required. |
-| `--lidar-id` | `lidar_top_360fov` | ncorev4 LiDAR sensor id used to source cuboid tracks for dynamic-mask refinement. Must exist in the sequence's `lidar_sensors`. |
 | `--max-chunks` | `8` | Maximum number of time-chunks processed per clip. One chunk spans up to 13.5 s, so the default covers 8 × 13.5 = 108 s. Clips longer than that are silently truncated unless this is increased — bump to `ceil(clip_seconds / 13.5)` for longer clips. |
 | `--log-level` | `INFO` | `DEBUG` / `INFO` / `WARNING` / `ERROR` / `CRITICAL`. |
 
