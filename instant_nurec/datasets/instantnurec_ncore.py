@@ -18,12 +18,10 @@ import logging
 
 from collections import OrderedDict
 from dataclasses import dataclass
-from typing import cast
 
 import numpy as np
 import torch
 
-from scipy import ndimage
 from upath import UPath
 
 import ncore.data
@@ -48,7 +46,7 @@ from instant_nurec.utils.batch import (
 from instant_nurec.utils.files import parse_universal_path
 from instant_nurec.utils.geometry import se3_matrix_inverse
 from instant_nurec.utils.misc import to_torch, unpack_optional
-from instant_nurec.utils.types import FrameConversion, HalfClosedInterval, RayFlags, RigTrajectories
+from instant_nurec.utils.types import FrameConversion, HalfClosedInterval, RigTrajectories
 
 
 logger = logging.getLogger(__name__)
@@ -117,11 +115,10 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
 
     @dataclass
     class LoadersAndSensorsResult:
-        """Result of loading sequence loader, aux loader, and camera/lidar sensors for an ncore sequence."""
+        """Result of loading sequence loader and camera sensors for an ncore sequence."""
 
         T_rig_worlds_with_timestamps_us: tuple[np.ndarray, np.ndarray]
         sequence_loader: ncore.data.SequenceLoaderProtocol
-        aux_loader: ncore_utils.AuxShardDataLoader
         camera_sensors: dict["NCoreInstantNuRecDataset.ExtendedCameraId", ncore.data.CameraSensorProtocol]
 
     def __init__(
@@ -289,7 +286,6 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
         frame_batch: SampledSensorFrameIdxs,
         camera_idx_mapping: dict[UniqueFrameId, int],
         camera_sensors: dict[ExtendedCameraId, ncore.data.CameraSensorProtocol],
-        aux_loader: ncore_utils.AuxShardDataLoader,
         camera_subsampler: CameraSubsampler,
     ) -> DataBatch:
         """
@@ -313,84 +309,15 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
             if camera_id not in camera_sensors:
                 continue
             camera_sensor = camera_sensors[camera_id]
-            camera_width = camera_subsampler.frame_width
-            camera_height = camera_subsampler.frame_height
-
-            # Statically unmasked pixels
-            if (camera_mask_array := ncore_utils.get_camera_sensor_mask(camera_sensor)) is not None:
-                camera_mask_array = camera_subsampler.apply_frame_data(camera_mask_array)
-                camera_mask_array = ndimage.binary_dilation(
-                    camera_mask_array, iterations=self.n_camera_mask_dilation_iterations
-                )
-                invalid_ego_mask = cast(np.ndarray, camera_mask_array)
-            else:
-                # No mask / consider all pixels as valid
-                invalid_ego_mask = np.zeros((camera_height, camera_width), dtype=bool)
 
             # Determine unique sensor index mapping
             unique_sensor_idx = camera_id.unique_sensor_idx
             for frame_idx in frame_idxs:
-                # Obtain this timestamp to index aux data
-                frame_end_timestamp_us = int(
-                    camera_sensor.get_frame_timestamp_us(frame_idx, ncore.data.FrameTimepoint.END)
-                )
-
-                # initialize ray flags (potentially updated below by additional label-derived flags)
-                flags = torch.full(
-                    (camera_height, camera_width),
-                    RayFlags.RGB_LABEL.value,
-                    dtype=torch.int32,
-                    device="cpu",
-                )
-
                 # Collect labels data
                 labels = CameraFrameLabels()
                 frame_image_array = camera_sensor.get_frame_image_array(frame_idx).astype(np.float32) / 255.0
                 frame_image_array = camera_subsampler.apply_frame_data(frame_image_array)
                 labels.rgb = to_torch(frame_image_array, device="cpu").unsqueeze(0)
-
-                # Load auxiliary information
-                data_camera_id = camera_id.camera_id
-                sky_mask: np.ndarray | bool = False
-                if aux_loader.has_semantic_segmentation(data_camera_id):
-                    semantics = np.asarray(
-                        aux_loader.get_semantic_segmentation(data_camera_id, frame_end_timestamp_us)
-                    )
-                    stuff_classes = aux_loader.get_semantic_segmentation_meta(data_camera_id)["stuff_classes"]
-                    sky_mask = semantics == stuff_classes.index("sky")
-
-                    # classify sampled rays for sky and road
-                    flags |= RayFlags.VALID_SEMANTIC.value
-                    semantics = camera_subsampler.apply_frame_data(semantics)
-                    flags[semantics == stuff_classes.index("sky")] |= RayFlags.SKY_SEMANTIC.value
-                    flags[semantics == stuff_classes.index("road")] |= RayFlags.ROAD_SEMANTIC.value
-                    for vehicle_class in ["car", "truck", "bus", "train", "motorcycle", "bicycle"]:
-                        flags[semantics == stuff_classes.index(vehicle_class)] |= RayFlags.VEHICLE_SEMANTIC.value
-                    # Some egocar regions are detected in semantic segmentations.
-                    if "egocar" in stuff_classes:
-                        invalid_ego_mask |= semantics == stuff_classes.index("egocar")
-
-                if aux_loader.has_depth(data_camera_id):
-                    # Distance map already processed by the data pre-processing stage
-                    depth = aux_loader.get_depth(data_camera_id, frame_end_timestamp_us)
-                    # For DS-based data, depth is nan/inf for sky regions, correct them to be 0.
-                    # Applied before subsampling to avoid enlarging nan regions.
-                    depth[~np.isfinite(depth) | sky_mask] = 0.0
-                    depth = camera_subsampler.apply_depth_data(depth)
-                    # (H, W) -> (1, H, W, 1)
-                    labels.metric_distance = to_torch(depth, device="cpu")[None, ..., None]
-                    depth_aux_loaded = True
-
-                if aux_loader.has_egomask(data_camera_id):
-                    egomask = aux_loader.get_egomask(data_camera_id, 0)
-                    egomask = camera_subsampler.apply_frame_data(egomask)
-                    egomask = ndimage.binary_dilation(egomask, iterations=self.n_camera_mask_dilation_iterations)
-                    invalid_ego_mask |= cast(np.ndarray, egomask)
-
-                # store invalid flag of pixels (usually only required in validation mode)
-                flags[invalid_ego_mask] |= RayFlags.INVALID
-                flags[invalid_ego_mask] |= RayFlags.EGO_SEMANTIC
-                labels.flags = flags[None, ..., None]  # (H, W) -> (1, H, W, 1)
 
                 camera_batch_list.append(
                     DataBatch.Camera(
@@ -548,7 +475,7 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
         all_camera_ids: "list[NCoreInstantNuRecDataset.ExtendedCameraId]",
     ) -> "NCoreInstantNuRecDataset.LoadersAndSensorsResult":
         """
-        Load sequence loaders, aux loaders, camera/lidar sensors, and rig poses for the
+        Load sequence loaders, camera sensors, and rig poses for the
         given ncore sequence meta path. Returns a LoadersAndSensorsResult dataclass.
         """
         (
@@ -584,15 +511,6 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
             unpack_optional(rig_world_edge.timestamps_us, msg="Rig-to-world pose requires to be dynamic"),
         )
 
-        try:
-            aux_loader = ncore_utils.AuxShardDataLoader(
-                sequence_id=sequence_loader.sequence_id,
-                dataset_paths=dataset_paths,
-                open_consolidated=self.open_consolidated,
-            )
-        except ValueError as e:
-            raise InstantNuRecDataError(f"Failed to load auxiliary data for sequence {ncore_json_path.stem}.") from e
-
         camera_sensors = {
             camera_id: sequence_loader.get_camera_sensor(camera_id.camera_id) for camera_id in all_camera_ids
         }
@@ -601,7 +519,6 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
         return NCoreInstantNuRecDataset.LoadersAndSensorsResult(
             T_rig_worlds_with_timestamps_us=T_rig_worlds_with_timestamps_us,
             sequence_loader=sequence_loader,
-            aux_loader=aux_loader,
             camera_sensors=camera_sensors,
         )
 
@@ -639,7 +556,6 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
         loaders_sensors = self._get_loaders_and_sensors(ncore_json_path, supervision_camera_ids)
         T_rig_worlds_with_timestamps_us = loaders_sensors.T_rig_worlds_with_timestamps_us
         sequence_loader = loaders_sensors.sequence_loader
-        aux_loader = loaders_sensors.aux_loader
         camera_sensors = loaders_sensors.camera_sensors
 
         # Determine the timestamps interval to select frames from.
@@ -690,7 +606,6 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
                 context_frame_batch,
                 context_camera_mapping,
                 camera_sensors,
-                aux_loader,
                 context_camera_subsampler,
             )
         )

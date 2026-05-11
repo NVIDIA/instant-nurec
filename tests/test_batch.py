@@ -22,7 +22,7 @@ exercise the testable dataclass logic with plain torch tensors.
 
 Coverage focus: ``generate_grid_2d_indices`` + the dataclass __post_init__ /
 ``collate_fn`` / ``to`` / ``__getitem__`` paths for ``RenderingData``,
-``FrameMeta``, ``CameraFrameLabels``, ``LidarFrameLabels``, ``DataBatch.{Camera,Lidar}``,
+``FrameMeta``, ``CameraFrameLabels``, ``DataBatch.Camera``,
 ``DataBatch``, ``RenderingBatch``, ``DataAndRenderingBatch``.
 
 The CameraFreePoseViewGeometry class (which uses ncore.PoseInterpolator +
@@ -51,7 +51,6 @@ def stubbed_batch(monkeypatch):
     ncore_mod = types.ModuleType("ncore")
     ncore_data_mod = types.ModuleType("ncore.data")
     ncore_data_mod.ConcreteCameraModelParametersUnion = object
-    ncore_data_mod.ConcreteLidarModelParametersUnion = object
     ncore_data_mod.FThetaCameraModelParameters = type(
         "FCP", (), {"PolynomialType": Enum("PolyType", ["ANGLE_TO_PIXELDIST"])}
     )
@@ -408,10 +407,7 @@ def test_frame_meta_collate_fn_returns_list_of_moved_metas(stubbed_batch):
 
 def _make_cam_labels(stubbed_batch, **overrides):
     base = dict(
-        flags=torch.zeros(1, 4, 5, 1, dtype=torch.int32),
         rgb=torch.zeros(1, 4, 5, 3, dtype=torch.float32),
-        metric_distance=torch.zeros(1, 4, 5, 1, dtype=torch.float32),
-        normals=torch.zeros(1, 4, 5, 3, dtype=torch.float32),
     )
     base.update(overrides)
     return stubbed_batch.CameraFrameLabels(**base)
@@ -419,18 +415,6 @@ def _make_cam_labels(stubbed_batch, **overrides):
 
 def test_cam_labels_post_init_accepts_valid_inputs(stubbed_batch):
     _ = _make_cam_labels(stubbed_batch)
-
-
-def test_cam_labels_post_init_rejects_bad_flags_shape(stubbed_batch):
-    mod = stubbed_batch
-    with pytest.raises(AssertionError, match="Flags must be a 4D"):
-        mod.CameraFrameLabels(flags=torch.zeros(1, 4, 5, dtype=torch.int32))
-
-
-def test_cam_labels_post_init_rejects_wrong_flags_dtype(stubbed_batch):
-    mod = stubbed_batch
-    with pytest.raises(AssertionError, match="Flags must be a int32"):
-        mod.CameraFrameLabels(flags=torch.zeros(1, 4, 5, 1, dtype=torch.float32))
 
 
 def test_cam_labels_post_init_rejects_bad_rgb_shape(stubbed_batch):
@@ -445,60 +429,10 @@ def test_cam_labels_post_init_rejects_wrong_rgb_dtype(stubbed_batch):
         mod.CameraFrameLabels(rgb=torch.zeros(1, 4, 5, 3, dtype=torch.float64))
 
 
-def test_cam_labels_post_init_rejects_bad_metric_distance_shape(stubbed_batch):
-    mod = stubbed_batch
-    with pytest.raises(AssertionError, match="Metric distance must be"):
-        mod.CameraFrameLabels(metric_distance=torch.zeros(1, 4, 5, 2, dtype=torch.float32))
-
-
-def test_cam_labels_post_init_rejects_wrong_metric_distance_dtype(stubbed_batch):
-    mod = stubbed_batch
-    with pytest.raises(AssertionError, match="Metric distance must be a float32"):
-        mod.CameraFrameLabels(metric_distance=torch.zeros(1, 4, 5, 1, dtype=torch.float64))
-
-
-def test_cam_labels_post_init_rejects_bad_normals_shape(stubbed_batch):
-    mod = stubbed_batch
-    with pytest.raises(AssertionError, match="Normals must be"):
-        mod.CameraFrameLabels(normals=torch.zeros(1, 4, 5, 4, dtype=torch.float32))
-
-
-def test_cam_labels_post_init_rejects_wrong_normals_dtype(stubbed_batch):
-    mod = stubbed_batch
-    with pytest.raises(AssertionError, match="Normals must be a float32"):
-        mod.CameraFrameLabels(normals=torch.zeros(1, 4, 5, 3, dtype=torch.float64))
-
-
-def test_cam_labels_get_mask_flags_all(stubbed_batch):
-    """Mask is True iff all bits of `flags.value` are set in self.flags."""
-    mod = stubbed_batch
-    flags_tensor = torch.tensor([[[[0b110]]]], dtype=torch.int32)  # has bits 1 and 2
-
-    class _F:
-        value = 0b010
-
-    cl = mod.CameraFrameLabels(flags=flags_tensor)
-    mask = cl.get_mask_flags_all(_F())
-    assert mask.all()
-
-
-def test_cam_labels_get_mask_flags_all_requires_flags(stubbed_batch):
-    mod = stubbed_batch
-    cl = mod.CameraFrameLabels()  # no flags
-
-    class _F:
-        value = 0b1
-
-    with pytest.raises(AssertionError, match="flags are required"):
-        cl.get_mask_flags_all(_F())
-
-
 def test_cam_labels_to_passes_through_optional_fields(stubbed_batch):
-    """All four fields support .to() with None passthrough."""
     cl = stubbed_batch.CameraFrameLabels()  # all None
     moved = cl.to(torch.float32)
-    assert moved.flags is None and moved.rgb is None
-    assert moved.metric_distance is None and moved.normals is None
+    assert moved.rgb is None
 
 
 def test_cam_labels_to_moves_tensors(stubbed_batch):
@@ -506,7 +440,6 @@ def test_cam_labels_to_moves_tensors(stubbed_batch):
     moved = cl.to(torch.device("cpu"))
     # .to(device) with no dtype change — types preserved.
     assert moved.rgb.dtype == torch.float32
-    assert moved.normals.dtype == torch.float32
 
 
 def test_cam_labels_getitem_int_and_slice(stubbed_batch):
@@ -520,98 +453,18 @@ def test_cam_labels_getitem_int_and_slice(stubbed_batch):
 def test_cam_labels_getitem_passes_through_none(stubbed_batch):
     cl = stubbed_batch.CameraFrameLabels()
     sub = cl[0]
-    assert sub.flags is None
     assert sub.rgb is None
-    assert sub.metric_distance is None
-    assert sub.normals is None
 
 
 def test_cam_labels_collate_fn_with_all_none(stubbed_batch):
     a = stubbed_batch.CameraFrameLabels()
     b = stubbed_batch.CameraFrameLabels()
     out = stubbed_batch.CameraFrameLabels.collate_fn([a, b])
-    assert out.flags is None and out.rgb is None
-
-
-def test_cam_labels_collate_fn_zero_fills_missing_metric_distance(stubbed_batch):
-    """If at least one sample has metric_distance and others don't, the
-    others get filled with zeros_like instead of being treated as None."""
-    a = stubbed_batch.CameraFrameLabels(
-        metric_distance=torch.ones(1, 4, 5, 1, dtype=torch.float32)
-    )
-    b = stubbed_batch.CameraFrameLabels()  # no metric_distance
-    out = stubbed_batch.CameraFrameLabels.collate_fn([a, b])
-    assert out.metric_distance is not None
-    assert out.metric_distance.shape == (2, 4, 5, 1)
+    assert out.rgb is None
 
 
 # ---------------------------------------------------------------------------
-# LidarFrameLabels
-# ---------------------------------------------------------------------------
-
-
-def test_lidar_labels_post_init_accepts_valid_inputs(stubbed_batch):
-    _ = stubbed_batch.LidarFrameLabels(
-        flags=torch.zeros(1, 4, 5, 1, dtype=torch.int32),
-        distance=torch.zeros(1, 4, 5, 1, dtype=torch.float32),
-    )
-
-
-def test_lidar_labels_post_init_rejects_bad_flags_shape(stubbed_batch):
-    with pytest.raises(AssertionError, match="Flags must be a 4D"):
-        stubbed_batch.LidarFrameLabels(flags=torch.zeros(1, 4, 5, dtype=torch.int32))
-
-
-def test_lidar_labels_post_init_rejects_wrong_flags_dtype(stubbed_batch):
-    with pytest.raises(AssertionError, match="Flags must be a int32"):
-        stubbed_batch.LidarFrameLabels(flags=torch.zeros(1, 4, 5, 1, dtype=torch.float32))
-
-
-def test_lidar_labels_post_init_rejects_bad_distance_shape(stubbed_batch):
-    with pytest.raises(AssertionError, match="Distance must be"):
-        stubbed_batch.LidarFrameLabels(distance=torch.zeros(1, 4, 5, 2, dtype=torch.float32))
-
-
-def test_lidar_labels_post_init_rejects_wrong_distance_dtype(stubbed_batch):
-    with pytest.raises(AssertionError, match="Distance must be a float32"):
-        stubbed_batch.LidarFrameLabels(distance=torch.zeros(1, 4, 5, 1, dtype=torch.float64))
-
-
-def test_lidar_labels_to_moves_tensors(stubbed_batch):
-    ll = stubbed_batch.LidarFrameLabels(
-        flags=torch.zeros(1, 4, 5, 1, dtype=torch.int32),
-        distance=torch.zeros(1, 4, 5, 1, dtype=torch.float32),
-    )
-    moved = ll.to(torch.device("cpu"))
-    # .to(device) with no dtype change — types preserved.
-    assert moved.distance.dtype == torch.float32
-
-
-def test_lidar_labels_to_passes_through_none(stubbed_batch):
-    moved = stubbed_batch.LidarFrameLabels().to(torch.float32)
-    assert moved.flags is None and moved.distance is None
-
-
-def test_lidar_labels_getitem(stubbed_batch):
-    ll = stubbed_batch.LidarFrameLabels(distance=torch.zeros(3, 4, 5, 1, dtype=torch.float32))
-    assert ll[0].distance.shape[0] == 1
-    assert ll[0:2].distance.shape[0] == 2
-
-
-def test_lidar_labels_getitem_with_none_fields(stubbed_batch):
-    sub = stubbed_batch.LidarFrameLabels()[0]
-    assert sub.flags is None and sub.distance is None
-
-
-def test_lidar_labels_collate_fn(stubbed_batch):
-    a = stubbed_batch.LidarFrameLabels(distance=torch.zeros(1, 4, 5, 1, dtype=torch.float32))
-    b = stubbed_batch.LidarFrameLabels(distance=torch.ones(1, 4, 5, 1, dtype=torch.float32))
-    out = stubbed_batch.LidarFrameLabels.collate_fn([a, b])
-    assert out.distance.shape == (2, 4, 5, 1)
-
-
-# ---------------------------------------------------------------------------
-# DataBatch (Camera, Lidar) + composition
+# DataBatch (Camera) + composition
 # ---------------------------------------------------------------------------
 
 
@@ -635,67 +488,38 @@ def test_databatch_camera_collate_to_getitem(stubbed_batch):
     assert isinstance(sub_slice, mod.DataBatch.Camera)
 
 
-def test_databatch_lidar_collate_to_getitem(stubbed_batch):
-    mod = stubbed_batch
-    fm = mod.FrameMeta(unique_sensor_idx=0, unique_frame_idx=0)
-    ll = mod.LidarFrameLabels(distance=torch.zeros(1, 4, 5, 1, dtype=torch.float32))
-    lid = mod.DataBatch.Lidar(meta=[fm], labels=ll)
-    assert lid.b == 1
-
-    lid2 = mod.DataBatch.Lidar(meta=[fm], labels=ll)
-    out = mod.DataBatch.Lidar.collate_fn([lid, lid2])
-    assert len(out.meta) == 2
-
-    moved = lid.to(torch.device("cpu"))
-    assert isinstance(moved, mod.DataBatch.Lidar)
-
-    sub_int = lid[0]
-    assert isinstance(sub_int, mod.DataBatch.Lidar)
-    sub_slice = lid[0:1]
-    assert isinstance(sub_slice, mod.DataBatch.Lidar)
-
-
-def test_databatch_collate_fn_combines_camera_and_lidar(stubbed_batch):
+def test_databatch_collate_fn_combines_camera(stubbed_batch):
     mod = stubbed_batch
     fm = mod.FrameMeta(unique_sensor_idx=0, unique_frame_idx=0)
     cam = mod.DataBatch.Camera(meta=[fm], labels=_make_cam_labels(stubbed_batch))
-    lid = mod.DataBatch.Lidar(
-        meta=[fm], labels=mod.LidarFrameLabels(distance=torch.zeros(1, 4, 5, 1, dtype=torch.float32))
-    )
-    db = mod.DataBatch(camera=cam, lidar=lid)
+    db = mod.DataBatch(camera=cam)
     out = mod.DataBatch.collate_fn([db, db])
     assert out.camera is not None
-    assert out.lidar is not None
 
 
-def test_databatch_collate_fn_drops_camera_or_lidar_when_any_missing(stubbed_batch):
+def test_databatch_collate_fn_drops_camera_when_any_missing(stubbed_batch):
     mod = stubbed_batch
     fm = mod.FrameMeta(unique_sensor_idx=0, unique_frame_idx=0)
     cam = mod.DataBatch.Camera(meta=[fm], labels=_make_cam_labels(stubbed_batch))
-    db_with = mod.DataBatch(camera=cam, lidar=None)
-    db_without = mod.DataBatch(camera=None, lidar=None)
+    db_with = mod.DataBatch(camera=cam)
+    db_without = mod.DataBatch(camera=None)
     out = mod.DataBatch.collate_fn([db_with, db_without])
     assert out.camera is None
-    assert out.lidar is None
 
 
 def test_databatch_to_moves_subbatches(stubbed_batch):
     mod = stubbed_batch
     fm = mod.FrameMeta(unique_sensor_idx=0, unique_frame_idx=0)
     cam = mod.DataBatch.Camera(meta=[fm], labels=_make_cam_labels(stubbed_batch))
-    lid = mod.DataBatch.Lidar(
-        meta=[fm], labels=mod.LidarFrameLabels(distance=torch.zeros(1, 4, 5, 1, dtype=torch.float32))
-    )
-    db = mod.DataBatch(camera=cam, lidar=lid)
+    db = mod.DataBatch(camera=cam)
     moved = db.to(torch.device("cpu"))
     assert moved.camera is not None
-    assert moved.lidar is not None
 
 
 def test_databatch_to_passes_through_none(stubbed_batch):
-    db = stubbed_batch.DataBatch(camera=None, lidar=None)
+    db = stubbed_batch.DataBatch(camera=None)
     moved = db.to(torch.float32)
-    assert moved.camera is None and moved.lidar is None
+    assert moved.camera is None
 
 
 # ---------------------------------------------------------------------------
@@ -705,28 +529,27 @@ def test_databatch_to_passes_through_none(stubbed_batch):
 
 def test_rendering_batch_collate_combines(stubbed_batch):
     rd = _make_rendering_data(stubbed_batch)
-    rb = stubbed_batch.RenderingBatch(camera=rd, lidar=rd)
+    rb = stubbed_batch.RenderingBatch(camera=rd)
     out = stubbed_batch.RenderingBatch.collate_fn([rb, rb])
-    assert out.camera is not None and out.lidar is not None
+    assert out.camera is not None
 
 
 def test_rendering_batch_collate_drops_when_any_missing(stubbed_batch):
     mod = stubbed_batch
     rd = _make_rendering_data(stubbed_batch)
-    rb_with = mod.RenderingBatch(camera=rd, lidar=None)
-    rb_without = mod.RenderingBatch(camera=None, lidar=None)
+    rb_with = mod.RenderingBatch(camera=rd)
+    rb_without = mod.RenderingBatch(camera=None)
     out = mod.RenderingBatch.collate_fn([rb_with, rb_without])
     assert out.camera is None
-    assert out.lidar is None
 
 
 def test_rendering_batch_to_with_optional_fields(stubbed_batch):
     rd = _make_rendering_data(stubbed_batch)
-    rb = stubbed_batch.RenderingBatch(camera=rd, lidar=rd)
+    rb = stubbed_batch.RenderingBatch(camera=rd)
     moved = rb.to(torch.float64)
     assert moved.camera is not None
     moved2 = stubbed_batch.RenderingBatch().to(torch.float32)
-    assert moved2.camera is None and moved2.lidar is None
+    assert moved2.camera is None
 
 
 # ---------------------------------------------------------------------------
@@ -738,7 +561,7 @@ def _make_data_and_rendering(stubbed_batch, *, with_rendering=True):
     mod = stubbed_batch
     fm = mod.FrameMeta(unique_sensor_idx=0, unique_frame_idx=0)
     cam = mod.DataBatch.Camera(meta=[fm], labels=_make_cam_labels(stubbed_batch))
-    db = mod.DataBatch(camera=cam, lidar=None)
+    db = mod.DataBatch(camera=cam)
     rb = mod.RenderingBatch(camera=_make_rendering_data(stubbed_batch)) if with_rendering else None
     return mod.DataAndRenderingBatch(data=db, rendering=rb)
 

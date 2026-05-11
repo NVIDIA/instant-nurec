@@ -26,12 +26,11 @@ from ncore.data import ConcreteCameraModelParametersUnion  # type: ignore
 from ncore.sensors import CameraModel  # type: ignore
 from instant_nurec.config_schema.predict import PrimitiveMergeConfig
 from instant_nurec.primitives.kelvin_primitive import KelvinDynamicLayer, KelvinInstantNuRecPrimitive, KelvinStaticLayer
-from instant_nurec.utils.cubemap import unproject_to_sky_cubemap
 from instant_nurec.utils.trajectory import merge_rig_trajectories, transform_rig_trajectories
 from instant_nurec.utils.batch import CameraFreePoseViewGeometry, DataAndRenderingBatch, DataBatch, InstantNuRecDataBatch, RenderingBatch
 from instant_nurec.utils.geometry import se3_matrix_inverse, tquat_to_se3_matrix
 from instant_nurec.utils.misc import list_of_dicts_to_singleton_dict, unpack_optional
-from instant_nurec.utils.types import RayFlags, RigTrajectories
+from instant_nurec.utils.types import RigTrajectories
 
 
 logger = logging.getLogger(__name__)
@@ -232,108 +231,14 @@ class KelvinPrimitiveMerge:
 
         return merged_primitive, merged_batch
 
-    @staticmethod
-    def _soften_cubemap_mask(
-        cubemap_mask: torch.Tensor,
-        dilate_kernel_size: int,
-        blur_sigma: float,
-    ) -> torch.Tensor:
-        """
-        Soften a per-face cubemap mask via morphological dilation followed by a Gaussian blur,
-        producing smooth weights in [0, 1] that fade out around the original mask edges.
-
-        Each cubemap face is processed independently; smoothing does not cross face seams.
-        Args:
-            cubemap_mask: (6, H, W, 1) boolean or float mask.
-            dilate_kernel_size: Square structuring element side length (in pixels) for dilation.
-                Use <= 1 to skip dilation.
-            blur_sigma: Standard deviation (in pixels) of the separable Gaussian blur.
-                Use <= 0 to skip blurring.
-        Returns:
-            (6, H, W, 1) float tensor with values in [0, 1].
-        """
-        x = cubemap_mask.float().permute(0, 3, 1, 2)  # (6, 1, H, W)
-        if dilate_kernel_size > 1:
-            pad = dilate_kernel_size // 2
-            x = torch.nn.functional.max_pool2d(x, kernel_size=dilate_kernel_size, stride=1, padding=pad)
-            # max_pool2d with even kernels can shift the spatial size; crop back to original H, W.
-            x = x[..., : cubemap_mask.shape[1], : cubemap_mask.shape[2]]
-        if blur_sigma > 0:
-            kernel_size = 2 * int(round(3 * blur_sigma)) + 1
-            coords = torch.arange(kernel_size, dtype=x.dtype, device=x.device) - kernel_size // 2
-            kernel_1d = torch.exp(-(coords**2) / (2 * blur_sigma**2))
-            kernel_1d = kernel_1d / kernel_1d.sum()
-            pad = kernel_size // 2
-            # Use 'replicate' padding (not conv2d's default zero-padding) so that the Gaussian
-            # blur does not attenuate the mask near face boundaries -- zero-padding would create
-            # a dark seam of width ~3*sigma around each cubemap face edge. This is not a true
-            # cubemap-aware pad across neighboring faces, but it avoids the artifact.
-            x = torch.nn.functional.pad(x, (pad, pad, 0, 0), mode="replicate")
-            x = torch.nn.functional.conv2d(x, kernel_1d.view(1, 1, 1, -1))
-            x = torch.nn.functional.pad(x, (0, 0, pad, pad), mode="replicate")
-            x = torch.nn.functional.conv2d(x, kernel_1d.view(1, 1, -1, 1))
-        return x.permute(0, 2, 3, 1).clamp(0.0, 1.0)
-
     def _merge_sky_cubemaps(
         self,
         sky_cubemaps: list[torch.Tensor],
         batch: InstantNuRecDataBatch,
         batch_rig_transforms: list[torch.Tensor],
-        dilate_kernel_size: int = 31,
-        blur_sigma: float = 8.0,
-        floor_weight: float = 0.01,
     ) -> torch.Tensor:
-        """
-        Weighted average of multiple sky cubemaps by sky-mask visibility (determined by per-image sky labels).
-
-        Each per-chunk sky mask is unprojected onto the cubemap and then *softened* by a morphological
-        dilation followed by a Gaussian blur. The resulting soft mask (in [0, 1]) is used as the
-        per-pixel blending weight, plus a small ``floor_weight`` so that directions without any sky
-        observation still fall back to (an average of) the per-chunk sky cubemap predictions.
-        """
-        merged_sky_cubemap = torch.zeros_like(sky_cubemaps[0])
-        merged_sky_cubemap_weights = torch.zeros_like(merged_sky_cubemap)
-
-        for b_idx, (sky_cubemap, batch_rig_transform) in enumerate(
-            zip(sky_cubemaps, batch_rig_transforms, strict=True)
-        ):
-            camera_data = unpack_optional(batch.context[b_idx].data.camera)
-            if camera_data.labels is None or camera_data.labels.flags is None:
-                merged_sky_cubemap += sky_cubemap
-                merged_sky_cubemap_weights += 1.0
-                continue
-
-            sky_mask = camera_data.labels.get_mask_flags_all(RayFlags.SKY_SEMANTIC).float()
-            rendering_data = unpack_optional(unpack_optional(batch.context[b_idx].rendering).camera)
-            rig_T = batch_rig_transform.to(
-                device=rendering_data.poses_tquat_startend.device, dtype=torch.float32
-            )
-            global_R_sensors = torch.stack(
-                [
-                    (rig_T @ tquat_to_se3_matrix(rendering_data.poses_tquat_startend[f, 1, :].unsqueeze(0)))[:3, :3]
-                    for f in range(rendering_data.b)
-                ],
-                dim=0,
-            )
-            _, cubemap_sky_mask = unproject_to_sky_cubemap(
-                merged_sky_cubemap.shape[-2],
-                global_R_sensors,
-                [
-                    cast(ConcreteCameraModelParametersUnion, sensor_model)
-                    for sensor_model in rendering_data.sensor_model_parameters
-                ],
-                sky_mask,
-                feature_mask=sky_mask,
-            )
-
-            # Soft per-pixel weight in [0, 1], plus a small floor to avoid hard zeros where no
-            # chunk observes sky (the per-chunk MLP still predicts a cubemap value there).
-            soft_mask = self._soften_cubemap_mask(cubemap_sky_mask, dilate_kernel_size, blur_sigma)
-            sky_cubemap_weights = soft_mask + floor_weight
-            merged_sky_cubemap += sky_cubemap * sky_cubemap_weights
-            merged_sky_cubemap_weights += sky_cubemap_weights
-
-        return merged_sky_cubemap / (merged_sky_cubemap_weights + 1e-8)
+        del batch, batch_rig_transforms
+        return torch.stack(sky_cubemaps, dim=0).mean(dim=0)
 
     @torch.autocast(device_type="cuda", enabled=False)
     def _merge_affine_matrices(self, affine_matrices: list[torch.Tensor]) -> tuple[torch.Tensor, list[torch.Tensor]]:
@@ -399,4 +304,3 @@ class KelvinPrimitiveMerge:
             affine_matrix=merged_affine_matrix,
         )
         return merged_primitive
-

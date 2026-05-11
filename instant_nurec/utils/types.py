@@ -48,29 +48,6 @@ class HalfClosedInterval:
 
 
 
-
-
-class RayFlags(IntFlag):
-    """Bitmask flags of per-ray properties (note: limited to 32 variants)"""
-
-    # general ray-associated attributes [non-mutually exclusive]
-    RGB_LABEL = auto()  # set if the ray has associated RGB values
-    VALID_SEMANTIC = (
-        auto()
-    )  # set if semantics of the ray can be considered to be valid (even if no specific class is set)
-    SKY_SEMANTIC = auto()  # set if the ray is classified to be a sky ray
-    ROAD_SEMANTIC = auto()  # set if the ray is classified to be a road ray
-    VEHICLE_SEMANTIC = auto()  # set if the ray is classified to be a vehicle ray (non-ego)
-    EGO_SEMANTIC = auto()  # set if the ray is classified to the ego car
-    DROPPED = auto()  # set if the ray is classified to be a dropped ray
-    VALID_NORMAL = auto()  # set if the ray has a valid normal
-
-    INVALID = (
-        auto()
-    )  # rays can be invalid due to e.g. motion state, mask, ... - all training rays are usually considered to be valid,
-    # but invalid rays can be produced in validation mode and should be discarded for, e.g., metric estimation
-
-
 @dataclass(slots=True, kw_only=True)
 class FrameConversion:
     """Represents parameters and functions to convert frame-associated data between different (potentially uniformly scaled) canonical 3d frames"""

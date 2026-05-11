@@ -43,7 +43,6 @@ from instant_nurec.utils.sensors.ncore_sensors_converters import (
 )
 from instant_nurec.utils.types import (
     CuboidTracksDataPack,
-    RayFlags,
     RigTrajectories,
 )
 
@@ -252,39 +251,15 @@ class CameraFrameLabels:
     """Labels for a camera frame.
 
     The fields are:
-    - flags: Optional. Bitmask integer value (see RayFlags). Default is None. [Tensor[int32]]. (B, height, width, 1).
     - rgb: Optional. RGB value within [0, 1]. Default is None. [Tensor[float32]]. (B, height, width, 3).
-    - metric_distance: Optional. Non-metric ray depth from a depth estimation model. Default is None. [Tensor[float32]]. (B, height, width, 1).
-    - normals: Optional. Per-pixel normal vectors relative to the world frame. Default is None. [Tensor[float32]]. (B, height, width, 3).
     """
 
-    flags: torch.Tensor | None = None
     rgb: torch.Tensor | None = None
-    metric_distance: torch.Tensor | None = None
-    normals: torch.Tensor | None = None
 
     def __post_init__(self):
-        if self.flags is not None:
-            assert self.flags.ndim == 4 and self.flags.shape[3] == 1, "Flags must be a 4D tensor (B, height, width, 1)"
-            assert self.flags.dtype == torch.int32, "Flags must be a int32 tensor"
         if self.rgb is not None:
             assert self.rgb.ndim == 4 and self.rgb.shape[3] == 3, "RGB must be a 4D tensor (B, height, width, 3)"
             assert self.rgb.dtype == torch.float32, "RGB must be a float32 tensor"
-        if self.metric_distance is not None:
-            assert self.metric_distance.ndim == 4 and self.metric_distance.shape[3] == 1, (
-                "Metric distance must be a 4D tensor (B, height, width, 1)"
-            )
-            assert self.metric_distance.dtype == torch.float32, "Metric distance must be a float32 tensor"
-        if self.normals is not None:
-            assert self.normals.ndim == 4 and self.normals.shape[3] == 3, (
-                "Normals must be a 4D tensor (B, height, width, 3)"
-            )
-            assert self.normals.dtype == torch.float32, "Normals must be a float32 tensor"
-
-    def get_mask_flags_all(self, flags: RayFlags) -> torch.Tensor:
-        """Mask indicating the rays that have *all* flag bits of 'flags' set"""
-        assert self.flags is not None, "flags are required"
-        return torch.bitwise_and(self.flags, flags.value).eq(flags.value)
 
     @classmethod
     def collate_fn(
@@ -292,31 +267,13 @@ class CameraFrameLabels:
         seq: List[Self],
         device: torch.device = torch.device("cpu"),
     ) -> Self:
-        # For metric distance, if any is not None, we set the others to zeros
-        metric_distance_seq = [item.metric_distance for item in seq]
-        if (
-            first_not_none_distance := next(
-                (distance for distance in metric_distance_seq if distance is not None), None
-            )
-        ) is not None:
-            metric_distance_seq = [
-                torch.zeros_like(first_not_none_distance) if distance is None else distance
-                for distance in metric_distance_seq
-            ]
-
         return cls(
-            flags=collate_fn([item.flags for item in seq], device),
             rgb=collate_fn([item.rgb for item in seq], device),
-            metric_distance=collate_fn(metric_distance_seq, device),
-            normals=collate_fn([item.normals for item in seq], device),
         )
 
     def to(self, *args, **kwargs) -> Self:
         return self.__class__(
-            flags=self.flags.to(*args, **kwargs) if self.flags is not None else None,
             rgb=self.rgb.to(*args, **kwargs) if self.rgb is not None else None,
-            metric_distance=self.metric_distance.to(*args, **kwargs) if self.metric_distance is not None else None,
-            normals=self.normals.to(*args, **kwargs) if self.normals is not None else None,
         )
 
     def __getitem__(self, item: Union[int, slice, torch.Tensor]) -> Self:
@@ -325,10 +282,7 @@ class CameraFrameLabels:
             item = slice(item, item + 1)
 
         return self.__class__(
-            flags=self.flags[item] if self.flags is not None else None,
             rgb=self.rgb[item] if self.rgb is not None else None,
-            metric_distance=self.metric_distance[item] if self.metric_distance is not None else None,
-            normals=self.normals[item] if self.normals is not None else None,
         )
 
 

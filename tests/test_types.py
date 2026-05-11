@@ -45,9 +45,6 @@ def _stub_compiled_imports(monkeypatch: pytest.MonkeyPatch):
     ncore_data_mod.ConcreteCameraModelParametersUnion = type(  # type: ignore[attr-defined]
         "CCMP", (), {}
     )
-    ncore_data_mod.ConcreteLidarModelParametersUnion = type(  # type: ignore[attr-defined]
-        "CLMP", (), {}
-    )
     monkeypatch.setitem(sys.modules, "ncore", ncore_mod)
     monkeypatch.setitem(sys.modules, "ncore.data", ncore_data_mod)
 
@@ -251,7 +248,6 @@ def test_rigtrajectory_post_init_accepts_valid_inputs():
     rt = RigTrajectories.RigTrajectory(
         sequence_id="seq",
         cameras_frame_timestamps_us={"cam_a": torch.tensor([[0, 100], [200, 300]])},
-        lidars_frame_timestamps_us={"lid_a": torch.tensor([[0, 1]])},
         T_rig_worlds=torch.eye(4)[None].repeat(2, 1, 1).double(),
         T_rig_world_timestamps_us=torch.tensor([0, 100]),
     )
@@ -266,7 +262,6 @@ def test_rigtrajectory_post_init_rejects_2d_timestamps():
         RigTrajectories.RigTrajectory(
             sequence_id="s",
             cameras_frame_timestamps_us={},
-            lidars_frame_timestamps_us={},
             T_rig_worlds=torch.eye(4)[None].double(),
             T_rig_world_timestamps_us=torch.tensor([[0]]),  # 2D
         )
@@ -280,7 +275,6 @@ def test_rigtrajectory_post_init_rejects_pose_count_mismatch():
         RigTrajectories.RigTrajectory(
             sequence_id="s",
             cameras_frame_timestamps_us={},
-            lidars_frame_timestamps_us={},
             T_rig_worlds=torch.eye(4)[None].repeat(2, 1, 1).double(),  # 2 poses
             T_rig_world_timestamps_us=torch.tensor([0]),  # 1 timestamp
         )
@@ -294,21 +288,6 @@ def test_rigtrajectory_post_init_rejects_wrong_camera_ts_shape():
         RigTrajectories.RigTrajectory(
             sequence_id="s",
             cameras_frame_timestamps_us={"cam": torch.tensor([[0, 1, 2]])},  # 3 not 2
-            lidars_frame_timestamps_us={},
-            T_rig_worlds=torch.eye(4)[None].double(),
-            T_rig_world_timestamps_us=torch.tensor([0]),
-        )
-
-
-def test_rigtrajectory_post_init_rejects_wrong_lidar_ts_shape():
-    import torch
-    from instant_nurec.utils.types import RigTrajectories
-
-    with pytest.raises(AssertionError):
-        RigTrajectories.RigTrajectory(
-            sequence_id="s",
-            cameras_frame_timestamps_us={},
-            lidars_frame_timestamps_us={"lid": torch.tensor([[0, 1, 2]])},
             T_rig_worlds=torch.eye(4)[None].double(),
             T_rig_world_timestamps_us=torch.tensor([0]),
         )
@@ -319,19 +298,17 @@ def test_rigtrajectory_post_init_rejects_wrong_lidar_ts_shape():
 # ---------------------------------------------------------------------------
 
 
-def _make_rig_trajectories(camera_ids, lidar_ids, traj_camera_ids=None, traj_lidar_ids=None):
+def _make_rig_trajectories(camera_ids, traj_camera_ids=None):
     """Helper to build a minimal RigTrajectories instance for the post_init checks."""
     from collections import OrderedDict
     import torch
     from instant_nurec.utils.types import FrameConversion, RigTrajectories
 
     traj_camera_ids = traj_camera_ids if traj_camera_ids is not None else camera_ids
-    traj_lidar_ids = traj_lidar_ids if traj_lidar_ids is not None else lidar_ids
 
     rt = RigTrajectories.RigTrajectory(
         sequence_id="s",
         cameras_frame_timestamps_us={cid: torch.tensor([[0, 1]]) for cid in traj_camera_ids},
-        lidars_frame_timestamps_us={lid: torch.tensor([[0, 1]]) for lid in traj_lidar_ids},
         T_rig_worlds=torch.eye(4)[None].double(),
         T_rig_world_timestamps_us=torch.tensor([0]),
     )
@@ -345,28 +322,17 @@ def _make_rig_trajectories(camera_ids, lidar_ids, traj_camera_ids=None, traj_lid
         ))
         for i, cid in enumerate(camera_ids)
     )
-    lid_calibs = OrderedDict(
-        (lid, RigTrajectories.LidarCalibration(
-            sequence_id="s",
-            unique_sensor_idx=i,
-            T_sensor_rig=torch.eye(4),
-        ))
-        for i, lid in enumerate(lidar_ids)
-    )
-
     return RigTrajectories(
         T_world_base=torch.eye(4),
         world_to_scene=FrameConversion(matrix=np.eye(4, dtype=np.float64)),
         rig_trajectories=[rt],
         camera_calibrations=cam_calibs,
-        lidar_calibrations=lid_calibs,
     )
 
 
 def test_rig_trajectories_post_init_accepts_consistent_calibrations():
-    rt = _make_rig_trajectories(["cam_a"], ["lid_a"])
+    rt = _make_rig_trajectories(["cam_a"])
     assert "cam_a" in rt.camera_calibrations
-    assert "lid_a" in rt.lidar_calibrations
 
 
 def test_rig_trajectories_post_init_rejects_missing_camera():
@@ -374,17 +340,7 @@ def test_rig_trajectories_post_init_rejects_missing_camera():
     with pytest.raises(AssertionError, match="Missing camera"):
         _make_rig_trajectories(
             camera_ids=["cam_a"],
-            lidar_ids=["lid_a"],
             traj_camera_ids=["cam_X"],  # not in calibrations
-        )
-
-
-def test_rig_trajectories_post_init_rejects_missing_lidar():
-    with pytest.raises(AssertionError, match="Missing lidar"):
-        _make_rig_trajectories(
-            camera_ids=["cam_a"],
-            lidar_ids=["lid_a"],
-            traj_lidar_ids=["lid_X"],
         )
 
 
@@ -557,20 +513,6 @@ def test_cuboid_tracks_data_pack_to_device():
     pack = CuboidTracksDataPack(tracks_data=td, cuboidtracks_data=cd)
     pack2 = pack.to_device(torch.device("cpu"))
     assert pack2 is not pack
-
-
-# ---------------------------------------------------------------------------
-# RayFlags / TrackFlags enums
-# ---------------------------------------------------------------------------
-
-
-def test_ray_flags_enum_values_distinct():
-    from instant_nurec.utils.types import RayFlags
-
-    seen = set()
-    for f in RayFlags:
-        assert f.value not in seen
-        seen.add(f.value)
 
 
 def test_track_flags_none_is_zero():

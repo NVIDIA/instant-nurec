@@ -27,8 +27,6 @@ from __future__ import annotations
 
 import math
 
-from dataclasses import replace
-
 import torch
 
 from torch import nn
@@ -45,7 +43,7 @@ from instant_nurec.utils.geometry import tquat_to_se3_matrix
 from instant_nurec.utils.misc import unpack_optional
 from instant_nurec.utils.motion import warp_points_with_cuboid_tracks
 from instant_nurec.utils.sensor import to_simple_pinhole_model_parameters
-from instant_nurec.utils.types import RayFlags, TrackFlags
+from instant_nurec.utils.types import TrackFlags
 
 
 # Cubemap placeholder size: small enough to keep memory negligible, large
@@ -88,55 +86,11 @@ class JITKelvinAdapter(nn.Module):
                 f"equals {self.expected_v}."
             )
 
-    # ------------------------------------------------------------------
-    # prepare_context: copy of KelvinInstantNuRec._maybe_derive_normals_from_distance
-    # so the adapter doesn't depend on the (soon-to-be-retired) public
-    # KelvinInstantNuRec class.
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def _maybe_derive_normals_from_distance(batch: DataAndRenderingBatch) -> DataAndRenderingBatch:
-        assert (camera_data := batch.data.camera) is not None
-        assert (rendering_data := batch.rendering) is not None and (
-            rendering_camera_data := rendering_data.camera
-        ) is not None
-        if camera_data.labels.normals is not None:
-            return batch
-        if (metric_distance := camera_data.labels.metric_distance) is None:
-            return batch
-
-        new_flags = unpack_optional(camera_data.labels.flags)
-        batch_rays = rendering_camera_data.rays
-        world_points = batch_rays[..., :3] + metric_distance * batch_rays[..., 3:]
-        new_normals = torch.zeros_like(world_points)
-        new_normals[:, 1:-1, 1:-1] = torch.nn.functional.normalize(
-            torch.cross(
-                world_points[:, 2:, 1:-1] - world_points[:, :-2, 1:-1],
-                world_points[:, 1:-1, 2:] - world_points[:, 1:-1, :-2],
-            ),
-            dim=-1,
-        )
-        distance_valid_mask = (
-            (metric_distance[:, 2:, 1:-1] > 0.0)
-            & (metric_distance[:, 1:-1, 2:] > 0.0)
-            & (metric_distance[:, 1:-1, :-2] > 0.0)
-            & (metric_distance[:, :-2, 1:-1] > 0.0)
-        )
-        new_normals[:, 1:-1, 1:-1][~distance_valid_mask.squeeze(-1)] = 0.0
-        new_flags[:, 1:-1, 1:-1][distance_valid_mask] |= RayFlags.VALID_NORMAL
-        return replace(
-            batch,
-            data=replace(
-                batch.data,
-                camera=replace(camera_data, labels=replace(camera_data.labels, normals=new_normals, flags=new_flags)),
-            ),
-        )
-
     def prepare_context(
         self,
         context: list[DataAndRenderingBatch],
     ) -> list[DataAndRenderingBatch]:
-        return [self._maybe_derive_normals_from_distance(batch) for batch in context]
+        return context
 
     # ------------------------------------------------------------------
     # reconstruct: tensor-extraction adapter
@@ -299,5 +253,4 @@ class JITKelvinAdapter(nn.Module):
                 )
             )
         return primitives
-
 

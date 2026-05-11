@@ -232,36 +232,15 @@ def test_reconstruct_static_layer_semantic_class_is_uint8():
     assert out[0].static_layer.semantic_class.dtype == torch.uint8
 
 
-# ---------- prepare_context (no normals, no metric distance) ----------
+# ---------- prepare_context ----------
 
 
-def test_prepare_context_passthrough_when_no_metric_distance():
-    """When the camera has no metric_distance, prepare_context returns the
-    batch unchanged. This mirrors the eager KelvinInstantNuRec behavior."""
+def test_prepare_context_passthrough():
     from types import SimpleNamespace
 
-    labels = SimpleNamespace(normals=None, metric_distance=None)
-    camera = SimpleNamespace(labels=labels)
-    data = SimpleNamespace(camera=camera)
-    rendering = SimpleNamespace(camera=SimpleNamespace())
-    batch = SimpleNamespace(data=data, rendering=rendering)
-
-    out = JITKelvinAdapter._maybe_derive_normals_from_distance(batch)
-    assert out is batch
-
-
-def test_prepare_context_passthrough_when_normals_already_present():
-    from types import SimpleNamespace
-
-    normals = torch.zeros(2, 3, 3, 3)
-    labels = SimpleNamespace(normals=normals, metric_distance=None)
-    camera = SimpleNamespace(labels=labels)
-    data = SimpleNamespace(camera=camera)
-    rendering = SimpleNamespace(camera=SimpleNamespace())
-    batch = SimpleNamespace(data=data, rendering=rendering)
-
-    out = JITKelvinAdapter._maybe_derive_normals_from_distance(batch)
-    assert out is batch
+    context = [SimpleNamespace()]
+    adapter = _make_adapter(_FakeJITModule(B=1, V=2, H=4, W=4, n_cams=1))
+    assert adapter.prepare_context(context) is context
 
 
 # ---------- _empty_dynamic_layer / _placeholder_sky_cubemap ----------
