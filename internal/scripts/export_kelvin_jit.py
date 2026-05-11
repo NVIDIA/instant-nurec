@@ -119,7 +119,10 @@ from instant_nurec.config_schema.dataset import (  # noqa: E402
     InstantNuRecSplitsConfig,
     NCoreInstantNuRecDatasetConfig,
 )
-from instant_nurec.config_schema.instantnurec import InstantNuRecConfig  # noqa: E402
+from instant_nurec.config_schema.instantnurec import (  # noqa: E402
+    GaussiansInstantNuRecSystemConfig,
+    InstantNuRecConfig,
+)
 from instant_nurec.config_schema.predict import (  # noqa: E402
     PredictConfig,
     PrimitiveMergeConfig,
@@ -314,6 +317,10 @@ def _build_config(ncore_path: str, output_dir: str) -> InstantNuRecConfig:
     json_paths = resolve_ncore_paths(Path(ncore_path))
     return InstantNuRecConfig(
         out_dir=output_dir,
+        system=GaussiansInstantNuRecSystemConfig(
+            predict_num_workers=0,
+            predict_batch_size=1,
+        ),
         dataset=InstantNuRecSplitsConfig(
             predict=NCoreInstantNuRecDatasetConfig(
                 ncore_json_paths=[str(p) for p in json_paths],
