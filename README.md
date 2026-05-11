@@ -6,6 +6,7 @@
 [![Paper](https://img.shields.io/badge/arXiv-Paper-b31b1b?logo=arxiv)](https://arxiv.org/abs/2501.00602)
 [![License](https://img.shields.io/badge/License-Apache--2.0-orange)](LICENSE.txt)
 [![Model](https://img.shields.io/badge/HF-Model-yellow?logo=huggingface&style=flat-square)](https://huggingface.co/nvidia/instant-nurec-kelvin)
+[![Data](https://img.shields.io/badge/NCore-0d9488?logo=database&logoColor=white&style=flat-square)](https://huggingface.co/datasets/nvidia/PhysicalAI-Autonomous-Vehicles-NCore)
 
 **NVIDIA**
 
