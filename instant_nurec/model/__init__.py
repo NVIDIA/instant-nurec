@@ -132,6 +132,17 @@ def make(config: "InstantNuRecConfig") -> GaussiansInstantNuRecSystem:
     _preflight_validate_camera_ids(config)
 
     logger.info("Loading JIT system from %s.", full_pt_path)
+    # Disable JIT kernel fusion before load. The bisect against the
+    # eager-pickle path on clip 000da9de showed the load+fuse cycle
+    # introduces 2-4 orders of magnitude more drift than the trace itself:
+    # gs_densities went from eager-vs-traced 1.7e-5 to traced-vs-loaded
+    # 9.3e-1, which directly flips Gaussians across the density-prune
+    # threshold (the +5/+20/-6 cull-boundary count drift documented at
+    # commit 7ec41ad in internal/parity_proofs/MR_description.md).
+    # Empty fusion strategy disables nnc/tensorexpr fusion while keeping
+    # the profiling executor (disabling that hits a size_t underflow inside
+    # the legacy executor's vector indexing on the recorded graph).
+    torch.jit.set_fusion_strategy([("STATIC", 0), ("DYNAMIC", 0)])
     jit_module = torch.jit.load(full_pt_path, map_location="cpu")
     adapter = JITKelvinAdapter(jit_module=jit_module)
 
