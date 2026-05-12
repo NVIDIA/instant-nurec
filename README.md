@@ -131,6 +131,7 @@ Output layout: PLYs only, under `out_dir/<run_id>/ply/<sequence_id>/...ply`.
 | variable | purpose |
 | --- | --- |
 | `INSTANT_NUREC_FULL_PT` | Absolute path to a local `instant_nurec.pt`. Takes priority over the auto-downloaded copy. |
+| `INSTANT_NUREC_HF_CACHE_DIR` | Override the HF cache root used for the auto-download. When unset, `huggingface_hub` uses its standard cache (`~/.cache/huggingface/hub`, or whatever `HF_HOME` / `HUGGINGFACE_HUB_CACHE` resolve to). |
 | `INSTANT_NUREC_RUN_ID` | Override the per-run shortuuid; useful when scripting reproducible output paths. |
 
 </details>
