@@ -66,12 +66,25 @@ that commit, not the delta vs the previous row.
 | e58736e | NRM → InstantNuRec rename      | 28.5 / 33.1 s           |   −2     |   +7     |  −21    | 5.09e-3 / 6.26e-3 / 4.61e-3       | 0.903 / 0.851 / 0.907             |
 | 69c7601 | migrate to uv (loose pins)     | 49.7 / 28.0 s           |   +5     |   −4     |  −30    | 4.75e-3 / 6.50e-3 / 4.60e-3       | 0.901 / 0.848 / 0.900             |
 | 7d713e5 | uv pins → NRE-bazel exact      | 28.5 / 33.1 s           |   +5     |   −4     |  −30    | 4.75e-3 / 6.50e-3 / 4.60e-3       | 0.901 / 0.848 / 0.900             |
+| 7ec41ad | C2 switch loader to torch.jit.load | 40.5 / 42.5 s       |   +5     |  +20     |   −6    | 4.75e-3 / 7.11e-3 / 4.90e-3       | 0.901 / 0.835 / 0.893             |
+| 34f69d0 | C2 polish (15 commits) — pre-fix   | 39.0 / 38.7 s       |   +5     |  +20     |   −6    | 4.75e-3 / 7.11e-3 / 4.90e-3       | 0.901 / 0.835 / 0.893             |
+| 5682763 | HEAD — disable JIT kernel fusion at load | 26.2 / 26.2 s |   +5     |   −4     |  −30    | 4.75e-3 / 6.50e-3 / 4.60e-3       | 0.901 / 0.848 / 0.900             |
+
+The 21 commits between `7d713e5` and `7ec41ad`, and the 15 commits
+between `7ec41ad` and `34f69d0`, are parity-neutral: 7 are pre-JIT-runtime
+tooling (CLI `.json/.lst`, JIT-export script, static-core refactors) that
+keep using the eager pickle, and 15 are post-JIT polish (retire pickle
+path, config refactors, lidar removal, CLI flags, docs) that keep using
+the JIT artifact. None re-measured because the deltas inherit from the
+row above.
 
 `validate_parity.py` exits 0 in both `merge` and `no_merge` modes at HEAD.
 
 ### Where parity changed
 
-Only **three** rows in the table moved parity vs the row above them.
+**Four** rows in the table moved parity vs the row above them at
+measurement time. One of the four (`7ec41ad`) was later reverted at
+`5682763`; the net at HEAD is therefore three irreducible drifts.
 Everything else either matched or was parity-neutral.
 
 * **`fc23075` Phase A.1** — *first commit to break bit-exact parity*.
@@ -94,6 +107,17 @@ Everything else either matched or was parity-neutral.
   1.11.1 / 2.3.3 / 18.7.0. Drift redistributed to −2/+7/−21. The
   commit message originally blamed (a) the cu128 wheel; we later
   disproved that — see `69c7601` and `7d713e5` below.
+* **`7ec41ad` C2 switch loader to torch.jit.load** — *artifact
+  swap, not a runtime-code change*. Introduces `JITKelvinAdapter`
+  which runs `KelvinStaticCore.forward_tensors` through a
+  `torch.jit.trace`d graph instead of the eager pickle. Bisect
+  confirmed at this exact commit: loading the **eager pickle**
+  here reproduces `7d713e5`'s **+5/−4/−30** exactly, while loading
+  the **JIT artifact** gives **+5/+20/−6**. The drift was later
+  attributed precisely to `torch.jit.load`'s NNC kernel-fusion
+  passes (not the trace itself — see `5682763` below for the proof
+  via per-tensor `eager-vs-traced` vs `load round-trip` diffs and
+  the load-time fix that reverts the regression).
 
 ### Where parity returned
 
@@ -112,24 +136,56 @@ Everything else either matched or was parity-neutral.
   `huggingface_hub==0.36.2` on Python 3.11.15). **No parity change**
   vs `69c7601` — those four versions are parity-neutral. This commit
   exists for reproducibility-against-NRE rather than for parity.
+* **`5682763` disable JIT kernel fusion at load** — *load-time
+  fix*. The diagnostic added in `7b04d68` exposed that the trace
+  itself is faithful (eager-vs-traced max-abs-diff ~5.8e-4 on
+  `gs_xyz`, ~1.7e-5 on `gs_densities`) while the **load round-trip**
+  blows that up by 2-4 orders of magnitude (`gs_densities` 9.3e-1,
+  enough to flip Gaussians across the density-prune threshold and
+  produce the +20 / −24 chunk1/merge shift seen at `7ec41ad`). The
+  fix is one line in `instant_nurec.model.make`:
+  `torch.jit.set_fusion_strategy([("STATIC", 0), ("DYNAMIC", 0)])`
+  before `torch.jit.load`, which disables NNC kernel fusion at the
+  JIT executor. The recorded graph then runs op-by-op (matching
+  what the eager pickle does), and the deltas snap back to
+  **+5/−4/−30** — bit-identical to `7d713e5` on Chamfer and F1 too,
+  not just vertex counts. Bonus: ~12 s faster per mode (no
+  autotuning cost for a one-shot CLI).
 
 ### Net story
 
-Three commits actually moved parity (`fc23075`, `6b32da4`, `07c8b20`).
-Two of them (`fc23075`, `6b32da4`) are intrinsic to the slang→torch
-port and unavoidable. The third (`07c8b20`) was a transient drift that
-returned to the pre-drop pattern at `69c7601` once the dep tree was
-managed deterministically. The residual +5/−4/−30 vs the bazel
-reference at HEAD is entirely from `fc23075` + `6b32da4`. The
+Three commits actually move parity at HEAD (`fc23075`, `6b32da4`,
+`07c8b20`). The first two are intrinsic to the slang→torch port and
+unavoidable; the third is a transient drift that returned to the
+pre-drop pattern at `69c7601`. The JIT-loader switch at `7ec41ad`
+*looked* parity-moving in isolation (+5/+20/−6) but the apparent
+regression was JIT load-time kernel fusion, which `5682763` disables.
+Net at HEAD: residual `+5/−4/−30` from `fc23075` + `6b32da4` only,
+the slang→torch ULP drift on the rotation/pose kernels. The
+eager-pickle vs JIT artifact difference is parity-neutral, the
 public-vs-internal cu128 wheel difference is parity-neutral.
 
 ## Runtime
 
-Wall-clock per mode is in the table above. The ~9 s no_merge /
-~12 s merge gap between baseline (19.6 / 21.1 s) and HEAD
-(28.5 / 33.1 s) is the cumulative cost of the slang→torch swaps;
-the per-commit attribution (A.7 vren is the biggest single
-contributor at +24 s no_merge cold-cache) is in the linked report.
+Wall-clock per mode is in the table above. Cumulative gaps vs the
+bazel baseline (19.6 / 21.1 s):
+
+1. Baseline → `7d713e5` (28.5 / 33.1 s): **+8.9 / +12.0 s** from the
+   slang→torch swaps (A.7 vren is the biggest single contributor at
+   +24 s no_merge cold-cache; per-commit breakdown in the linked
+   per-commit report).
+2. `7d713e5` → `34f69d0` (39.0 / 38.7 s): **+10.5 / +5.6 s** from the
+   JIT loader switch at `7ec41ad`. NNC kernel-fusion autotuning at
+   first call plus the per-pixel-tensor marshalling in
+   `JITKelvinAdapter` together added ~10 s per mode.
+3. `34f69d0` → HEAD (`5682763`, 26.2 / 26.2 s): **−12.8 / −12.5 s**
+   from disabling NNC fusion at load. For a one-shot CLI the
+   autotuning cost can't be amortized, so skipping fusion is a net
+   wall-time win on top of restoring parity.
+
+Net HEAD vs baseline: **+6.6 / +5.1 s** (26.2 / 26.2 vs 19.6 / 21.1) —
+the irreducible cost of running torch's CUDA kernels instead of the
+hand-tuned NRE slang/CUDA originals.
 
 ## Reproduction
 
