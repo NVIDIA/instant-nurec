@@ -128,7 +128,7 @@ from instant_nurec.config_schema.predict import (  # noqa: E402
     PrimitiveMergeConfig,
 )
 from instant_nurec.datasets.datamodule import InstantNuRecDataModule  # noqa: E402
-from instant_nurec.model import _resolve_full_pt_path  # noqa: E402
+from instant_nurec.model import _resolve_model_pt_path  # noqa: E402
 from instant_nurec.ncore_input import resolve_ncore_paths  # noqa: E402
 from instant_nurec.utils.geometry import tquat_to_se3_matrix  # noqa: E402
 from instant_nurec.utils.misc import unpack_optional  # noqa: E402
@@ -360,7 +360,7 @@ def main() -> int:
     if args.full_pt is not None:
         full_pt = args.full_pt
     else:
-        full_pt = _resolve_full_pt_path()
+        full_pt = _resolve_model_pt_path()
     if not full_pt or not Path(full_pt).exists():
         logger.error("kelvin_full.pt not found. Set INSTANT_NUREC_FULL_PT or pass --full-pt.")
         return 2

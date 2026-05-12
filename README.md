@@ -5,7 +5,7 @@
 
 [![Paper](https://img.shields.io/badge/arXiv-Paper-b31b1b?logo=arxiv)](https://arxiv.org/abs/2501.00602)
 [![License](https://img.shields.io/badge/License-Apache--2.0-orange)](LICENSE.txt)
-[![Model](https://img.shields.io/badge/HF-Model-yellow?logo=huggingface&style=flat-square)](https://huggingface.co/nvidia/instant-nurec-kelvin)
+[![Model](https://img.shields.io/badge/HF-Model-yellow?logo=huggingface&style=flat-square)](https://huggingface.co/nvidia/instant-nurec)
 [![Data](https://img.shields.io/badge/NCore-0d9488?logo=database&logoColor=white&style=flat-square)](https://huggingface.co/datasets/nvidia/PhysicalAI-Autonomous-Vehicles-NCore)
 
 **NVIDIA**
@@ -56,11 +56,12 @@ source .venv/bin/activate
 tree from `uv.lock` into `.venv/`. The only CUDA dependency is whatever
 the pinned `torch` wheel ships with.
 
-The pretrained model `kelvin_jit.pt` (a TorchScript archive of the
+The pretrained model `instant_nurec.pt` (a TorchScript archive of the
 Kelvin static-only forward) is fetched on first inference run from the
-Hugging Face repo `nvidia/instant-nurec-kelvin` and cached at
-`~/.cache/huggingface/nvidia/instant_nurec/kelvin/`. Set
-`INSTANT_NUREC_FULL_PT` to a local path to override the auto-download.
+Hugging Face repo `nvidia/instant-nurec` into the standard HF hub cache
+(`~/.cache/huggingface/hub` unless `HF_HOME` /
+`HUGGINGFACE_HUB_CACHE` say otherwise). Set `INSTANT_NUREC_FULL_PT`
+to a local path to override the auto-download.
 
 </details>
 
@@ -129,7 +130,7 @@ Output layout: PLYs only, under `out_dir/<run_id>/ply/<sequence_id>/...ply`.
 
 | variable | purpose |
 | --- | --- |
-| `INSTANT_NUREC_FULL_PT` | Absolute path to a local `kelvin_jit.pt`. Takes priority over the auto-downloaded copy. |
+| `INSTANT_NUREC_FULL_PT` | Absolute path to a local `instant_nurec.pt`. Takes priority over the auto-downloaded copy. |
 | `INSTANT_NUREC_RUN_ID` | Override the per-run shortuuid; useful when scripting reproducible output paths. |
 
 </details>
@@ -141,7 +142,7 @@ Output layout: PLYs only, under `out_dir/<run_id>/ply/<sequence_id>/...ply`.
 instant-nurec/
 ├── instant_nurec/                  # main package (what ships in the wheel)
 │   ├── cli.py                      # argparse entrypoint
-│   ├── pretrained.py               # auto-downloads kelvin_jit.pt from HF on first run
+│   ├── pretrained.py               # auto-downloads instant_nurec.pt from HF on first run
 │   ├── config_schema/              # pydantic schemas + defaults (post-JIT runtime knobs only)
 │   ├── datasets/                   # ncorev4 ingest + cuboid-track helpers
 │   ├── model/

@@ -57,7 +57,7 @@ class JITKelvinAdapter(nn.Module):
     """Adapter wrapping a ``torch.jit.load`` output.
 
     Args:
-        jit_module: Output of ``torch.jit.load(kelvin_jit.pt)``.
+        jit_module: Output of ``torch.jit.load(instant_nurec.pt)``.
     """
 
     def __init__(self, jit_module: torch.jit.ScriptModule):

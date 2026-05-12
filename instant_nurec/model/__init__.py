@@ -34,14 +34,14 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class FullModelNotFoundError(RuntimeError):
-    """``kelvin_jit.pt`` couldn't be resolved (no HF download, no env override)."""
+class ModelNotFoundError(RuntimeError):
+    """``instant_nurec.pt`` couldn't be resolved (no HF download, no env override)."""
 
 
-def _resolve_full_pt_path() -> Optional[str]:
-    """Return the local path to ``kelvin_jit.pt`` or ``None`` on failure."""
+def _resolve_model_pt_path() -> Optional[str]:
+    """Return the local path to ``instant_nurec.pt`` or ``None`` on failure."""
     try:
-        return pretrained.download_kelvin_full_pt()
+        return pretrained.download_instant_nurec_pt()
     except pretrained.PretrainedModelError:
         return None
 
@@ -112,7 +112,7 @@ def _preflight_validate_camera_ids(config: "InstantNuRecConfig") -> None:
 
 
 def make(config: "InstantNuRecConfig") -> GaussiansInstantNuRecSystem:
-    """Load ``kelvin_jit.pt`` and build a ``GaussiansInstantNuRecSystem``.
+    """Load ``instant_nurec.pt`` and build a ``GaussiansInstantNuRecSystem``.
 
     Resolution: ``INSTANT_NUREC_FULL_PT`` env var takes priority; otherwise
     the artifact is fetched from Hugging Face.
@@ -120,11 +120,11 @@ def make(config: "InstantNuRecConfig") -> GaussiansInstantNuRecSystem:
     The full ``GaussiansInstantNuRecSystem.__init__`` is bypassed via
     ``__new__`` + manual attribute assignment.
     """
-    full_pt_path = _resolve_full_pt_path()
+    full_pt_path = _resolve_model_pt_path()
     if not full_pt_path or not os.path.exists(full_pt_path):
-        raise FullModelNotFoundError(
-            f"kelvin_jit.pt not found. Either set INSTANT_NUREC_FULL_PT to a "
-            f"local .pt path or ensure {pretrained.KELVIN_REPO_ID!r} is reachable."
+        raise ModelNotFoundError(
+            f"instant_nurec.pt not found. Either set INSTANT_NUREC_FULL_PT to a "
+            f"local .pt path or ensure {pretrained.MODEL_REPO_ID!r} is reachable."
         )
 
     from instant_nurec.datasets.datamodule import InstantNuRecDataModule
@@ -148,7 +148,7 @@ def make(config: "InstantNuRecConfig") -> GaussiansInstantNuRecSystem:
 
     n_context_cams = len(config.dataset.predict.context_camera_ids)
     if adapter.expected_v % n_context_cams != 0:
-        raise FullModelNotFoundError(
+        raise ModelNotFoundError(
             f"Model expects {adapter.expected_v} input frames; "
             f"len(context_camera_ids)={n_context_cams} doesn't divide it. "
             f"Update context_camera_ids so its length divides "

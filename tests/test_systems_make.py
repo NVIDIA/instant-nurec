@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Branch-coverage tests for ``instant_nurec.model._resolve_full_pt_path`` and
+"""Branch-coverage tests for ``instant_nurec.model._resolve_model_pt_path`` and
 ``instant_nurec.model._validate_camera_ids``.
 
 The full ``make()`` body GPU-loads a real GaussiansInstantNuRecSystem so we
@@ -34,23 +34,23 @@ sys.path.insert(0, str(REPO_ROOT))
 
 
 from instant_nurec import pretrained  # noqa: E402
-from instant_nurec.model import _resolve_full_pt_path, _validate_camera_ids  # noqa: E402
+from instant_nurec.model import _resolve_model_pt_path, _validate_camera_ids  # noqa: E402
 
 
 def test_resolve_returns_path_when_download_succeeds(monkeypatch, tmp_path):
-    fake_pt = tmp_path / "kelvin_full.pt"
+    fake_pt = tmp_path / "instant_nurec.pt"
     fake_pt.write_bytes(b"")
-    monkeypatch.setattr(pretrained, "download_kelvin_full_pt", lambda **kw: str(fake_pt))
-    assert _resolve_full_pt_path() == str(fake_pt)
+    monkeypatch.setattr(pretrained, "download_instant_nurec_pt", lambda **kw: str(fake_pt))
+    assert _resolve_model_pt_path() == str(fake_pt)
 
 
 def test_resolve_returns_none_when_download_raises(monkeypatch):
     def _raise(**kwargs):
         raise pretrained.PretrainedModelError("offline")
 
-    monkeypatch.setattr(pretrained, "download_kelvin_full_pt", _raise)
+    monkeypatch.setattr(pretrained, "download_instant_nurec_pt", _raise)
     monkeypatch.delenv("INSTANT_NUREC_FULL_PT", raising=False)
-    assert _resolve_full_pt_path() is None
+    assert _resolve_model_pt_path() is None
 
 
 def test_resolve_only_calls_downloader_once_per_invocation(monkeypatch):
@@ -60,8 +60,8 @@ def test_resolve_only_calls_downloader_once_per_invocation(monkeypatch):
         calls["n"] += 1
         return "/tmp/something.pt"
 
-    monkeypatch.setattr(pretrained, "download_kelvin_full_pt", _fake)
-    _resolve_full_pt_path()
+    monkeypatch.setattr(pretrained, "download_instant_nurec_pt", _fake)
+    _resolve_model_pt_path()
     assert calls["n"] == 1
 
 

@@ -38,9 +38,9 @@ def _reset_env(monkeypatch):
     monkeypatch.delenv("INSTANT_NUREC_HF_CACHE_DIR", raising=False)
 
 
-def test_default_cache_dir_is_under_huggingface_namespace():
-    parts = pretrained.DEFAULT_CACHE_DIR.parts[-5:]
-    assert parts == (".cache", "huggingface", "nvidia", "instant_nurec", "kelvin")
+def test_cache_dir_returns_none_without_env_override(monkeypatch):
+    """Unset env yields ``None`` so HF uses its standard hub cache."""
+    assert pretrained._cache_dir() is None
 
 
 def test_cache_dir_overridden_by_env(monkeypatch, tmp_path):
@@ -51,7 +51,7 @@ def test_cache_dir_overridden_by_env(monkeypatch, tmp_path):
 def test_env_var_override_short_circuits_download(monkeypatch, tmp_path):
     """Setting INSTANT_NUREC_FULL_PT to an existing file returns it directly,
     without consulting huggingface_hub."""
-    fake_pt = tmp_path / "local-kelvin.pt"
+    fake_pt = tmp_path / "local-instant_nurec.pt"
     fake_pt.write_bytes(b"")
     monkeypatch.setenv("INSTANT_NUREC_FULL_PT", str(fake_pt))
 
@@ -59,7 +59,7 @@ def test_env_var_override_short_circuits_download(monkeypatch, tmp_path):
     fake_hf.hf_hub_download = lambda **kw: pytest.fail("must not call HF when env override resolves")
     monkeypatch.setitem(sys.modules, "huggingface_hub", fake_hf)
 
-    assert pretrained.download_kelvin_full_pt() == str(fake_pt)
+    assert pretrained.download_instant_nurec_pt() == str(fake_pt)
 
 
 def test_env_var_pointing_at_missing_file_falls_through(monkeypatch, tmp_path):
@@ -72,8 +72,8 @@ def test_env_var_pointing_at_missing_file_falls_through(monkeypatch, tmp_path):
     fake_hf.try_to_load_from_cache = lambda **kw: None
     monkeypatch.setitem(sys.modules, "huggingface_hub", fake_hf)
 
-    out = pretrained.download_kelvin_full_pt()
-    assert out == f"DOWNLOADED:{pretrained.KELVIN_REPO_ID}/{pretrained.KELVIN_FILENAME}"
+    out = pretrained.download_instant_nurec_pt()
+    assert out == f"DOWNLOADED:{pretrained.MODEL_REPO_ID}/{pretrained.MODEL_FILENAME}"
 
 
 def test_download_returns_path_from_hf_hub_download(monkeypatch, tmp_path):
@@ -83,18 +83,35 @@ def test_download_returns_path_from_hf_hub_download(monkeypatch, tmp_path):
 
     def _fake_dl(**kw):
         captured.update(kw)
-        return "/some/cached/path/kelvin_full.pt"
+        return "/some/cached/path/instant_nurec.pt"
 
     fake_hf = types.ModuleType("huggingface_hub")
     fake_hf.hf_hub_download = _fake_dl
     fake_hf.try_to_load_from_cache = lambda **kw: None  # uncached
     monkeypatch.setitem(sys.modules, "huggingface_hub", fake_hf)
 
-    out = pretrained.download_kelvin_full_pt()
-    assert out == "/some/cached/path/kelvin_full.pt"
-    assert captured["repo_id"] == pretrained.KELVIN_REPO_ID
-    assert captured["filename"] == pretrained.KELVIN_FILENAME
+    out = pretrained.download_instant_nurec_pt()
+    assert out == "/some/cached/path/instant_nurec.pt"
+    assert captured["repo_id"] == pretrained.MODEL_REPO_ID
+    assert captured["filename"] == pretrained.MODEL_FILENAME
     assert captured["cache_dir"] == str(tmp_path / "cache")
+
+
+def test_download_without_cache_env_omits_cache_dir_kwarg(monkeypatch):
+    """With no override, ``cache_dir`` is not forwarded so HF uses its default."""
+    captured: dict = {}
+
+    def _fake_dl(**kw):
+        captured.update(kw)
+        return "/anywhere/instant_nurec.pt"
+
+    fake_hf = types.ModuleType("huggingface_hub")
+    fake_hf.hf_hub_download = _fake_dl
+    fake_hf.try_to_load_from_cache = lambda **kw: None
+    monkeypatch.setitem(sys.modules, "huggingface_hub", fake_hf)
+
+    pretrained.download_instant_nurec_pt()
+    assert "cache_dir" not in captured
 
 
 def test_cached_copy_short_circuits_download(monkeypatch, tmp_path):
@@ -102,13 +119,13 @@ def test_cached_copy_short_circuits_download(monkeypatch, tmp_path):
     monkeypatch.setenv("INSTANT_NUREC_HF_CACHE_DIR", str(tmp_path / "cache"))
 
     fake_hf = types.ModuleType("huggingface_hub")
-    fake_hf.try_to_load_from_cache = lambda **kw: "/cached/kelvin_full.pt"
+    fake_hf.try_to_load_from_cache = lambda **kw: "/cached/instant_nurec.pt"
     fake_hf.hf_hub_download = lambda **kw: pytest.fail(
         "hf_hub_download must not be called when the file is already cached"
     )
     monkeypatch.setitem(sys.modules, "huggingface_hub", fake_hf)
 
-    assert pretrained.download_kelvin_full_pt() == "/cached/kelvin_full.pt"
+    assert pretrained.download_instant_nurec_pt() == "/cached/instant_nurec.pt"
 
 
 def test_explicit_cache_dir_kwarg_overrides_env(monkeypatch, tmp_path):
@@ -125,7 +142,7 @@ def test_explicit_cache_dir_kwarg_overrides_env(monkeypatch, tmp_path):
     fake_hf.try_to_load_from_cache = lambda **kw: None
     monkeypatch.setitem(sys.modules, "huggingface_hub", fake_hf)
 
-    pretrained.download_kelvin_full_pt(cache_dir=tmp_path / "explicit")
+    pretrained.download_instant_nurec_pt(cache_dir=tmp_path / "explicit")
     assert captured["cache_dir"] == str(tmp_path / "explicit")
 
 
@@ -141,7 +158,7 @@ def test_download_failure_raises_pretrained_model_error(monkeypatch, tmp_path):
     monkeypatch.setitem(sys.modules, "huggingface_hub", fake_hf)
 
     with pytest.raises(pretrained.PretrainedModelError, match="network down"):
-        pretrained.download_kelvin_full_pt()
+        pretrained.download_instant_nurec_pt()
 
 
 def test_missing_huggingface_hub_raises_actionable_error(monkeypatch, tmp_path):
@@ -159,4 +176,4 @@ def test_missing_huggingface_hub_raises_actionable_error(monkeypatch, tmp_path):
     monkeypatch.setattr("builtins.__import__", _block_hf)
 
     with pytest.raises(pretrained.PretrainedModelError, match="huggingface_hub is required"):
-        pretrained.download_kelvin_full_pt()
+        pretrained.download_instant_nurec_pt()
