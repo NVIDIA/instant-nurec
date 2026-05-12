@@ -5,9 +5,9 @@ GitLab MR description for the kelvin-standalone branch.
 Copy the body below into the MR's description field on GitLab.
 -->
 
-# Standalone NRM Kelvin predict mode
+# Standalone InstantNuRec Kelvin predict mode
 
-Predict-only carve-out of the NRM Kelvin model from the NRE codebase
+Predict-only carve-out of the InstantNuRec Kelvin model from the NRE codebase
 (`a54a6af`). Bazel and slang/CUDA-compiled kernels are gone; the
 runtime is pure-torch + a `torch==2.7.0+cu128` wheel. Layout matches
 asset-harvester. The pickled artifact is now a single `kelvin_full.pt`
@@ -33,16 +33,17 @@ under the placeholder HF repo `nvidia/instant-nurec-kelvin`.
   the original authors (Zachary Teed and Jia Deng), docs/license
   files in place.
 
-## Parity vs reference baseline
+## Per-commit quality + runtime
 
-Parity is verified against `baselines/original_baseline/` — the
-`a54a6af` bazel run output — using `benchmark/validate_parity.py`.
+Reference: `baselines/original_baseline/` (the `a54a6af` bazel run).
+Distance metrics are in PLY units (scene-rescaled by 0.15 from the
+original-frame meters; multiply by 6.667 to get back to meters).
 Bit-exact parity held until commit `2b48686` (Phase A.4); after that,
 slang→torch instruction-sequence differences on CUDA introduce 0–3
 ULP per quaternion component, which flips ~5–30 cull-boundary
-Gaussians per chunk. The per-property max-abs differences stay inside
-the run-to-run noise floor recorded in `tests/tolerance.json`
-(derived from 5 reruns of the original pipeline).
+Gaussians per chunk. Per-property max-abs differences stay inside the
+run-to-run noise floor recorded in `tests/tolerance.json` (5 reruns of
+the original pipeline).
 
 Quality metrics (bidirectional Chamfer, F-score@τ=0.01, marginal
 Wasserstein-1) and runtime are tracked per-commit. Reference for both
@@ -87,26 +88,35 @@ measurement time. One of the four (`7ec41ad`) was later reverted at
 `5682763`; the net at HEAD is therefore three irreducible drifts.
 Everything else either matched or was parity-neutral.
 
-* **`fc23075` Phase A.1** — *first commit to break bit-exact parity*.
+- **`fc23075` Phase A.1** — first commit to break bit-exact parity.
   Pure-torch f64-internal Shepperd's method replaces the slang
   kernel; torch f32 result differs by 0–3 ULP per quaternion
-  component on CUDA. ~5–30 cull-boundary Gaussians per chunk flip.
-  Per-property maxabs stays inside `tests/tolerance.json`.
-  `_vertex_count_delta=50` added to absorb the count delta.
-* **`6b32da4` Phase A.5** — `compute_poses_and_timestamps`. Slang did
-  a pointless SE3 round-trip (4×4 → quat,t → 4×4) inside the kernel
-  even with `enable_calib=False`; torch skips it. No-op modulo ULPs
-  but redistributes the cull-boundary count.
-* **`07c8b20` drop bazel + cu128 wheel** — *transitive dep swap, not
-  a math change*. Same Phase A torch impls. Two things changed at
-  once: (a) public `torch==2.7.0+cu128` wheel instead of NRE's
-  internal `+cu128.gitc41f6e01287` build, and (b) the first
-  `pip install -e .` after dropping bazel resolved the entire
-  transitive Python tree fresh — pip picked numpy 2.x / scipy 1.17 /
-  pandas 3.0 / nvidia-ncore 19.0 instead of NRE's pinned 1.26.4 /
-  1.11.1 / 2.3.3 / 18.7.0. Drift redistributed to −2/+7/−21. The
-  commit message originally blamed (a) the cu128 wheel; we later
-  disproved that — see `69c7601` and `7d713e5` below.
+  component on CUDA (verified by side-by-side ULP measurement).
+  ~5–30 cull-boundary Gaussians per chunk flip; per-property maxabs
+  stays inside `tests/tolerance.json`. `_vertex_count_delta=50`
+  added to absorb the count delta.
+- **`6b32da4` Phase A.5** — `compute_poses_and_timestamps`. Slang
+  did a pointless SE3 round-trip (4×4 → quat,t → 4×4) inside the
+  kernel even with `enable_calib=False`; torch skips it. No-op
+  modulo ULPs but redistributes the cull-boundary count.
+- **`037ed34` Phase A.2+A.3+A.6 bundle** —
+  `image_points_to_world_rays_shutter_pose` + the supporting
+  dataclasses. Torch rolling-shutter pose-interp matches ncore's
+  pure-python reference more faithfully than the slang kernel did.
+- **`07c8b20` Phase B.2** — *runtime swap, not a math change*. Same
+  Phase A torch impls, run via the public `torch==2.7.0+cu128` wheel
+  instead of NRE's internal `torch==2.7.0+cu128.gitc41f6e01287` build.
+  Different TF32/cuDNN heuristics → drift redistribution from
+  +5/−4/−30 to −2/+7/−21. Same 50-vertex band held.
+
+  Update from later investigation (`69c7601`, `7d713e5` below): the
+  dominant factor in the `07c8b20` drift was actually the
+  numpy / pandas / ncore major-version jumps in the post-bazel
+  `pip install -e .` resolution (numpy 2.x / scipy 1.17 / pandas 3.0
+  / nvidia-ncore 19.0 instead of NRE's pinned 1.26.4 / 1.11.1 /
+  2.3.3 / 18.7.0), not the cu128 wheel difference — see `69c7601`
+  for the proof that snapping deps back to NRE-equivalent versions
+  also snaps parity back to `+5/−4/−30`.
 * **`7ec41ad` C2 switch loader to torch.jit.load** — *artifact
   swap, not a runtime-code change*. Introduces `JITKelvinAdapter`
   which runs `KelvinStaticCore.forward_tensors` through a
@@ -165,6 +175,29 @@ the slang→torch ULP drift on the rotation/pose kernels. The
 eager-pickle vs JIT artifact difference is parity-neutral, the
 public-vs-internal cu128 wheel difference is parity-neutral.
 
+### Where runtime changed
+
+The ~12 s no_merge / ~11 s merge gap between baseline (19.6 / 21.1)
+and HEAD (28.5 / 33.1) is the cumulative cost of the slang→torch
+swaps. Distributed across A.1, A.5, A.2+A.3+A.6, A.7 and the cu128
+wheel swap. Dominant contributors:
+
+- **A.7 vren** — `ray_cuboidtracks_intersection` and
+  `point_cuboidtracks_intersection_interpolate_pose`. Torch impl
+  iterates per-track in Python (~50–100 tracks per frame) but is
+  fully vectorised across rays per iteration. Slang did this in a
+  single GPU grid; the per-track loop is the dominant runtime add.
+- **A.2+A.3+A.6 bundle** — FTheta inverse projection +
+  rolling-shutter pose interp in pure torch. Slang fused these into
+  a single kernel; torch path makes 5–6 separate kernel launches per
+  pixel batch.
+- **A.1 se3pose** — f64-internal Shepperd's method dominates the
+  camera-pose-encode portion of the predict loop. ~0.5 s addend per
+  predict step.
+
+Full sweep notes (including bazel cache caveat from the first
+attempt) at `internal/parity_proofs/per_commit_quality_runtime.md`.
+
 ## Runtime
 
 Wall-clock per mode is in the table above. Cumulative gaps vs the
@@ -194,9 +227,9 @@ hand-tuned NRE slang/CUDA originals.
 source .venv/bin/activate
 
 mkdir -p /tmp/out/no_merge /tmp/out/merge
-python run_inference.py --ncore-path /storage/data/nurec/ncorev4/debug.lst \
+python run_inference.py --ncore-path /storage/data/nurec/ncorev4 \
     --output-dir /tmp/out/no_merge --merge none
-python run_inference.py --ncore-path /storage/data/nurec/ncorev4/debug.lst \
+python run_inference.py --ncore-path /storage/data/nurec/ncorev4 \
     --output-dir /tmp/out/merge   --merge frustum-ownership
 
 python benchmark/validate_parity.py merge \
@@ -223,4 +256,7 @@ plus the bazel build system and all `libs/*` slang/CUDA kernel sources.
 - `benchmark/compare_clouds.py` — Chamfer/F-score/NN-attribute residuals/marginal Wasserstein
 - `tests/tolerance.json` — per-property determinism tolerance
 - `internal/parity_proofs/per_commit_quality_runtime.md` — full per-commit sweep table
-- `scripts/migrate_kelvin_full_pt.py` — one-off `.pt` re-pickle helper for the NRM → InstantNuRec rename
+- `scripts/migrate_kelvin_full_pt.py` — one-off `.pt` re-pickle helper for the InstantNuRec rename
+
+---
+🤖 Generated with [Claude Code](https://claude.ai/code)
