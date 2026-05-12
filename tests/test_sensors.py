@@ -53,8 +53,6 @@ def stubbed_sensors(monkeypatch):
         pass
 
     ncore_sensors_mod.FThetaCameraModel = _StubCamera
-    ncore_sensors_mod.OpenCVFisheyeCameraModel = _StubCamera
-    ncore_sensors_mod.OpenCVPinholeCameraModel = _StubCamera
 
     ncore_mod.data = ncore_data_mod
     ncore_mod.sensors = ncore_sensors_mod

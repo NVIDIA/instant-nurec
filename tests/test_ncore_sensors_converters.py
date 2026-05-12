@@ -77,12 +77,6 @@ def stubbed_converters(monkeypatch):
     class CameraModel:
         pass
 
-    class OpenCVPinholeCameraModel(CameraModel):
-        pass
-
-    class OpenCVFisheyeCameraModel(CameraModel):
-        pass
-
     class FThetaCameraModel(CameraModel):
         pass
 
@@ -90,8 +84,6 @@ def stubbed_converters(monkeypatch):
         pass
 
     sensors_ncore.CameraModel = CameraModel
-    sensors_ncore.OpenCVPinholeCameraModel = OpenCVPinholeCameraModel
-    sensors_ncore.OpenCVFisheyeCameraModel = OpenCVFisheyeCameraModel
     sensors_ncore.FThetaCameraModel = FThetaCameraModel
     sensors_ncore.BivariateWindshieldModel = BivariateWindshieldModel
     ncore_mod.data = data_mod
@@ -129,16 +121,6 @@ def stubbed_converters(monkeypatch):
         return _capturing
 
     monkeypatch.setattr(
-        kt.OpenCVPinholeProjection,
-        "from_components",
-        _wrap_from_components(kt.OpenCVPinholeProjection, "OpenCVPinholeProjection"),
-    )
-    monkeypatch.setattr(
-        kt.OpenCVFisheyeProjection,
-        "from_components",
-        _wrap_from_components(kt.OpenCVFisheyeProjection, "OpenCVFisheyeProjection"),
-    )
-    monkeypatch.setattr(
         kt.FThetaProjection,
         "from_components",
         _wrap_from_components(kt.FThetaProjection, "FThetaProjection"),
@@ -151,8 +133,6 @@ def stubbed_converters(monkeypatch):
         ),
     )
 
-    OpenCVPinholeProjection = kt.OpenCVPinholeProjection  # noqa: F841
-    OpenCVFisheyeProjection = kt.OpenCVFisheyeProjection  # noqa: F841
     FThetaProjection = kt.FThetaProjection  # noqa: F841
     BivariateWindshieldDistortion = kt.BivariateWindshieldDistortion  # noqa: F841
     FThetaPolynomialType = kt.FThetaPolynomialType
@@ -163,8 +143,6 @@ def stubbed_converters(monkeypatch):
     return (
         converters,
         captured,
-        OpenCVPinholeCameraModel,
-        OpenCVFisheyeCameraModel,
         FThetaCameraModel,
         BivariateWindshieldModel,
         ShutterType,
@@ -182,38 +160,16 @@ def _shutter_obj(shutter_type_value):
     return obj
 
 
-def _make_pinhole(model_cls, ShutterType, with_distortion=False, BivariateModel=None):
-    m = model_cls()
-    m.focal_length = torch.tensor([100.0, 100.0])
-    m.principal_point = torch.tensor([320.0, 240.0])
-    m.radial_coeffs = torch.zeros(6)
-    m.tangential_coeffs = torch.zeros(2)
-    m.thin_prism_coeffs = torch.zeros(4)
-    m.resolution = torch.tensor([640, 480])
-    m.shutter_type = _shutter_obj(ShutterType.ROLLING_TOP_TO_BOTTOM)
-    m.external_distortion = None
-    if with_distortion:
-        d = BivariateModel()
-        d.horizontal_poly = torch.zeros(5)
-        d.vertical_poly = torch.zeros(5)
-        d.horizontal_poly_inverse = torch.zeros(5)
-        d.vertical_poly_inverse = torch.zeros(5)
-        d.reference_poly = "FORWARD"
-        m.external_distortion = d
-    return m
-
-
-def _make_fisheye(model_cls, ShutterType):
-    m = model_cls()
-    m.focal_length = torch.tensor([100.0, 100.0])
-    m.principal_point = torch.tensor([320.0, 240.0])
-    # forward_poly[[3, 5, 7, 9]] needs at least 10 elements.
-    m.forward_poly = torch.arange(10, dtype=torch.float32)
-    m.resolution = torch.tensor([640, 480])
-    m.max_angle = 1.5
-    m.newton_iterations = 5
-    m.shutter_type = _shutter_obj(ShutterType.ROLLING_TOP_TO_BOTTOM)
-    m.external_distortion = None
+def _attach_bivariate(m, BivariateModel):
+    """Attach a stubbed BivariateWindshieldModel external distortion to a
+    camera-model stand-in."""
+    d = BivariateModel()
+    d.horizontal_poly = torch.zeros(5)
+    d.vertical_poly = torch.zeros(5)
+    d.horizontal_poly_inverse = torch.zeros(5)
+    d.vertical_poly_inverse = torch.zeros(5)
+    d.reference_poly = "FORWARD"
+    m.external_distortion = d
     return m
 
 
@@ -240,51 +196,10 @@ def _make_ftheta(model_cls, ShutterType, ref_poly):
 # ---------------------------------------------------------------------------
 
 
-def test_convert_pinhole_returns_pinhole_projection(stubbed_converters):
-    (
-        mod,
-        captured,
-        OpenCVPinholeCameraModel,
-        _Fisheye,
-        _Ftheta,
-        _BWModel,
-        ShutterType,
-        *_,
-    ) = stubbed_converters
-    cam = _make_pinhole(OpenCVPinholeCameraModel, ShutterType)
-    result = mod.CameraModelConverter.convert(cam)
-    names = [c[0] for c in captured["calls"]]
-    assert "OpenCVPinholeProjection" in names
-    assert result.resolution == (640, 480)
-    assert result.shutter_type == ShutterType.ROLLING_TOP_TO_BOTTOM
-
-
-def test_convert_fisheye_slices_forward_poly(stubbed_converters):
-    (
-        mod,
-        captured,
-        _Pinhole,
-        OpenCVFisheyeCameraModel,
-        _Ftheta,
-        _BWModel,
-        ShutterType,
-        *_,
-    ) = stubbed_converters
-    cam = _make_fisheye(OpenCVFisheyeCameraModel, ShutterType)
-    result = mod.CameraModelConverter.convert(cam)
-    fisheye_call = next(c for c in captured["calls"] if c[0] == "OpenCVFisheyeProjection")
-    fwd_poly = fisheye_call[1]["forward_poly"]
-    # Indices [3,5,7,9] of arange(10) are [3,5,7,9].
-    assert torch.equal(fwd_poly, torch.tensor([3.0, 5.0, 7.0, 9.0]))
-    assert isinstance(result, mod.CameraModelConverterResult)
-
-
 def test_convert_ftheta_angle_to_pixeldist_uses_forward_polynomial(stubbed_converters):
     (
         mod,
         captured,
-        _Pinhole,
-        _Fisheye,
         FThetaCameraModel,
         _BWModel,
         ShutterType,
@@ -303,8 +218,6 @@ def test_convert_ftheta_pixeldist_to_angle_uses_backward_polynomial(stubbed_conv
     (
         mod,
         captured,
-        _Pinhole,
-        _Fisheye,
         FThetaCameraModel,
         _BWModel,
         ShutterType,
@@ -320,6 +233,8 @@ def test_convert_ftheta_pixeldist_to_angle_uses_backward_polynomial(stubbed_conv
 
 
 def test_convert_unsupported_camera_type_raises(stubbed_converters):
+    """Any non-FTheta camera model triggers ``TypeError`` — OpenCVPinhole /
+    OpenCVFisheye are intentionally not supported on the input side."""
     (mod, *_) = stubbed_converters
 
     class _Mystery:
@@ -332,23 +247,25 @@ def test_convert_unsupported_camera_type_raises(stubbed_converters):
 def test_convert_default_device_is_cpu(stubbed_converters):
     mod = stubbed_converters[0]
     captured = stubbed_converters[1]
-    OpenCVPinholeCameraModel = stubbed_converters[2]
-    ShutterType = stubbed_converters[6]
-    cam = _make_pinhole(OpenCVPinholeCameraModel, ShutterType)
+    FThetaCameraModel = stubbed_converters[2]
+    ShutterType = stubbed_converters[4]
+    AnglePolyType = stubbed_converters[8]
+    cam = _make_ftheta(FThetaCameraModel, ShutterType, ref_poly=AnglePolyType.ANGLE_TO_PIXELDIST)
     mod.CameraModelConverter.convert(cam)
-    pinhole_call = next(c for c in captured["calls"] if c[0] == "OpenCVPinholeProjection")
-    assert pinhole_call[1]["focal_length"].device == torch.device("cpu")
+    ftheta_call = next(c for c in captured["calls"] if c[0] == "FThetaProjection")
+    assert ftheta_call[1]["principal_point"].device == torch.device("cpu")
 
 
 def test_convert_explicit_device_argument_is_propagated(stubbed_converters):
     mod = stubbed_converters[0]
     captured = stubbed_converters[1]
-    OpenCVPinholeCameraModel = stubbed_converters[2]
-    ShutterType = stubbed_converters[6]
-    cam = _make_pinhole(OpenCVPinholeCameraModel, ShutterType)
+    FThetaCameraModel = stubbed_converters[2]
+    ShutterType = stubbed_converters[4]
+    AnglePolyType = stubbed_converters[8]
+    cam = _make_ftheta(FThetaCameraModel, ShutterType, ref_poly=AnglePolyType.ANGLE_TO_PIXELDIST)
     mod.CameraModelConverter.convert(cam, device=torch.device("cpu"))
-    pinhole_call = next(c for c in captured["calls"] if c[0] == "OpenCVPinholeProjection")
-    assert pinhole_call[1]["focal_length"].device.type == "cpu"
+    ftheta_call = next(c for c in captured["calls"] if c[0] == "FThetaProjection")
+    assert ftheta_call[1]["principal_point"].device.type == "cpu"
 
 
 # ---------------------------------------------------------------------------
@@ -358,9 +275,10 @@ def test_convert_explicit_device_argument_is_propagated(stubbed_converters):
 
 def test_external_distortion_none_returns_no_external_distortion(stubbed_converters):
     mod = stubbed_converters[0]
-    OpenCVPinholeCameraModel = stubbed_converters[2]
-    ShutterType = stubbed_converters[6]
-    cam = _make_pinhole(OpenCVPinholeCameraModel, ShutterType)
+    FThetaCameraModel = stubbed_converters[2]
+    ShutterType = stubbed_converters[4]
+    AnglePolyType = stubbed_converters[8]
+    cam = _make_ftheta(FThetaCameraModel, ShutterType, ref_poly=AnglePolyType.ANGLE_TO_PIXELDIST)
     result = mod.CameraModelConverter.convert(cam)
     # NoExternalDistortion lives in instant_nurec's in-tree
     # kernel_types module.
@@ -373,19 +291,17 @@ def test_external_distortion_bivariate_windshield_branch(stubbed_converters):
     (
         mod,
         captured,
-        OpenCVPinholeCameraModel,
-        _Fisheye,
-        _Ftheta,
+        FThetaCameraModel,
         BivariateWindshieldModel,
         ShutterType,
         ReferencePolynomial,
-        *_extra,
+        _FThetaPolyType,
+        _NcoreRP,
+        AnglePolyType,
     ) = stubbed_converters
-    cam = _make_pinhole(
-        OpenCVPinholeCameraModel,
-        ShutterType,
-        with_distortion=True,
-        BivariateModel=BivariateWindshieldModel,
+    cam = _attach_bivariate(
+        _make_ftheta(FThetaCameraModel, ShutterType, ref_poly=AnglePolyType.ANGLE_TO_PIXELDIST),
+        BivariateWindshieldModel,
     )
     result = mod.CameraModelConverter.convert(cam)
     bw_call = next(c for c in captured["calls"] if c[0] == "BivariateWindshieldDistortion")
@@ -402,19 +318,17 @@ def test_external_distortion_bivariate_backward_reference_polynomial(stubbed_con
     (
         mod,
         captured,
-        OpenCVPinholeCameraModel,
-        _Fisheye,
-        _Ftheta,
+        FThetaCameraModel,
         BivariateWindshieldModel,
         ShutterType,
         ReferencePolynomial,
-        *_extra,
+        _FThetaPolyType,
+        _NcoreRP,
+        AnglePolyType,
     ) = stubbed_converters
-    cam = _make_pinhole(
-        OpenCVPinholeCameraModel,
-        ShutterType,
-        with_distortion=True,
-        BivariateModel=BivariateWindshieldModel,
+    cam = _attach_bivariate(
+        _make_ftheta(FThetaCameraModel, ShutterType, ref_poly=AnglePolyType.ANGLE_TO_PIXELDIST),
+        BivariateWindshieldModel,
     )
     cam.external_distortion.reference_poly = "BACKWARD_OR_OTHER"
     mod.CameraModelConverter.convert(cam)
@@ -426,9 +340,10 @@ def test_external_distortion_unrecognized_type_returns_none(stubbed_converters):
     """If external_distortion is set but is not a BivariateWindshieldModel,
     the SUT falls through to the default ``return NoExternalDistortion()``."""
     mod = stubbed_converters[0]
-    OpenCVPinholeCameraModel = stubbed_converters[2]
-    ShutterType = stubbed_converters[6]
-    cam = _make_pinhole(OpenCVPinholeCameraModel, ShutterType)
+    FThetaCameraModel = stubbed_converters[2]
+    ShutterType = stubbed_converters[4]
+    AnglePolyType = stubbed_converters[8]
+    cam = _make_ftheta(FThetaCameraModel, ShutterType, ref_poly=AnglePolyType.ANGLE_TO_PIXELDIST)
     cam.external_distortion = object()  # not None, not BivariateWindshieldModel
     result = mod.CameraModelConverter.convert(cam)
     from instant_nurec.utils.sensors.kernel_types import NoExternalDistortion

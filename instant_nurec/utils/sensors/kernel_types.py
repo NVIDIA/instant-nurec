@@ -16,9 +16,12 @@
 """Dataclasses + enums consumed by the in-tree torch ray-gen
 (``ray_gen.py``).
 
-FTheta-only for now (predict uses ``camera_front_wide_120fov``).
-OpenCVPinhole / OpenCVFisheye + BivariateWindshieldDistortion stubs
-raise on use; add them when a non-FTheta dataset comes through.
+FTheta-only by design. OpenCVPinhole and OpenCVFisheye distortion
+models are intentionally not supported on the input side (Kelvin
+predict was only ever exercised with FTheta cameras; per-
+@jiahuihuang the other distortion families are explicitly dropped).
+The ``BivariateWindshieldDistortion`` remains because it pairs with
+FTheta on real datasets.
 """
 
 from __future__ import annotations
@@ -66,75 +69,6 @@ class ExternalDistortion:
 @dataclass
 class NoExternalDistortion(ExternalDistortion):
     """No external distortion - identity transformation."""
-
-
-@dataclass
-class OpenCVPinholeProjection(CameraProjection):
-    """OpenCVPinhole projection — passive value container.
-
-    The math (forward + inverse projection) lives in the slang kernel that
-    pinhole branch is wired (no current dataset uses it).
-    """
-
-    focal_length: torch.Tensor
-    principal_point: torch.Tensor
-    radial_coeffs: torch.Tensor
-    tangential_coeffs: torch.Tensor
-    thin_prism_coeffs: torch.Tensor
-    resolution: torch.Tensor
-
-    @classmethod
-    def from_components(
-        cls,
-        focal_length: torch.Tensor,
-        principal_point: torch.Tensor,
-        radial_coeffs: torch.Tensor,
-        tangential_coeffs: torch.Tensor,
-        thin_prism_coeffs: torch.Tensor,
-        resolution: torch.Tensor,
-    ) -> "OpenCVPinholeProjection":
-        return cls(
-            focal_length=focal_length,
-            principal_point=principal_point,
-            radial_coeffs=radial_coeffs,
-            tangential_coeffs=tangential_coeffs,
-            thin_prism_coeffs=thin_prism_coeffs,
-            resolution=resolution,
-        )
-
-
-@dataclass
-class OpenCVFisheyeProjection(CameraProjection):
-    """OpenCVFisheye projection — passive value container (see Pinhole note)."""
-
-    focal_length: torch.Tensor
-    principal_point: torch.Tensor
-    forward_poly: torch.Tensor
-    resolution: torch.Tensor
-    max_angle: float
-    newton_iterations: int
-    min_2d_norm: torch.Tensor
-
-    @classmethod
-    def from_components(
-        cls,
-        focal_length: torch.Tensor,
-        principal_point: torch.Tensor,
-        forward_poly: torch.Tensor,
-        resolution: torch.Tensor,
-        max_angle: float,
-        newton_iterations: int,
-        min_2d_norm: torch.Tensor,
-    ) -> "OpenCVFisheyeProjection":
-        return cls(
-            focal_length=focal_length,
-            principal_point=principal_point,
-            forward_poly=forward_poly,
-            resolution=resolution,
-            max_angle=max_angle,
-            newton_iterations=newton_iterations,
-            min_2d_norm=min_2d_norm,
-        )
 
 
 @dataclass
@@ -244,8 +178,6 @@ __all__ = [
     "FThetaPolynomialType",
     "FThetaProjection",
     "NoExternalDistortion",
-    "OpenCVFisheyeProjection",
-    "OpenCVPinholeProjection",
     "Pose",
     "ReferencePolynomial",
     "ShutterType",

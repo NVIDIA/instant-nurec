@@ -97,8 +97,6 @@ def stubbed_batch(monkeypatch):
             return self
 
     sensors_ncore.CameraModel = CameraModel
-    sensors_ncore.OpenCVPinholeCameraModel = type("OPC", (CameraModel,), {})
-    sensors_ncore.OpenCVFisheyeCameraModel = type("OFC", (CameraModel,), {})
     sensors_ncore.FThetaCameraModel = type("FTC", (CameraModel,), {})
     sensors_ncore.BivariateWindshieldModel = type("BWM", (), {})
     ncore_mod.sensors = sensors_ncore

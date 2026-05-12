@@ -54,8 +54,6 @@ def _stub_compiled_imports(monkeypatch: pytest.MonkeyPatch):
         pass
 
     ncore_sensors_mod.FThetaCameraModel = _StubCamera
-    ncore_sensors_mod.OpenCVFisheyeCameraModel = _StubCamera
-    ncore_sensors_mod.OpenCVPinholeCameraModel = _StubCamera
 
     # ncore.impl.data.types — only the CameraModelParameters type is referenced
     # for type hinting in cubemap.py; a placeholder class is enough.

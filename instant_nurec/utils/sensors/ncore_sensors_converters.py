@@ -28,8 +28,6 @@ from instant_nurec.utils.sensors.kernel_types import (
     FThetaPolynomialType,
     FThetaProjection,
     NoExternalDistortion,
-    OpenCVFisheyeProjection,
-    OpenCVPinholeProjection,
     Pose,
     ReferencePolynomial,
     ShutterType,
@@ -40,8 +38,6 @@ from ncore.sensors import (
     BivariateWindshieldModel,
     CameraModel,
     FThetaCameraModel,
-    OpenCVFisheyeCameraModel,
-    OpenCVPinholeCameraModel,
 )
 
 
@@ -77,13 +73,11 @@ class CameraModelConverter:
         if device is None:
             device = torch.device("cpu")
 
-        # Convert projection based on type
+        # Convert projection based on type. FTheta is the only supported
+        # input projection — Pinhole/Fisheye were intentionally dropped
+        # because Kelvin predict was never exercised with them.
         projection: CameraProjection
-        if isinstance(camera_model, OpenCVPinholeCameraModel):
-            projection = CameraModelConverter._convert_opencv_pinhole(camera_model, device)
-        elif isinstance(camera_model, OpenCVFisheyeCameraModel):
-            projection = CameraModelConverter._convert_opencv_fisheye(camera_model, device)
-        elif isinstance(camera_model, FThetaCameraModel):
+        if isinstance(camera_model, FThetaCameraModel):
             projection = CameraModelConverter._convert_ftheta(camera_model, device)
         else:
             raise TypeError(f"Unsupported camera model type: {type(camera_model).__name__}")
@@ -96,39 +90,6 @@ class CameraModelConverter:
             external_distortion=external_distortion,
             resolution=tuple(camera_model.resolution.tolist()),
             shutter_type=ShutterType(camera_model.shutter_type.value),
-        )
-
-    @staticmethod
-    def _convert_opencv_pinhole(
-        camera_model: OpenCVPinholeCameraModel,
-        device: torch.device,
-    ) -> OpenCVPinholeProjection:
-        """Convert OpenCVPinholeCameraModel to OpenCVPinholeProjection."""
-
-        return OpenCVPinholeProjection.from_components(
-            focal_length=camera_model.focal_length.to(device),
-            principal_point=camera_model.principal_point.to(device),
-            radial_coeffs=camera_model.radial_coeffs.to(device),
-            tangential_coeffs=camera_model.tangential_coeffs.to(device),
-            thin_prism_coeffs=camera_model.thin_prism_coeffs.to(device),
-            resolution=camera_model.resolution.to(device),
-        )
-
-    @staticmethod
-    def _convert_opencv_fisheye(
-        camera_model: OpenCVFisheyeCameraModel,
-        device: torch.device,
-    ) -> OpenCVFisheyeProjection:
-        """Convert OpenCVFisheyeCameraModel to OpenCVFisheyeProjection."""
-
-        return OpenCVFisheyeProjection.from_components(
-            focal_length=camera_model.focal_length.to(device),
-            principal_point=camera_model.principal_point.to(device),
-            forward_poly=camera_model.forward_poly[[3, 5, 7, 9]].to(device),
-            resolution=camera_model.resolution.to(device),
-            max_angle=camera_model.max_angle,
-            newton_iterations=camera_model.newton_iterations,
-            min_2d_norm=torch.tensor(1e-6, device=device),
         )
 
     @staticmethod

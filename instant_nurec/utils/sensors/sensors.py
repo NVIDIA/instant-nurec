@@ -18,15 +18,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TypeAlias, Union
+from typing import TypeAlias
 
 import torch
 
-from ncore.sensors import (
-    FThetaCameraModel,
-    OpenCVFisheyeCameraModel,
-    OpenCVPinholeCameraModel,
-)
+from ncore.sensors import FThetaCameraModel
 
 
 def _compute_poses_and_timestamps_torch(
@@ -65,7 +61,7 @@ def _compute_poses_and_timestamps_torch(
     return T_sensor_world_startend_allviews[fidx], timestamps_startend_us_allviews[fidx]
 
 
-ConcreteCameraModelsUnion: TypeAlias = Union[FThetaCameraModel, OpenCVFisheyeCameraModel, OpenCVPinholeCameraModel]
+ConcreteCameraModelsUnion: TypeAlias = FThetaCameraModel
 
 
 @dataclass(kw_only=True, slots=True)

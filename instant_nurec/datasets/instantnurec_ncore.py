@@ -381,10 +381,7 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
             ):
                 camera_model_parameters_copy.linear_cde = np.array([1.0, 0.0, 0.0], dtype=np.float32)
 
-            if isinstance(
-                camera_model_parameters_copy,
-                (ncore.data.FThetaCameraModelParameters, ncore.data.OpenCVFisheyeCameraModelParameters),
-            ):
+            if isinstance(camera_model_parameters_copy, ncore.data.FThetaCameraModelParameters):
                 # (This would make boundary pixels of omnidirectional cameras to be classified as invalid)
                 camera_model_parameters_copy.max_angle = min(
                     np.deg2rad(self.camera_max_fov_deg) / 2.0, camera_model_parameters_copy.max_angle

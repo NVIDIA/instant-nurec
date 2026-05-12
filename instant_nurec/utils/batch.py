@@ -31,8 +31,6 @@ from ncore.impl.common.transformations import PoseInterpolator
 from ncore.sensors import (
     CameraModel,
     FThetaCameraModel,
-    OpenCVFisheyeCameraModel,
-    OpenCVPinholeCameraModel,
 )
 from instant_nurec.utils.misc import assert_same_type, collate_fn, unpack_optional
 from instant_nurec.utils.sensors import SensorModelComputations
@@ -47,7 +45,7 @@ from instant_nurec.utils.types import (
 )
 
 
-ConcreteCameraModelsUnion: TypeAlias = FThetaCameraModel | OpenCVFisheyeCameraModel | OpenCVPinholeCameraModel
+ConcreteCameraModelsUnion: TypeAlias = FThetaCameraModel
 ConcreteSensorModelParametersUnion: TypeAlias = ConcreteCameraModelParametersUnion
 
 
