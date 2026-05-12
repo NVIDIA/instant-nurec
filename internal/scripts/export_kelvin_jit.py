@@ -426,6 +426,31 @@ def main() -> int:
         # user-facing gate and runs at inference time via
         # ``internal/benchmark/validate_parity.py``.
         traced_out = traced(*trace_inputs)
+    # Diagnostic: eager-vs-trace drift per tensor. Tells us how much of the
+    # post-JIT-switch regression is intrinsic to ``torch.jit.trace`` recording
+    # vs introduced later by ``torch.jit.load``'s IR optimization passes.
+    _trace_diag_tags = (
+        "gs_xyz",
+        "gs_rotations",
+        "gs_scales",
+        "gs_densities",
+        "gs_rgb",
+        "semantic_argmax",
+        "normals",
+        "affine",
+    )
+    for tag, eager_v, traced_v in zip(_trace_diag_tags, eager_t_out, traced_out):
+        if eager_v.dtype.is_floating_point:
+            max_diff = (eager_v.float() - traced_v.float()).abs().max().item()
+        else:
+            max_diff = float((eager_v != traced_v).sum().item())
+        logger.info(
+            "%s (eager vs traced) shape=%s dtype=%s max_diff=%.3e",
+            tag,
+            tuple(eager_v.shape),
+            str(eager_v.dtype),
+            max_diff,
+        )
 
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
