@@ -1,0 +1,507 @@
+20260428: "/plan We have to do some changes to the current code. A new Kelvin model landed on main in @/storage/projects/nre, however it only works when using the branch nrm/adaptive-sequential-sampler. You can see how it is being called in @nre_example_call.sh, once with merge, once
+without merge. The output of this call are a bunch of directories, but for you the only important files are the ply files. I created them for you as a baseline reference for merge case and no_merge case in /storage/results/instant-nurec/baseline_ga/, ie I ran the script while being
+ on the brach nrm/adaptive-sequential-sampler via /storage/projects/instant-nurec/nre_example_call.sh /storage/results/instant-nurec/baseline_ga/. Your task it to look at the Kelvin model that is being invoked in my script and port it over to this code base, drop the kelvin model
+present in this codebase, we don't need it anymore. Only the model that is being invoked with my script must be supported. Also please use torch's save routine to save the entire model, not only the state_dict, see here:
+https://docs.pytorch.org/tutorials/beginner/saving_loading_models.html#save-load-entire-model. I think with this we should be able to save several thousand lines of code. Once you ported the model over to this codebase, write unit tests to ensure everything works as expected. The
+final call to run predict mode from within this repository should be small and consice and only depend on the dataset path, the merge strategy (defaule none), the output-dir, and a log-level from logging (defaulting to info level), as only one model is supported. Something like
+run.py --ncore-path path/to/ncorev4/directory --output-dir path/to/output --merge [none,frustum-ownership] --log-level INFO|DEBUG|... Once you ported everything over and unit tests succeed and the CLI is set up, run it with the dataset in /storage/data/nurec/ncorev4. This will be
+an iterative process as we had before: 1. run the command, let it timeout after 60s if no output is being logged in the command line. 2a. if it times out, add logging to see what is going on. 2b. If it doesn't time out and fails, look at the error. Look how it's handled in the
+/storage/project/nre repo and fix it accorindgly. If the fix is not applicable, come upt with your own fix, but keep it minimal and your own fix should really only be the last resort. Go back to 1 and re-run. Do this until ply files are being generated for both, the merge and the
+no_merge case. At this stage, the next iterative process starts: 1. Run the two commands, ie merge and no-merge. 2. Compare the ply files of your run with the reference ply files living in /storage/results/instant-nurec/baseline_ga/. Comparison should be done in the following
+manner: The files to be compared are the ply file of the merge case, with the reference ply file of the merge case and the ply files of the no-merge with the reference ply files of the no-merge case. 2a initial comparison can be a number of files comparison, both approaches should
+create the same number of ply files, ie merge should create 1 ply file, no-merge should create <number_of_chunks> ply files, in the case of the dataset we're using it's two ply files. If the number of output files is different, it's a bug. Look at how it's done in the nre repo and
+fix it, then go back to 1. If the same number of files, go to the next step. 2b The corresponding files should be roughly the same filesize, ie. ~113M and ~94M in the no-merge case and ~187M in the merge case. If the size is largely different, it's a bug. Look how it's done in the
+nre repo and fix it, then go back to 1. If it's roughly the same file size go to the next step. 2c Write a python script that load the ply files that should be compared, ie. it should run three comparisons (one comp. on the single ply file in the merge case with the respective
+baseline, and two comps. with the two ply files of the no-merge case with their respective baselines). The python script should validate the following: The attributes of the ply files should have the same custom attributes present, they should also be equal in size and they should
+not differ per element more than 1e-3, ie something like ((ply.custom_attribute - ply_baseline.custom_attribute).abs()<1e-3).all() for all positions and all custom attributes. If there's a difference in the available custom attributes or any tensor size/shape, it's a bug. Look at
+how it's done in the nre repo and fix it, go back to 1. If the per element error is >1e-3, it's a bug. Look at how it's done in the nre repo and fix it, go back to 1. If it's smaller than 1e-3, your successfull and you can stop iterating. The constraints are: 1. Port the minimal
+number of lines from the nre repo and only what is needed by nrm/instant-nurec. 2. Don't depend on the nre repo, be standalone. 3. Have a similar repo structure as https://github.com/NVIDIA/asset-harvester. 4. Do not use bazel. 5. Build tests for each function. 6. Save and load the
+ full model, not only the state_dict, see https://docs.pytorch.org/tutorials/beginner/saving_loading_models.html#save-load-entire-model. 7. In the /storage/projects/instant-nurec repo on the nurec/001-scaffold branch, create 1 commit after you copied the new model if all tests
+being successful and afterwards, once you start your two iterative cycles, create one commit for each failed and fixed fun to see your history. 8. After you were succesful, create the final/last commit. 9. keep the same constraints as the plan
+@docs/plans/001-nrm-predict-extraction.md. 10. Only look at the nrm/adaptive-sequential-sampler branch in the nre repo as a code reference, don't change branches. 11. Use the script @nre_example_call.sh to infer the necessary code paths in nre. 12. only use the ply files I provided
+ as reference baseline."
+
+ 20260429: """
+ /plan Look at the @CLAUDE.md file and all plans in @docs/plans to understand what has been done, then I want to reach parity with respect to the output of nre's invocation of the Kelvin model. That means the ply files of the below two commands should be equivalent to the ply files that are being generated with this model's invocation.
+  Command1 w/o merge: bazel run //nre/nrm:run -- \
+    --config-name ~/.cache/nrm/pretrained_models/kelvin-0427-front/parsed.yaml \
+    resume=~/.cache/nrm/pretrained_models/kelvin-0427-front/last.ckpt \
+    +nrm/apps/options=_kelvin_predict_adaptive_front \
+    dataset.predict.ncore_json_base_path=/storage/data/nurec/ncorev4/ \
+    dataset.predict.ncore_json_list_path=/storage/data/nurec/ncorev4/debug.lst \
+    dataset.predict.cuboid_tracks_params.lidar_id=lidar_top_360fov \
+    out_dir="${OUT_DIR}/no_merge" \
+    predict.primitive_merge.enabled=false \
+    predict.render_video.enabled=false
+  Command2 with merge: bazel run //nre/nrm:run -- \
+    --config-name ~/.cache/nrm/pretrained_models/kelvin-0427-front/parsed.yaml \
+    resume=~/.cache/nrm/pretrained_models/kelvin-0427-front/last.ckpt \
+    +nrm/apps/options=_kelvin_predict_adaptive_front \
+    dataset.predict.ncore_json_base_path=/storage/data/nurec/ncorev4/ \
+    dataset.predict.ncore_json_list_path=/storage/data/nurec/ncorev4/debug.lst \
+    dataset.predict.cuboid_tracks_params.lidar_id=lidar_top_360fov \
+    out_dir="${OUT_DIR}/merge" \
+    predict.render_video.enabled=false
+  Log of both commands executedconsecutively: $ cat /storage/results/instant-nurec/baseline_ga_log/log.txt 
+    + OUT_DIR=/storage/results/instant-nurec/baseline_ga_log/
+    + bazel run //nre/nrm:run -- --config-name /localhome/local-bhaefner/.cache/nrm/pretrained_models/kelvin-0427-front/parsed.yaml resume=/localhome/local-bhaefner/.cache/nrm/pretrained_models/kelvin-0427-front/last.ckpt +nrm/apps/options=_kelvin_predict_adaptive_front dataset.predict.ncore_json_base_path=/storage/data/nurec/ncorev4/ dataset.predict.ncore_json_list_path=/storage/data/nurec/ncorev4/debug.lst dataset.predict.cuboid_tracks_params.lidar_id=lidar_top_360fov out_dir=/storage/results/instant-nurec/baseline_ga_log//no_merge predict.primitive_merge.enabled=false predict.render_video.enabled=false
+    Starting local Bazel server (8.3.1) and connecting to it...
+    (15:30:44) INFO: Invocation ID: 8a4ac234-c5c9-4071-8dd9-16ed8b06496e
+    (15:30:44) INFO: Current date is 2026-04-29
+    (15:30:44) Computing main repo mapping: 
+    (15:30:45) Loading: 
+    (15:30:45) Loading: 5 packages loaded
+    (15:30:45) Analyzing: target //nre/nrm:run (6 packages loaded, 0 targets configured)
+    (15:30:45) Analyzing: target //nre/nrm:run (6 packages loaded, 0 targets configured)
+
+    (15:30:46) Analyzing: target //nre/nrm:run (282 packages loaded, 4629 targets configured)
+
+    (15:30:47) Analyzing: target //nre/nrm:run (500 packages loaded, 28626 targets configured)
+
+    (15:30:49) Analyzing: target //nre/nrm:run (640 packages loaded, 60352 targets configured)
+
+    (15:30:50) Analyzing: target //nre/nrm:run (646 packages loaded, 61177 targets configured)
+
+    (15:30:52) INFO: Analyzed target //nre/nrm:run (647 packages loaded, 61213 targets configured).
+    (15:30:52) [1 / 1] no actions running
+    (15:30:54) [39 / 400] [Prepa] Executing genrule //libs/slang_gaussians:mcmc_slang_src
+    (15:30:55) [43 / 400] checking cached actions
+    (15:30:58) [60 / 400] [Prepa] Executing genrule //libs/geometry/kernels:pose_kernels_slang_src
+    (15:30:59) [248 / 400] Compiling gsplat/cuda/ext.cpp; 0s disk-cache ... (7 actions, 0 running)
+    (15:31:00) [298 / 400] checking cached actions
+    (15:31:02) [399 / 400] checking cached actions
+    (15:31:04) [399 / 400] [Prepa] Action nre/nrm/run.venv
+    (15:31:07) [399 / 400] Action nre/nrm/run.venv; 0s disk-cache
+    (15:31:09) [399 / 400] Action nre/nrm/run.venv; 1s disk-cache, linux-sandbox
+    (15:31:11) [399 / 400] Action nre/nrm/run.venv; 4s disk-cache, linux-sandbox
+    (15:31:19) [399 / 400] Action nre/nrm/run.venv; 11s disk-cache, linux-sandbox
+    (15:31:19) INFO: Found 1 target...
+    Target //nre/nrm:run up-to-date:
+      bazel-bin/nre/nrm/run
+    (15:31:20) INFO: Elapsed time: 36.658s, Critical Path: 18.84s
+    (15:31:20) INFO: 167 processes: 238 action cache hit, 165 disk cache hit, 1 internal, 1 linux-sandbox.
+    (15:31:20) INFO: Build completed successfully, 167 total actions
+    (15:31:20) INFO: Running command line: bazel-bin/nre/nrm/run <args omitted>
+    Seed set to 38
+    NRM RUN 🆔: 5rNftuCNEn6KYib3hZgvAp
+    [2026-04-29 15:31:37,941][nre.config.trainer][INFO] World Size: 1
+    [2026-04-29 15:31:37,941][nre.config.trainer][INFO] Node Count: 1
+    [2026-04-29 15:31:37,941][nre.config.trainer][INFO] Device Count per Node: 1
+    [2026-04-29 15:31:37,941][nre.config.trainer][INFO] Log every 5 steps
+    [2026-04-29 15:31:37,948][libs.losses.models.base_losses][INFO] BaseLoss/primitive_sky_cubemap_l1_mean: start_step=0
+    [2026-04-29 15:31:37,948][libs.losses.models.base_losses][INFO] BaseLoss/primitive_rgb_l1_mean: start_step=0
+    [2026-04-29 15:31:37,948][libs.losses.models.base_losses][INFO] BaseLoss/primitive_distance_l1_quantile: start_step=0
+    [2026-04-29 15:31:37,949][libs.losses.models.base_losses][INFO] BaseLoss/primitive_distance_gradient_abs_mean: start_step=0
+    [2026-04-29 15:31:37,949][libs.losses.models.base_losses][INFO] BaseLoss/primitive_semantics_cross_entropy_mean: start_step=0
+    [2026-04-29 15:31:37,949][libs.losses.models.base_losses][INFO] BaseLoss/primitive_normal_normal_cosine_mean: start_step=0
+    [2026-04-29 15:31:37,949][libs.losses.models.base_losses][INFO] BaseLoss/primitive_velocity_l1_mean: start_step=0
+    [2026-04-29 15:31:37,949][libs.losses.models.base_losses][INFO] BaseLoss/rgb_mse_mean: start_step=0
+    [2026-04-29 15:31:37,949][libs.losses.models.base_losses][INFO] BaseLoss/lpips_lpips_mean: start_step=0
+    [2026-04-29 15:31:37,949][libs.losses.models.base_losses][INFO] BaseLoss/distance_depth_inverse_mse_mean: start_step=0
+    [2026-04-29 15:31:37,949][libs.losses.models.base_losses][INFO] BaseLoss/background_mse_mean: start_step=0
+    [NuRec::NRend][INFO] ::: Creating registered instance <3dgut-nrend>
+    [NuRec::NRend][INFO] ::: GRUTRenderer : camera output settings : Features ON | Extended Features ON | Sensor Extended Features ON | Normals OFF | Ray Gradients OFF
+    [NuRec::NRend][INFO] ::: GRUTRenderer : lidar output settings : Features OFF | Extended Features ON | Sensor Extended Features ON | Normals OFF | Ray Gradients OFF
+    [NuRec::NRend][INFO] ::: LiDAR tiling size: 16x16
+    [NuRec::NRend][INFO] ::: Creating registered instance <sh-gaussians>
+    [NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.positions> in the state_dict.
+    [NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.scales> in the state_dict.
+    [NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.rotations> in the state_dict.
+    [NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.densities> in the state_dict.
+    [NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.features_albedo> in the state_dict.
+    [NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.features_specular> in the state_dict.
+    [NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.extra_signal> in the state_dict.
+    [NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.camera_extra_signal> in the state_dict.
+    [NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.lidar_extra_signal> in the state_dict.
+    [NuRec::NRend][INFO] ::: Parsed model . with 0 particles
+    [NuRec::NRend][INFO] ::: Model nre::sh-gaussians => nre_sh-gaussians@26.5.34 opened
+    [2026-04-29 15:31:39,357][nre.models.gaussians.renderers][INFO] Gaussian3DNRenderer: enable_ray_based_culling: True
+    Using bfloat16 Automatic Mixed Precision (AMP)
+    Trainer already configured with model summary callbacks: [<class 'pytorch_lightning.callbacks.model_summary.ModelSummary'>]. Skipping setting a default `ModelSummary` callback.
+    GPU available: True (cuda), used: True
+    TPU available: False, using: 0 TPU cores
+    HPU available: False, using: 0 HPUs
+    You are using a CUDA device ('NVIDIA RTX A6000') that has Tensor Cores. To properly utilize them, you should set `torch.set_float32_matmul_precision('medium' | 'high')` which will trade-off precision for performance. For more details, read https://pytorch.org/docs/stable/generated/torch.set_float32_matmul_precision.html#torch.set_float32_matmul_precision
+    Restoring states from the checkpoint path at /localhome/local-bhaefner/.cache/nrm/pretrained_models/kelvin-0427-front/last.ckpt
+    LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+    Loaded model weights from the checkpoint at /localhome/local-bhaefner/.cache/nrm/pretrained_models/kelvin-0427-front/last.ckpt
+    [2026-04-29 15:31:40,240][nre.nrm.datasets.nrm_ncore][INFO] Loaded 1/1 samples from file:///storage/data/nurec/ncorev4/debug.lst
+    Predicting in chunks: 100%|██████████| 2/2 [00:02<00:00,  1.05s/it]
+    Predicting DataLoader 0: 100%|██████████| 1/1 [00:02<00:00,  0.36it/s][2026-04-29 15:31:55,209][nre.nrm.predict.export_ply][INFO] Removed 0 non-finite density gaussians.
+    [2026-04-29 15:31:55,209][nre.nrm.predict.export_ply][INFO] Starting to filter 1,817,128 finite gaussians.
+    [2026-04-29 15:31:55,209][nre.nrm.predict.export_ply][INFO] Filter (density) removed 0 gaussians
+    [2026-04-29 15:31:55,217][nre.nrm.predict.export_ply][INFO] Filter (scale) removed 0 gaussians
+    [2026-04-29 15:31:55,217][nre.nrm.predict.export_ply][INFO] Filter (surface area) removed 0 gaussians
+    [2026-04-29 15:31:55,217][nre.nrm.predict.export_ply][INFO] After filtering, 1817128 gaussians remaining.
+    [2026-04-29 15:31:56,067][nre.models.gaussians.utils][INFO] Wrote .ply-file: /storage/results/instant-nurec/baseline_ga_log/no_merge/5rNftuCNEn6KYib3hZgvAp/ply/pai_000da9de-0ee5-465a-9a2d-e7e91d3016bb/pai_000da9de-0ee5-465a-9a2d-e7e91d3016bb_chunk0.ply
+    [2026-04-29 15:31:56,083][nre.nrm.predict.export_ply][INFO] Removed 0 non-finite density gaussians.
+    [2026-04-29 15:31:56,083][nre.nrm.predict.export_ply][INFO] Starting to filter 1,508,601 finite gaussians.
+    [2026-04-29 15:31:56,083][nre.nrm.predict.export_ply][INFO] Filter (density) removed 0 gaussians
+    [2026-04-29 15:31:56,083][nre.nrm.predict.export_ply][INFO] Filter (scale) removed 0 gaussians
+    [2026-04-29 15:31:56,083][nre.nrm.predict.export_ply][INFO] Filter (surface area) removed 0 gaussians
+    [2026-04-29 15:31:56,084][nre.nrm.predict.export_ply][INFO] After filtering, 1508601 gaussians remaining.
+    [2026-04-29 15:31:56,736][nre.models.gaussians.utils][INFO] Wrote .ply-file: /storage/results/instant-nurec/baseline_ga_log/no_merge/5rNftuCNEn6KYib3hZgvAp/ply/pai_000da9de-0ee5-465a-9a2d-e7e91d3016bb/pai_000da9de-0ee5-465a-9a2d-e7e91d3016bb_chunk1.ply
+    Predicting DataLoader 0: 100%|██████████| 1/1 [00:04<00:00,  0.23it/s]
+    + bazel run //nre/nrm:run -- --config-name /localhome/local-bhaefner/.cache/nrm/pretrained_models/kelvin-0427-front/parsed.yaml resume=/localhome/local-bhaefner/.cache/nrm/pretrained_models/kelvin-0427-front/last.ckpt +nrm/apps/options=_kelvin_predict_adaptive_front dataset.predict.ncore_json_base_path=/storage/data/nurec/ncorev4/ dataset.predict.ncore_json_list_path=/storage/data/nurec/ncorev4/debug.lst dataset.predict.cuboid_tracks_params.lidar_id=lidar_top_360fov out_dir=/storage/results/instant-nurec/baseline_ga_log//merge predict.render_video.enabled=false
+    (15:31:59) INFO: Invocation ID: 3f436e5b-78ef-49c7-b790-28920f4b7d60
+    (15:32:00) INFO: Current date is 2026-04-29
+    (15:32:00) Computing main repo mapping: 
+    (15:32:00) Loading: 
+    (15:32:00) Loading: 0 packages loaded
+    (15:32:02) Analyzing: target //nre/nrm:run (0 packages loaded)
+    (15:32:05) Analyzing: target //nre/nrm:run (0 packages loaded, 0 targets configured)
+    (15:32:05) Analyzing: target //nre/nrm:run (0 packages loaded, 0 targets configured)
+
+    (15:32:05) INFO: Analyzed target //nre/nrm:run (0 packages loaded, 0 targets configured).
+    (15:32:05) INFO: Found 1 target...
+    Target //nre/nrm:run up-to-date:
+      bazel-bin/nre/nrm/run
+    (15:32:05) INFO: Elapsed time: 5.205s, Critical Path: 0.06s
+    (15:32:05) INFO: 1 process: 1 internal.
+    (15:32:05) INFO: Build completed successfully, 1 total action
+    (15:32:05) INFO: Running command line: bazel-bin/nre/nrm/run <args omitted>
+    Seed set to 38
+    NRM RUN 🆔: JeNBmfMJDJ7JLvexLXPTYZ
+    [2026-04-29 15:32:22,678][nre.config.trainer][INFO] World Size: 1
+    [2026-04-29 15:32:22,678][nre.config.trainer][INFO] Node Count: 1
+    [2026-04-29 15:32:22,678][nre.config.trainer][INFO] Device Count per Node: 1
+    [2026-04-29 15:32:22,678][nre.config.trainer][INFO] Log every 5 steps
+    [2026-04-29 15:32:22,685][libs.losses.models.base_losses][INFO] BaseLoss/primitive_sky_cubemap_l1_mean: start_step=0
+    [2026-04-29 15:32:22,685][libs.losses.models.base_losses][INFO] BaseLoss/primitive_rgb_l1_mean: start_step=0
+    [2026-04-29 15:32:22,685][libs.losses.models.base_losses][INFO] BaseLoss/primitive_distance_l1_quantile: start_step=0
+    [2026-04-29 15:32:22,685][libs.losses.models.base_losses][INFO] BaseLoss/primitive_distance_gradient_abs_mean: start_step=0
+    [2026-04-29 15:32:22,685][libs.losses.models.base_losses][INFO] BaseLoss/primitive_semantics_cross_entropy_mean: start_step=0
+    [2026-04-29 15:32:22,685][libs.losses.models.base_losses][INFO] BaseLoss/primitive_normal_normal_cosine_mean: start_step=0
+    [2026-04-29 15:32:22,685][libs.losses.models.base_losses][INFO] BaseLoss/primitive_velocity_l1_mean: start_step=0
+    [2026-04-29 15:32:22,685][libs.losses.models.base_losses][INFO] BaseLoss/rgb_mse_mean: start_step=0
+    [2026-04-29 15:32:22,685][libs.losses.models.base_losses][INFO] BaseLoss/lpips_lpips_mean: start_step=0
+    [2026-04-29 15:32:22,685][libs.losses.models.base_losses][INFO] BaseLoss/distance_depth_inverse_mse_mean: start_step=0
+    [2026-04-29 15:32:22,685][libs.losses.models.base_losses][INFO] BaseLoss/background_mse_mean: start_step=0
+    [NuRec::NRend][INFO] ::: Creating registered instance <3dgut-nrend>
+    [NuRec::NRend][INFO] ::: GRUTRenderer : camera output settings : Features ON | Extended Features ON | Sensor Extended Features ON | Normals OFF | Ray Gradients OFF
+    [NuRec::NRend][INFO] ::: GRUTRenderer : lidar output settings : Features OFF | Extended Features ON | Sensor Extended Features ON | Normals OFF | Ray Gradients OFF
+    [NuRec::NRend][INFO] ::: LiDAR tiling size: 16x16
+    [NuRec::NRend][INFO] ::: Creating registered instance <sh-gaussians>
+    [NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.positions> in the state_dict.
+    [NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.scales> in the state_dict.
+    [NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.rotations> in the state_dict.
+    [NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.densities> in the state_dict.
+    [NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.features_albedo> in the state_dict.
+    [NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.features_specular> in the state_dict.
+    [NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.extra_signal> in the state_dict.
+    [NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.camera_extra_signal> in the state_dict.
+    [NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.lidar_extra_signal> in the state_dict.
+    [NuRec::NRend][INFO] ::: Parsed model . with 0 particles
+    [NuRec::NRend][INFO] ::: Model nre::sh-gaussians => nre_sh-gaussians@26.5.34 opened
+    [2026-04-29 15:32:24,033][nre.models.gaussians.renderers][INFO] Gaussian3DNRenderer: enable_ray_based_culling: True
+    Using bfloat16 Automatic Mixed Precision (AMP)
+    Trainer already configured with model summary callbacks: [<class 'pytorch_lightning.callbacks.model_summary.ModelSummary'>]. Skipping setting a default `ModelSummary` callback.
+    GPU available: True (cuda), used: True
+    TPU available: False, using: 0 TPU cores
+    HPU available: False, using: 0 HPUs
+    You are using a CUDA device ('NVIDIA RTX A6000') that has Tensor Cores. To properly utilize them, you should set `torch.set_float32_matmul_precision('medium' | 'high')` which will trade-off precision for performance. For more details, read https://pytorch.org/docs/stable/generated/torch.set_float32_matmul_precision.html#torch.set_float32_matmul_precision
+    Restoring states from the checkpoint path at /localhome/local-bhaefner/.cache/nrm/pretrained_models/kelvin-0427-front/last.ckpt
+    LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+    Loaded model weights from the checkpoint at /localhome/local-bhaefner/.cache/nrm/pretrained_models/kelvin-0427-front/last.ckpt
+    [2026-04-29 15:32:24,878][nre.nrm.datasets.nrm_ncore][INFO] Loaded 1/1 samples from file:///storage/data/nurec/ncorev4/debug.lst
+    Predicting in chunks: 100%|██████████| 2/2 [00:02<00:00,  1.05s/it]
+    [2026-04-29 15:32:39,243][nre.nrm.predict.primitive_merge][INFO] Merging 2 chunks (3392823 Gaussians)
+    [2026-04-29 15:32:41,415][nre.nrm.predict.primitive_merge][INFO] Merged 2 primitives into KelvinNRMPrimitive(StaticLayer(#GS=3.01M), [DynamicLayer(#GS=0.07M, #KF=3)])
+    Predicting DataLoader 0: 100%|██████████| 1/1 [00:05<00:00,  0.20it/s][2026-04-29 15:32:41,921][nre.nrm.predict.export_ply][INFO] Removed 0 non-finite density gaussians.
+    [2026-04-29 15:32:41,922][nre.nrm.predict.export_ply][INFO] Starting to filter 3,006,374 finite gaussians.
+    [2026-04-29 15:32:41,922][nre.nrm.predict.export_ply][INFO] Filter (density) removed 0 gaussians
+    [2026-04-29 15:32:41,929][nre.nrm.predict.export_ply][INFO] Filter (scale) removed 0 gaussians
+    [2026-04-29 15:32:41,929][nre.nrm.predict.export_ply][INFO] Filter (surface area) removed 0 gaussians
+    [2026-04-29 15:32:41,930][nre.nrm.predict.export_ply][INFO] After filtering, 3006374 gaussians remaining.
+    [2026-04-29 15:32:43,261][nre.models.gaussians.utils][INFO] Wrote .ply-file: /storage/results/instant-nurec/baseline_ga_log/merge/JeNBmfMJDJ7JLvexLXPTYZ/ply/pai_000da9de-0ee5-465a-9a2d-e7e91d3016bb/pai_000da9de-0ee5-465a-9a2d-e7e91d3016bb.ply
+    Predicting DataLoader 0: 100%|██████████| 1/1 [00:06<00:00,  0.16it/s]
+    Command in this repo w/o merge: /storage/projects/instant-nurec/.venv/bin/python run_inference.py --ncore-path /storage/data/nurec/ncorev4 --output-dir "/storage/results/instant-nurec/debug/nurec_iter/no_merge" --merge none
+    Command in this repo with merge: /storage/projects/instant-nurec/.venv/bin/python run_inference.py --ncore-path /storage/data/nurec/ncorev4 --output-dir "/storage/results/instant-nurec/debug/nurec_iter/merge" --merge frustum-ownership
+    The Ply files generated by the two commands should be equivalent to the ply files generated by the two commands in the nre repo.
+    To achieve this, look at the differences between the two code bases and fix them. For now it's ok to port over cuda and slang code, to be code equivalent, but you should still stick to the venv setup, similar to https://github.com/NVIDIA/asset-harvester. After we reached parity, we can start to strip cuda/slang code away, while ensuring an equivalent torch based version.
+    Once we have this, the last step is strip down the codebase to only the necessary code for the instant-nurec project. We really want a minimal codebase, that is easy to understand and maintain."""
+
+20260429: """"
+/plan We have to build up this codebase from scratch. A new NRM model called Kelvin landed on main in @/storage/projects/nre, however it only works when using the branch nrm/adaptive-sequential-sampler. You can see how it is being called in @nre_example_call.sh, once with merge, once
+without merge. The output of this call are a bunch of directories, but for you the only important files are the ply files. I created them for you as a baseline reference for merge case and no_merge case in /storage/results/instant-nurec/baseline_ga/, ie I ran the script while being
+ on the brach nrm/adaptive-sequential-sampler via /storage/projects/instant-nurec/nre_example_call.sh /storage/results/instant-nurec/baseline_ga/. Your task it to look at the Kelvin model that is being invoked in my script and port all of it over to this code base as is. Only the model that is being invoked with my script must be supported. Also please use torch's save routine to save the entire model, not only the state_dict, see here:
+https://docs.pytorch.org/tutorials/beginner/saving_loading_models.html#save-load-entire-model. I think with this we should be able to save several thousand lines of code. Once you ported the model over to this codebase, write unit tests for each function and each function's code path to ensure everything works as expected. The
+final call to run predict mode from within this repository should be small and consice and only depend on the dataset path, the merge strategy (defaule none), the output-dir, and a log-level from logging (defaulting to info level), as only one model is supported. Something like
+run.py --ncore-path path/to/ncorev4/directory --output-dir path/to/output --merge [none,frustum-ownership] --log-level INFO|DEBUG|... Once you ported everything over and unit tests succeed and the CLI is set up, run it with the dataset in /storage/data/nurec/ncorev4. This will be
+an iterative process as stated in the @CLAUDE.md file: 1. run the command, let it timeout after 60s if no output is being logged in the command line. 2a. if it times out, add logging to see what is going on. 2b. If it doesn't time out and fails, look at the error. Look how it's handled in the
+/storage/project/nre repo and fix it accorindgly. If the fix is not applicable, come upt with your own fix, but keep it minimal and your own fix should really only be the last resort. Go back to 1 and re-run. Do this until ply files are being generated for both, the merge and the
+no_merge case. At this stage, the next iterative process starts: 1. Run the two commands, ie merge and no-merge. 2. Compare the ply files of your run with the reference ply files living in /storage/results/instant-nurec/baseline_ga/. Comparison should be done in the following
+manner: The files to be compared are the ply file of the merge case, with the reference ply file of the merge case and the ply files of the no-merge with the reference ply files of the no-merge case. 2a initial comparison can be a number of files comparison, both approaches should
+create the same number of ply files, ie merge should create 1 ply file, no-merge should create <number_of_chunks> ply files, in the case of the dataset we're using it's two ply files. If the number of output files is different, it's a bug. Look at how it's done in the nre repo and
+fix it, then go back to 1. If the same number of files, go to the next step. 2b The corresponding files should be roughly the same filesize, ie. ~113M and ~94M in the no-merge case and ~187M in the merge case. If the size is largely different, it's a bug. Look how it's done in the
+nre repo and fix it, then go back to 1. If it's roughly the same file size go to the next step. 2c Write a python script that load the ply files that should be compared, ie. it should run three comparisons (one comp. on the single ply file in the merge case with the respective
+baseline, and two comps. with the two ply files of the no-merge case with their respective baselines). The python script should validate the following: The attributes of the ply files should have the same custom attributes present, they should also be equal in size and they should
+not differ per element more than 1e-3, ie something like ((ply.custom_attribute - ply_baseline.custom_attribute).abs()<1e-3).all() for all positions and all custom attributes. If there's a difference in the available custom attributes or any tensor size/shape, it's a bug. Look at
+how it's done in the nre repo and fix it, go back to 1. If the per element error is >1e-3, it's a bug. Look at how it's done in the nre repo and fix it, go back to 1. If it's smaller than 1e-3, your successfull and you can stop iterating. The constraints are: 1. Port the minimal
+number of lines from the nre repo and only what is needed by nrm/instant-nurec. 2. Don't depend on the nre repo, be standalone. 3. Have a similar repo structure as https://github.com/NVIDIA/asset-harvester. 4. Do not use bazel. 5. Build tests for each function's code path. 6. Save and load the
+ full model, not only the state_dict, see https://docs.pytorch.org/tutorials/beginner/saving_loading_models.html#save-load-entire-model. 7. Create a new branch in this repo and create 1 commit after you copied the new model if all tests
+being successful and afterwards, once you start your two iterative cycles, create one commit for each failed and fixed bug to see your history. 8. After you were succesful, create the final/last commit. 9. keep the same constraints as the plan
+@docs/plans/001-nrm-predict-extraction.md. 10. Only look at the nrm/adaptive-sequential-sampler branch in the nre repo as a code reference, don't change branches. 11. Use the script @nre_example_call.sh to infer the necessary code paths in nre. 12. only use the ply files I provided
+ as reference baseline +  the corresponding parsed.yaml file in the same output directory.
+
+AFter you copied the code as is, verify the following is correct. It needs to be a perfect parity.
+Look at the @CLAUDE.md file and all plans in @docs/plans to understand what has been done, then I want to reach parity with respect to the output of nre's invocation of the Kelvin model. That means the ply files of the below two commands should be equivalent to the ply files that are being generated with this model's invocation.
+  Command1 w/o merge: bazel run //nre/nrm:run -- \
+    --config-name ~/.cache/nrm/pretrained_models/kelvin-0427-front/parsed.yaml \
+    resume=~/.cache/nrm/pretrained_models/kelvin-0427-front/last.ckpt \
+    +nrm/apps/options=_kelvin_predict_adaptive_front \
+    dataset.predict.ncore_json_base_path=/storage/data/nurec/ncorev4/ \
+    dataset.predict.ncore_json_list_path=/storage/data/nurec/ncorev4/debug.lst \
+    dataset.predict.cuboid_tracks_params.lidar_id=lidar_top_360fov \
+    out_dir="/storage/results/instant-nurec/baseline_ga_log//no_merge" \
+    predict.primitive_merge.enabled=false \
+    predict.render_video.enabled=false
+  Command2 with merge: bazel run //nre/nrm:run -- \
+    --config-name ~/.cache/nrm/pretrained_models/kelvin-0427-front/parsed.yaml \
+    resume=~/.cache/nrm/pretrained_models/kelvin-0427-front/last.ckpt \
+    +nrm/apps/options=_kelvin_predict_adaptive_front \
+    dataset.predict.ncore_json_base_path=/storage/data/nurec/ncorev4/ \
+    dataset.predict.ncore_json_list_path=/storage/data/nurec/ncorev4/debug.lst \
+    dataset.predict.cuboid_tracks_params.lidar_id=lidar_top_360fov \
+    out_dir="/storage/results/instant-nurec/baseline_ga_log//merge" \
+    predict.render_video.enabled=false
+  Log of both commands executedconsecutively: $ cat /storage/results/instant-nurec/baseline_ga_log/log.txt 
+    + OUT_DIR=/storage/results/instant-nurec/baseline_ga_log/
+    + bazel run //nre/nrm:run -- --config-name /localhome/local-bhaefner/.cache/nrm/pretrained_models/kelvin-0427-front/parsed.yaml resume=/localhome/local-bhaefner/.cache/nrm/pretrained_models/kelvin-0427-front/last.ckpt +nrm/apps/options=_kelvin_predict_adaptive_front dataset.predict.ncore_json_base_path=/storage/data/nurec/ncorev4/ dataset.predict.ncore_json_list_path=/storage/data/nurec/ncorev4/debug.lst dataset.predict.cuboid_tracks_params.lidar_id=lidar_top_360fov out_dir=/storage/results/instant-nurec/baseline_ga_log//no_merge predict.primitive_merge.enabled=false predict.render_video.enabled=false
+    Starting local Bazel server (8.3.1) and connecting to it...
+    (15:30:44) INFO: Invocation ID: 8a4ac234-c5c9-4071-8dd9-16ed8b06496e
+    (15:30:44) INFO: Current date is 2026-04-29
+    (15:30:44) Computing main repo mapping: 
+    (15:30:45) Loading: 
+    (15:30:45) Loading: 5 packages loaded
+    (15:30:45) Analyzing: target //nre/nrm:run (6 packages loaded, 0 targets configured)
+    (15:30:45) Analyzing: target //nre/nrm:run (6 packages loaded, 0 targets configured)
+
+    (15:30:46) Analyzing: target //nre/nrm:run (282 packages loaded, 4629 targets configured)
+
+    (15:30:47) Analyzing: target //nre/nrm:run (500 packages loaded, 28626 targets configured)
+
+    (15:30:49) Analyzing: target //nre/nrm:run (640 packages loaded, 60352 targets configured)
+
+    (15:30:50) Analyzing: target //nre/nrm:run (646 packages loaded, 61177 targets configured)
+
+    (15:30:52) INFO: Analyzed target //nre/nrm:run (647 packages loaded, 61213 targets configured).
+    (15:30:52) [1 / 1] no actions running
+    (15:30:54) [39 / 400] [Prepa] Executing genrule //libs/slang_gaussians:mcmc_slang_src
+    (15:30:55) [43 / 400] checking cached actions
+    (15:30:58) [60 / 400] [Prepa] Executing genrule //libs/geometry/kernels:pose_kernels_slang_src
+    (15:30:59) [248 / 400] Compiling gsplat/cuda/ext.cpp; 0s disk-cache ... (7 actions, 0 running)
+    (15:31:00) [298 / 400] checking cached actions
+    (15:31:02) [399 / 400] checking cached actions
+    (15:31:04) [399 / 400] [Prepa] Action nre/nrm/run.venv
+    (15:31:07) [399 / 400] Action nre/nrm/run.venv; 0s disk-cache
+    (15:31:09) [399 / 400] Action nre/nrm/run.venv; 1s disk-cache, linux-sandbox
+    (15:31:11) [399 / 400] Action nre/nrm/run.venv; 4s disk-cache, linux-sandbox
+    (15:31:19) [399 / 400] Action nre/nrm/run.venv; 11s disk-cache, linux-sandbox
+    (15:31:19) INFO: Found 1 target...
+    Target //nre/nrm:run up-to-date:
+      bazel-bin/nre/nrm/run
+    (15:31:20) INFO: Elapsed time: 36.658s, Critical Path: 18.84s
+    (15:31:20) INFO: 167 processes: 238 action cache hit, 165 disk cache hit, 1 internal, 1 linux-sandbox.
+    (15:31:20) INFO: Build completed successfully, 167 total actions
+    (15:31:20) INFO: Running command line: bazel-bin/nre/nrm/run <args omitted>
+    Seed set to 38
+    NRM RUN 🆔: 5rNftuCNEn6KYib3hZgvAp
+    [2026-04-29 15:31:37,941][nre.config.trainer][INFO] World Size: 1
+    [2026-04-29 15:31:37,941][nre.config.trainer][INFO] Node Count: 1
+    [2026-04-29 15:31:37,941][nre.config.trainer][INFO] Device Count per Node: 1
+    [2026-04-29 15:31:37,941][nre.config.trainer][INFO] Log every 5 steps
+    [2026-04-29 15:31:37,948][libs.losses.models.base_losses][INFO] BaseLoss/primitive_sky_cubemap_l1_mean: start_step=0
+    [2026-04-29 15:31:37,948][libs.losses.models.base_losses][INFO] BaseLoss/primitive_rgb_l1_mean: start_step=0
+    [2026-04-29 15:31:37,948][libs.losses.models.base_losses][INFO] BaseLoss/primitive_distance_l1_quantile: start_step=0
+    [2026-04-29 15:31:37,949][libs.losses.models.base_losses][INFO] BaseLoss/primitive_distance_gradient_abs_mean: start_step=0
+    [2026-04-29 15:31:37,949][libs.losses.models.base_losses][INFO] BaseLoss/primitive_semantics_cross_entropy_mean: start_step=0
+    [2026-04-29 15:31:37,949][libs.losses.models.base_losses][INFO] BaseLoss/primitive_normal_normal_cosine_mean: start_step=0
+    [2026-04-29 15:31:37,949][libs.losses.models.base_losses][INFO] BaseLoss/primitive_velocity_l1_mean: start_step=0
+    [2026-04-29 15:31:37,949][libs.losses.models.base_losses][INFO] BaseLoss/rgb_mse_mean: start_step=0
+    [2026-04-29 15:31:37,949][libs.losses.models.base_losses][INFO] BaseLoss/lpips_lpips_mean: start_step=0
+    [2026-04-29 15:31:37,949][libs.losses.models.base_losses][INFO] BaseLoss/distance_depth_inverse_mse_mean: start_step=0
+    [2026-04-29 15:31:37,949][libs.losses.models.base_losses][INFO] BaseLoss/background_mse_mean: start_step=0
+    [NuRec::NRend][INFO] ::: Creating registered instance <3dgut-nrend>
+    [NuRec::NRend][INFO] ::: GRUTRenderer : camera output settings : Features ON | Extended Features ON | Sensor Extended Features ON | Normals OFF | Ray Gradients OFF
+    [NuRec::NRend][INFO] ::: GRUTRenderer : lidar output settings : Features OFF | Extended Features ON | Sensor Extended Features ON | Normals OFF | Ray Gradients OFF
+    [NuRec::NRend][INFO] ::: LiDAR tiling size: 16x16
+    [NuRec::NRend][INFO] ::: Creating registered instance <sh-gaussians>
+    [NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.positions> in the state_dict.
+    [NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.scales> in the state_dict.
+    [NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.rotations> in the state_dict.
+    [NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.densities> in the state_dict.
+    [NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.features_albedo> in the state_dict.
+    [NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.features_specular> in the state_dict.
+    [NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.extra_signal> in the state_dict.
+    [NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.camera_extra_signal> in the state_dict.
+    [NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.lidar_extra_signal> in the state_dict.
+    [NuRec::NRend][INFO] ::: Parsed model . with 0 particles
+    [NuRec::NRend][INFO] ::: Model nre::sh-gaussians => nre_sh-gaussians@26.5.34 opened
+    [2026-04-29 15:31:39,357][nre.models.gaussians.renderers][INFO] Gaussian3DNRenderer: enable_ray_based_culling: True
+    Using bfloat16 Automatic Mixed Precision (AMP)
+    Trainer already configured with model summary callbacks: [<class 'pytorch_lightning.callbacks.model_summary.ModelSummary'>]. Skipping setting a default `ModelSummary` callback.
+    GPU available: True (cuda), used: True
+    TPU available: False, using: 0 TPU cores
+    HPU available: False, using: 0 HPUs
+    You are using a CUDA device ('NVIDIA RTX A6000') that has Tensor Cores. To properly utilize them, you should set `torch.set_float32_matmul_precision('medium' | 'high')` which will trade-off precision for performance. For more details, read https://pytorch.org/docs/stable/generated/torch.set_float32_matmul_precision.html#torch.set_float32_matmul_precision
+    Restoring states from the checkpoint path at /localhome/local-bhaefner/.cache/nrm/pretrained_models/kelvin-0427-front/last.ckpt
+    LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+    Loaded model weights from the checkpoint at /localhome/local-bhaefner/.cache/nrm/pretrained_models/kelvin-0427-front/last.ckpt
+    [2026-04-29 15:31:40,240][nre.nrm.datasets.nrm_ncore][INFO] Loaded 1/1 samples from file:///storage/data/nurec/ncorev4/debug.lst
+    Predicting in chunks: 100%|██████████| 2/2 [00:02<00:00,  1.05s/it]
+    Predicting DataLoader 0: 100%|██████████| 1/1 [00:02<00:00,  0.36it/s][2026-04-29 15:31:55,209][nre.nrm.predict.export_ply][INFO] Removed 0 non-finite density gaussians.
+    [2026-04-29 15:31:55,209][nre.nrm.predict.export_ply][INFO] Starting to filter 1,817,128 finite gaussians.
+    [2026-04-29 15:31:55,209][nre.nrm.predict.export_ply][INFO] Filter (density) removed 0 gaussians
+    [2026-04-29 15:31:55,217][nre.nrm.predict.export_ply][INFO] Filter (scale) removed 0 gaussians
+    [2026-04-29 15:31:55,217][nre.nrm.predict.export_ply][INFO] Filter (surface area) removed 0 gaussians
+    [2026-04-29 15:31:55,217][nre.nrm.predict.export_ply][INFO] After filtering, 1817128 gaussians remaining.
+    [2026-04-29 15:31:56,067][nre.models.gaussians.utils][INFO] Wrote .ply-file: /storage/results/instant-nurec/baseline_ga_log/no_merge/5rNftuCNEn6KYib3hZgvAp/ply/pai_000da9de-0ee5-465a-9a2d-e7e91d3016bb/pai_000da9de-0ee5-465a-9a2d-e7e91d3016bb_chunk0.ply
+    [2026-04-29 15:31:56,083][nre.nrm.predict.export_ply][INFO] Removed 0 non-finite density gaussians.
+    [2026-04-29 15:31:56,083][nre.nrm.predict.export_ply][INFO] Starting to filter 1,508,601 finite gaussians.
+    [2026-04-29 15:31:56,083][nre.nrm.predict.export_ply][INFO] Filter (density) removed 0 gaussians
+    [2026-04-29 15:31:56,083][nre.nrm.predict.export_ply][INFO] Filter (scale) removed 0 gaussians
+    [2026-04-29 15:31:56,083][nre.nrm.predict.export_ply][INFO] Filter (surface area) removed 0 gaussians
+    [2026-04-29 15:31:56,084][nre.nrm.predict.export_ply][INFO] After filtering, 1508601 gaussians remaining.
+    [2026-04-29 15:31:56,736][nre.models.gaussians.utils][INFO] Wrote .ply-file: /storage/results/instant-nurec/baseline_ga_log/no_merge/5rNftuCNEn6KYib3hZgvAp/ply/pai_000da9de-0ee5-465a-9a2d-e7e91d3016bb/pai_000da9de-0ee5-465a-9a2d-e7e91d3016bb_chunk1.ply
+    Predicting DataLoader 0: 100%|██████████| 1/1 [00:04<00:00,  0.23it/s]
+    + bazel run //nre/nrm:run -- --config-name /localhome/local-bhaefner/.cache/nrm/pretrained_models/kelvin-0427-front/parsed.yaml resume=/localhome/local-bhaefner/.cache/nrm/pretrained_models/kelvin-0427-front/last.ckpt +nrm/apps/options=_kelvin_predict_adaptive_front dataset.predict.ncore_json_base_path=/storage/data/nurec/ncorev4/ dataset.predict.ncore_json_list_path=/storage/data/nurec/ncorev4/debug.lst dataset.predict.cuboid_tracks_params.lidar_id=lidar_top_360fov out_dir=/storage/results/instant-nurec/baseline_ga_log//merge predict.render_video.enabled=false
+    (15:31:59) INFO: Invocation ID: 3f436e5b-78ef-49c7-b790-28920f4b7d60
+    (15:32:00) INFO: Current date is 2026-04-29
+    (15:32:00) Computing main repo mapping: 
+    (15:32:00) Loading: 
+    (15:32:00) Loading: 0 packages loaded
+    (15:32:02) Analyzing: target //nre/nrm:run (0 packages loaded)
+    (15:32:05) Analyzing: target //nre/nrm:run (0 packages loaded, 0 targets configured)
+    (15:32:05) Analyzing: target //nre/nrm:run (0 packages loaded, 0 targets configured)
+
+    (15:32:05) INFO: Analyzed target //nre/nrm:run (0 packages loaded, 0 targets configured).
+    (15:32:05) INFO: Found 1 target...
+    Target //nre/nrm:run up-to-date:
+      bazel-bin/nre/nrm/run
+    (15:32:05) INFO: Elapsed time: 5.205s, Critical Path: 0.06s
+    (15:32:05) INFO: 1 process: 1 internal.
+    (15:32:05) INFO: Build completed successfully, 1 total action
+    (15:32:05) INFO: Running command line: bazel-bin/nre/nrm/run <args omitted>
+    Seed set to 38
+    NRM RUN 🆔: JeNBmfMJDJ7JLvexLXPTYZ
+    [2026-04-29 15:32:22,678][nre.config.trainer][INFO] World Size: 1
+    [2026-04-29 15:32:22,678][nre.config.trainer][INFO] Node Count: 1
+    [2026-04-29 15:32:22,678][nre.config.trainer][INFO] Device Count per Node: 1
+    [2026-04-29 15:32:22,678][nre.config.trainer][INFO] Log every 5 steps
+    [2026-04-29 15:32:22,685][libs.losses.models.base_losses][INFO] BaseLoss/primitive_sky_cubemap_l1_mean: start_step=0
+    [2026-04-29 15:32:22,685][libs.losses.models.base_losses][INFO] BaseLoss/primitive_rgb_l1_mean: start_step=0
+    [2026-04-29 15:32:22,685][libs.losses.models.base_losses][INFO] BaseLoss/primitive_distance_l1_quantile: start_step=0
+    [2026-04-29 15:32:22,685][libs.losses.models.base_losses][INFO] BaseLoss/primitive_distance_gradient_abs_mean: start_step=0
+    [2026-04-29 15:32:22,685][libs.losses.models.base_losses][INFO] BaseLoss/primitive_semantics_cross_entropy_mean: start_step=0
+    [2026-04-29 15:32:22,685][libs.losses.models.base_losses][INFO] BaseLoss/primitive_normal_normal_cosine_mean: start_step=0
+    [2026-04-29 15:32:22,685][libs.losses.models.base_losses][INFO] BaseLoss/primitive_velocity_l1_mean: start_step=0
+    [2026-04-29 15:32:22,685][libs.losses.models.base_losses][INFO] BaseLoss/rgb_mse_mean: start_step=0
+    [2026-04-29 15:32:22,685][libs.losses.models.base_losses][INFO] BaseLoss/lpips_lpips_mean: start_step=0
+    [2026-04-29 15:32:22,685][libs.losses.models.base_losses][INFO] BaseLoss/distance_depth_inverse_mse_mean: start_step=0
+    [2026-04-29 15:32:22,685][libs.losses.models.base_losses][INFO] BaseLoss/background_mse_mean: start_step=0
+    [NuRec::NRend][INFO] ::: Creating registered instance <3dgut-nrend>
+    [NuRec::NRend][INFO] ::: GRUTRenderer : camera output settings : Features ON | Extended Features ON | Sensor Extended Features ON | Normals OFF | Ray Gradients OFF
+    [NuRec::NRend][INFO] ::: GRUTRenderer : lidar output settings : Features OFF | Extended Features ON | Sensor Extended Features ON | Normals OFF | Ray Gradients OFF
+    [NuRec::NRend][INFO] ::: LiDAR tiling size: 16x16
+    [NuRec::NRend][INFO] ::: Creating registered instance <sh-gaussians>
+    [NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.positions> in the state_dict.
+    [NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.scales> in the state_dict.
+    [NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.rotations> in the state_dict.
+    [NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.densities> in the state_dict.
+    [NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.features_albedo> in the state_dict.
+    [NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.features_specular> in the state_dict.
+    [NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.extra_signal> in the state_dict.
+    [NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.camera_extra_signal> in the state_dict.
+    [NuRec::NRend][WARNING] ::: NRESHGaussianModel : missing parameters tensor <.lidar_extra_signal> in the state_dict.
+    [NuRec::NRend][INFO] ::: Parsed model . with 0 particles
+    [NuRec::NRend][INFO] ::: Model nre::sh-gaussians => nre_sh-gaussians@26.5.34 opened
+    [2026-04-29 15:32:24,033][nre.models.gaussians.renderers][INFO] Gaussian3DNRenderer: enable_ray_based_culling: True
+    Using bfloat16 Automatic Mixed Precision (AMP)
+    Trainer already configured with model summary callbacks: [<class 'pytorch_lightning.callbacks.model_summary.ModelSummary'>]. Skipping setting a default `ModelSummary` callback.
+    GPU available: True (cuda), used: True
+    TPU available: False, using: 0 TPU cores
+    HPU available: False, using: 0 HPUs
+    You are using a CUDA device ('NVIDIA RTX A6000') that has Tensor Cores. To properly utilize them, you should set `torch.set_float32_matmul_precision('medium' | 'high')` which will trade-off precision for performance. For more details, read https://pytorch.org/docs/stable/generated/torch.set_float32_matmul_precision.html#torch.set_float32_matmul_precision
+    Restoring states from the checkpoint path at /localhome/local-bhaefner/.cache/nrm/pretrained_models/kelvin-0427-front/last.ckpt
+    LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+    Loaded model weights from the checkpoint at /localhome/local-bhaefner/.cache/nrm/pretrained_models/kelvin-0427-front/last.ckpt
+    [2026-04-29 15:32:24,878][nre.nrm.datasets.nrm_ncore][INFO] Loaded 1/1 samples from file:///storage/data/nurec/ncorev4/debug.lst
+    Predicting in chunks: 100%|██████████| 2/2 [00:02<00:00,  1.05s/it]
+    [2026-04-29 15:32:39,243][nre.nrm.predict.primitive_merge][INFO] Merging 2 chunks (3392823 Gaussians)
+    [2026-04-29 15:32:41,415][nre.nrm.predict.primitive_merge][INFO] Merged 2 primitives into KelvinNRMPrimitive(StaticLayer(#GS=3.01M), [DynamicLayer(#GS=0.07M, #KF=3)])
+    Predicting DataLoader 0: 100%|██████████| 1/1 [00:05<00:00,  0.20it/s][2026-04-29 15:32:41,921][nre.nrm.predict.export_ply][INFO] Removed 0 non-finite density gaussians.
+    [2026-04-29 15:32:41,922][nre.nrm.predict.export_ply][INFO] Starting to filter 3,006,374 finite gaussians.
+    [2026-04-29 15:32:41,922][nre.nrm.predict.export_ply][INFO] Filter (density) removed 0 gaussians
+    [2026-04-29 15:32:41,929][nre.nrm.predict.export_ply][INFO] Filter (scale) removed 0 gaussians
+    [2026-04-29 15:32:41,929][nre.nrm.predict.export_ply][INFO] Filter (surface area) removed 0 gaussians
+    [2026-04-29 15:32:41,930][nre.nrm.predict.export_ply][INFO] After filtering, 3006374 gaussians remaining.
+    [2026-04-29 15:32:43,261][nre.models.gaussians.utils][INFO] Wrote .ply-file: /storage/results/instant-nurec/baseline_ga_log/merge/JeNBmfMJDJ7JLvexLXPTYZ/ply/pai_000da9de-0ee5-465a-9a2d-e7e91d3016bb/pai_000da9de-0ee5-465a-9a2d-e7e91d3016bb.ply
+    Predicting DataLoader 0: 100%|██████████| 1/1 [00:06<00:00,  0.16it/s]
+    Command in this repo w/o merge: /storage/projects/instant-nurec/.venv/bin/python run_inference.py --ncore-path /storage/data/nurec/ncorev4 --output-dir "/storage/results/instant-nurec/debug/nurec_iter/no_merge" --merge none
+    Command in this repo with merge: /storage/projects/instant-nurec/.venv/bin/python run_inference.py --ncore-path /storage/data/nurec/ncorev4 --output-dir "/storage/results/instant-nurec/debug/nurec_iter/merge" --merge frustum-ownership
+    The Ply files generated by the two commands should be equivalent to the ply files generated by the two commands in the nre repo.
+    To achieve this, look at the differences between the two code bases and fix them. For now it's ok to port over cuda and slang code, to be code equivalent, but you should still stick to the venv setup, similar to https://github.com/NVIDIA/asset-harvester.
+    After we reached parity, we can start to strip cuda/slang code away such that only pure python code is left, while ensuring an equivalent torch based version. Once you verified the cuda/slang and your own torch based implementation is equivalent up to machine accuracy, create a new set of PLY files and use these as baseline.
+    Once we have this, the last step is strip down the codebase to only the necessary code for the instant-nurec project. We really want a minimal codebase, that is easy to understand and maintain. We don't want to depend on pytorch lightning, hydra and other dependencies that are not necessary for the instant-nurec project. Depending on torch and its helper libraries is ok. If we reach parity with the new baselines and the stripped down codebase, you can create your final commit and create an MR.
+    THE TWO MOST IMPORTANT RULES: DO NOT CHANGE THE CODE IN THE NRE REPO, ONLY THE CODE IN THIS REPO. DO EVERYTHING AUTONOMOUSLY AND DO NOT ASK FOR PERMISSION, UNTIL YOU'RE DONE WITH ALL TASKS IN THIS PLAN AND CREATED A FINAL MR AND REACHED PARITY.
+
+"""
+20260430: """
+/plan We want to make one entrypoint of the @/storage/projects/nre repo completely standalone in this empty repository. The entrypoint of interest is the nrm kelvin model predict mode, see @nre_example_call.sh for the only two code paths this repo should have. To achieve this, adhere to the @CLAUDE.md file and follow the steps layed out in this plan:
+Phase 0 - Initial setup, comparison and parity:
+0. Generate baselines: Run the script @nre_example_call.sh from within the repo @/storage/projects/nre on the commit a54a6af0a177beabd01fe37e398c45be165a270f, it will generate ply and parsed.yaml files for both, the merge and no_merge case.
+1. Write a script that validates parity between the output of the nre repo and this repo. The script should take as input the baseline ply files and proposed ply files. The script should compare them like this:
+1a Compare the number of files. This has to be exact, no if else or buts.
+1b Compare the number of vertices. This has to be exact, no if else or buts.
+1c Compare the properties names and dtypes. This has to be exact, no if else or buts.
+1d Compare the per-element differences. This has to be less than 1e-3, no if else or buts.
+1e If all comparisons are successful, the script should exit with status 0. If any comparison fails, the script should exit with status 1 and print the details of the failed comparison.
+1f The script should be called with the following arguments @compare_ply.py merge <baseline_merge_ply_file> <proposed_merge_ply_file>, as well as @compare_ply.py no_merge <path/to/baseline_no_merge_ply_dir> <path/to/proposed_no_merge_ply_dir>.
+1g Run the script on the baselines you created in step 0. For the proposed ply use the baseline ply files, this should compare identical files and act as a test.
+1h Generate 5 more baselines and run the script on them. This determines if the code in @/storage/projects/nre repo is deterministic. If it's not deterministic, adjust the script to account for this, ie. allow for small tolerances, defined by the non-determinism of the repeated baselin plys generations.
+2. Copy the whole code: From the @/storage/projects/nre repo on the commit a54a6af0a177beabd01fe37e398c45be165a270f copy the whole code to this repository.
+2a Rerun the script step 0, but this time run it from within this repo.
+2b Compare the ply files from 2a to the ones from 0. This should be within the same tolerance as determined in 1h. If it's not, find out why and fix it.
+
+Phase 1 - Build minimal codebase:
+Note: Always ensure parity - at each step! From this step onwards, always keep parity with the baselines AT EACH STEP and SUBSTEP of this plan using your script you wrote in step 1. Look at the @CLAUDE.md file how this is done!
+3. Create minimal CLI interface: Create a new entrypoint that only has the following parameters --ncore-path /storage/data/nurec/ncorev4 --output-dir /tmp/nurec_iter/no_merge --merge [none,frustum-ownership] --log-level [INFO,DEBUG,...]
+4. Save/Load entire model: Use the approach of saving and loading the FULL kelvin model, see https://docs.pytorch.org/tutorials/beginner/saving_loading_models.html#save-load-entire-model.
+5. Strip boilerplate files/functions/lines of code: The full copied codebase, has way too much code for our purpose of ONLY having the kelvin model predict mode as standalone in this code base. Be drastic, be aggressive, change the structure, change the files, change the code to simplify the codebase as much as possible, while ensuring parity with the baseline.
+5a Iteratively strip all files of all types and all functions that are not necessary for the kelvin model.
+5b Iteratively strip all files of all types and all functions that are not necessary for the kelvin model predict mode. That includes, but is not limited to removing everything related to training, testing, validation. Use the baseline's created config/parsed.yaml file to understand the limited functionality needed for the predict mode.
+5c Iteratively strip all files of all types and all functions and all lines of code that do not change the output of the kelvin model predict mode, ie if a code piece does not alter the final ply file, remove it. That includes, but is not limited to profiling code - it might be executed, but has no impacton the final ply file. Understand the full codebase in detail to to realize this step.
+5d Iteratively remove all yaml files too, the final version should not contain, nor depend on any yaml file.
+5e Iteratively remove NRE as a dependency, we only need the nrm kelvin model predict mode.
+5f Iteratively remove NRE mentioned anywhere in the codebase.
+5g Ensure minimal code and /simplify as much as possible! Final code should only contain everything related to handling the ncorev4 data, to prepare a batch, to run the kelvin model predict mode, and to export the ply files. No other code is allowed. If that's not true, go back to the beginning of this step.
+5h Iterate over this phase until you can't strip any further and a single file/function removal would cause a loss of parity for a given ncorev4 sample. Use your /effort max on this phase and understand the codebase in detail to do this!
+6 Unit tests: Write unit tests for each function and each line of code that is left in the codebase.
+
+Phase 2 - Strip CUDA/slang:
+Note: Always ensure parity - at each step! From this step onwards, always keep parity with the baselines AT EACH STEP and SUBSTEP of this plan using your script you wrote in step 1. Look at the @CLAUDE.md file how this is done!
+6. Iteratively remove dependencies on CUDA/slang using test-driven-development: This repo should be a pure python/pytorch implementation.
+6a Implement your own versions of the CUDA/slang code, verify with dedicated tests that both implementations are equivalent up to machine accuracy. This is crucial! Build tests that verify every code path of both implementations is equivalent for each input, don't forget edge cases. 
+6b Once verified CUDA/slang and your pytorch implemenations are equivalent, verify parity of the ply files still hold. Take the verified difference between your pytorch and CUDA/slang implementations into account and adjust the tolerance of the parity accordingly.
+6c Repeat phase 1 on the cuda/slang stripped codebase.
+
+Phase 3 - Change build system and remove 3rd party dependencies:
+Note: Always ensure parity - at each step! From this step onwards, always keep parity with the baselines AT EACH STEP and SUBSTEP of this plan using your script you wrote in step 1. Look at the @CLAUDE.md file how this is done!
+7. Iteratively remove dependencies, build similar setup and run script, and make structure similar to the @NVIDIA/asset-harvester repo: https://github.com/NVIDIA/asset-harvester/tree/main
+7a The dependencies have to exclude bazel, pytorch lightning, hydra, nre and other dependencies that are not necessary for the instant-nurec project. The dependencies should be minimal and similar to the dependencies of the @NVIDIA/asset-harvester repo.
+7b Create a repo structure that is very similar to the @NVIDIA/asset-harvester repo - understand it fully, each directory, each file, each line of code of that repo
+7c Repeat phase 1 on the build system and dependency stripped codebase.
+
+Phase 4 - Cleanup and final touches:
+8 Mock huggingface: Assume the ncorev4 data and the kelvin model is being downloaded from huggingface, create mocks for this. Use the already available local model and data to for this, ie the huggingface mocks should resolve to the local model and data, because it's not yet on huggingface. This is being done by the corporation, not by us.
+9 README, setup, run: Write a README.md, setup.sh, run.sh file, similar to the @NVIDIA/asset-harvester repo README.md, setup.sh, and run.sh file. The readme should be self-contained and explain how to use the codebase. The setup.sh should be self-contained and setup the environment. The run.sh should be self-contained and enable running the codebase.
+
+Note0: Parity must be kept at all times, up to tolerance you determined in the above steps!
+Note1: All calls that require a GPU, are allowed to be run unsandboxed. Only calls that require a GPU are allowed to be run unsandboxed.
+Note2: Work completely autonomously and do not ask for permission, until you're done with ALL tasks in this plan and created a final MR and reached parity. If you hit a blocker resolve it yourself and continue with the plan.
+Note3: Work on a single branch for this plan. Do not create any other branches.
+Note4: Each step on its own can and should be an iterative step
+Note5: Create a clean commit with a descriptive commit message for each step and each substep.
+Note6: Phase 1 is by far the most important step, as it builds the minimal codebase. 
+"""

@@ -1,0 +1,70 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+.ipynb_checkpoints/
+
+# Virtual envs
+.venv/
+.venv-*/
+venv/
+env/
+
+# Editor / OS
+.idea/
+.vscode/
+.cursor/
+.DS_Store
+.devcontainer/
+.vs/
+pyrightconfig.json
+compile_commands.json
+
+# Tooling caches
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+.claude/
+.scratch/
+
+# Generated runtime artifacts
+*.pt
+*.ckpt
+*.pkl
+*.pth
+*.so
+*.swp
+*.swo
+
+# Reference baselines (large PLYs; kept out of git, used only locally)
+baselines/
+
+# Project-local trees that should never be committed
+out/
+results/
+logs/
+outputs/
+ckpts/
+checkpoints/
+tmp*
+backup/
+trial*/
+debug*
+
+# Stray shell/profile dotfiles that may land in the working tree on
+# certain container setups
+.bash_profile
+.bashrc
+.gitconfig
+.gitmodules
+.mcp.json
+.profile
+.ripgreprc
+.zprofile
+.zshrc
