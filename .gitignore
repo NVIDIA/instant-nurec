@@ -16,7 +16,9 @@ env/
 
 # Editor / OS
 .idea/
+.idea
 .vscode/
+.vscode
 .cursor/
 .DS_Store
 .devcontainer/
@@ -31,7 +33,7 @@ compile_commands.json
 .coverage
 htmlcov/
 .claude/
-.scratch/
+.scratch*/
 
 # Generated runtime artifacts
 *.pt
