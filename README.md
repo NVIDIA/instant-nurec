@@ -56,17 +56,16 @@ source .venv/bin/activate
 tree from `uv.lock` into `.venv/`. The only CUDA dependency is whatever
 the pinned `torch` wheel ships with.
 
-The pretrained model `instant_nurec.pt` (a TorchScript archive of the
-Kelvin static-only forward) is fetched on first inference run from the
-Hugging Face repo `nvidia/instant-nurec` into the standard HF hub cache
-(`~/.cache/huggingface/hub` unless `HF_HOME` /
-`HUGGINGFACE_HUB_CACHE` say otherwise). Set `INSTANT_NUREC_FULL_PT`
-to a local path to override the auto-download.
-
 </details>
 
 <details>
 <summary><b>Inference</b></summary>
+
+> **Note:** The pretrained model `instant_nurec.pt` (a TorchScript
+> archive) is fetched on first inference run from the Hugging Face
+> repo `nvidia/instant-nurec` and cached locally; subsequent runs read
+> it from the cache. Set `INSTANT_NUREC_FULL_PT` to a local path to
+> override the auto-download.
 
 `--ncore-path` accepts two input shapes:
 
@@ -131,7 +130,6 @@ Output layout: PLYs only, under `out_dir/<run_id>/ply/<sequence_id>/...ply`.
 | variable | purpose |
 | --- | --- |
 | `INSTANT_NUREC_FULL_PT` | Absolute path to a local `instant_nurec.pt`. Takes priority over the auto-downloaded copy. |
-| `INSTANT_NUREC_HF_CACHE_DIR` | Override the HF cache root used for the auto-download. When unset, `huggingface_hub` uses its standard cache (`~/.cache/huggingface/hub`, or whatever `HF_HOME` / `HUGGINGFACE_HUB_CACHE` resolve to). |
 | `INSTANT_NUREC_RUN_ID` | Override the per-run shortuuid; useful when scripting reproducible output paths. |
 
 </details>
