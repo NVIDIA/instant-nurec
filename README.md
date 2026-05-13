@@ -67,6 +67,32 @@ the pinned `torch` wheel ships with.
 > it from the cache. Set `INSTANT_NUREC_FULL_PT` to a local path to
 > override the auto-download.
 
+##### First run — end-to-end on a public demo clip
+
+The clip lives in a gated HF dataset. Accept the terms at
+[nvidia/PhysicalAI-Autonomous-Vehicles-NCore](https://huggingface.co/datasets/nvidia/PhysicalAI-Autonomous-Vehicles-NCore)
+while logged into Hugging Face, then `hf auth login` locally; the same
+auth covers the `nvidia/instant-nurec` model auto-download on first run.
+
+```bash
+# Download the clip (~2 GB)
+huggingface-cli download \
+    nvidia/PhysicalAI-Autonomous-Vehicles-NCore --repo-type dataset \
+    --include "clips/000da9de-0ee5-465a-9a2d-e7e91d3016bb/*" \
+    --local-dir ./demo_clip
+
+# Reconstruct it
+python run_inference.py \
+    --ncore-path ./demo_clip/clips/000da9de-0ee5-465a-9a2d-e7e91d3016bb/pai_000da9de-0ee5-465a-9a2d-e7e91d3016bb.json \
+    --output-dir ./demo_output \
+    --merge frustum-ownership
+```
+
+Success looks like a single PLY at
+`./demo_output/<run_id>/ply/pai_000da9de-.../pai_000da9de-....ply` —
+~221 MB, ~2.87 M Gaussians (3.18 M pre-merge across 2 chunks). Drop
+`--merge frustum-ownership` to write per-chunk PLYs instead.
+
 `--ncore-path` accepts two input shapes:
 
 ##### Mode 1 — single sequence `.json` (NuRec-aligned)
