@@ -82,9 +82,10 @@ def make_parser() -> argparse.ArgumentParser:
         help=(
             f"Maximum number of time-chunks processed per clip "
             f"(default: {_DEFAULT_MAX_CHUNKS}). One chunk spans up to 13.5 s, "
-            f"so the default covers 8 * 13.5 = 108 s. Clips longer than that "
-            f"are silently truncated unless this is increased -- bump it to "
-            f"ceil(clip_seconds / 13.5) for longer clips."
+            f"so the default covers 8 * 13.5 = 108 s. Longer clips are "
+            f"truncated and a WARNING is logged naming the dropped chunk "
+            f"count and the --max-chunks value needed to cover the full clip; "
+            f"bump it to ceil(clip_seconds / 13.5) to silence the warning."
         ),
     )
     parser.add_argument(

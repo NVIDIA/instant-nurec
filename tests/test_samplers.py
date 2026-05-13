@@ -205,6 +205,82 @@ def test_sample_frame_batch_returns_empty_when_chunk_count_under_sample_idx():
     assert out_one == {}
 
 
+def test_sample_frame_batch_warns_when_clip_exceeds_max_chunks(caplog):
+    """When the natural chunk count exceeds n_samples_per_sequence, the sampler
+    emits a single warning naming the dropped chunk count and the suggested
+    --max-chunks value."""
+    import logging
+
+    from instant_nurec.utils.types import HalfClosedInterval
+
+    # 4 frames/sample * 1_000_000us gap = 4_000_000us per chunk.
+    # 20_000_000us clip -> ceil(20/4) = 5 natural chunks, but cap is 2.
+    sampler = _make_sampler(
+        n_frames_per_sample=4,
+        n_samples_per_sequence=2,
+        max_frame_gap_timestamp_us=1_000_000,
+    )
+    cams = {"a": np.arange(0, 20_000_001, 500_000)}
+    intervals = [HalfClosedInterval(0, 20_000_000)]
+
+    with caplog.at_level(logging.WARNING, logger="instant_nurec.datasets.samplers"):
+        sampler.sample_frame_batch(
+            sample_idx=0, camera_frame_timestamps_us=cams, time_intervals=intervals
+        )
+
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warnings) == 1
+    msg = warnings[0].getMessage()
+    assert "3 chunk(s) will be silently dropped" in msg
+    assert "--max-chunks to 5" in msg
+
+
+def test_sample_frame_batch_no_warning_when_within_max_chunks(caplog):
+    """No warning when the natural chunk count fits within n_samples_per_sequence."""
+    import logging
+
+    from instant_nurec.utils.types import HalfClosedInterval
+
+    # Clip is short enough that only 1 chunk is needed; cap of 8 is plenty.
+    sampler = _make_sampler(
+        n_frames_per_sample=4,
+        n_samples_per_sequence=8,
+        max_frame_gap_timestamp_us=10_000_000,
+    )
+    cams = {"a": np.array([0, 100_000])}
+    intervals = [HalfClosedInterval(0, 100_000)]
+
+    with caplog.at_level(logging.WARNING, logger="instant_nurec.datasets.samplers"):
+        sampler.sample_frame_batch(
+            sample_idx=0, camera_frame_timestamps_us=cams, time_intervals=intervals
+        )
+
+    assert [r for r in caplog.records if r.levelno == logging.WARNING] == []
+
+
+def test_sample_frame_batch_truncation_warning_fires_only_at_sample_idx_zero(caplog):
+    """The truncation warning fires once per clip (at sample_idx=0), not on
+    subsequent sample_idx calls for the same oversized clip."""
+    import logging
+
+    from instant_nurec.utils.types import HalfClosedInterval
+
+    sampler = _make_sampler(
+        n_frames_per_sample=4,
+        n_samples_per_sequence=2,
+        max_frame_gap_timestamp_us=1_000_000,
+    )
+    cams = {"a": np.arange(0, 20_000_001, 500_000)}
+    intervals = [HalfClosedInterval(0, 20_000_000)]
+
+    with caplog.at_level(logging.WARNING, logger="instant_nurec.datasets.samplers"):
+        sampler.sample_frame_batch(
+            sample_idx=1, camera_frame_timestamps_us=cams, time_intervals=intervals
+        )
+
+    assert [r for r in caplog.records if r.levelno == logging.WARNING] == []
+
+
 def test_sample_frame_batch_multi_interval_uses_min_start_max_end():
     """When multiple intervals are provided, the sampled span is min(start)
     to max(end)."""

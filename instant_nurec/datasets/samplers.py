@@ -15,10 +15,15 @@
 
 from __future__ import annotations
 
+import logging
+
 import numpy as np
 
 from instant_nurec.config_schema.dataset import AdaptiveSequentialFrameBatchSamplerConfig
 from instant_nurec.utils.types import HalfClosedInterval
+
+
+logger = logging.getLogger(__name__)
 
 
 def get_closest_frame_index(frame_timestamps_us: np.ndarray, target_timestamp_us: int) -> int:
@@ -76,6 +81,26 @@ class AdaptiveSequentialFrameBatchSampler:
         sequence_total_timespan = sequence_end_timestamp - sequence_start_timestamp
         max_chunk_timespan = self.max_frame_gap_timestamp_us * self.n_frames_per_sample
         n_chunks = max(1, int(np.ceil(sequence_total_timespan / max_chunk_timespan)))
+
+        if sample_idx == 0 and n_chunks > self.n_samples_per_sequence:
+            chunk_seconds = max_chunk_timespan / 1e6
+            clip_seconds = sequence_total_timespan / 1e6
+            covered_seconds = self.n_samples_per_sequence * chunk_seconds
+            dropped = n_chunks - self.n_samples_per_sequence
+            logger.warning(
+                "Clip spans %.1fs (~%d chunks of %.1fs) but n_samples_per_sequence=%d "
+                "(`--max-chunks`) caps processing to the first ~%.1fs; "
+                "%d chunk(s) will be silently dropped. "
+                "Set --max-chunks to %d (= ceil(clip_seconds / %.1f)) to process the full clip.",
+                clip_seconds,
+                n_chunks,
+                chunk_seconds,
+                self.n_samples_per_sequence,
+                covered_seconds,
+                dropped,
+                n_chunks,
+                chunk_seconds,
+            )
 
         if sample_idx >= n_chunks:
             return {}

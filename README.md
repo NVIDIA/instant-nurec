@@ -122,7 +122,7 @@ Output layout: PLYs only, under `out_dir/<run_id>/ply/<sequence_id>/...ply`.
 | `--output-dir` | (required) | Directory the pipeline writes PLYs into. |
 | `--merge` | `none` | `none` writes per-chunk PLYs (`<seq>_chunk{N}.ply`); `frustum-ownership` writes a single merged PLY per sequence (`<seq>.ply`). |
 | `--camera-id` | `camera_front_wide_120fov` | ncorev4 context-camera id used as model input. Exactly one camera is required. |
-| `--max-chunks` | `8` | Maximum number of time-chunks processed per clip. One chunk spans up to 13.5 s, so the default covers 8 × 13.5 = 108 s. Clips longer than that are silently truncated unless this is increased — bump to `ceil(clip_seconds / 13.5)` for longer clips. |
+| `--max-chunks` | `8` | Maximum number of time-chunks processed per clip. One chunk spans up to 13.5 s, so the default covers 8 × 13.5 = 108 s. Longer clips are truncated and a `WARNING` is logged naming the dropped chunk count and the `--max-chunks` value needed to cover the full clip — bump to `ceil(clip_seconds / 13.5)` to silence it. |
 | `--log-level` | `INFO` | `DEBUG` / `INFO` / `WARNING` / `ERROR` / `CRITICAL`. |
 
 #### Environment variables

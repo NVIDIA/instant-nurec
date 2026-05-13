@@ -50,7 +50,9 @@ class AdaptiveSequentialFrameBatchSamplerConfig(BaseConfigSchema):
         description=(
             "Maximum number of time-chunks processed per sequence. Clips longer than "
             "n_samples_per_sequence * n_frames_per_sample * max_frame_gap_timestamp_us "
-            "(approx 108 s with defaults) are silently truncated -- bump this for long clips."
+            "(approx 108 s with defaults) are truncated and the sampler logs a WARNING "
+            "naming the dropped chunk count and the value needed to cover the full clip -- "
+            "bump this for long clips."
         ),
     )
     max_frame_gap_timestamp_us: int = Field(
