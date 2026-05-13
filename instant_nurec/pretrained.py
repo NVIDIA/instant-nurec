@@ -17,10 +17,9 @@
 
 ``download_instant_nurec_pt()`` returns the local path to
 ``instant_nurec.pt``, downloading from Hugging Face on first use into
-the standard HF hub cache (``~/.cache/huggingface/hub``). Setting
-``INSTANT_NUREC_FULL_PT`` to an existing local path short-circuits the
-download (useful for offline use). ``INSTANT_NUREC_HF_CACHE_DIR``
-overrides the HF cache root.
+the standard HF hub cache. Setting ``INSTANT_NUREC_FULL_PT`` to an
+existing local path short-circuits the download (useful for offline
+use).
 """
 
 from __future__ import annotations
@@ -43,19 +42,6 @@ class PretrainedModelError(RuntimeError):
     """Raised when ``instant_nurec.pt`` cannot be resolved."""
 
 
-def _cache_dir() -> Optional[Path]:
-    """Return the HF cache override, or ``None`` to let HF use its default.
-
-    Honors ``INSTANT_NUREC_HF_CACHE_DIR``. When unset, returning ``None``
-    lets ``huggingface_hub`` fall through to its standard cache root
-    (``~/.cache/huggingface/hub`` unless overridden by ``HF_HOME`` /
-    ``HUGGINGFACE_HUB_CACHE``), so blobs are shared with other tooling
-    on the same machine.
-    """
-    override = os.environ.get("INSTANT_NUREC_HF_CACHE_DIR")
-    return Path(override) if override else None
-
-
 def download_instant_nurec_pt(*, cache_dir: Optional[str | Path] = None) -> str:
     """Return the local path to ``instant_nurec.pt``.
 
@@ -63,9 +49,9 @@ def download_instant_nurec_pt(*, cache_dir: Optional[str | Path] = None) -> str:
 
     1. ``INSTANT_NUREC_FULL_PT`` env var, if set and pointing at an
        existing file — used verbatim (offline override).
-    2. ``huggingface_hub.hf_hub_download`` from :data:`MODEL_REPO_ID`
-       into ``cache_dir`` (defaults to ``INSTANT_NUREC_HF_CACHE_DIR``
-       or HF's standard hub cache).
+    2. ``huggingface_hub.hf_hub_download`` from :data:`MODEL_REPO_ID`.
+       When ``cache_dir`` is passed it is forwarded verbatim; otherwise
+       ``huggingface_hub`` uses its standard hub cache.
     """
 
     env_path = os.environ.get("INSTANT_NUREC_FULL_PT")
@@ -74,10 +60,9 @@ def download_instant_nurec_pt(*, cache_dir: Optional[str | Path] = None) -> str:
 
     if cache_dir is not None:
         target: Optional[Path] = Path(cache_dir)
-    else:
-        target = _cache_dir()
-    if target is not None:
         target.mkdir(parents=True, exist_ok=True)
+    else:
+        target = None
 
     try:
         from huggingface_hub import hf_hub_download, try_to_load_from_cache
