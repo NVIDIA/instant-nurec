@@ -3,7 +3,6 @@
 
 # InstantNuRec: Feed-Forward 3D Gaussian Reconstruction from Driving Logs
 
-[![Paper](https://img.shields.io/badge/arXiv-Paper-b31b1b?logo=arxiv)](https://arxiv.org/abs/2501.00602)
 [![License](https://img.shields.io/badge/License-Apache--2.0-orange)](LICENSE.txt)
 [![Model](https://img.shields.io/badge/HF-Model-yellow?logo=huggingface&style=flat-square)](https://huggingface.co/nvidia/instant-nurec)
 [![Data](https://img.shields.io/badge/NCore-0d9488?logo=database&logoColor=white&style=flat-square)](https://huggingface.co/datasets/nvidia/PhysicalAI-Autonomous-Vehicles-NCore)
@@ -23,9 +22,21 @@ time and interchanged with existing simulation pipelines.
 
 This repository is the public reference implementation of the predict
 side of the **Kelvin** model: ncorev4 ingest → frame batch prep →
-forward pass → 3D-Gaussian PLY export. It is sufficient to
-reproduce the paper's reconstruction outputs from a recorded ncorev4
-sequence.
+forward pass → 3D-Gaussian PLY export. The PLY output is usable
+directly as a static reconstruction, and can also serve as
+initialization for downstream NuRec training to reach higher fidelity.
+
+### Background
+
+Instant NuRec is a feed-forward reconstruction model that converts
+driving logs into 3D Gaussian Splatting (3DGS) representations. Its
+vision-transformer backbone and DPT-decoders output a high-fidelity
+3D environment that's ready for simulations.
+
+Instant NuRec leverages the following foundational technologies:
+[Depth-Anything-V3](https://github.com/ByteDance-Seed/depth-anything-3),
+[STORM](https://github.com/NVlabs/GaussianSTORM), and
+[BTimer](https://research.nvidia.com/labs/toronto-ai/bullet-timer/).
 
 ## Pipeline Overview
 
@@ -210,14 +221,12 @@ in [THIRD_PARTY_LICENSE.txt](THIRD_PARTY_LICENSE.txt).
 If you find this work useful in your research, please consider citing:
 
 ```bibtex
-@article{yang2025storm,
-  title   = {STORM: Spatio-Temporal Reconstruction Model for Large-Scale Outdoor Scenes},
-  author  = {Yang, Jiawei and Huang, Jiahui and Chen, Yuxiao and Wang, Yan
-             and Li, Boyi and You, Yurong and Sharma, Apoorva and Igl, Maximilian
-             and Karkus, Peter and Xu, Danfei and Ivanovic, Boris
-             and Wang, Yue and Pavone, Marco},
-  journal = {arXiv preprint arXiv:2501.00602},
-  year    = {2025}
+@misc{instantnurec2026,
+  author       = {{NVIDIA}},
+  title        = {Instant NuRec},
+  year         = {2026},
+  publisher    = {GitHub},
+  howpublished = {\url{https://github.com/NVIDIA/instant-nurec}}
 }
 ```
 
