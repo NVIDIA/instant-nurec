@@ -7,7 +7,7 @@
 | `ValueError: --ncore-path ...: not an existing JSON/LST file` | Path doesn't resolve | Check the resolved path; `.lst` entries resolve relative to the LST file's dir, not `$PWD`. |
 | `ValueError: --ncore-path must end in .json or .lst` | Wrong suffix | Pass a single `.json` or a `.lst` manifest. |
 | `InstantNuRecDataError: Context camera <id> not found in supervision cameras [...]` | `--camera-id` not in the ncorev4 sequence | Inspect the JSON's camera list and pass a matching id. |
-| `RuntimeError: Found no NVIDIA driver` / `Torch not compiled with CUDA enabled` | No GPU, driver `< 570`, or non-CUDA torch wheel | `nvidia-smi` to confirm GPU + driver; `python -c "import torch; print(torch.cuda.is_available())"` must be `True`. No CPU fallback exists. |
+| `RuntimeError: Found no NVIDIA driver` / `Torch not compiled with CUDA enabled` | No GPU, driver `< 570` (or `< 580` on Blackwell), or non-CUDA torch wheel | `nvidia-smi` to confirm GPU + driver; `python -c "import torch; print(torch.cuda.is_available())"` must be `True`. No CPU fallback exists. |
 | `torch.cuda.OutOfMemoryError` during `Predicting in chunks` | `--max-chunks` × per-chunk working set exceeds VRAM | Lower `--max-chunks`. |
 | `WARNING ... Clip spans Xs ... chunk(s) will be silently dropped` | Clip longer than `--max-chunks × 13.5 s` (default 108 s) | Bump `--max-chunks` to the value the warning prints. |
 

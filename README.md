@@ -50,7 +50,7 @@ NCore V4 Sequence ─► Frame Batching ─► Kelvin Forward Pass (JIT) ─► 
 #### Prerequisites
 
 - **Python** 3.11
-- **NVIDIA driver** >= 570 (CUDA 12.8 compatible)
+- **NVIDIA driver** >= 570 (CUDA 12.8 compatible); Blackwell GPUs require >= 580 _(TODO: pending HW Eng / DevTech sign-off)_
 - **GPU VRAM** ≥ 16 GB
 - **uv** — the [Astral Python package manager](https://docs.astral.sh/uv/).
   Install with `curl -LsSf https://astral.sh/uv/install.sh | sh` or
