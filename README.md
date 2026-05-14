@@ -3,7 +3,6 @@
 
 # InstantNuRec: Feed-Forward 3D Gaussian Reconstruction from Driving Logs
 
-[![Paper](https://img.shields.io/badge/arXiv-Paper-b31b1b?logo=arxiv)](https://arxiv.org/abs/2501.00602)
 [![License](https://img.shields.io/badge/License-Apache--2.0-orange)](LICENSE.txt)
 [![Model](https://img.shields.io/badge/HF-Model-yellow?logo=huggingface&style=flat-square)](https://huggingface.co/nvidia/instant-nurec)
 [![Data](https://img.shields.io/badge/NCore-0d9488?logo=database&logoColor=white&style=flat-square)](https://huggingface.co/datasets/nvidia/PhysicalAI-Autonomous-Vehicles-NCore)
@@ -23,9 +22,21 @@ time and interchanged with existing simulation pipelines.
 
 This repository is the public reference implementation of the predict
 side of the **Kelvin** model: ncorev4 ingest → frame batch prep →
-forward pass → 3D-Gaussian PLY export. It is sufficient to
-reproduce the paper's reconstruction outputs from a recorded ncorev4
-sequence.
+forward pass → 3D-Gaussian PLY export. The PLY output is usable
+directly as a static reconstruction, and can also serve as
+initialization for downstream NuRec training to reach higher fidelity.
+
+### Background
+
+Instant NuRec is a feed-forward reconstruction model that converts
+driving logs into 3D Gaussian Splatting (3DGS) representations. Its
+vision-transformer backbone and DPT-decoders output a high-fidelity
+3D environment that's ready for simulations.
+
+Instant NuRec leverages the following foundational technologies:
+[Depth-Anything-V3](https://github.com/ByteDance-Seed/depth-anything-3),
+[STORM](https://github.com/NVlabs/GaussianSTORM), and
+[BTimer](https://research.nvidia.com/labs/toronto-ai/bullet-timer/).
 
 ## Pipeline Overview
 
@@ -39,7 +50,7 @@ NCore V4 Sequence ─► Frame Batching ─► Kelvin Forward Pass (JIT) ─► 
 #### Prerequisites
 
 - **Python** 3.11
-- **NVIDIA driver** >= 570 (CUDA 12.8 compatible)
+- **NVIDIA driver** >= 570 (CUDA 12.8 compatible); Blackwell GPUs require >= 580 _(TODO: pending HW Eng / DevTech sign-off)_
 - **GPU VRAM** ≥ 16 GB
 - **uv** — the [Astral Python package manager](https://docs.astral.sh/uv/).
   Install with `curl -LsSf https://astral.sh/uv/install.sh | sh` or
@@ -66,6 +77,32 @@ the pinned `torch` wheel ships with.
 > repo `nvidia/instant-nurec` and cached locally; subsequent runs read
 > it from the cache. Set `INSTANT_NUREC_FULL_PT` to a local path to
 > override the auto-download.
+
+##### First run — end-to-end on a public demo clip
+
+The clip lives in a gated HF dataset. Accept the terms at
+[nvidia/PhysicalAI-Autonomous-Vehicles-NCore](https://huggingface.co/datasets/nvidia/PhysicalAI-Autonomous-Vehicles-NCore)
+while logged into Hugging Face, then `hf auth login` locally; the same
+auth covers the `nvidia/instant-nurec` model auto-download on first run.
+
+```bash
+# Download the clip (~2 GB)
+huggingface-cli download \
+    nvidia/PhysicalAI-Autonomous-Vehicles-NCore --repo-type dataset \
+    --include "clips/000da9de-0ee5-465a-9a2d-e7e91d3016bb/*" \
+    --local-dir ./demo_clip
+
+# Reconstruct it
+python run_inference.py \
+    --ncore-path ./demo_clip/clips/000da9de-0ee5-465a-9a2d-e7e91d3016bb/pai_000da9de-0ee5-465a-9a2d-e7e91d3016bb.json \
+    --output-dir ./demo_output \
+    --merge frustum-ownership
+```
+
+Success looks like a single PLY at
+`./demo_output/<run_id>/ply/pai_000da9de-.../pai_000da9de-....ply` —
+~221 MB, ~2.87 M Gaussians (3.18 M pre-merge across 2 chunks). Drop
+`--merge frustum-ownership` to write per-chunk PLYs instead.
 
 `--ncore-path` accepts two input shapes:
 
@@ -122,7 +159,7 @@ Output layout: PLYs only, under `out_dir/<run_id>/ply/<sequence_id>/...ply`.
 | `--output-dir` | (required) | Directory the pipeline writes PLYs into. |
 | `--merge` | `none` | `none` writes per-chunk PLYs (`<seq>_chunk{N}.ply`); `frustum-ownership` writes a single merged PLY per sequence (`<seq>.ply`). |
 | `--camera-id` | `camera_front_wide_120fov` | ncorev4 context-camera id used as model input. Exactly one camera is required. |
-| `--max-chunks` | `8` | Maximum number of time-chunks processed per clip. One chunk spans up to 13.5 s, so the default covers 8 × 13.5 = 108 s. Clips longer than that are silently truncated unless this is increased — bump to `ceil(clip_seconds / 13.5)` for longer clips. |
+| `--max-chunks` | `8` | Maximum number of time-chunks processed per clip. One chunk spans up to 13.5 s, so the default covers 8 × 13.5 = 108 s. Longer clips are truncated and a `WARNING` is logged naming the dropped chunk count and the `--max-chunks` value needed to cover the full clip — bump to `ceil(clip_seconds / 13.5)` to silence it. |
 | `--log-level` | `INFO` | `DEBUG` / `INFO` / `WARNING` / `ERROR` / `CRITICAL`. |
 
 #### Environment variables
@@ -184,14 +221,12 @@ in [THIRD_PARTY_LICENSE.txt](THIRD_PARTY_LICENSE.txt).
 If you find this work useful in your research, please consider citing:
 
 ```bibtex
-@article{yang2025storm,
-  title   = {STORM: Spatio-Temporal Reconstruction Model for Large-Scale Outdoor Scenes},
-  author  = {Yang, Jiawei and Huang, Jiahui and Chen, Yuxiao and Wang, Yan
-             and Li, Boyi and You, Yurong and Sharma, Apoorva and Igl, Maximilian
-             and Karkus, Peter and Xu, Danfei and Ivanovic, Boris
-             and Wang, Yue and Pavone, Marco},
-  journal = {arXiv preprint arXiv:2501.00602},
-  year    = {2025}
+@misc{instantnurec2026,
+  author       = {{NVIDIA}},
+  title        = {Instant NuRec},
+  year         = {2026},
+  publisher    = {GitHub},
+  howpublished = {\url{https://github.com/NVIDIA/instant-nurec}}
 }
 ```
 
