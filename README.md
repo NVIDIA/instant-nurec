@@ -67,6 +67,31 @@ source .venv/bin/activate
 tree from `uv.lock` into `.venv/`. The only CUDA dependency is whatever
 the pinned `torch` wheel ships with.
 
+#### Download Model Checkpoints [optional]
+
+> **Note:** `instant_nurec.pt` is auto-downloaded into the Hugging Face
+> hub cache on the first inference run.
+
+However, you can also manually download the model into a directory of
+your choice:
+
+```bash
+pip install huggingface_hub[cli]
+hf auth login
+hf download nvidia/instant-nurec --local-dir checkpoints
+```
+
+This places the following file in `checkpoints/`:
+
+    checkpoints/
+    └── instant_nurec.pt
+
+Point the pipeline at this local copy by exporting:
+
+```bash
+export INSTANT_NUREC_FULL_PT="$(pwd)/checkpoints/instant_nurec.pt"
+```
+
 </details>
 
 <details>
