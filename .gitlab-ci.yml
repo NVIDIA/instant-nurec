@@ -1,0 +1,72 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# Minimal CI for the standalone instant_nurec repo.
+#
+# `lint` runs first and gates `test`: a ruff failure is cheap to surface,
+# and there's no point spinning up the slower pytest job until style is
+# clean. Both stages build the same locked environment contributors get
+# from ``./setup.sh`` (``uv sync --frozen``), so a green pipeline matches
+# a green local run.
+#
+# End-to-end inference and parity-style verification need a GPU and are
+# intentionally not part of this pipeline (see CLAUDE.md rule 4).
+
+# Run on every merge request, and on pushes to ``main``. A push to a
+# feature branch with an MR open produces a single MR pipeline (no
+# duplicate branch pipeline), since the ``push`` source doesn't match
+# either rule.
+workflow:
+  auto_cancel:
+    # When a new commit lands on the same ref, cancel any still-running
+    # pipeline on the previous SHA. Jobs opt in via ``interruptible: true``.
+    on_new_commit: interruptible
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "main"
+    # Release branches follow ``release/YY.MM`` (e.g. ``release/26.06``).
+    # Treat them like ``main`` for now — every push runs the pipeline.
+    - if: $CI_COMMIT_BRANCH =~ /^release\/[0-9]{2}\.(0[1-9]|1[0-2])$/
+
+stages:
+  - lint
+  - test
+
+default:
+  image: python:3.11-slim
+  # Pick up the ``nrs`` group's shared docker runners. The project has no
+  # project-level runners, so without these tags GitLab reports "no runner".
+  # GPU tags (``gpu``/``2_gpus``) are intentionally omitted — lint and the
+  # CPU pytest suite don't need a GPU, and asking for one would queue these
+  # jobs behind much scarcer hardware.
+  tags:
+    - type/docker
+    - os/linux
+    - arch/x86_64
+  # Both jobs are pure read-only checks — safe to cancel mid-run when a
+  # newer commit supersedes them.
+  interruptible: true
+  before_script:
+    - pip install --no-cache-dir uv==0.4.30
+    - uv sync --frozen
+
+ruff:
+  stage: lint
+  script:
+    - .venv/bin/ruff check .
+
+pytest:
+  stage: test
+  # Only the test job needs a C++ toolchain: Torch Inductor's CPU backend
+  # JITs a vector-ISA probe via ``g++`` the first time any
+  # ``@torch.compile``-decorated function runs on CPU (e.g.
+  # ``unproject_to_sky_cubemap`` in tests/test_cubemap.py). The lint job
+  # doesn't import torch, so we don't pay the ~50s install there.
+  # ``!reference`` splices in the default ``before_script`` so we don't
+  # have to duplicate the uv steps.
+  before_script:
+    - apt-get update -qq
+    - apt-get install -y --no-install-recommends g++
+    - !reference [default, before_script]
+  script:
+    - .venv/bin/python -m pytest tests/ -q
