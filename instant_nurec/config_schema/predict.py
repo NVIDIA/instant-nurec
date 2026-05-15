@@ -23,6 +23,7 @@ class PrimitiveMergeConfig(BaseConfigSchema):
     Configuration for primitive merging. It typically contains the following stages:
     1. Transform each primitive to a reference frame (defined by the first chunk); filtering is done per-chunk via model.export_preprocess.
     2. Merge primitives into a single primitive with frustum-ownership de-overlap so GS from one chunk do not interfere with others.
+    3. (Optional) Apply KL-optimal voxelization to collapse co-located Gaussians.
     """
 
     enabled: bool = Field(default=False, description="Whether to enable primitive merging")
@@ -30,6 +31,15 @@ class PrimitiveMergeConfig(BaseConfigSchema):
         default=5.0,
         description="Maximum distance in meters between the distances from one GS to non-owned chunks and owned chunks",
         ge=0.0,
+    )
+    enable_voxelization: bool = Field(
+        default=False,
+        description="Whether to apply KL-optimal voxelization to merge nearby Gaussians post-merge",
+    )
+    voxel_size: float = Field(
+        default=0.1,
+        description="Edge length of voxels for voxelization (in scene units; ignored unless enable_voxelization is True)",
+        gt=0.0,
     )
 
 

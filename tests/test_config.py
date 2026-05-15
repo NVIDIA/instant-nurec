@@ -51,6 +51,8 @@ def test_primitive_merge_default_disabled():
     cfg = PrimitiveMergeConfig()
     assert cfg.enabled is False
     assert cfg.frustum_ownership_max_diff_m == 5.0
+    assert cfg.enable_voxelization is False
+    assert cfg.voxel_size == 0.1
 
 
 def test_primitive_merge_enabled_with_positive_diff():
@@ -62,6 +64,22 @@ def test_primitive_merge_enabled_with_positive_diff():
 def test_primitive_merge_rejects_negative_diff():
     with pytest.raises(ValidationError):
         PrimitiveMergeConfig(frustum_ownership_max_diff_m=-0.1)
+
+
+def test_primitive_merge_enable_voxelization_with_explicit_size():
+    cfg = PrimitiveMergeConfig(enable_voxelization=True, voxel_size=0.25)
+    assert cfg.enable_voxelization is True
+    assert cfg.voxel_size == 0.25
+
+
+def test_primitive_merge_rejects_zero_voxel_size():
+    with pytest.raises(ValidationError):
+        PrimitiveMergeConfig(voxel_size=0.0)
+
+
+def test_primitive_merge_rejects_negative_voxel_size():
+    with pytest.raises(ValidationError):
+        PrimitiveMergeConfig(voxel_size=-0.1)
 
 
 # ---------------------------------------------------------------------------
