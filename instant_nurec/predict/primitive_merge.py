@@ -174,6 +174,28 @@ class KelvinPrimitiveMerge:
     def __init__(self, config: PrimitiveMergeConfig):
         self.config = config
 
+    def _maybe_voxelize_static_layer(
+        self, merged_primitive: KelvinInstantNuRecPrimitive
+    ) -> KelvinInstantNuRecPrimitive:
+        """Apply KL-optimal voxelization to the static layer iff configured.
+
+        No-op when ``self.config.enable_voxelization`` is False so default
+        predict runs stay byte-identical to the pre-voxelization path.
+        """
+        if not self.config.enable_voxelization:
+            return merged_primitive
+        n_before = len(merged_primitive.static_layer)
+        merged_primitive.static_layer = merged_primitive.static_layer.voxelize(self.config.voxel_size)
+        n_after = len(merged_primitive.static_layer)
+        logger.info(
+            "Voxelization (size=%.4f): %d -> %d static Gaussians (%.1f%% reduction)",
+            self.config.voxel_size,
+            n_before,
+            n_after,
+            100.0 * (1.0 - n_after / n_before) if n_before > 0 else 0.0,
+        )
+        return merged_primitive
+
     @torch.autocast(device_type="cuda", enabled=False)
     def merge_primitives_and_batch(
         self,
@@ -199,6 +221,7 @@ class KelvinPrimitiveMerge:
             )
 
         merged_primitive = self.merge_processed_primitives(primitives_list, batch_rig_transforms, batch)
+        merged_primitive = self._maybe_voxelize_static_layer(merged_primitive)
 
         logger.info(f"Merged {len(primitives_list)} primitives into {repr(merged_primitive)}")
 
