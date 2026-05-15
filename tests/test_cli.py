@@ -55,6 +55,29 @@ def test_parser_default_merge_is_none() -> None:
     assert args.merge == "none"
 
 
+def test_parser_default_voxel_size() -> None:
+    from instant_nurec.cli import make_parser
+    args = make_parser().parse_args(["--ncore-path", "/x", "--output-dir", "/y"])
+    assert args.voxel_size == 0.1
+    assert not hasattr(args, "voxelization")
+
+
+def test_parser_accepts_explicit_voxel_size() -> None:
+    from instant_nurec.cli import make_parser
+    args = make_parser().parse_args(
+        ["--ncore-path", "/x", "--output-dir", "/y", "--voxel-size", "0.25"]
+    )
+    assert args.voxel_size == 0.25
+
+
+def test_parser_rejects_non_float_voxel_size() -> None:
+    from instant_nurec.cli import make_parser
+    with pytest.raises(SystemExit):
+        make_parser().parse_args(
+            ["--ncore-path", "/x", "--output-dir", "/y", "--voxel-size", "huge"]
+        )
+
+
 def test_parser_default_log_level_is_info() -> None:
     from instant_nurec.cli import make_parser
     args = make_parser().parse_args(["--ncore-path", "/x", "--output-dir", "/y"])
@@ -169,6 +192,39 @@ def test_main_frustum_ownership_constructs_config_with_enabled_merge(
     assert rc == 0
     cfg = fake_run_predict.call_args.args[0]
     assert cfg.predict.primitive_merge.enabled is True
+
+
+def test_main_no_merge_disables_voxelization(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    fake_run_predict = _install_runtime_stubs(monkeypatch)
+    json_path = _make_json_path(tmp_path)
+    from instant_nurec.cli import main
+    rc = main(["--ncore-path", str(json_path), "--output-dir", "/o"])
+    assert rc == 0
+    cfg = fake_run_predict.call_args.args[0]
+    assert cfg.predict.primitive_merge.enable_voxelization is False
+    assert cfg.predict.primitive_merge.voxel_size == 0.1
+
+
+def test_main_merge_enables_voxelization(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    """--merge=frustum-ownership always enables voxelization (bundled)."""
+    fake_run_predict = _install_runtime_stubs(monkeypatch)
+    json_path = _make_json_path(tmp_path)
+    from instant_nurec.cli import main
+    rc = main([
+        "--ncore-path", str(json_path),
+        "--output-dir", "/o",
+        "--merge", "frustum-ownership",
+        "--voxel-size", "0.2",
+    ])
+    assert rc == 0
+    cfg = fake_run_predict.call_args.args[0]
+    assert cfg.predict.primitive_merge.enabled is True
+    assert cfg.predict.primitive_merge.enable_voxelization is True
+    assert cfg.predict.primitive_merge.voxel_size == 0.2
 
 
 def test_main_configures_log_level(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
