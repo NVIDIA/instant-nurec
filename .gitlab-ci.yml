@@ -24,6 +24,9 @@ workflow:
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH == "main"
+    # Release branches follow ``release/YY.MM`` (e.g. ``release/26.06``).
+    # Treat them like ``main`` for now — every push runs the pipeline.
+    - if: $CI_COMMIT_BRANCH =~ /^release\/[0-9]{2}\.(0[1-9]|1[0-2])$/
 
 stages:
   - lint
