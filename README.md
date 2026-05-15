@@ -50,8 +50,9 @@ NCore V4 Sequence ─► Frame Batching ─► Kelvin Forward Pass (JIT) ─► 
 #### Prerequisites
 
 - **Python** 3.11
-- **NVIDIA driver** >= 570 (CUDA 12.8 compatible); Blackwell GPUs require >= 580 _(TODO: pending HW Eng / DevTech sign-off)_
-- **GPU VRAM** ≥ 16 GB
+- **NVIDIA driver and GPU VRAM** — see the
+  [NuRec Hardware Setup and Requirements](https://docs.nvidia.com/nurec/basics/hardware.html#hardware-setup-and-requirements)
+  page; Instant-NuRec inherits the same minimums.
 - **uv** — the [Astral Python package manager](https://docs.astral.sh/uv/).
   Install with `curl -LsSf https://astral.sh/uv/install.sh | sh` or
   `pip install uv`.
