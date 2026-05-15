@@ -236,6 +236,14 @@ instant-nurec/
 
 </details>
 
+## Support
+
+For common errors and fixes (HF auth, driver / CUDA mismatch, OOM at
+chunk-prep, `--max-chunks` truncation), see
+[TROUBLESHOOTING.md](TROUBLESHOOTING.md). Anything not listed there:
+file a GitHub issue with the full traceback, `nvidia-smi`, and
+`python --version`.
+
 ## License
 
 This project is licensed under the Apache License 2.0. See [LICENSE.txt](LICENSE.txt)
