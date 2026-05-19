@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 import logging
+import math
 
 from dataclasses import dataclass
 from typing import cast
@@ -174,6 +175,111 @@ class KelvinPrimitiveMerge:
     def __init__(self, config: PrimitiveMergeConfig):
         self.config = config
 
+    def _maybe_voxelize_static_layer(
+        self, merged_primitive: KelvinInstantNuRecPrimitive
+    ) -> KelvinInstantNuRecPrimitive:
+        """Bracketed binary search over voxel size to land the static-layer
+        count in ``[0.9 * target_n_gaussians, target_n_gaussians]``.
+
+        Starting from ``self.config.voxel_size`` (default 0.1), each
+        iteration re-voxelizes the *original* merged static layer at a
+        candidate voxel size:
+
+          * count > target → current voxel_size is too small (too many
+            Gaussians). Record it as the lower bracket; next candidate is
+            the midpoint of the bracket if both ends are known, else
+            double (search for the upper bracket).
+          * count < 0.9 * target → current voxel_size is too large (too
+            few Gaussians). Record it as the upper bracket; next
+            candidate is the midpoint if bracketed, else halve.
+          * count in band → return.
+
+        The midpoint step replaces the previous blind doubling/halving
+        and converges for any monotone count-vs-size relationship,
+        including targets that the coarse 2× step would have oscillated
+        across (e.g. count drops 8× per doubling but the acceptance band
+        is only 10% wide).
+
+        No-op when ``self.config.enable_voxelization`` is False so
+        default predict runs stay byte-identical to the pre-voxelization
+        path.
+
+        The voxel count function is discrete (Gaussians bucket via
+        ``round(positions / voxel_size)``), so for some target values
+        the band falls *between* two adjacent count plateaus and the
+        bracket shrinks without ever entering the band; the loop exits
+        with a WARNING when the bracket width falls below
+        ``BRACKET_TOL`` relative to its upper end, or when
+        ``max_voxelization_iterations`` is reached.
+        """
+        if not self.config.enable_voxelization:
+            return merged_primitive
+
+        original_static = merged_primitive.static_layer
+        n_before = len(original_static)
+        target = self.config.target_n_gaussians
+        lower_bound = 0.9 * target
+        voxel_size = self.config.voxel_size
+        max_iter = self.config.max_voxelization_iterations
+        # Bracket invariant: target voxel size lies in (v_low, v_high).
+        v_low = 0.0
+        v_high = math.inf
+        BRACKET_TOL = 1e-3  # stop when (v_high - v_low) / v_high < BRACKET_TOL
+
+        voxelized: KelvinStaticLayer | None = None
+        chosen_voxel_size = voxel_size
+        converged = False
+        bracket_collapsed = False
+        iteration = 0
+        for iteration in range(1, max_iter + 1):
+            chosen_voxel_size = voxel_size
+            voxelized = original_static.voxelize(voxel_size)
+            n = len(voxelized)
+            if n > target:
+                # voxel_size too small → tighten lower bracket
+                v_low = max(v_low, voxel_size)
+            elif n < lower_bound:
+                # voxel_size too large → tighten upper bracket
+                v_high = min(v_high, voxel_size)
+            else:
+                converged = True
+                break
+            if math.isfinite(v_high) and v_low > 0.0:
+                if (v_high - v_low) / v_high < BRACKET_TOL:
+                    bracket_collapsed = True
+                    break
+                voxel_size = 0.5 * (v_low + v_high)
+            elif n > target:
+                voxel_size *= 2.0
+            else:  # n < lower_bound
+                voxel_size /= 2.0
+
+        assert voxelized is not None  # max_iter > 0 enforced by config validation
+        merged_primitive.static_layer = voxelized
+        n_after = len(voxelized)
+        reduction_pct = 100.0 * (1.0 - n_after / n_before) if n_before > 0 else 0.0
+        if converged:
+            logger.info(
+                "Voxelization converged in %d iter (voxel_size=%.4g, target=%d): "
+                "%d -> %d static Gaussians (%.1f%% reduction)",
+                iteration, chosen_voxel_size, target, n_before, n_after, reduction_pct,
+            )
+        elif bracket_collapsed:
+            logger.warning(
+                "Voxelization search bracket collapsed after %d iter without "
+                "entering the band (voxel_size=%.4g, target=%d, last count=%d); "
+                "the discrete voxel count function jumps over [0.9*target, target]. "
+                "Returning last result.",
+                iteration, chosen_voxel_size, target, n_after,
+            )
+        else:
+            logger.warning(
+                "Voxelization did not converge after %d iter (voxel_size=%.4g, "
+                "target=%d, last count=%d); returning last result.",
+                max_iter, chosen_voxel_size, target, n_after,
+            )
+        return merged_primitive
+
     @torch.autocast(device_type="cuda", enabled=False)
     def merge_primitives_and_batch(
         self,
@@ -199,6 +305,7 @@ class KelvinPrimitiveMerge:
             )
 
         merged_primitive = self.merge_processed_primitives(primitives_list, batch_rig_transforms, batch)
+        merged_primitive = self._maybe_voxelize_static_layer(merged_primitive)
 
         logger.info(f"Merged {len(primitives_list)} primitives into {repr(merged_primitive)}")
 

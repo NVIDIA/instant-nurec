@@ -23,6 +23,7 @@ class PrimitiveMergeConfig(BaseConfigSchema):
     Configuration for primitive merging. It typically contains the following stages:
     1. Transform each primitive to a reference frame (defined by the first chunk); filtering is done per-chunk via model.export_preprocess.
     2. Merge primitives into a single primitive with frustum-ownership de-overlap so GS from one chunk do not interfere with others.
+    3. (Optional) Apply KL-optimal voxelization to collapse co-located Gaussians, iterating until the static-layer count lands in [0.9 * target_n_gaussians, target_n_gaussians].
     """
 
     enabled: bool = Field(default=False, description="Whether to enable primitive merging")
@@ -30,6 +31,25 @@ class PrimitiveMergeConfig(BaseConfigSchema):
         default=5.0,
         description="Maximum distance in meters between the distances from one GS to non-owned chunks and owned chunks",
         ge=0.0,
+    )
+    enable_voxelization: bool = Field(
+        default=False,
+        description="Whether to apply KL-optimal voxelization to merge nearby Gaussians post-merge",
+    )
+    voxel_size: float = Field(
+        default=0.1,
+        description="Initial voxel edge length (scene units) for the iterative voxelization search; doubled when the result exceeds target_n_gaussians, halved when below 0.9 * target_n_gaussians.",
+        gt=0.0,
+    )
+    target_n_gaussians: int = Field(
+        default=2_000_000,
+        description="Target post-voxelization static-Gaussian count. The iterative search returns when the count lands in [0.9 * target, target].",
+        gt=0,
+    )
+    max_voxelization_iterations: int = Field(
+        default=20,
+        description="Cap for the iterative voxel-size search. When exceeded, the latest voxelization is returned with a WARNING log.",
+        gt=0,
     )
 
 

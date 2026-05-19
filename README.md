@@ -122,13 +122,16 @@ huggingface-cli download \
 python run_inference.py \
     --ncore-path ./demo_clip/clips/000da9de-0ee5-465a-9a2d-e7e91d3016bb/pai_000da9de-0ee5-465a-9a2d-e7e91d3016bb.json \
     --output-dir ./demo_output \
-    --merge frustum-ownership
+    --merge
 ```
 
 Success looks like a single PLY at
 `./demo_output/<run_id>/ply/pai_000da9de-.../pai_000da9de-....ply` —
-~221 MB, ~2.87 M Gaussians (3.18 M pre-merge across 2 chunks). Drop
-`--merge frustum-ownership` to write per-chunk PLYs instead.
+~1.88 M Gaussians, kl-optimal voxelized from 2.87 M merged (3.18 M
+pre-merge across 2 chunks) to land in `[0.9 * --n-gaussians,
+--n-gaussians]` (default target 2 M). Omit `--merge` to write
+per-chunk PLYs instead (voxelization is bundled with merge and
+runs only when the flag is set).
 
 `--ncore-path` accepts two input shapes:
 
@@ -140,8 +143,7 @@ This matches NuRec's own input convention.
 ```bash
 ./run.sh \
     --ncore-path /path/to/clips/<uuid>/pai_<uuid>.json \
-    --output-dir /tmp/out \
-    --merge none
+    --output-dir /tmp/out
 ```
 
 ##### Mode 2 — `.lst` manifest (batch)
@@ -162,7 +164,7 @@ relative/path/to/clips/<uuid_b>/pai_<uuid_b>.json
 ./run.sh \
     --ncore-path /path/to/example_manifest.lst \
     --output-dir /tmp/out \
-    --merge frustum-ownership
+    --merge
 ```
 
 `run.sh` validates the input + output paths and execs
@@ -171,8 +173,7 @@ relative/path/to/clips/<uuid_b>/pai_<uuid_b>.json
 ```bash
 python run_inference.py \
     --ncore-path /path/to/sequence.json \
-    --output-dir /tmp/out \
-    --merge none
+    --output-dir /tmp/out
 ```
 
 Output layout: PLYs only, under `out_dir/<run_id>/ply/<sequence_id>/...ply`.
@@ -183,7 +184,8 @@ Output layout: PLYs only, under `out_dir/<run_id>/ply/<sequence_id>/...ply`.
 | --- | --- | --- |
 | `--ncore-path` | (required) | A `.json` file (single sequence) or a `.lst` manifest (one JSON path per line). |
 | `--output-dir` | (required) | Directory the pipeline writes PLYs into. |
-| `--merge` | `none` | `none` writes per-chunk PLYs (`<seq>_chunk{N}.ply`); `frustum-ownership` writes a single merged PLY per sequence (`<seq>.ply`). |
+| `--merge` | absent (false) | Boolean flag. When set, merges per-chunk primitives into a single frustum-ownership PLY per sequence (`<seq>.ply`) and runs kl-optimal voxelization (target count from `--n-gaussians`). Absent (default): per-chunk PLYs (`<seq>_chunk{N}.ply`), no voxelization. |
+| `--n-gaussians` | `2000000` | Target number of static Gaussians after voxelization. Only consulted when `--merge` is set. The voxel size is searched iteratively via bracketed binary search to land the count in `[0.9 * target, target]`. |
 | `--camera-id` | `camera_front_wide_120fov` | ncorev4 context-camera id used as model input. Exactly one camera is required. |
 | `--max-chunks` | `8` | Maximum number of time-chunks processed per clip. One chunk spans up to 13.5 s, so the default covers 8 × 13.5 = 108 s. Longer clips are truncated and a `WARNING` is logged naming the dropped chunk count and the `--max-chunks` value needed to cover the full clip — bump to `ceil(clip_seconds / 13.5)` to silence it. |
 | `--log-level` | `INFO` | `DEBUG` / `INFO` / `WARNING` / `ERROR` / `CRITICAL`. |

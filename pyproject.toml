@@ -23,6 +23,7 @@ dependencies = [
     "scipy==1.11.1",
     "shortuuid==1.0.11",
     "torch==2.7.0+cu128",
+    "torch-scatter==2.1.2",
     "torchvision==0.22.0+cu128",
     "tqdm==4.66.3",
     "universal-pathlib==0.3.6",
@@ -43,18 +44,26 @@ dev = [
 include = ["instant_nurec*"]
 exclude = ["tests*", "internal*"]
 
-# uv resolves torch / torchvision from the PyTorch CUDA 12.8 wheel index;
-# everything else comes from PyPI. The ``explicit = true`` flag means uv
-# only consults the cu128 index for packages that explicitly opt in via
-# ``[tool.uv.sources]``.
+# uv resolves torch / torchvision from the PyTorch CUDA 12.8 wheel index,
+# and torch-scatter from the matching PyG flat index (wheels pre-built
+# against the same torch+cu128 ABI). Everything else comes from PyPI.
+# The ``explicit = true`` flag means uv only consults each index for
+# packages that explicitly opt in via ``[tool.uv.sources]``.
 [[tool.uv.index]]
 name = "pytorch-cu128"
 url = "https://download.pytorch.org/whl/cu128"
 explicit = true
 
+[[tool.uv.index]]
+name = "pyg-torch-2.7.0-cu128"
+url = "https://data.pyg.org/whl/torch-2.7.0+cu128.html"
+explicit = true
+format = "flat"
+
 [tool.uv.sources]
 torch = { index = "pytorch-cu128" }
 torchvision = { index = "pytorch-cu128" }
+torch-scatter = { index = "pyg-torch-2.7.0-cu128" }
 
 [tool.ruff]
 target-version = "py311"

@@ -24,10 +24,12 @@ from enum import IntEnum
 from typing import Self, Sequence
 
 import torch
+import torch_scatter
 
 
 from instant_nurec.config_schema.models import PrimitiveExportPreprocessConfig
 from instant_nurec.primitives.base import BaseInstantNuRecPrimitive
+from instant_nurec.utils.merge_covariances import merge_covariances_kl_optimal
 from instant_nurec.utils.cubemap import rotate_sky_cubemap
 from instant_nurec.utils.batch import DataAndRenderingBatch
 from instant_nurec.utils.geometry import quat_mult_xyzw, so3_matrix_to_quat
@@ -190,6 +192,69 @@ class KelvinStaticLayer(KelvinLayer):
             normals=normals,
             **asdict(KelvinLayer._concatenate_base(layers)),
         )
+
+    @torch.autocast(device_type="cuda", enabled=False)
+    def voxelize(self, voxel_size: float, confidence: torch.Tensor | None = None) -> Self:
+        """
+        KL-optimal voxelization of the static layer with an optional confidence score.
+
+        Gaussians are bucketed into voxels of size ``voxel_size`` (round-to-nearest
+        in each axis). Per-voxel weights are softmax(confidence) over voxel
+        members; positions/densities/rgb/normals are weighted averages; rotation
+        and scale are moment-matched via :func:`merge_covariances_kl_optimal`;
+        semantic_class is taken from the max-confidence Gaussian in each voxel.
+
+        Args:
+            voxel_size: Edge length of voxels (in scene units).
+            confidence: Optional per-Gaussian confidence scores [N]; defaults to ones.
+        """
+        if confidence is None:
+            confidence = torch.ones(len(self), device=self.device())
+
+        # Bucket Gaussians by voxel index.
+        voxel_indices = (self.positions / voxel_size).round().int()  # [n_gaussians, 3]
+        _, inverse_indices = torch.unique(voxel_indices, dim=0, return_inverse=True)
+
+        # Per-voxel softmax over confidence.
+        confidence_voxel_max, _ = torch_scatter.scatter_max(confidence, inverse_indices, dim=0)
+        confidence_exp = torch.exp(confidence - confidence_voxel_max[inverse_indices])
+        voxel_weights = torch_scatter.scatter_add(confidence_exp, inverse_indices, dim=0)  # [num_unique_voxels]
+        weights = (confidence_exp / (voxel_weights[inverse_indices] + 1e-6)).unsqueeze(-1)  # [n_gaussians, 1]
+
+        # Weighted averages for the per-voxel scalars/colors/positions.
+        positions = torch_scatter.scatter_add(self.positions * weights, inverse_indices, dim=0)
+        densities = torch_scatter.scatter_add(self.densities * weights, inverse_indices, dim=0)
+        rgb = torch_scatter.scatter_add(self.rgb * weights, inverse_indices, dim=0)
+
+        # KL-optimal (moment-matched) merge of rotation+scale -> covariance correctness.
+        rotations, scales = merge_covariances_kl_optimal(
+            self.positions, self.rotations, self.scales, weights, inverse_indices, positions
+        )
+
+        # For semantic_class, pick the class of the highest-confidence Gaussian in each voxel.
+        semantic_class: torch.Tensor | None = None
+        if self.semantic_class is not None:
+            _, argmax_indices = torch_scatter.scatter_max(confidence, inverse_indices, dim=0)
+            semantic_class = self.semantic_class[argmax_indices]
+
+        # For normals, weighted-average and renormalize (collapses to zero if they cancel out).
+        normals: torch.Tensor | None = None
+        if self.normals is not None:
+            normals = torch.nn.functional.normalize(
+                torch_scatter.scatter_add(self.normals * weights, inverse_indices, dim=0),
+                dim=1,
+            )
+
+        return self.__class__(
+            positions=positions,
+            densities=densities,
+            rotations=rotations,
+            scales=scales,
+            rgb=rgb,
+            semantic_class=semantic_class,
+            normals=normals,
+        )
+
 
 @dataclass(kw_only=True)
 class KelvinDynamicLayer(KelvinLayer):
