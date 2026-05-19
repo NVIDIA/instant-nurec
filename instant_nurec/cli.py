@@ -31,7 +31,7 @@ from typing import Sequence
 
 _DEFAULT_CAMERA_ID = "camera_front_wide_120fov"
 _DEFAULT_MAX_CHUNKS = 8
-_DEFAULT_VOXEL_SIZE = 0.1
+_DEFAULT_N_GAUSSIANS = 2_000_000
 
 
 def make_parser() -> argparse.ArgumentParser:
@@ -66,12 +66,15 @@ def make_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
-        "--voxel-size",
-        type=float,
-        default=_DEFAULT_VOXEL_SIZE,
+        "--n-gaussians",
+        type=int,
+        default=_DEFAULT_N_GAUSSIANS,
         help=(
-            f"Edge length of voxels in scene units "
-            f"(default: {_DEFAULT_VOXEL_SIZE}). Only consulted when "
+            f"Target number of static Gaussians after kl-optimal voxelization "
+            f"(default: {_DEFAULT_N_GAUSSIANS}). The voxel size is searched "
+            f"iteratively (starting at 0.1, doubled when the result exceeds "
+            f"this target, halved when it falls below 0.9 * target) until the "
+            f"count lands in [0.9 * target, target]. Only consulted when "
             f"--merge=frustum-ownership (voxelization is bundled with merge); "
             f"must be > 0."
         ),
@@ -142,7 +145,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             primitive_merge=PrimitiveMergeConfig(
                 enabled=(args.merge == "frustum-ownership"),
                 enable_voxelization=(args.merge == "frustum-ownership"),
-                voxel_size=args.voxel_size,
+                target_n_gaussians=args.n_gaussians,
             ),
         ),
     )

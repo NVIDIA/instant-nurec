@@ -55,26 +55,37 @@ def test_parser_default_merge_is_none() -> None:
     assert args.merge == "none"
 
 
-def test_parser_default_voxel_size() -> None:
+def test_parser_default_n_gaussians() -> None:
     from instant_nurec.cli import make_parser
     args = make_parser().parse_args(["--ncore-path", "/x", "--output-dir", "/y"])
-    assert args.voxel_size == 0.1
+    assert args.n_gaussians == 2_000_000
+    # The voxel-size and voxelization flags are no longer part of the CLI surface.
+    assert not hasattr(args, "voxel_size")
     assert not hasattr(args, "voxelization")
 
 
-def test_parser_accepts_explicit_voxel_size() -> None:
+def test_parser_accepts_explicit_n_gaussians() -> None:
     from instant_nurec.cli import make_parser
     args = make_parser().parse_args(
-        ["--ncore-path", "/x", "--output-dir", "/y", "--voxel-size", "0.25"]
+        ["--ncore-path", "/x", "--output-dir", "/y", "--n-gaussians", "500000"]
     )
-    assert args.voxel_size == 0.25
+    assert args.n_gaussians == 500000
 
 
-def test_parser_rejects_non_float_voxel_size() -> None:
+def test_parser_rejects_non_int_n_gaussians() -> None:
     from instant_nurec.cli import make_parser
     with pytest.raises(SystemExit):
         make_parser().parse_args(
-            ["--ncore-path", "/x", "--output-dir", "/y", "--voxel-size", "huge"]
+            ["--ncore-path", "/x", "--output-dir", "/y", "--n-gaussians", "many"]
+        )
+
+
+def test_parser_no_longer_accepts_voxel_size() -> None:
+    """The old --voxel-size flag must error so we don't silently ignore it."""
+    from instant_nurec.cli import make_parser
+    with pytest.raises(SystemExit):
+        make_parser().parse_args(
+            ["--ncore-path", "/x", "--output-dir", "/y", "--voxel-size", "0.25"]
         )
 
 
@@ -204,13 +215,19 @@ def test_main_no_merge_disables_voxelization(
     assert rc == 0
     cfg = fake_run_predict.call_args.args[0]
     assert cfg.predict.primitive_merge.enable_voxelization is False
-    assert cfg.predict.primitive_merge.voxel_size == 0.1
+    # Default target carries through even when voxelization is disabled.
+    assert cfg.predict.primitive_merge.target_n_gaussians == 2_000_000
 
 
 def test_main_merge_enables_voxelization(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
 ) -> None:
-    """--merge=frustum-ownership always enables voxelization (bundled)."""
+    """--merge=frustum-ownership always enables voxelization (bundled).
+
+    --n-gaussians propagates to ``target_n_gaussians``; the initial
+    ``voxel_size`` stays at its config default (0.1) since the iteration
+    discovers the converged value.
+    """
     fake_run_predict = _install_runtime_stubs(monkeypatch)
     json_path = _make_json_path(tmp_path)
     from instant_nurec.cli import main
@@ -218,13 +235,14 @@ def test_main_merge_enables_voxelization(
         "--ncore-path", str(json_path),
         "--output-dir", "/o",
         "--merge", "frustum-ownership",
-        "--voxel-size", "0.2",
+        "--n-gaussians", "500000",
     ])
     assert rc == 0
     cfg = fake_run_predict.call_args.args[0]
     assert cfg.predict.primitive_merge.enabled is True
     assert cfg.predict.primitive_merge.enable_voxelization is True
-    assert cfg.predict.primitive_merge.voxel_size == 0.2
+    assert cfg.predict.primitive_merge.target_n_gaussians == 500000
+    assert cfg.predict.primitive_merge.voxel_size == 0.1
 
 
 def test_main_configures_log_level(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

@@ -4,7 +4,7 @@
 # ncorev4 clip — one per instant-nurec CLI mode:
 #   1. no_merge                — per-chunk PLYs (instant: default).
 #   2. merge_voxel_<size_1>    — frustum-ownership merge + KL-optimal voxelization
-#                                (instant: --merge=frustum-ownership --voxel-size <size_1>).
+#                                at a fixed voxel size.
 #   3. merge_voxel_<size_2>    — same, with a second voxel size.
 #
 # Usage:
@@ -16,6 +16,13 @@
 # rotation/scale attribute parity becomes meaningless. instant-nurec's
 # --merge bundles voxelization unconditionally, so there is no parity
 # counterpart for nre's plain merge (no-voxel) case.
+#
+# Note: instant-nurec selects voxel size *iteratively* from
+# `--n-gaussians` (start 0.1, double when result exceeds target, halve
+# when below 0.9 * target). To compare against a specific nre reference
+# from this script, pick `--n-gaussians` so the iteration converges on
+# the matching VOXEL_SIZE_i — or read the converged voxel size from the
+# instant log and rerun this script with it.
 
 OUT_DIR=$1
 VOXEL_SIZE_1=${2:-0.1}

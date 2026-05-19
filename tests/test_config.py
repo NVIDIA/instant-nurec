@@ -53,6 +53,8 @@ def test_primitive_merge_default_disabled():
     assert cfg.frustum_ownership_max_diff_m == 5.0
     assert cfg.enable_voxelization is False
     assert cfg.voxel_size == 0.1
+    assert cfg.target_n_gaussians == 2_000_000
+    assert cfg.max_voxelization_iterations == 20
 
 
 def test_primitive_merge_enabled_with_positive_diff():
@@ -66,7 +68,8 @@ def test_primitive_merge_rejects_negative_diff():
         PrimitiveMergeConfig(frustum_ownership_max_diff_m=-0.1)
 
 
-def test_primitive_merge_enable_voxelization_with_explicit_size():
+def test_primitive_merge_enable_voxelization_with_explicit_initial_size():
+    """``voxel_size`` is now the initial value for the iterative search."""
     cfg = PrimitiveMergeConfig(enable_voxelization=True, voxel_size=0.25)
     assert cfg.enable_voxelization is True
     assert cfg.voxel_size == 0.25
@@ -80,6 +83,31 @@ def test_primitive_merge_rejects_zero_voxel_size():
 def test_primitive_merge_rejects_negative_voxel_size():
     with pytest.raises(ValidationError):
         PrimitiveMergeConfig(voxel_size=-0.1)
+
+
+def test_primitive_merge_target_n_gaussians_explicit():
+    cfg = PrimitiveMergeConfig(target_n_gaussians=500_000)
+    assert cfg.target_n_gaussians == 500_000
+
+
+def test_primitive_merge_rejects_zero_target_n_gaussians():
+    with pytest.raises(ValidationError):
+        PrimitiveMergeConfig(target_n_gaussians=0)
+
+
+def test_primitive_merge_rejects_negative_target_n_gaussians():
+    with pytest.raises(ValidationError):
+        PrimitiveMergeConfig(target_n_gaussians=-1)
+
+
+def test_primitive_merge_max_voxelization_iterations_explicit():
+    cfg = PrimitiveMergeConfig(max_voxelization_iterations=5)
+    assert cfg.max_voxelization_iterations == 5
+
+
+def test_primitive_merge_rejects_zero_max_voxelization_iterations():
+    with pytest.raises(ValidationError):
+        PrimitiveMergeConfig(max_voxelization_iterations=0)
 
 
 # ---------------------------------------------------------------------------
