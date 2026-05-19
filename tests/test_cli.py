@@ -49,10 +49,10 @@ def _install_runtime_stubs(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
 # ---------- argparse surface ----------
 
 
-def test_parser_default_merge_is_none() -> None:
+def test_parser_default_merge_is_false() -> None:
     from instant_nurec.cli import make_parser
     args = make_parser().parse_args(["--ncore-path", "/x", "--output-dir", "/y"])
-    assert args.merge == "none"
+    assert args.merge is False
 
 
 def test_parser_default_n_gaussians() -> None:
@@ -95,27 +95,21 @@ def test_parser_default_log_level_is_info() -> None:
     assert args.log_level == "INFO"
 
 
-def test_parser_accepts_merge_none() -> None:
+def test_parser_merge_flag_sets_true() -> None:
     from instant_nurec.cli import make_parser
     args = make_parser().parse_args(
-        ["--ncore-path", "/x", "--output-dir", "/y", "--merge", "none"]
+        ["--ncore-path", "/x", "--output-dir", "/y", "--merge"]
     )
-    assert args.merge == "none"
+    assert args.merge is True
 
 
-def test_parser_accepts_merge_frustum_ownership() -> None:
-    from instant_nurec.cli import make_parser
-    args = make_parser().parse_args(
-        ["--ncore-path", "/x", "--output-dir", "/y", "--merge", "frustum-ownership"]
-    )
-    assert args.merge == "frustum-ownership"
-
-
-def test_parser_rejects_unknown_merge() -> None:
+def test_parser_merge_no_longer_takes_choice_argument() -> None:
+    """The old `--merge {none, frustum-ownership}` form must error so we
+    don't silently treat 'frustum-ownership' as a positional argument."""
     from instant_nurec.cli import make_parser
     with pytest.raises(SystemExit):
         make_parser().parse_args(
-            ["--ncore-path", "/x", "--output-dir", "/y", "--merge", "frobnicate"]
+            ["--ncore-path", "/x", "--output-dir", "/y", "--merge", "frustum-ownership"]
         )
 
 
@@ -193,13 +187,13 @@ def test_main_lst_path_resolves_each_line(
     ]
 
 
-def test_main_frustum_ownership_constructs_config_with_enabled_merge(
+def test_main_merge_flag_constructs_config_with_enabled_merge(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
 ) -> None:
     fake_run_predict = _install_runtime_stubs(monkeypatch)
     json_path = _make_json_path(tmp_path)
     from instant_nurec.cli import main
-    rc = main(["--ncore-path", str(json_path), "--output-dir", "/o", "--merge", "frustum-ownership"])
+    rc = main(["--ncore-path", str(json_path), "--output-dir", "/o", "--merge"])
     assert rc == 0
     cfg = fake_run_predict.call_args.args[0]
     assert cfg.predict.primitive_merge.enabled is True
@@ -222,7 +216,7 @@ def test_main_no_merge_disables_voxelization(
 def test_main_merge_enables_voxelization(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
 ) -> None:
-    """--merge=frustum-ownership always enables voxelization (bundled).
+    """--merge always enables voxelization (bundled).
 
     --n-gaussians propagates to ``target_n_gaussians``; the initial
     ``voxel_size`` stays at its config default (0.1) since the iteration
@@ -234,7 +228,7 @@ def test_main_merge_enables_voxelization(
     rc = main([
         "--ncore-path", str(json_path),
         "--output-dir", "/o",
-        "--merge", "frustum-ownership",
+        "--merge",
         "--n-gaussians", "500000",
     ])
     assert rc == 0

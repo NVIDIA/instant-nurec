@@ -94,7 +94,7 @@ def test_runtime_imports_without_internal(
     # dep accidentally pulled internal/ at module load time.
     parser = cli_mod.make_parser()
     args = parser.parse_args(["--ncore-path", "/tmp/none", "--output-dir", "/tmp/none"])
-    assert args.merge == "none"  # default
+    assert args.merge is False  # default
 
     # ``run_predict`` is only loaded inside ``main()``; force-import it here
     # so we catch any internal/ dependency on that side too.

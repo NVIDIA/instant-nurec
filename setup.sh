@@ -49,9 +49,9 @@ Activate the venv with:
 
 Run inference with:
 
-    ./run.sh --ncore-path /path/to/ncorev4 --output-dir /tmp/out --merge {none,frustum-ownership}
+    ./run.sh --ncore-path /path/to/ncorev4 --output-dir /tmp/out [--merge] [--n-gaussians N]
 
 Or directly:
 
-    python run_inference.py --ncore-path /path/to/ncorev4 --output-dir /tmp/out --merge {none,frustum-ownership}
+    python run_inference.py --ncore-path /path/to/ncorev4 --output-dir /tmp/out [--merge] [--n-gaussians N]
 EOF

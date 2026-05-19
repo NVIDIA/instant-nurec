@@ -46,7 +46,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$NCORE_PATH" ]] || [[ -z "$OUTPUT_DIR" ]]; then
-    echo "usage: $0 --ncore-path <path> --output-dir <path> [--merge {none,frustum-ownership}] [--log-level ...]" >&2
+    echo "usage: $0 --ncore-path <path> --output-dir <path> [--merge] [--n-gaussians N] [--log-level ...]" >&2
     exit 64
 fi
 

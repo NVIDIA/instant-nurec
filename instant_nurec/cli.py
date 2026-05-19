@@ -58,11 +58,13 @@ def make_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--merge",
-        choices=["none", "frustum-ownership"],
-        default="none",
+        action="store_true",
         help=(
-            "Primitive merge strategy. 'none' writes per-chunk PLYs; "
-            "'frustum-ownership' writes a single merged PLY."
+            "If set, merge per-chunk primitives into a single "
+            "frustum-ownership PLY per sequence and run kl-optimal "
+            "voxelization (target count controlled by --n-gaussians). "
+            "Default (flag absent) writes per-chunk PLYs and skips "
+            "voxelization entirely."
         ),
     )
     parser.add_argument(
@@ -72,11 +74,9 @@ def make_parser() -> argparse.ArgumentParser:
         help=(
             f"Target number of static Gaussians after kl-optimal voxelization "
             f"(default: {_DEFAULT_N_GAUSSIANS}). The voxel size is searched "
-            f"iteratively (starting at 0.1, doubled when the result exceeds "
-            f"this target, halved when it falls below 0.9 * target) until the "
-            f"count lands in [0.9 * target, target]. Only consulted when "
-            f"--merge=frustum-ownership (voxelization is bundled with merge); "
-            f"must be > 0."
+            f"iteratively via bracketed binary search (starting at 0.1) until "
+            f"the count lands in [0.9 * target, target]. Only consulted when "
+            f"--merge is set (voxelization is bundled with merge); must be > 0."
         ),
     )
     parser.add_argument(
@@ -143,8 +143,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         ),
         predict=PredictConfig(
             primitive_merge=PrimitiveMergeConfig(
-                enabled=(args.merge == "frustum-ownership"),
-                enable_voxelization=(args.merge == "frustum-ownership"),
+                enabled=args.merge,
+                enable_voxelization=args.merge,
                 target_n_gaussians=args.n_gaussians,
             ),
         ),
