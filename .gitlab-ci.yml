@@ -55,8 +55,47 @@ ruff:
   script:
     - .venv/bin/ruff check .
 
+no-fixups:
+  # Refuse to merge MRs that still carry ``fixup!`` / ``squash!`` commits;
+  # those are placeholders for ``git rebase -i --autosquash`` and aren't
+  # meant to land in main's history. Only runs on MR pipelines — on
+  # protected branches the commits are already final, and there's no
+  # diff base to compare against.
+  stage: lint
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  # ``alpine/git`` ships git directly, so we skip the default
+  # python/uv setup and keep this job a few seconds wall-clock.
+  # Its entrypoint is ``git``; override to empty so GitLab's
+  # ``sh -c "<script>"`` step runner isn't passed as a git
+  # subcommand (``git sh ...`` → ``git: 'sh' is not a git command``).
+  image:
+    name: alpine/git
+    entrypoint: [""]
+  variables:
+    # MR pipelines default to a shallow clone; force full history so
+    # ``$CI_MERGE_REQUEST_DIFF_BASE_SHA`` is always reachable.
+    GIT_DEPTH: "0"
+  before_script: []
+  # Each step is a single line so GitLab's job log echoes them all
+  # — a ``- |`` block collapses to just the first line in the UI.
+  script:
+    - range="$CI_MERGE_REQUEST_DIFF_BASE_SHA..HEAD"
+    - bad=$(git log --format='%h %s' "$range" | grep -E '^[0-9a-f]+ (fixup|squash)!' || true)
+    - if [ -z "$bad" ]; then echo "OK — no fixup/squash commits in $range"; exit 0; fi
+    - echo "Refusing to merge — fixup/squash commits present in MR:"
+    - echo "$bad"
+    - 'echo "Run: git rebase -i --autosquash $CI_MERGE_REQUEST_DIFF_BASE_SHA"'
+    - exit 1
+
 pytest:
   stage: test
+  # Decouple pytest from the rest of ``lint`` via the DAG: a
+  # ``no-fixups`` failure is purely commit-message housekeeping and
+  # shouldn't suppress test signal. The pipeline still fails red
+  # overall; pytest just runs in parallel with ``no-fixups``.
+  needs:
+    - ruff
   # Only the test job needs a C++ toolchain: Torch Inductor's CPU backend
   # JITs a vector-ISA probe via ``g++`` the first time any
   # ``@torch.compile``-decorated function runs on CPU (e.g.
