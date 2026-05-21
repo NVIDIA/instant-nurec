@@ -29,16 +29,26 @@ from instant_nurec.utils.sensors.kernel_types import (
     FThetaProjection,
     NoExternalDistortion,
     Pose,
-    ReferencePolynomial,
     ShutterType,
 )
 from ncore.data import FThetaCameraModelParameters
-from ncore.data import ReferencePolynomial as NcoreReferencePolynomial
 from ncore.sensors import (
     BivariateWindshieldModel,
     CameraModel,
     FThetaCameraModel,
 )
+
+
+def _looks_like_bivariate_windshield(external_distortion: object) -> bool:
+    return all(
+        hasattr(external_distortion, name)
+        for name in (
+            "horizontal_poly",
+            "vertical_poly",
+            "horizontal_poly_inverse",
+            "vertical_poly_inverse",
+        )
+    )
 
 
 @dataclass
@@ -134,18 +144,30 @@ class CameraModelConverter:
         if camera_model.external_distortion is None:
             return NoExternalDistortion()
 
-        # Check the type of external distortion
-        # ncore uses BivariateWindshieldModelParameters
-        if isinstance(camera_model.external_distortion, BivariateWindshieldModel):
-            # Convert polynomial coefficients
+        external_distortion = camera_model.external_distortion
+
+        # ncore exposes this as BivariateWindshieldModel on constructed
+        # cameras, but some loaders hand us the parameter object directly.
+        if isinstance(external_distortion, BivariateWindshieldModel) or _looks_like_bivariate_windshield(
+            external_distortion
+        ):
+            def tensor(name: str) -> torch.Tensor:
+                return torch.as_tensor(
+                    getattr(external_distortion, name),
+                    device=device,
+                ).flatten()
+
+            reference_polynomial = getattr(external_distortion, "reference_poly", None)
+            if reference_polynomial is None:
+                reference_polynomial = getattr(
+                    external_distortion, "reference_polynomial", None
+                )
             return BivariateWindshieldDistortion.from_components(
-                h_poly=camera_model.external_distortion.horizontal_poly.to(device),
-                v_poly=camera_model.external_distortion.vertical_poly.to(device),
-                h_poly_inv=camera_model.external_distortion.horizontal_poly_inverse.to(device),
-                v_poly_inv=camera_model.external_distortion.vertical_poly_inverse.to(device),
-                reference_polynomial=ReferencePolynomial.FORWARD
-                if camera_model.external_distortion.reference_poly == NcoreReferencePolynomial.FORWARD
-                else ReferencePolynomial.BACKWARD,
+                h_poly=tensor("horizontal_poly"),
+                v_poly=tensor("vertical_poly"),
+                h_poly_inv=tensor("horizontal_poly_inverse"),
+                v_poly_inv=tensor("vertical_poly_inverse"),
+                reference_polynomial=reference_polynomial,
             )
 
         # Default to no external distortion

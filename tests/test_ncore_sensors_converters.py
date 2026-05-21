@@ -164,10 +164,10 @@ def _attach_bivariate(m, BivariateModel):
     """Attach a stubbed BivariateWindshieldModel external distortion to a
     camera-model stand-in."""
     d = BivariateModel()
-    d.horizontal_poly = torch.zeros(5)
-    d.vertical_poly = torch.zeros(5)
-    d.horizontal_poly_inverse = torch.zeros(5)
-    d.vertical_poly_inverse = torch.zeros(5)
+    d.horizontal_poly = torch.zeros(3)
+    d.vertical_poly = torch.zeros(3)
+    d.horizontal_poly_inverse = torch.zeros(3)
+    d.vertical_poly_inverse = torch.zeros(3)
     d.reference_poly = "FORWARD"
     m.external_distortion = d
     return m
@@ -290,7 +290,7 @@ def test_external_distortion_none_returns_no_external_distortion(stubbed_convert
 def test_external_distortion_bivariate_windshield_branch(stubbed_converters):
     (
         mod,
-        captured,
+        _captured,
         FThetaCameraModel,
         BivariateWindshieldModel,
         ShutterType,
@@ -304,20 +304,19 @@ def test_external_distortion_bivariate_windshield_branch(stubbed_converters):
         BivariateWindshieldModel,
     )
     result = mod.CameraModelConverter.convert(cam)
-    bw_call = next(c for c in captured["calls"] if c[0] == "BivariateWindshieldDistortion")
-    # FORWARD on the ncore side maps to ReferencePolynomial.FORWARD on the kernel side.
-    assert bw_call[1]["reference_polynomial"] == ReferencePolynomial.FORWARD
     from instant_nurec.utils.sensors.kernel_types import BivariateWindshieldDistortion
 
     assert isinstance(result.external_distortion, BivariateWindshieldDistortion)
+    # FORWARD on the ncore side maps to ReferencePolynomial.FORWARD on the kernel side.
+    assert result.external_distortion.reference_polynomial == ReferencePolynomial.FORWARD
 
 
 def test_external_distortion_bivariate_backward_reference_polynomial(stubbed_converters):
     """If ncore reports the inverse reference polynomial, the kernel-side
-    enum value should flip to BACKWARD (the else branch of the ternary)."""
+    enum value should flip to BACKWARD."""
     (
         mod,
-        captured,
+        _captured,
         FThetaCameraModel,
         BivariateWindshieldModel,
         ShutterType,
@@ -330,10 +329,91 @@ def test_external_distortion_bivariate_backward_reference_polynomial(stubbed_con
         _make_ftheta(FThetaCameraModel, ShutterType, ref_poly=AnglePolyType.ANGLE_TO_PIXELDIST),
         BivariateWindshieldModel,
     )
+    cam.external_distortion.reference_poly = "BACKWARD"
+    result = mod.CameraModelConverter.convert(cam)
+    assert result.external_distortion.reference_polynomial == ReferencePolynomial.BACKWARD
+
+
+def test_external_distortion_bivariate_duck_typed_uses_reference_polynomial_attr(
+    stubbed_converters,
+):
+    """Parameter-object-like windshield models reach the converter via
+    ``_looks_like_bivariate_windshield`` duck typing; some loaders spell the
+    field ``reference_polynomial`` rather than ``reference_poly``. Both
+    spellings must be honored so the converter and ray_gen paths agree."""
+    (
+        mod,
+        _captured,
+        FThetaCameraModel,
+        _BWModel,
+        ShutterType,
+        ReferencePolynomial,
+        _FThetaPolyType,
+        _NcoreRP,
+        AnglePolyType,
+    ) = stubbed_converters
+    cam = _make_ftheta(FThetaCameraModel, ShutterType, ref_poly=AnglePolyType.ANGLE_TO_PIXELDIST)
+    duck = types.SimpleNamespace(
+        horizontal_poly=torch.zeros(3),
+        vertical_poly=torch.zeros(3),
+        horizontal_poly_inverse=torch.zeros(3),
+        vertical_poly_inverse=torch.zeros(3),
+        reference_polynomial="FORWARD",
+    )
+    cam.external_distortion = duck
+    result = mod.CameraModelConverter.convert(cam)
+    assert result.external_distortion.reference_polynomial == ReferencePolynomial.FORWARD
+
+
+def test_external_distortion_bivariate_duck_typed_missing_reference_raises(
+    stubbed_converters,
+):
+    """A duck-typed windshield model with neither ``reference_poly`` nor
+    ``reference_polynomial`` set must fail loud, mirroring the ray_gen path."""
+    (
+        mod,
+        _captured,
+        FThetaCameraModel,
+        _BWModel,
+        ShutterType,
+        _ReferencePolynomial,
+        _FThetaPolyType,
+        _NcoreRP,
+        AnglePolyType,
+    ) = stubbed_converters
+    cam = _make_ftheta(FThetaCameraModel, ShutterType, ref_poly=AnglePolyType.ANGLE_TO_PIXELDIST)
+    duck = types.SimpleNamespace(
+        horizontal_poly=torch.zeros(3),
+        vertical_poly=torch.zeros(3),
+        horizontal_poly_inverse=torch.zeros(3),
+        vertical_poly_inverse=torch.zeros(3),
+    )
+    cam.external_distortion = duck
+    with pytest.raises(ValueError, match="unrecognized reference_polynomial"):
+        mod.CameraModelConverter.convert(cam)
+
+
+def test_external_distortion_bivariate_unrecognized_reference_raises(stubbed_converters):
+    """Unrecognized reference_poly strings should fail loud, not silently
+    fall back to BACKWARD."""
+    (
+        mod,
+        _captured,
+        FThetaCameraModel,
+        BivariateWindshieldModel,
+        ShutterType,
+        _ReferencePolynomial,
+        _FThetaPolyType,
+        _NcoreRP,
+        AnglePolyType,
+    ) = stubbed_converters
+    cam = _attach_bivariate(
+        _make_ftheta(FThetaCameraModel, ShutterType, ref_poly=AnglePolyType.ANGLE_TO_PIXELDIST),
+        BivariateWindshieldModel,
+    )
     cam.external_distortion.reference_poly = "BACKWARD_OR_OTHER"
-    mod.CameraModelConverter.convert(cam)
-    bw_call = next(c for c in captured["calls"] if c[0] == "BivariateWindshieldDistortion")
-    assert bw_call[1]["reference_polynomial"] == ReferencePolynomial.BACKWARD
+    with pytest.raises(ValueError, match="unrecognized reference_polynomial"):
+        mod.CameraModelConverter.convert(cam)
 
 
 def test_external_distortion_unrecognized_type_returns_none(stubbed_converters):

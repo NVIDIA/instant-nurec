@@ -20,9 +20,8 @@
 * ``camera_rays_to_image_points`` — forward camera projection (consumed
   by ``instant_nurec/utils/cubemap.py``).
 
-FTheta + NoExternalDistortion only for now (predict uses
-``camera_front_wide_120fov``). Other camera models fall through to
-``NotImplementedError`` until a dataset that needs them arrives.
+FTheta is the supported projection model. External distortion supports
+``NoExternalDistortion`` and NRE-compatible bivariate windshield models.
 """
 
 from __future__ import annotations
@@ -31,6 +30,7 @@ import torch
 
 from instant_nurec.utils.se3 import quat_xyzw_slerp, quat_xyzw_to_rotmat
 from instant_nurec.utils.sensors.kernel_types import (
+    BivariateWindshieldDistortion,
     DynamicPose,
     ExternalDistortion,
     FThetaPolynomialType,
@@ -239,6 +239,48 @@ def _ncore_ftheta_to_projection_and_resolution(
     return projection, resolution
 
 
+@torch._dynamo.disable  # numpy / dataclass conversion from ncore params is outside the compiled path
+def _ncore_external_distortion_to_distortion(
+    ncore_params: object, device: torch.device, dtype: torch.dtype
+) -> ExternalDistortion:
+    """Build an in-tree external distortion from ncore camera parameters."""
+    external_distortion = getattr(ncore_params, "external_distortion_parameters", None)
+    if external_distortion is None:
+        external_distortion = getattr(ncore_params, "external_distortion", None)
+    if external_distortion is None:
+        return NoExternalDistortion()
+
+    required = (
+        "horizontal_poly",
+        "vertical_poly",
+        "horizontal_poly_inverse",
+        "vertical_poly_inverse",
+    )
+    if not all(hasattr(external_distortion, name) for name in required):
+        raise NotImplementedError(
+            f"unsupported external distortion parameters: {type(external_distortion).__name__}"
+        )
+
+    def tensor(name: str) -> torch.Tensor:
+        return torch.as_tensor(
+            getattr(external_distortion, name),
+            device=device,
+            dtype=dtype,
+        ).flatten()
+
+    reference_polynomial = getattr(external_distortion, "reference_poly", None)
+    if reference_polynomial is None:
+        reference_polynomial = getattr(external_distortion, "reference_polynomial", None)
+
+    return BivariateWindshieldDistortion.from_components(
+        h_poly=tensor("horizontal_poly"),
+        v_poly=tensor("vertical_poly"),
+        h_poly_inv=tensor("horizontal_poly_inverse"),
+        v_poly_inv=tensor("vertical_poly_inverse"),
+        reference_polynomial=reference_polynomial,
+    )
+
+
 def camera_rays_to_image_points(
     camera_model_parameters: object,
     cam_rays: torch.Tensor,
@@ -258,9 +300,20 @@ def camera_rays_to_image_points(
     if isinstance(camera_model_parameters, FThetaProjection):
         projection = camera_model_parameters
         resolution = None  # caller didn't pass resolution; skip image-bounds check
+        external_distortion: ExternalDistortion = NoExternalDistortion()
     else:
         projection, resolution = _ncore_ftheta_to_projection_and_resolution(
             camera_model_parameters, device, dtype
+        )
+        external_distortion = _ncore_external_distortion_to_distortion(
+            camera_model_parameters, device, dtype
+        )
+
+    if isinstance(external_distortion, BivariateWindshieldDistortion):
+        cam_rays = external_distortion.distort_camera_rays(cam_rays)
+    elif not isinstance(external_distortion, NoExternalDistortion):
+        raise NotImplementedError(
+            f"unsupported external distortion: {type(external_distortion).__name__}"
         )
 
     ray_xy_norms = _numerically_stable_xy_norm(cam_rays)
@@ -339,9 +392,9 @@ def image_points_to_world_rays_shutter_pose(
         raise NotImplementedError(
             f"only FThetaProjection supported, got {type(projection).__name__}"
         )
-    if not isinstance(external_distortion, NoExternalDistortion):
+    if not isinstance(external_distortion, (NoExternalDistortion, BivariateWindshieldDistortion)):
         raise NotImplementedError(
-            f"only NoExternalDistortion supported, got {type(external_distortion).__name__}"
+            f"unsupported external distortion: {type(external_distortion).__name__}"
         )
     if return_poses:
         raise NotImplementedError("return_poses=True not supported.")
@@ -365,6 +418,8 @@ def image_points_to_world_rays_shutter_pose(
 
     # Camera-frame rays via FTheta inverse projection.
     cam_rays = _ftheta_image_points_to_camera_rays(image_points, projection)
+    if isinstance(external_distortion, BivariateWindshieldDistortion):
+        cam_rays = external_distortion.undistort_camera_rays(cam_rays)
 
     # Per-pixel rolling-shutter interpolation parameter.
     t = _image_points_relative_frame_times(image_points, resolution, shutter_type)

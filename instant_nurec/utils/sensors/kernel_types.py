@@ -17,11 +17,8 @@
 (``ray_gen.py``).
 
 FTheta-only by design. OpenCVPinhole and OpenCVFisheye distortion
-models are intentionally not supported on the input side (Kelvin
-predict was only ever exercised with FTheta cameras; per-
-@jiahuihuang the other distortion families are explicitly dropped).
-The ``BivariateWindshieldDistortion`` remains because it pairs with
-FTheta on real datasets.
+models are intentionally not supported on the input side; the other
+distortion families are explicitly dropped.
 """
 
 from __future__ import annotations
@@ -73,17 +70,78 @@ class NoExternalDistortion(ExternalDistortion):
 
 @dataclass
 class BivariateWindshieldDistortion(ExternalDistortion):
-    """Bivariate windshield distortion — passive value container.
-
-    Math lives in the slang kernel; torch ray-gen rejects this type until
-    the windshield branch is wired (no current predict dataset uses it).
-    """
+    """Bivariate windshield distortion for FTheta camera rays."""
 
     h_poly: torch.Tensor
     v_poly: torch.Tensor
     h_poly_inv: torch.Tensor
     v_poly_inv: torch.Tensor
     reference_polynomial: ReferencePolynomial
+    h_poly_degree: int = -1
+    v_poly_degree: int = -1
+
+    def __post_init__(self) -> None:
+        self.reference_polynomial = self._coerce_reference_polynomial(self.reference_polynomial)
+        h_poly_degree = self._compute_poly_order(self.h_poly, "h_poly")
+        v_poly_degree = self._compute_poly_order(self.v_poly, "v_poly")
+        h_poly_inv_degree = self._compute_poly_order(self.h_poly_inv, "h_poly_inv")
+        v_poly_inv_degree = self._compute_poly_order(self.v_poly_inv, "v_poly_inv")
+
+        if h_poly_inv_degree != h_poly_degree:
+            raise ValueError("h_poly_inv must have the same bivariate order as h_poly.")
+        if v_poly_inv_degree != v_poly_degree:
+            raise ValueError("v_poly_inv must have the same bivariate order as v_poly.")
+        if self.h_poly_degree >= 0 and self.h_poly_degree != h_poly_degree:
+            raise ValueError("h_poly_degree does not match h_poly coefficient count.")
+        if self.v_poly_degree >= 0 and self.v_poly_degree != v_poly_degree:
+            raise ValueError("v_poly_degree does not match v_poly coefficient count.")
+        self.h_poly_degree = h_poly_degree
+        self.v_poly_degree = v_poly_degree
+
+    @staticmethod
+    def _compute_poly_order(poly_coeffs: torch.Tensor, name: str) -> int:
+        """Return the order for triangular bivariate coefficient storage."""
+        if poly_coeffs.dim() != 1:
+            raise ValueError(f"{name} must be 1D, got shape {tuple(poly_coeffs.shape)}")
+        n_coeffs = int(torch.numel(poly_coeffs))
+        if n_coeffs == 0:
+            raise ValueError(f"{name} must contain at least one coefficient.")
+        num_terms = 0
+        for order_candidate in range(n_coeffs):
+            num_terms += order_candidate + 1
+            if num_terms == n_coeffs:
+                return order_candidate
+            if num_terms > n_coeffs:
+                break
+        raise ValueError(
+            f"{name} coefficient count is not consistent with triangular bivariate polynomial storage."
+        )
+
+    @staticmethod
+    def _coerce_reference_polynomial(value: object) -> ReferencePolynomial:
+        if isinstance(value, ReferencePolynomial):
+            return value
+        original = value
+        if hasattr(value, "name"):
+            value = getattr(value, "name")
+        elif hasattr(value, "value") and not isinstance(value, str):
+            value = getattr(value, "value")
+        if isinstance(value, str):
+            normalized = value.strip().upper().rsplit(".", maxsplit=1)[-1]
+            if normalized in ReferencePolynomial.__members__:
+                return ReferencePolynomial[normalized]
+            try:
+                return ReferencePolynomial(int(normalized))
+            except ValueError as e:
+                raise ValueError(
+                    f"unrecognized reference_polynomial value: {original!r}"
+                ) from e
+        try:
+            return ReferencePolynomial(int(value))
+        except (TypeError, ValueError) as e:
+            raise ValueError(
+                f"unrecognized reference_polynomial value: {original!r}"
+            ) from e
 
     @classmethod
     def from_components(
@@ -101,6 +159,58 @@ class BivariateWindshieldDistortion(ExternalDistortion):
             v_poly_inv=v_poly_inv,
             reference_polynomial=reference_polynomial,
         )
+
+    @staticmethod
+    def _eval_poly_2d(
+        poly: torch.Tensor, order: int, x: torch.Tensor, y: torch.Tensor
+    ) -> torch.Tensor:
+        """Evaluate triangular bivariate coefficients with NRE's Horner order."""
+        start_idx = 0
+        y_coeffs = []
+        for inner_order in range(order, -1, -1):
+            coeffs = poly[start_idx : start_idx + inner_order + 1]
+            result = torch.zeros_like(x)
+            for coeff in reversed(coeffs):
+                result = result * x + coeff
+            y_coeffs.append(result)
+            start_idx += inner_order + 1
+
+        result = torch.zeros_like(y)
+        for coeff in reversed(y_coeffs):
+            result = result * y + coeff
+        return result
+
+    def _active_polynomials(self, *, inverse: bool) -> tuple[torch.Tensor, torch.Tensor]:
+        use_inverse = inverse
+        if self.reference_polynomial == ReferencePolynomial.BACKWARD:
+            use_inverse = not use_inverse
+        if use_inverse:
+            return self.h_poly_inv, self.v_poly_inv
+        return self.h_poly, self.v_poly
+
+    def _apply_distortion(self, camera_rays: torch.Tensor, *, inverse: bool) -> torch.Tensor:
+        if camera_rays.shape[-1] != 3:
+            raise ValueError(f"camera_rays must end with dimension 3, got shape {tuple(camera_rays.shape)}")
+
+        h_poly, v_poly = self._active_polynomials(inverse=inverse)
+        h_poly = h_poly.to(device=camera_rays.device, dtype=camera_rays.dtype)
+        v_poly = v_poly.to(device=camera_rays.device, dtype=camera_rays.dtype)
+
+        ray_norm = torch.nn.functional.normalize(camera_rays, dim=-1)
+        phi = torch.asin(torch.clamp(ray_norm[..., 0], -1.0, 1.0))
+        theta = torch.asin(torch.clamp(ray_norm[..., 1], -1.0, 1.0))
+        x = torch.sin(self._eval_poly_2d(h_poly, self.h_poly_degree, phi, theta))
+        y = torch.sin(self._eval_poly_2d(v_poly, self.v_poly_degree, phi, theta))
+        z_square = torch.clamp(1.0 - x * x - y * y, min=0.0, max=1.0)
+        z_sign = torch.where(ray_norm[..., 2] < 0.0, -1.0, 1.0)
+        z = torch.sqrt(z_square) * z_sign
+        return torch.stack([x, y, z], dim=-1)
+
+    def distort_camera_rays(self, camera_rays: torch.Tensor) -> torch.Tensor:
+        return self._apply_distortion(camera_rays, inverse=False)
+
+    def undistort_camera_rays(self, camera_rays: torch.Tensor) -> torch.Tensor:
+        return self._apply_distortion(camera_rays, inverse=True)
 
 
 @dataclass
