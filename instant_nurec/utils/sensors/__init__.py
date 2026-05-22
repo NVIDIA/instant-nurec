@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
+# Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
 
 from instant_nurec.utils.sensors.sensors import (
     RectSubsampledSensor,
