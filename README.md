@@ -113,7 +113,7 @@ auth covers the `nvidia/instant-nurec` model auto-download on first run.
 
 ```bash
 # Download the clip (~2 GB)
-huggingface-cli download \
+hf download \
     nvidia/PhysicalAI-Autonomous-Vehicles-NCore --repo-type dataset \
     --include "clips/000da9de-0ee5-465a-9a2d-e7e91d3016bb/*" \
     --local-dir ./demo_clip
