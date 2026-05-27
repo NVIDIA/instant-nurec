@@ -68,6 +68,11 @@ source .venv/bin/activate
 tree from `uv.lock` into `.venv/`. The only CUDA dependency is whatever
 the pinned `torch` wheel ships with.
 
+This repo is native-Python only — no Docker required. If you want a
+container, use the standard
+[NuRec](https://docs.nvidia.com/nurec/nurec/reconstruct-av-scene.html)
+image as a generic CUDA environment.
+
 #### Download Model Checkpoints [optional]
 
 > **Note:** `instant_nurec.pt` is auto-downloaded into the Hugging Face
