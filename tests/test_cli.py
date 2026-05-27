@@ -263,6 +263,35 @@ def test_main_returns_zero_on_clean_exit(monkeypatch: pytest.MonkeyPatch, tmp_pa
     assert rc == 0
 
 
+def test_main_prints_refine_link_when_merge(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str],
+) -> None:
+    _install_runtime_stubs(monkeypatch)
+    json_path = _make_json_path(tmp_path)
+    from instant_nurec.cli import main
+    rc = main(["--ncore-path", str(json_path), "--output-dir", "/o", "--merge"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "Next: refine into USDZ with NuRec" in out
+    assert "https://docs.nvidia.com/nurec/nurec/reconstruct-av-scene.html" in out
+    assert "SuperSplat" not in out
+
+
+def test_main_prints_viewer_hint_when_no_merge(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str],
+) -> None:
+    _install_runtime_stubs(monkeypatch)
+    json_path = _make_json_path(tmp_path)
+    from instant_nurec.cli import main
+    rc = main(["--ncore-path", str(json_path), "--output-dir", "/o"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "Next: view your 3DGS PLY with SuperSplat" in out
+    assert "https://playcanvas.com/supersplat/editor" in out
+    assert "ply_viewer (NuRec container)" in out
+    assert "refine into USDZ" not in out
+
+
 def test_main_unrecognised_suffix_raises(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
 ) -> None:
