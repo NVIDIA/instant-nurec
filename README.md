@@ -133,6 +133,15 @@ pre-merge across 2 chunks) to land in `[0.9 * --n-gaussians,
 per-chunk PLYs instead (voxelization is bundled with merge and
 runs only when the flag is set).
 
+##### View your output
+
+The PLY is a **3DGS** PLY (Gaussian Splatting), not a point cloud —
+generic viewers like MeshLab / macOS Preview will fail to open it.
+Use one of:
+
+- [SuperSplat](https://playcanvas.com/supersplat/editor) — browser, no install.
+- `ply_viewer` — shipped in the NuRec container.
+
 `--ncore-path` accepts two input shapes:
 
 ##### Mode 1 — single sequence `.json` (NuRec-aligned)
