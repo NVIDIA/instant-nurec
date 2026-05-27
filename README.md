@@ -26,6 +26,13 @@ forward pass → 3D-Gaussian PLY export. The PLY output is usable
 directly as a static reconstruction, and can also serve as
 initialization for downstream NuRec training to reach higher fidelity.
 
+Instant-NuRec and
+[NuRec](https://docs.nvidia.com/nurec/nurec/reconstruct-av-scene.html)
+share the same input (NCore V4 clip / HF dataset / sequence `.json`)
+but run on different runtimes: Instant-NuRec is a native-Python
+feed-forward preview (seconds per clip); NuRec is a Docker-based
+per-scene refinement pipeline that produces a high-fidelity USDZ.
+
 ### Background
 
 Instant NuRec is a feed-forward reconstruction model that converts
