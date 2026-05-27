@@ -20,11 +20,10 @@ model emits a Gaussian primitive per pixel — covering geometry,
 appearance, and per-Gaussian motion — which can be rendered in real
 time and interchanged with existing simulation pipelines.
 
-This repository is the public reference implementation of the predict
-side of the **Kelvin** model: ncorev4 ingest → frame batch prep →
-forward pass → 3D-Gaussian PLY export. The PLY output is usable
-directly as a static reconstruction, and can also serve as
-initialization for downstream NuRec training to reach higher fidelity.
+This repo goes from ncorev4 ingest → frame batch prep → forward pass
+→ 3D-Gaussian PLY export. The PLY output is usable directly as a
+static reconstruction, and can also serve as initialization for
+downstream NuRec training to reach higher fidelity.
 
 Instant-NuRec and
 [NuRec](https://docs.nvidia.com/nurec/nurec/reconstruct-av-scene.html)
@@ -47,7 +46,7 @@ Instant NuRec leverages the following foundational technologies:
 
 ## Pipeline Overview
 
-NCore V4 Sequence ─► Frame Batching ─► Kelvin Forward Pass (JIT) ─► 3D Gaussians ─► PLY (per-chunk or merged)
+NCore V4 Sequence ─► Frame Batching ─► Forward Pass (JIT) ─► 3D Gaussians ─► PLY (per-chunk or merged)
 
 ## User Guide
 
