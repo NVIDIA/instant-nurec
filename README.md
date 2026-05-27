@@ -259,6 +259,13 @@ instant-nurec/
 
 </details>
 
+## What's next?
+
+The PLY you just wrote is usable directly as a static reconstruction.
+If you want a high-fidelity, fully-trained scene, feed the PLY into
+[NuRec](https://docs.nvidia.com/nurec/nurec/reconstruct-av-scene.html)
+as initialization for per-scene refinement.
+
 ## Support
 
 For common errors and fixes (HF auth, driver / CUDA mismatch, OOM at
