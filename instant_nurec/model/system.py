@@ -122,6 +122,8 @@ class GaussiansInstantNuRecSystem(nn.Module):
                 rig_trajectories=rig,
                 path=Path(path),
             )
+            n = primitive.static_layer.densities.numel()
+            print(f"Wrote 3DGS PLY ({n:,} gaussians): {Path(path).resolve()}", flush=True)
 
         for chunk_idx in range(n_chunks):
             meta = out_batch.meta[chunk_idx]

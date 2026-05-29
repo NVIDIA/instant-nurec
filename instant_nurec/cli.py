@@ -150,6 +150,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         ),
     )
     run_predict(config)
+    if args.merge:
+        print(
+            "Next: refine into USDZ with NuRec — "
+            "https://docs.nvidia.com/nurec/nurec/reconstruct-av-scene.html",
+            flush=True,
+        )
+    else:
+        print(
+            "Next: view your 3DGS PLY with SuperSplat "
+            "(https://playcanvas.com/supersplat/editor) "
+            "or ply_viewer (NuRec container).",
+            flush=True,
+        )
     return 0
 
 

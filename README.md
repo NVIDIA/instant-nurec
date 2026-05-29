@@ -20,11 +20,17 @@ model emits a Gaussian primitive per pixel — covering geometry,
 appearance, and per-Gaussian motion — which can be rendered in real
 time and interchanged with existing simulation pipelines.
 
-This repository is the public reference implementation of the predict
-side of the **Kelvin** model: ncorev4 ingest → frame batch prep →
-forward pass → 3D-Gaussian PLY export. The PLY output is usable
-directly as a static reconstruction, and can also serve as
-initialization for downstream NuRec training to reach higher fidelity.
+This repo goes from ncorev4 ingest → frame batch prep → forward pass
+→ 3D-Gaussian PLY export. The PLY output is usable directly as a
+static reconstruction, and can also serve as initialization for
+downstream NuRec training to reach higher fidelity.
+
+Instant-NuRec and
+[NuRec](https://docs.nvidia.com/nurec/nurec/reconstruct-av-scene.html)
+share the same input (NCore V4 clip / HF dataset / sequence `.json`)
+but run on different runtimes: Instant-NuRec is a native-Python
+feed-forward preview (seconds per clip); NuRec is a Docker-based
+per-scene refinement pipeline that produces a high-fidelity USDZ.
 
 ### Background
 
@@ -40,7 +46,7 @@ Instant NuRec leverages the following foundational technologies:
 
 ## Pipeline Overview
 
-NCore V4 Sequence ─► Frame Batching ─► Kelvin Forward Pass (JIT) ─► 3D Gaussians ─► PLY (per-chunk or merged)
+NCore V4 Sequence ─► Frame Batching ─► Forward Pass (JIT) ─► 3D Gaussians ─► PLY (per-chunk or merged)
 
 ## User Guide
 
@@ -67,6 +73,11 @@ source .venv/bin/activate
 `setup.sh` runs `uv sync --frozen`, which installs the locked dependency
 tree from `uv.lock` into `.venv/`. The only CUDA dependency is whatever
 the pinned `torch` wheel ships with.
+
+This repo is native-Python only — no Docker required. If you want a
+container, use the standard
+[NuRec](https://docs.nvidia.com/nurec/nurec/reconstruct-av-scene.html)
+image as a generic CUDA environment.
 
 #### Download Model Checkpoints [optional]
 
@@ -113,7 +124,7 @@ auth covers the `nvidia/instant-nurec` model auto-download on first run.
 
 ```bash
 # Download the clip (~2 GB)
-huggingface-cli download \
+hf download \
     nvidia/PhysicalAI-Autonomous-Vehicles-NCore --repo-type dataset \
     --include "clips/000da9de-0ee5-465a-9a2d-e7e91d3016bb/*" \
     --local-dir ./demo_clip
@@ -132,6 +143,15 @@ pre-merge across 2 chunks) to land in `[0.9 * --n-gaussians,
 --n-gaussians]` (default target 2 M). Omit `--merge` to write
 per-chunk PLYs instead (voxelization is bundled with merge and
 runs only when the flag is set).
+
+##### View your output
+
+The PLY is a **3DGS** PLY (Gaussian Splatting), not a point cloud —
+generic viewers like MeshLab / macOS Preview will fail to open it.
+Use one of:
+
+- [SuperSplat](https://playcanvas.com/supersplat/editor) — browser, no install.
+- `ply_viewer` — shipped in the NuRec container.
 
 `--ncore-path` accepts two input shapes:
 
@@ -237,6 +257,13 @@ instant-nurec/
 ```
 
 </details>
+
+## What's next?
+
+The PLY you just wrote is usable directly as a static reconstruction.
+If you want a high-fidelity, fully-trained scene, feed the PLY into
+[NuRec](https://docs.nvidia.com/nurec/nurec/reconstruct-av-scene.html)
+as initialization for per-scene refinement.
 
 ## Support
 
