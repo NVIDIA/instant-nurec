@@ -61,22 +61,11 @@ class KelvinDecoderReturn:
 class KelvinDPTDecoder(nn.Module):
     """
     DPT Head (compared to corresponding encoder this is ~5-10% of parameters & FLOPS)
-    TODO: Compare SDT head from https://aigeeksgroup.github.io/AnyDepth/
-
-    See schematic plot here:
-    https://excalidraw.com/#json=e8F-fbXBIoMoihwIZxxwe,U5OH-X-P6QjCUh6i8xb5ag
     """
 
     class TimeModulatedMotionHead(nn.Module):
         """
         Takes in image tokens, source time, and target time, output motion offset from each frame to the target time.
-        Currently the API jointly predicts forward & backward motion, as well as dynamic probability.
-        - Pros: save compute by predicting two motion offsets at once.
-        - Cons: somewhat introduces unncessary dependencies between the two motion offsets which should be independent.
-            However, the original V-DPM style modulation does not work well if we de-couple them, where forward & backward
-            motion offsets cancel each other out (i.e. the network does not seem to take src-time nor tgt-time into account).
-            Two solutions might be possible: (1) Predict XYZ instead of offset, matching the exact V-DPM setting,
-            (2) Adding attention mask (as in StreetForward / 4RC) may help, but haven't tried it yet.
         """
 
         def __init__(self, config: KelvinDPTDecoderConfig, model_config: KelvinModelConfig):
