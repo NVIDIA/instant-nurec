@@ -21,22 +21,10 @@ from instant_nurec.utils.batch import InstantNuRecDataBatch
 
 
 class InstantNuRecDataModule:
-    """``frame_width`` / ``frame_height`` / ``n_frames_per_sample`` are
-    passed in by the caller; ``instant_nurec.model.make`` is the
-    canonical caller."""
+    """Predict datamodule configured from the public input schema."""
 
-    def __init__(
-        self,
-        instantnurec_config: InstantNuRecConfig,
-        *,
-        frame_width: int,
-        frame_height: int,
-        n_frames_per_sample: int,
-    ) -> None:
+    def __init__(self, instantnurec_config: InstantNuRecConfig) -> None:
         self.instantnurec_config = instantnurec_config
-        self._frame_width = frame_width
-        self._frame_height = frame_height
-        self._n_frames_per_sample = n_frames_per_sample
         self.predict_dataset: NCoreInstantNuRecDataset | None = None
 
     def predict_dataloader(self) -> DataLoader:
@@ -45,9 +33,9 @@ class InstantNuRecDataModule:
 
         self.predict_dataset = NCoreInstantNuRecDataset(
             dataset_config,
-            frame_width=self._frame_width,
-            frame_height=self._frame_height,
-            n_frames_per_sample=self._n_frames_per_sample,
+            frame_width=dataset_config.camera_subsampler.frame_width,
+            frame_height=dataset_config.camera_subsampler.frame_height,
+            n_frames_per_sample=dataset_config.frame_batch_sampler.n_frames_per_sample,
         )
         return DataLoader(
             self.predict_dataset,

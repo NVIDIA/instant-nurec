@@ -46,7 +46,29 @@ Instant NuRec leverages the following foundational technologies:
 
 ## Pipeline Overview
 
-NCore V4 Sequence ─► Frame Batching ─► Forward Pass (JIT) ─► 3D Gaussians ─► PLY (per-chunk or merged)
+NCore V4 Sequence ─► Frame Batching ─► Eager PyTorch Model ─► 3D Gaussians ─► PLY (per-chunk or merged)
+
+## Model Architecture
+
+The released model is implemented entirely in this repository. Its
+pixel-aligned pipeline consists of:
+
+1. a multi-view vision-transformer encoder with alternating local and
+   global attention;
+2. DPT heads for depth, RGB, normals, semantics, Gaussian parameters,
+   and motion;
+3. a cubemap sky decoder; and
+4. per-camera affine color post-processing.
+
+The reusable attention, embedding, DPT, and camera-encoding layers live
+under [`instant_nurec/model/blocks`](instant_nurec/model/blocks), the
+encoder/decoder definitions under
+[`instant_nurec/model/backbone`](instant_nurec/model/backbone), and the
+complete model composition in
+[`instant_nurec/model/kelvin.py`](instant_nurec/model/kelvin.py).
+Inference runs the PLY-relevant heads directly from source via
+[`static_core.py`](instant_nurec/model/static_core.py); the downloaded
+checkpoint contains weights only.
 
 ## User Guide
 
@@ -81,7 +103,7 @@ image as a generic CUDA environment.
 
 #### Download Model Checkpoints [optional]
 
-> **Note:** `instant_nurec.pt` is auto-downloaded into the Hugging Face
+> **Note:** `instant_nurec_weights.pt` is auto-downloaded into the Hugging Face
 > hub cache on the first inference run.
 
 However, you can also manually download the model into a directory of
@@ -96,12 +118,12 @@ hf download nvidia/instant-nurec --local-dir checkpoints
 This places the following file in `checkpoints/`:
 
     checkpoints/
-    └── instant_nurec.pt
+    └── instant_nurec_weights.pt
 
 Point the pipeline at this local copy by exporting:
 
 ```bash
-export INSTANT_NUREC_FULL_PT="$(pwd)/checkpoints/instant_nurec.pt"
+export INSTANT_NUREC_FULL_PT="$(pwd)/checkpoints/instant_nurec_weights.pt"
 ```
 
 </details>
@@ -109,8 +131,8 @@ export INSTANT_NUREC_FULL_PT="$(pwd)/checkpoints/instant_nurec.pt"
 <details>
 <summary><b>Inference</b></summary>
 
-> **Note:** The pretrained model `instant_nurec.pt` (a TorchScript
-> archive) is fetched on first inference run from the Hugging Face
+> **Note:** The pretrained weights `instant_nurec_weights.pt` are fetched
+> on first inference run from the Hugging Face
 > repo `nvidia/instant-nurec` and cached locally; subsequent runs read
 > it from the cache. Set `INSTANT_NUREC_FULL_PT` to a local path to
 > override the auto-download.
@@ -214,7 +236,7 @@ Output layout: PLYs only, under `out_dir/<run_id>/ply/<sequence_id>/...ply`.
 
 | variable | purpose |
 | --- | --- |
-| `INSTANT_NUREC_FULL_PT` | Absolute path to a local `instant_nurec.pt`. Takes priority over the auto-downloaded copy. |
+| `INSTANT_NUREC_FULL_PT` | Absolute path to a local `instant_nurec_weights.pt`. Takes priority over the auto-downloaded copy. |
 | `INSTANT_NUREC_RUN_ID` | Override the per-run shortuuid; useful when scripting reproducible output paths. |
 
 </details>
@@ -226,13 +248,16 @@ Output layout: PLYs only, under `out_dir/<run_id>/ply/<sequence_id>/...ply`.
 instant-nurec/
 ├── instant_nurec/                  # main package (what ships in the wheel)
 │   ├── cli.py                      # argparse entrypoint
-│   ├── pretrained.py               # auto-downloads instant_nurec.pt from HF on first run
-│   ├── config_schema/              # pydantic schemas + defaults (post-JIT runtime knobs only)
+│   ├── pretrained.py               # auto-downloads weight checkpoint from HF on first run
+│   ├── config_schema/              # pydantic schemas + public architecture defaults
 │   ├── datasets/                   # ncorev4 ingest + cuboid-track helpers
 │   ├── model/
-│   │   ├── __init__.py             # make() — torch.jit.load + JITKelvinAdapter wiring
-│   │   ├── jit_adapter.py          # KelvinInstantNuRec-shaped wrapper around the JIT module
-│   │   └── system.py               # GaussiansInstantNuRecSystem (predict-loop harness)
+│   │   ├── backbone/               # multi-view encoder, DPT decoder, sky decoder
+│   │   ├── blocks/                 # attention, embeddings, DPT, camera encoding
+│   │   ├── kelvin.py               # complete source model composition
+│   │   ├── static_core.py          # eager PLY-reconstruction heads
+│   │   ├── inference.py            # masking + primitive packaging
+│   │   └── system.py               # predict-loop harness
 │   ├── predict/                    # predict loop + PLY export + merge
 │   ├── primitives/                 # KelvinInstantNuRecPrimitive
 │   └── utils/                      # batch / geometry / sensors / nn-extensions
