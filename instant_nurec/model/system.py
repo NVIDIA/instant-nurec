@@ -54,7 +54,21 @@ class GaussiansInstantNuRecSystem(nn.Module):
         self.config = config.system
         self.predict_config = config.predict
         self.export_preprocess = config.model.export_preprocess
-        self.datamodule = InstantNuRecDataModule(config)
+        dataset_config = config.dataset.predict
+        assert dataset_config is not None, "dataset.predict must be configured for inference"
+        n_context_cams = len(dataset_config.context_camera_ids)
+        if model.expected_v % n_context_cams != 0:
+            raise ValueError(
+                f"Model expects {model.expected_v} input frames; "
+                f"len(context_camera_ids)={n_context_cams} doesn't divide it. "
+                f"Update context_camera_ids so its length divides {model.expected_v}."
+            )
+        self.datamodule = InstantNuRecDataModule(
+            config,
+            frame_width=model.expected_w,
+            frame_height=model.expected_h,
+            n_frames_per_sample=model.expected_v // n_context_cams,
+        )
         self.model = model
 
     @property

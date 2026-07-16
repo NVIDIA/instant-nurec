@@ -40,7 +40,7 @@ from instant_nurec import model as model_mod  # noqa: E402
 from instant_nurec.model import (  # noqa: E402
     ModelCheckpointError,
     ModelNotFoundError,
-    _load_model_state_dict,
+    _load_model_checkpoint,
     _resolve_model_pt_path,
     _validate_camera_ids,
 )
@@ -123,30 +123,67 @@ def test_validate_camera_ids_error_message_anchors_to_sequence_path():
         )
 
 
-# ---------- _load_model_state_dict ----------
+# ---------- _load_model_checkpoint ----------
 
 
-def test_load_model_state_dict_accepts_plain_tensor_mapping(tmp_path):
+def test_load_model_checkpoint_extracts_shape_metadata(tmp_path):
     checkpoint = tmp_path / "weights.pt"
-    expected = {"layer.weight": torch.arange(3)}
+    expected = {
+        "expected_v": torch.tensor(18),
+        "expected_h": torch.tensor(448),
+        "expected_w": torch.tensor(784),
+        "layer.weight": torch.arange(3),
+    }
     torch.save(expected, checkpoint)
 
-    actual = _load_model_state_dict(str(checkpoint))
+    state_dict, input_shape = _load_model_checkpoint(str(checkpoint))
 
-    assert actual.keys() == expected.keys()
-    assert torch.equal(actual["layer.weight"], expected["layer.weight"])
+    assert state_dict.keys() == {"layer.weight"}
+    assert torch.equal(state_dict["layer.weight"], expected["layer.weight"])
+    assert input_shape == {"expected_v": 18, "expected_h": 448, "expected_w": 784}
 
 
 @pytest.mark.parametrize("payload", [[torch.ones(1)], {"layer.weight": "not-a-tensor"}])
-def test_load_model_state_dict_rejects_non_state_dict_payload(tmp_path, payload):
+def test_load_model_checkpoint_rejects_non_tensor_mapping(tmp_path, payload):
     checkpoint = tmp_path / "invalid.pt"
     torch.save(payload, checkpoint)
 
-    with pytest.raises(ModelCheckpointError, match="plain state dictionary"):
-        _load_model_state_dict(str(checkpoint))
+    with pytest.raises(ModelCheckpointError, match="plain tensor mapping"):
+        _load_model_checkpoint(str(checkpoint))
 
 
-def test_load_model_state_dict_rejects_legacy_traced_archive_before_torch_load(
+def test_load_model_checkpoint_requires_shape_metadata(tmp_path):
+    checkpoint = tmp_path / "invalid.pt"
+    torch.save({"layer.weight": torch.ones(1)}, checkpoint)
+
+    with pytest.raises(ModelCheckpointError, match="missing checkpoint-backed"):
+        _load_model_checkpoint(str(checkpoint))
+
+
+@pytest.mark.parametrize(
+    "key,value",
+    [
+        ("expected_v", torch.tensor([18, 18])),
+        ("expected_h", torch.tensor(448.0)),
+        ("expected_w", torch.tensor(0)),
+    ],
+)
+def test_load_model_checkpoint_rejects_invalid_shape_metadata(tmp_path, key, value):
+    checkpoint = tmp_path / "invalid.pt"
+    payload = {
+        "expected_v": torch.tensor(18),
+        "expected_h": torch.tensor(448),
+        "expected_w": torch.tensor(784),
+        "layer.weight": torch.ones(1),
+    }
+    payload[key] = value
+    torch.save(payload, checkpoint)
+
+    with pytest.raises(ModelCheckpointError, match=key):
+        _load_model_checkpoint(str(checkpoint))
+
+
+def test_load_model_checkpoint_rejects_legacy_traced_archive_before_torch_load(
     monkeypatch, tmp_path
 ):
     import zipfile
@@ -161,7 +198,7 @@ def test_load_model_state_dict_rejects_legacy_traced_archive_before_torch_load(
         lambda *args, **kwargs: pytest.fail("legacy archive must be rejected before torch.load"),
     )
     with pytest.raises(ModelCheckpointError, match="legacy traced-model archive"):
-        _load_model_state_dict(str(checkpoint))
+        _load_model_checkpoint(str(checkpoint))
 
 
 # ---------- make ----------
@@ -178,6 +215,7 @@ def test_make_builds_source_core_and_loads_weights(monkeypatch, tmp_path):
     checkpoint = tmp_path / pretrained.MODEL_FILENAME
     checkpoint.write_bytes(b"placeholder")
     state_dict = {"encoder.weight": torch.ones(1)}
+    input_shape = {"expected_v": 18, "expected_h": 448, "expected_w": 784}
     calls = {}
 
     class FakeCore:
@@ -195,11 +233,7 @@ def test_make_builds_source_core_and_loads_weights(monkeypatch, tmp_path):
 
     sentinel_system = object()
     model_config = SimpleNamespace(scene_rescale=0.15)
-    dataset_config = SimpleNamespace(
-        context_camera_ids=["front", "left"],
-        frame_batch_sampler=SimpleNamespace(n_frames_per_sample=9),
-        camera_subsampler=SimpleNamespace(frame_height=448, frame_width=784),
-    )
+    dataset_config = SimpleNamespace(context_camera_ids=["front", "left"])
     config = SimpleNamespace(
         model=model_config,
         dataset=SimpleNamespace(predict=dataset_config),
@@ -207,7 +241,9 @@ def test_make_builds_source_core_and_loads_weights(monkeypatch, tmp_path):
 
     monkeypatch.setattr(model_mod, "_resolve_model_pt_path", lambda: str(checkpoint))
     monkeypatch.setattr(model_mod, "_preflight_validate_camera_ids", lambda cfg: calls.setdefault("preflight", cfg))
-    monkeypatch.setattr(model_mod, "_load_model_state_dict", lambda path: state_dict)
+    monkeypatch.setattr(
+        model_mod, "_load_model_checkpoint", lambda path: (state_dict, input_shape)
+    )
     monkeypatch.setattr(model_mod, "KelvinStaticCore", FakeCore)
     monkeypatch.setattr(model_mod, "KelvinInferenceModel", FakeInference)
     monkeypatch.setattr(
@@ -229,3 +265,57 @@ def test_make_builds_source_core_and_loads_weights(monkeypatch, tmp_path):
         "expected_height": 448,
         "expected_width": 784,
     }
+
+
+def _system_config(context_camera_ids):
+    return SimpleNamespace(
+        out_dir="/tmp/out",
+        run_id="test",
+        system=SimpleNamespace(),
+        predict=SimpleNamespace(),
+        model=SimpleNamespace(export_preprocess=SimpleNamespace()),
+        dataset=SimpleNamespace(
+            predict=SimpleNamespace(context_camera_ids=context_camera_ids)
+        ),
+    )
+
+
+def test_system_configures_dataset_from_checkpoint_backed_model_shape(monkeypatch):
+    from instant_nurec.model import system as system_mod
+
+    calls = {}
+
+    class FakeDataModule:
+        def __init__(self, config, **kwargs):
+            calls["config"] = config
+            calls["kwargs"] = kwargs
+
+    model = torch.nn.Module()
+    model.expected_v = 18
+    model.expected_h = 448
+    model.expected_w = 784
+    config = _system_config(["front", "left"])
+    monkeypatch.setattr(system_mod, "InstantNuRecDataModule", FakeDataModule)
+
+    system_mod.GaussiansInstantNuRecSystem(config, model)
+
+    assert calls == {
+        "config": config,
+        "kwargs": {
+            "frame_width": 784,
+            "frame_height": 448,
+            "n_frames_per_sample": 9,
+        },
+    }
+
+
+def test_system_rejects_camera_count_that_does_not_divide_expected_v():
+    from instant_nurec.model.system import GaussiansInstantNuRecSystem
+
+    model = torch.nn.Module()
+    model.expected_v = 18
+    model.expected_h = 448
+    model.expected_w = 784
+
+    with pytest.raises(ValueError, match="doesn't divide"):
+        GaussiansInstantNuRecSystem(_system_config(["front"] * 4), model)
