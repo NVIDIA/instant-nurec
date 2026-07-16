@@ -72,7 +72,7 @@ class KelvinDPTDecoderConfig(BaseConfigSchema):
 
     # Motion-related:
     time_encoding_dim: int = Field(default=256, description="Dimension of the time sinusoidal encoding")
-    motion_depth: int = Field(default=4, description="Depth of the motion head (V-DPM setup is equivalent to 8)")
+    motion_depth: int = Field(default=1, description="Depth of the motion head (V-DPM setup is equivalent to 8)")
 
     def model_post_init(self, __context) -> None:
         assert self.dpt_dim > 0, "DPT dimension must be positive"

@@ -103,7 +103,7 @@ image as a generic CUDA environment.
 
 #### Download Model Checkpoints [optional]
 
-> **Note:** `instant_nurec_weights.pt` is auto-downloaded into the Hugging Face
+> **Note:** `pth/instant_nurec_pa_front_1.1.0.pth` is auto-downloaded into the Hugging Face
 > hub cache on the first inference run.
 
 However, you can also manually download the model into a directory of
@@ -118,12 +118,13 @@ hf download nvidia/instant-nurec --local-dir checkpoints
 This places the following file in `checkpoints/`:
 
     checkpoints/
-    └── instant_nurec_weights.pt
+    └── pth/
+        └── instant_nurec_pa_front_1.1.0.pth
 
 Point the pipeline at this local copy by exporting:
 
 ```bash
-export INSTANT_NUREC_FULL_PT="$(pwd)/checkpoints/instant_nurec_weights.pt"
+export INSTANT_NUREC_FULL_PT="$(pwd)/checkpoints/pth/instant_nurec_pa_front_1.1.0.pth"
 ```
 
 </details>
@@ -131,7 +132,7 @@ export INSTANT_NUREC_FULL_PT="$(pwd)/checkpoints/instant_nurec_weights.pt"
 <details>
 <summary><b>Inference</b></summary>
 
-> **Note:** The pretrained weights `instant_nurec_weights.pt` are fetched
+> **Note:** The pretrained weights `pth/instant_nurec_pa_front_1.1.0.pth` are fetched
 > on first inference run from the Hugging Face
 > repo `nvidia/instant-nurec` and cached locally; subsequent runs read
 > it from the cache. Set `INSTANT_NUREC_FULL_PT` to a local path to
@@ -236,7 +237,7 @@ Output layout: PLYs only, under `out_dir/<run_id>/ply/<sequence_id>/...ply`.
 
 | variable | purpose |
 | --- | --- |
-| `INSTANT_NUREC_FULL_PT` | Absolute path to a local `instant_nurec_weights.pt`. Takes priority over the auto-downloaded copy. |
+| `INSTANT_NUREC_FULL_PT` | Absolute path to a local `instant_nurec_pa_front_1.1.0.pth`. Takes priority over the auto-downloaded copy. |
 | `INSTANT_NUREC_RUN_ID` | Override the per-run shortuuid; useful when scripting reproducible output paths. |
 
 </details>

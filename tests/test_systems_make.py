@@ -176,6 +176,7 @@ def test_make_raises_when_checkpoint_cannot_be_resolved(monkeypatch):
 
 def test_make_builds_source_core_and_loads_weights(monkeypatch, tmp_path):
     checkpoint = tmp_path / pretrained.MODEL_FILENAME
+    checkpoint.parent.mkdir(parents=True)
     checkpoint.write_bytes(b"placeholder")
     state_dict = {"encoder.weight": torch.ones(1)}
     calls = {}

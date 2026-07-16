@@ -49,7 +49,7 @@ def test_kelvin_dpt_decoder_post_init_accepts_positive_dpt_dim():
     assert cfg.checkpointing is True
     assert cfg.dpt_chunk_size == 4
     assert cfg.time_encoding_dim == 256
-    assert cfg.motion_depth == 4
+    assert cfg.motion_depth == 1
 
 
 def test_kelvin_dpt_decoder_post_init_rejects_zero_dpt_dim():
