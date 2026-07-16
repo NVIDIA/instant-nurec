@@ -34,9 +34,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-_CHECKPOINT_SHAPE_KEYS = ("expected_v", "expected_h", "expected_w")
-
-
 class ModelNotFoundError(RuntimeError):
     """The pretrained weight checkpoint could not be resolved."""
 
@@ -118,48 +115,26 @@ def _preflight_validate_camera_ids(config: "InstantNuRecConfig") -> None:
     )
 
 
-def _load_model_checkpoint(
-    path: str,
-) -> tuple[dict[str, torch.Tensor], dict[str, int]]:
-    """Load source-model weights and their checkpoint-backed input shape."""
+def _load_model_state_dict(path: str) -> dict[str, torch.Tensor]:
+    """Load a weights-only checkpoint and reject legacy traced archives."""
     if zipfile.is_zipfile(path):
         with zipfile.ZipFile(path) as archive:
             if any(name.endswith("/constants.pkl") for name in archive.namelist()):
                 raise ModelCheckpointError(
                     f"{path} is a legacy traced-model archive. Download "
                     f"{pretrained.MODEL_FILENAME} or point INSTANT_NUREC_FULL_PT "
-                    "at the released source-model checkpoint."
+                    "at the released weights-only checkpoint."
                 )
 
-    checkpoint = torch.load(path, map_location="cpu", weights_only=True)
-    if not isinstance(checkpoint, dict) or not all(
+    state_dict = torch.load(path, map_location="cpu", weights_only=True)
+    if not isinstance(state_dict, dict) or not all(
         isinstance(key, str) and isinstance(value, torch.Tensor)
-        for key, value in checkpoint.items()
+        for key, value in state_dict.items()
     ):
         raise ModelCheckpointError(
-            f"{path} must contain a plain tensor mapping with model weights and "
-            f"{', '.join(_CHECKPOINT_SHAPE_KEYS)}."
+            f"{path} must contain a plain state dictionary of string keys and tensors."
         )
-
-    missing = [key for key in _CHECKPOINT_SHAPE_KEYS if key not in checkpoint]
-    if missing:
-        raise ModelCheckpointError(
-            f"{path} is missing checkpoint-backed model input metadata: "
-            f"{', '.join(missing)}."
-        )
-
-    state_dict = dict(checkpoint)
-    input_shape: dict[str, int] = {}
-    for key in _CHECKPOINT_SHAPE_KEYS:
-        value = state_dict.pop(key)
-        if value.numel() != 1 or value.dtype == torch.bool:
-            raise ModelCheckpointError(f"{path}: {key} must be a scalar integer tensor.")
-        scalar = value.item()
-        if not isinstance(scalar, int) or scalar <= 0:
-            raise ModelCheckpointError(f"{path}: {key} must be a positive integer.")
-        input_shape[key] = scalar
-
-    return state_dict, input_shape
+    return state_dict
 
 
 def make(config: "InstantNuRecConfig") -> GaussiansInstantNuRecSystem:
@@ -176,15 +151,20 @@ def make(config: "InstantNuRecConfig") -> GaussiansInstantNuRecSystem:
         )
 
     _preflight_validate_camera_ids(config)
-    logger.info("Loading source-model checkpoint from %s.", full_pt_path)
-    state_dict, input_shape = _load_model_checkpoint(full_pt_path)
+    logger.info("Loading source-model weights from %s.", full_pt_path)
     static_core = KelvinStaticCore(config.model)
-    static_core.load_state_dict(state_dict, strict=True)
+    static_core.load_state_dict(_load_model_state_dict(full_pt_path), strict=True)
+
+    dataset_config = config.dataset.predict
+    assert dataset_config is not None, "dataset.predict must be configured for inference"
     model = KelvinInferenceModel(
         static_core,
         scene_rescale=config.model.scene_rescale,
-        expected_frames=input_shape["expected_v"],
-        expected_height=input_shape["expected_h"],
-        expected_width=input_shape["expected_w"],
+        expected_frames=(
+            len(dataset_config.context_camera_ids)
+            * dataset_config.frame_batch_sampler.n_frames_per_sample
+        ),
+        expected_height=dataset_config.camera_subsampler.frame_height,
+        expected_width=dataset_config.camera_subsampler.frame_width,
     )
     return GaussiansInstantNuRecSystem(config, model)

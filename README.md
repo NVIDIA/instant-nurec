@@ -68,7 +68,7 @@ complete model composition in
 [`instant_nurec/model/kelvin.py`](instant_nurec/model/kelvin.py).
 Inference runs the PLY-relevant heads directly from source via
 [`static_core.py`](instant_nurec/model/static_core.py); the downloaded
-checkpoint contains the weights and the model's expected input shape.
+checkpoint contains weights only.
 
 ## User Guide
 

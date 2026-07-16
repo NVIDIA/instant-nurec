@@ -32,6 +32,7 @@ from pydantic import ValidationError
 
 from instant_nurec.config_schema.dataset import (
     AdaptiveSequentialFrameBatchSamplerConfig,
+    CameraSubsamplerConfig,
     NCoreInstantNuRecCuboidTracksParamsConfig,
 )
 from instant_nurec.config_schema.instantnurec import GaussiansInstantNuRecSystemConfig, InstantNuRecConfig
@@ -197,9 +198,15 @@ def test_adaptive_sequential_frame_batch_sampler_basic():
     cfg = AdaptiveSequentialFrameBatchSamplerConfig(
         n_samples_per_sequence=2, max_frame_gap_timestamp_us=200000
     )
-    assert not hasattr(cfg, "n_frames_per_sample")
+    assert cfg.n_frames_per_sample == 18
     assert cfg.n_samples_per_sequence == 2
     assert cfg.max_frame_gap_timestamp_us == 200000
+
+
+def test_camera_subsampler_public_model_dimensions():
+    cfg = CameraSubsamplerConfig()
+    assert cfg.frame_width == 784
+    assert cfg.frame_height == 448
 
 
 # ---------------------------------------------------------------------------
