@@ -54,8 +54,8 @@ NCore V4 Sequence ─► Frame Batching ─► Eager PyTorch Model ─► 3D Gau
 
 ## Model Architecture
 
-The released model is implemented entirely in this repository. Its
-pixel-aligned pipeline consists of:
+The released PA-front and PA-multiview models are implemented entirely
+in this repository. Their pixel-aligned pipeline consists of:
 
 1. a multi-view vision-transformer encoder with alternating local and
    global attention;
@@ -107,8 +107,9 @@ image as a generic CUDA environment.
 
 #### Download Model Checkpoints [optional]
 
-> **Note:** `pth/instant_nurec_pa_front_1.1.0.pth` is auto-downloaded into the Hugging Face
-> hub cache on the first inference run.
+> **Note:** The checkpoint selected by `--model` is auto-downloaded into
+> the Hugging Face hub cache on the first inference run. PA-front remains
+> the default.
 
 However, you can also manually download the model into a directory of
 your choice:
@@ -119,11 +120,12 @@ hf auth login
 hf download nvidia/instant-nurec --local-dir checkpoints
 ```
 
-This places the following file in `checkpoints/`:
+This places the following files in `checkpoints/`:
 
     checkpoints/
     └── pth/
-        └── instant_nurec_pa_front_1.1.0.pth
+        ├── instant_nurec_pa_front_1.1.0.pth
+        └── instant_nurec_pa_multiview_1.1.0.pth
 
 Point the pipeline at this local copy by exporting:
 
@@ -131,16 +133,25 @@ Point the pipeline at this local copy by exporting:
 export INSTANT_NUREC_FULL_PT="$(pwd)/checkpoints/pth/instant_nurec_pa_front_1.1.0.pth"
 ```
 
+When using a local override, make sure the file matches the `--model`
+selection.
+
 </details>
 
 <details>
 <summary><b>Inference</b></summary>
 
-> **Note:** The pretrained weights `pth/instant_nurec_pa_front_1.1.0.pth` are fetched
-> on first inference run from the Hugging Face
-> repo `nvidia/instant-nurec` and cached locally; subsequent runs read
-> it from the cache. Set `INSTANT_NUREC_FULL_PT` to a local path to
-> override the auto-download.
+> **Note:** The selected pretrained weights are fetched on first inference
+> from the Hugging Face repo `nvidia/instant-nurec` and cached locally;
+> subsequent runs read them from the cache. Set `INSTANT_NUREC_FULL_PT`
+> to a matching local checkpoint to override the auto-download.
+
+Two pixel-aligned release profiles are available:
+
+| profile | checkpoint | default input |
+| --- | --- | --- |
+| `pa-front` | `pth/instant_nurec_pa_front_1.1.0.pth` | 18 × `camera_front_wide_120fov`, 784×448 |
+| `pa-multiview` | `pth/instant_nurec_pa_multiview_1.1.0.pth` | 18 frames per camera across front-wide, cross-left, and cross-right, 504×280 (54 images total) |
 
 ##### First run — end-to-end on a public demo clip
 
@@ -162,6 +173,23 @@ python run_inference.py \
     --output-dir ./demo_output \
     --merge
 ```
+
+To run the pixel-aligned multiview model on the same clip, add its model
+profile. The default three-camera ordering matches the released model's
+inference configuration:
+
+```bash
+python run_inference.py \
+    --model pa-multiview \
+    --ncore-path ./demo_clip/clips/000da9de-0ee5-465a-9a2d-e7e91d3016bb/pai_000da9de-0ee5-465a-9a2d-e7e91d3016bb.json \
+    --output-dir ./demo_output_multiview \
+    --merge
+```
+
+`--camera-id` can be repeated to override the profile camera set. The
+multiview checkpoint supports 1, 3, or 5 context cameras; each camera
+contributes 18 frames. Five-camera inference has a larger working set and
+may require more GPU memory.
 
 Success looks like a single PLY at
 `./demo_output/<run_id>/ply/pai_000da9de-.../pai_000da9de-....ply` —
@@ -229,11 +257,12 @@ Output layout: PLYs only, under `out_dir/<run_id>/ply/<sequence_id>/...ply`.
 
 | flag | default | purpose |
 | --- | --- | --- |
+| `--model` | `pa-front` | Released input/checkpoint profile: `pa-front` or `pa-multiview`. |
 | `--ncore-path` | (required) | A `.json` file (single sequence) or a `.lst` manifest (one JSON path per line). |
 | `--output-dir` | (required) | Directory the pipeline writes PLYs into. |
 | `--merge` | absent (false) | Boolean flag. When set, merges per-chunk primitives into a single frustum-ownership PLY per sequence (`<seq>.ply`) and runs kl-optimal voxelization (target count from `--n-gaussians`). Absent (default): per-chunk PLYs (`<seq>_chunk{N}.ply`), no voxelization. |
 | `--n-gaussians` | `2000000` | Target number of static Gaussians after voxelization. Only consulted when `--merge` is set. The voxel size is searched iteratively via bracketed binary search to land the count in `[0.9 * target, target]`. |
-| `--camera-id` | `camera_front_wide_120fov` | ncorev4 context-camera id used as model input. Exactly one camera is required. |
+| `--camera-id` | profile-dependent | Override a context camera. Repeat once per camera in canonical order. PA-front requires 1; PA-multiview supports 1, 3, or 5 and defaults to front-wide, cross-left, cross-right. |
 | `--max-chunks` | `8` | Maximum number of time-chunks processed per clip. One chunk spans up to 13.5 s, so the default covers 8 × 13.5 = 108 s. Longer clips are truncated and a `WARNING` is logged naming the dropped chunk count and the `--max-chunks` value needed to cover the full clip — bump to `ceil(clip_seconds / 13.5)` to silence it. |
 | `--log-level` | `INFO` | `DEBUG` / `INFO` / `WARNING` / `ERROR` / `CRITICAL`. |
 
@@ -241,7 +270,7 @@ Output layout: PLYs only, under `out_dir/<run_id>/ply/<sequence_id>/...ply`.
 
 | variable | purpose |
 | --- | --- |
-| `INSTANT_NUREC_FULL_PT` | Absolute path to a local `instant_nurec_pa_front_1.1.0.pth`. Takes priority over the auto-downloaded copy. |
+| `INSTANT_NUREC_FULL_PT` | Absolute path to a local weights-only checkpoint matching `--model`. Takes priority over the auto-downloaded copy. |
 | `INSTANT_NUREC_RUN_ID` | Override the per-run shortuuid; useful when scripting reproducible output paths. |
 
 </details>

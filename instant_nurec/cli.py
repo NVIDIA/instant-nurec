@@ -28,8 +28,12 @@ import sys
 from pathlib import Path
 from typing import Sequence
 
+from instant_nurec.pretrained import (
+    DEFAULT_MODEL_VARIANT,
+    MODEL_VARIANTS,
+    get_model_profile,
+)
 
-_DEFAULT_CAMERA_ID = "camera_front_wide_120fov"
 _DEFAULT_MAX_CHUNKS = 8
 _DEFAULT_N_GAUSSIANS = 2_000_000
 
@@ -38,6 +42,16 @@ def make_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="instant_nurec",
         description="Standalone Kelvin predict-mode CLI.",
+    )
+    parser.add_argument(
+        "--model",
+        choices=MODEL_VARIANTS,
+        default=DEFAULT_MODEL_VARIANT,
+        help=(
+            "Released model profile. pa-front uses one 784x448 camera; "
+            "pa-multiview uses three 504x280 cameras by default. "
+            f"Default: {DEFAULT_MODEL_VARIANT}."
+        ),
     )
     parser.add_argument(
         "--ncore-path",
@@ -81,13 +95,16 @@ def make_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--camera-id",
+        dest="camera_ids",
+        metavar="CAMERA_ID",
         type=str,
-        default=_DEFAULT_CAMERA_ID,
+        action="append",
+        default=None,
         help=(
-            f"ncorev4 context-camera id used as model input "
-            f"(default: '{_DEFAULT_CAMERA_ID}'). Wires both "
-            f"context_camera_ids and supervision_camera_ids to [CAMERA_ID]. "
-            f"Exactly one camera is required."
+            "Override a profile's ncorev4 context camera. Repeat the flag to "
+            "provide multiple cameras in canonical order. pa-front requires "
+            "one camera; pa-multiview supports 1, 3, or 5. If omitted, the "
+            "selected profile's camera set is used."
         ),
     )
     parser.add_argument(
@@ -123,20 +140,39 @@ def main(argv: Sequence[str] | None = None) -> int:
         InstantNuRecSplitsConfig,
     )
     from instant_nurec.config_schema.instantnurec import InstantNuRecConfig
+    from instant_nurec.config_schema.models import KelvinDPTDecoderConfig, KelvinModelConfig
     from instant_nurec.config_schema.predict import PredictConfig, PrimitiveMergeConfig
     from instant_nurec.ncore_input import resolve_ncore_paths
     from instant_nurec.predict.run import run_predict
 
     json_paths = resolve_ncore_paths(args.ncore_path)
+    profile = get_model_profile(args.model)
+    camera_ids = list(args.camera_ids or profile.context_camera_ids)
+    allowed_camera_counts = profile.supported_camera_counts
+    if len(camera_ids) not in allowed_camera_counts:
+        counts = ", ".join(str(count) for count in allowed_camera_counts)
+        raise ValueError(
+            f"{args.model} expects {counts} context camera(s); got {len(camera_ids)}. "
+            "Repeat --camera-id once per camera."
+        )
 
     config = InstantNuRecConfig(
         out_dir=str(args.output_dir),
+        release_profile=args.model,
+        model=KelvinModelConfig(
+            decoder=KelvinDPTDecoderConfig(motion_depth=profile.motion_depth),
+        ),
         dataset=InstantNuRecSplitsConfig(
             predict=NCoreInstantNuRecDatasetConfig(
                 ncore_json_paths=[str(p) for p in json_paths],
-                context_camera_ids=[args.camera_id],
-                supervision_camera_ids=[args.camera_id],
+                camera_subsampler={
+                    "frame_width": profile.frame_width,
+                    "frame_height": profile.frame_height,
+                },
+                context_camera_ids=camera_ids,
+                supervision_camera_ids=camera_ids,
                 frame_batch_sampler=AdaptiveSequentialFrameBatchSamplerConfig(
+                    n_frames_per_sample=profile.n_frames_per_sample,
                     n_samples_per_sequence=args.max_chunks,
                 ),
             ),

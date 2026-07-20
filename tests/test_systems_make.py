@@ -49,12 +49,12 @@ from instant_nurec.model import (  # noqa: E402
 def test_resolve_returns_path_when_download_succeeds(monkeypatch, tmp_path):
     fake_pt = tmp_path / "instant_nurec_weights.pt"
     fake_pt.write_bytes(b"")
-    monkeypatch.setattr(pretrained, "download_instant_nurec_pt", lambda **kw: str(fake_pt))
+    monkeypatch.setattr(pretrained, "download_instant_nurec_pt", lambda *args, **kw: str(fake_pt))
     assert _resolve_model_pt_path() == str(fake_pt)
 
 
 def test_resolve_returns_none_when_download_raises(monkeypatch):
-    def _raise(**kwargs):
+    def _raise(*args, **kwargs):
         raise pretrained.PretrainedModelError("offline")
 
     monkeypatch.setattr(pretrained, "download_instant_nurec_pt", _raise)
@@ -65,13 +65,25 @@ def test_resolve_returns_none_when_download_raises(monkeypatch):
 def test_resolve_only_calls_downloader_once_per_invocation(monkeypatch):
     calls = {"n": 0}
 
-    def _fake(**kwargs):
+    def _fake(*args, **kwargs):
         calls["n"] += 1
         return "/tmp/something.pt"
 
     monkeypatch.setattr(pretrained, "download_instant_nurec_pt", _fake)
     _resolve_model_pt_path()
     assert calls["n"] == 1
+
+
+def test_resolve_forwards_multiview_variant(monkeypatch):
+    calls = []
+
+    def _fake(model_variant, **kwargs):
+        calls.append(model_variant)
+        return "/tmp/multiview.pth"
+
+    monkeypatch.setattr(pretrained, "download_instant_nurec_pt", _fake)
+    assert _resolve_model_pt_path("pa-multiview") == "/tmp/multiview.pth"
+    assert calls == ["pa-multiview"]
 
 
 # ---------- _validate_camera_ids ----------
@@ -168,10 +180,10 @@ def test_load_model_state_dict_rejects_legacy_traced_archive_before_torch_load(
 
 
 def test_make_raises_when_checkpoint_cannot_be_resolved(monkeypatch):
-    monkeypatch.setattr(model_mod, "_resolve_model_pt_path", lambda: None)
+    monkeypatch.setattr(model_mod, "_resolve_model_pt_path", lambda model_variant: None)
 
     with pytest.raises(ModelNotFoundError, match=pretrained.MODEL_FILENAME):
-        model_mod.make(SimpleNamespace())
+        model_mod.make(SimpleNamespace(release_profile="pa-front"))
 
 
 def test_make_builds_source_core_and_loads_weights(monkeypatch, tmp_path):
@@ -202,13 +214,22 @@ def test_make_builds_source_core_and_loads_weights(monkeypatch, tmp_path):
         camera_subsampler=SimpleNamespace(frame_height=448, frame_width=784),
     )
     config = SimpleNamespace(
+        release_profile="pa-front",
         model=model_config,
         dataset=SimpleNamespace(predict=dataset_config),
     )
 
-    monkeypatch.setattr(model_mod, "_resolve_model_pt_path", lambda: str(checkpoint))
+    monkeypatch.setattr(
+        model_mod,
+        "_resolve_model_pt_path",
+        lambda model_variant: calls.update(model_variant=model_variant) or str(checkpoint),
+    )
     monkeypatch.setattr(model_mod, "_preflight_validate_camera_ids", lambda cfg: calls.setdefault("preflight", cfg))
-    monkeypatch.setattr(model_mod, "_load_model_state_dict", lambda path: state_dict)
+    monkeypatch.setattr(
+        model_mod,
+        "_load_model_state_dict",
+        lambda path, **kwargs: state_dict,
+    )
     monkeypatch.setattr(model_mod, "KelvinStaticCore", FakeCore)
     monkeypatch.setattr(model_mod, "KelvinInferenceModel", FakeInference)
     monkeypatch.setattr(
@@ -221,6 +242,7 @@ def test_make_builds_source_core_and_loads_weights(monkeypatch, tmp_path):
 
     assert result is sentinel_system
     assert calls["preflight"] is config
+    assert calls["model_variant"] == "pa-front"
     assert calls["core_config"] is model_config
     assert calls["loaded"] is state_dict
     assert calls["strict"] is True
