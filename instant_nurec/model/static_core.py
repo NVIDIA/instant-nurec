@@ -13,31 +13,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""``KelvinStaticCore``: the static-only path carved out for JIT export.
+"""Eager source implementation of the pretrained static reconstruction core.
 
-The shipped Kelvin artifact only feeds ``static_layer`` + ``affine_matrix`` into
-the PLY export -- ``sky_cubemap`` and ``dynamic_layers`` are computed today but
-never reach disk (see ``predict/export_ply.py:75`` and the commit-7 contract).
-``KelvinStaticCore`` packages the encoder + (static parts of the) decoder +
-per-camera affine post-processing as a single ``nn.Module`` so the export
-script can hand it to ``torch.jit.trace`` and persist the result as
-``kelvin_jit.pt``.
-
-Output design: the JIT artifact produces *unmasked* per-pixel gaussian
-fields plus the semantic argmax. Final masking (semantic + optional
-cuboid-track-based refinement) happens in the Python-side adapter
-(``instant_nurec/model/jit_adapter.py``). This split keeps the JIT
-artifact free of variable-length data-dependent loops over cuboid_tracks
-while letting the runtime apply the same mask as the eager pickle path.
-
-Submodule ownership: ``__init__`` registers the encoder/decoder/post_processing
-as submodules of this instance, so callers must transfer ownership rather than
-share references with another parent (otherwise ``state_dict()`` surfaces
-duplicate keys for the same parameters). The export script constructs fresh
-submodules and copies ``state_dict``s out of the loaded ``kelvin_full.pt``.
-
-B=1 assumption: ``forward_tensors`` is shaped for ``predict_config.chunk_size=1``
-(the only value the predict driver uses).
+The PLY exporter consumes the static Gaussian layer and per-camera affine
+matrix. This module therefore runs the released encoder, the static decoder
+heads, and affine post-processing directly from Python source. Variable-length
+cuboid-track masking remains in :mod:`instant_nurec.model.inference`.
 """
 
 from __future__ import annotations
@@ -49,68 +30,34 @@ import torch
 from einops import rearrange
 from torch import nn
 
-from instant_nurec_internal.model.backbone.decoders import KelvinDPTDecoder
-from instant_nurec_internal.model.backbone.encoders import KelvinDAv3Encoder
-from instant_nurec_internal.model.post_processing import PerCameraAffinePostProcessing
+from instant_nurec.model.backbone.decoders import KelvinDPTDecoder
+from instant_nurec.model.backbone.encoders import KelvinDAv3Encoder
+from instant_nurec.model.post_processing import PerCameraAffinePostProcessing
+from instant_nurec.config_schema.models import KelvinModelConfig
 
 
 class KelvinStaticCore(nn.Module):
-    """Static-only Kelvin forward suitable for JIT export."""
+    """Static Gaussian reconstruction heads used by public inference."""
 
-    # Class indices for KelvinSemanticClass.{EGO,SKY,MOVABLE} -- pulled in as
-    # constants to keep ``forward_tensors`` free of imports that re-trigger
-    # module initialization on the JIT-load side.
+    # Class indices for KelvinSemanticClass.{EGO,SKY,MOVABLE}.
     _SEMANTIC_EGO: int = 1
     _SEMANTIC_SKY: int = 2
     _SEMANTIC_MOVABLE: int = 4
 
-    def __init__(
-        self,
-        encoder: KelvinDAv3Encoder,
-        decoder: KelvinDPTDecoder,
-        post_processing: PerCameraAffinePostProcessing,
-        scene_rescale: float,
-        expected_b: int,
-        expected_v: int,
-        expected_h: int,
-        expected_w: int,
-    ):
+    def __init__(self, config: KelvinModelConfig) -> None:
         super().__init__()
-        self.encoder = encoder
-        self.decoder = decoder
-        self.post_processing = post_processing
-        # Plain Python attributes don't survive ``torch.jit.save`` -- only
-        # parameters / buffers do. Registering as buffers lets the loader-side
-        # adapter read them back from the JIT module, so the public package
-        # never has to carry these JIT-baked shapes / scalars in its config.
-        self.register_buffer(
-            "scene_rescale_buffer",
-            torch.tensor(scene_rescale, dtype=torch.float32),
-            persistent=True,
+        inference_config = config.model_copy(deep=True)
+        inference_config.encoder.checkpointing = "none"
+        inference_config.decoder.checkpointing = False
+        self.encoder = KelvinDAv3Encoder(inference_config.encoder, inference_config)
+        self.decoder = KelvinDPTDecoder(inference_config.decoder, inference_config)
+        self.post_processing = PerCameraAffinePostProcessing(
+            embed_dim=inference_config.encoder.embed_dim,
+            init_token_scale=0.02,
         )
-        # Trace-baked input shape constraints: any input not matching these
-        # will silently shape-mismatch (or worse, miscompute) inside the
-        # frozen graph. The adapter validates against these on every call
-        # and the dataloader builds inputs to match.
-        self.register_buffer(
-            "expected_b", torch.tensor(expected_b, dtype=torch.int64), persistent=True
-        )
-        self.register_buffer(
-            "expected_v", torch.tensor(expected_v, dtype=torch.int64), persistent=True
-        )
-        self.register_buffer(
-            "expected_h", torch.tensor(expected_h, dtype=torch.int64), persistent=True
-        )
-        self.register_buffer(
-            "expected_w", torch.tensor(expected_w, dtype=torch.int64), persistent=True
-        )
-        self.scene_rescale = scene_rescale
+        self.scene_rescale = inference_config.scene_rescale
 
-    # ------------------------------------------------------------------
-    # forward_tensors(...) -- pure-tensor entry, JIT-traceable
-    # ------------------------------------------------------------------
-
-    def forward_tensors(
+    def forward(
         self,
         rgb: torch.Tensor,
         c2w: torch.Tensor,
@@ -128,7 +75,7 @@ class KelvinStaticCore(nn.Module):
         torch.Tensor,  # normals            (B, V, H, W, 3)
         torch.Tensor,  # affine             (B, n_affine_tokens, 3, 4)
     ]:
-        """Static-only forward consuming pre-extracted tensors.
+        """Run the static model heads on pre-extracted tensors.
 
         Inputs (B=1):
             rgb:                     (1, V, H, W, 3)
@@ -140,15 +87,12 @@ class KelvinStaticCore(nn.Module):
 
         Returns the *unmasked* per-pixel gaussian fields plus the affine
         matrix. Static/dynamic split, cuboid-track-based mask refinement,
-        and final flatten + gather happen in the Python-side adapter
-        (commit 7) so the JIT artifact stays free of data-dependent
-        cuboid_tracks logic.
+        and final flatten + gather happen in ``KelvinInferenceModel``.
         """
         scene_rescale = self.scene_rescale
 
         # ----- Encoder -----
-        # Mirror of KelvinDAv3Encoder.encode (lines 144-161 of encoders.py)
-        # but consuming the pre-stacked tensors directly.
+        # Mirror KelvinDAv3Encoder.encode while consuming stacked tensors.
         B, V, H, W, _ = rgb.shape
         x = self.encoder.patch_embed_img(
             self.encoder.rgb_normalize(rearrange(rgb, "B V H W C -> (B V) C H W"))
@@ -164,10 +108,8 @@ class KelvinStaticCore(nn.Module):
         encoded_deepest = img_feats[-1]
 
         # ----- Decoder static path -----
-        # Mirror of KelvinDPTDecoder.decode (lines 296-421 of decoders.py)
-        # restricted to the heads that feed static_layer; the per-pixel
-        # masking step (lines 432-456) is done by the Python adapter so it
-        # can incorporate cuboid_tracks-based mask refinement.
+        # Run the decoder heads that feed the exported static layer. Per-pixel
+        # masking happens in KelvinInferenceModel so it can use cuboid tracks.
         img_feats_flat = [rearrange(feat, "B V h w C -> (B V) h w C") for feat in img_feats]
         chunk_size = self.decoder.config.dpt_chunk_size
 
@@ -238,40 +180,4 @@ class KelvinStaticCore(nn.Module):
             semantic_argmax,
             context_world_normal,
             affine_matrix,
-        )
-
-
-class TraceableStaticCore(nn.Module):
-    """Thin trace-target wrapper exposing only ``KelvinStaticCore.forward_tensors``.
-
-    Trace records the module's ``forward``; this class exists so the traced
-    artifact's call signature is ``(rgb, c2w, fov, rays, distance_to_depth_scale,
-    camera_idxs) -> tuple[Tensor, ...]`` -- matching what the loader-side
-    adapter (commit 7) constructs from a ``DataAndRenderingBatch``.
-    """
-
-    def __init__(self, static_core: KelvinStaticCore):
-        super().__init__()
-        self.static_core = static_core
-
-    def forward(
-        self,
-        rgb: torch.Tensor,
-        c2w: torch.Tensor,
-        fov: torch.Tensor,
-        rays: torch.Tensor,
-        distance_to_depth_scale: torch.Tensor,
-        camera_idxs: torch.Tensor,
-    ) -> tuple[
-        torch.Tensor,
-        torch.Tensor,
-        torch.Tensor,
-        torch.Tensor,
-        torch.Tensor,
-        torch.Tensor,
-        torch.Tensor,
-        torch.Tensor,
-    ]:
-        return self.static_core.forward_tensors(
-            rgb, c2w, fov, rays, distance_to_depth_scale, camera_idxs
         )

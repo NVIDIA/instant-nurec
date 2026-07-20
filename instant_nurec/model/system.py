@@ -29,6 +29,7 @@ from tqdm import tqdm
 from instant_nurec.datasets.tracks import CuboidTracks
 from instant_nurec.config_schema.instantnurec import GaussiansInstantNuRecSystemConfig
 from instant_nurec.datasets.datamodule import InstantNuRecDataModule
+from instant_nurec.model.inference import KelvinInferenceModel
 from instant_nurec.predict.export_ply import export_ply
 from instant_nurec.predict.primitive_merge import KelvinPrimitiveMerge
 from instant_nurec.primitives.base import BaseInstantNuRecPrimitive
@@ -40,15 +41,21 @@ logger = logging.getLogger(__name__)
 
 
 class GaussiansInstantNuRecSystem(nn.Module):
-    """Predict-only system; the predict driver invokes hooks directly.
-
-    Instances are constructed by ``instant_nurec.model.make`` via
-    ``__new__`` + manual attribute assignment.
-    """
+    """Predict-only system; the predict driver invokes hooks directly."""
 
     config: GaussiansInstantNuRecSystemConfig
-    model: nn.Module
+    model: KelvinInferenceModel
     datamodule: InstantNuRecDataModule
+
+    def __init__(self, config, model: KelvinInferenceModel) -> None:
+        super().__init__()
+        self.out_dir = config.out_dir
+        self.run_id = config.run_id
+        self.config = config.system
+        self.predict_config = config.predict
+        self.export_preprocess = config.model.export_preprocess
+        self.datamodule = InstantNuRecDataModule(config)
+        self.model = model
 
     @property
     def device(self) -> torch.device:
@@ -135,4 +142,3 @@ class GaussiansInstantNuRecSystem(nn.Module):
                 meta,
                 chunk_suffix,
             )
-

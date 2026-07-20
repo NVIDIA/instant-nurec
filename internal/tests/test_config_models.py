@@ -13,14 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Branch-coverage tests for the architecture-side model configs that
-moved out of the public package.
-
-The public ``instant_nurec.config_schema.models`` only carries
-post-JIT runtime knobs (PrimitiveExportPreprocessConfig + slim
-KelvinModelConfig); these fields are baked into the JIT artifact at
-trace time so they live under ``instant_nurec_internal``.
-"""
+"""Branch-coverage tests for the public model architecture configs."""
 
 from __future__ import annotations
 
@@ -33,17 +26,16 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT))
-sys.path.insert(0, str(REPO_ROOT / "internal"))
 
 
 from pydantic import ValidationError
 
 from instant_nurec.config_schema.models import PrimitiveExportPreprocessConfig
-from instant_nurec_internal.config_schema.models import (
+from instant_nurec.config_schema.models import (
     GaussiansActivationConfig,
     KelvinDAv3EncoderConfig,
     KelvinDPTDecoderConfig,
-    KelvinFullModelConfig,
+    KelvinModelConfig,
     KelvinSkyCubemapDecoderConfig,
 )
 
@@ -57,7 +49,7 @@ def test_kelvin_dpt_decoder_post_init_accepts_positive_dpt_dim():
     assert cfg.checkpointing is True
     assert cfg.dpt_chunk_size == 4
     assert cfg.time_encoding_dim == 256
-    assert cfg.motion_depth == 4
+    assert cfg.motion_depth == 1
 
 
 def test_kelvin_dpt_decoder_post_init_rejects_zero_dpt_dim():
@@ -91,11 +83,11 @@ def test_activation_config_custom_values():
     assert cfg.scale_min == 0.01
 
 
-# ---------- KelvinFullModelConfig (composed) ----------
+# ---------- KelvinModelConfig (composed) ----------
 
 
 def _make_full_model_cfg(**overrides):
-    return KelvinFullModelConfig(
+    return KelvinModelConfig(
         sky=KelvinSkyCubemapDecoderConfig(cubemap_size=256, embed_dim=64, depth=2),
         encoder=KelvinDAv3EncoderConfig(
             depth=4,
@@ -111,7 +103,7 @@ def _make_full_model_cfg(**overrides):
     )
 
 
-def test_kelvin_full_model_default_track_padding_and_scene_rescale():
+def test_kelvin_model_default_track_padding_and_scene_rescale():
     cfg = _make_full_model_cfg()
     assert cfg.track_padding_m == [1.0, 1.0, 1.0]
     assert cfg.scene_rescale == 0.15
@@ -120,11 +112,11 @@ def test_kelvin_full_model_default_track_padding_and_scene_rescale():
     assert isinstance(cfg.export_preprocess, PrimitiveExportPreprocessConfig)
 
 
-def test_kelvin_full_model_rejects_track_padding_not_3_long():
+def test_kelvin_model_rejects_track_padding_not_3_long():
     with pytest.raises(ValidationError):
         _make_full_model_cfg(track_padding_m=[1.0, 1.0])
 
 
-def test_kelvin_full_model_rejects_track_padding_too_long():
+def test_kelvin_model_rejects_track_padding_too_long():
     with pytest.raises(ValidationError):
         _make_full_model_cfg(track_padding_m=[1.0, 1.0, 1.0, 1.0])

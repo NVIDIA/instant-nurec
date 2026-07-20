@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""``JITKelvinAdapter``: thin Python wrapper around the loaded model.
+"""Public eager-mode InstantNuRec inference model.
 
 Applies semantic + optional cuboid-track-based dynamic-mask refinement
 to the per-pixel outputs and packages them into
@@ -32,6 +32,7 @@ import torch
 from torch import nn
 
 from instant_nurec.datasets.tracks import CuboidTracks
+from instant_nurec.model.static_core import KelvinStaticCore
 from instant_nurec.primitives.kelvin_primitive import (
     KelvinDynamicLayer,
     KelvinInstantNuRecPrimitive,
@@ -53,24 +54,36 @@ from instant_nurec.utils.types import TrackFlags
 _PLACEHOLDER_SKY_CUBEMAP_SIZE = 16
 
 
-class JITKelvinAdapter(nn.Module):
-    """Adapter wrapping a ``torch.jit.load`` output.
+class KelvinInferenceModel(nn.Module):
+    """Wrap the eager model core and package its tensor outputs.
 
     Args:
-        jit_module: Output of ``torch.jit.load(instant_nurec.pt)``.
+        static_core: Source-defined encoder, decoder, and post-processing core.
+        scene_rescale: Scale factor used by the released model.
+        expected_frames: Number of input frames per inference sample.
+        expected_height: Input image height after preprocessing.
+        expected_width: Input image width after preprocessing.
     """
 
-    def __init__(self, jit_module: torch.jit.ScriptModule):
+    def __init__(
+        self,
+        static_core: KelvinStaticCore,
+        *,
+        scene_rescale: float,
+        expected_frames: int,
+        expected_height: int,
+        expected_width: int,
+    ) -> None:
         super().__init__()
-        self.jit_module = jit_module
-        self.scene_rescale = float(jit_module.static_core.scene_rescale_buffer.item())
-        self.expected_b = int(jit_module.static_core.expected_b.item())
-        self.expected_v = int(jit_module.static_core.expected_v.item())
-        self.expected_h = int(jit_module.static_core.expected_h.item())
-        self.expected_w = int(jit_module.static_core.expected_w.item())
+        self.static_core = static_core
+        self.scene_rescale = scene_rescale
+        self.expected_b = 1
+        self.expected_v = expected_frames
+        self.expected_h = expected_height
+        self.expected_w = expected_width
         self.register_buffer(
             "cuboids_dims_padding",
-            jit_module.static_core.decoder.cuboids_dims_padding.detach().clone(),
+            static_core.decoder.cuboids_dims_padding.detach().clone(),
             persistent=False,
         )
 
@@ -93,7 +106,7 @@ class JITKelvinAdapter(nn.Module):
         return context
 
     # ------------------------------------------------------------------
-    # reconstruct: tensor-extraction adapter
+    # reconstruct: tensor extraction and primitive packaging
     # ------------------------------------------------------------------
 
     def _extract_tensors(self, batch: DataAndRenderingBatch):
@@ -221,7 +234,7 @@ class JITKelvinAdapter(nn.Module):
                 semantic_argmax,
                 normals,
                 affine,
-            ) = self.jit_module(*tensors)
+            ) = self.static_core(*tensors)
 
             rendering_camera = unpack_optional(unpack_optional(batch.rendering).camera)
             cuboid_tracks_b = cuboid_tracks[bidx] if cuboid_tracks is not None else None
@@ -253,4 +266,3 @@ class JITKelvinAdapter(nn.Module):
                 )
             )
         return primitives
-

@@ -13,11 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# pytest auto-loads this before collection so the in-tree packages resolve
-# without an editable install. ``internal/`` is on the path so the tests
-# under ``internal/tests/`` can import the internal-only package
-# (``instant_nurec_internal``); the public ``instant_nurec`` package no
-# longer depends on it.
+# pytest auto-loads this before collection so the in-tree package resolves
+# without an editable install.
 
 import sys
 
@@ -26,7 +23,6 @@ from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parent
 
-for _p in (_REPO_ROOT, _REPO_ROOT / "internal"):
-    _s = str(_p)
-    if _s not in sys.path:
-        sys.path.insert(0, _s)
+_repo_root = str(_REPO_ROOT)
+if _repo_root not in sys.path:
+    sys.path.insert(0, _repo_root)

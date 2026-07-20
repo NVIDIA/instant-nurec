@@ -13,10 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Resolve the pretrained InstantNuRec model artifact.
+"""Resolve the pretrained InstantNuRec weight checkpoint.
 
 ``download_instant_nurec_pt()`` returns the local path to
-``instant_nurec.pt``, downloading from Hugging Face on first use into
+``pth/instant_nurec_pa_front_1.1.0.pth``, downloading from Hugging Face on first use into
 the standard HF hub cache. Setting ``INSTANT_NUREC_FULL_PT`` to an
 existing local path short-circuits the download (useful for offline
 use).
@@ -35,15 +35,15 @@ logger = logging.getLogger(__name__)
 
 
 MODEL_REPO_ID = "nvidia/instant-nurec"
-MODEL_FILENAME = "instant_nurec.pt"
+MODEL_FILENAME = "pth/instant_nurec_pa_front_1.1.0.pth"
 
 
 class PretrainedModelError(RuntimeError):
-    """Raised when ``instant_nurec.pt`` cannot be resolved."""
+    """Raised when the Instant NuRec PA-front checkpoint cannot be resolved."""
 
 
 def download_instant_nurec_pt(*, cache_dir: Optional[str | Path] = None) -> str:
-    """Return the local path to ``instant_nurec.pt``.
+    """Return the local path to :data:`MODEL_FILENAME`.
 
     Resolution order:
 

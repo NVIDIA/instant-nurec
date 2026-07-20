@@ -2,7 +2,8 @@
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| `PretrainedModelError: Could not download nvidia/instant-nurec/instant_nurec.pt` | No network / proxy blocks `huggingface.co` or `*.cloudfront.net` | Set `HTTPS_PROXY`, or copy `instant_nurec.pt` locally and `export INSTANT_NUREC_FULL_PT=/abs/path/to/instant_nurec.pt`. |
+| `PretrainedModelError: Could not download nvidia/instant-nurec/pth/instant_nurec_pa_front_1.1.0.pth` | No network / proxy blocks `huggingface.co` or `*.cloudfront.net` | Set `HTTPS_PROXY`, or copy `instant_nurec_pa_front_1.1.0.pth` locally and set `INSTANT_NUREC_FULL_PT` to its absolute path. |
+| `ModelCheckpointError: ... is a legacy traced-model archive` | `INSTANT_NUREC_FULL_PT` points at the retired artifact | Download `pth/instant_nurec_pa_front_1.1.0.pth` and update the environment variable. |
 | `PretrainedModelError: huggingface_hub is required` | Dependency missing | `uv sync --frozen`. |
 | `ValueError: --ncore-path ...: not an existing JSON/LST file` | Path doesn't resolve | Check the resolved path; `.lst` entries resolve relative to the LST file's dir, not `$PWD`. |
 | `ValueError: --ncore-path must end in .json or .lst` | Wrong suffix | Pass a single `.json` or a `.lst` manifest. |

@@ -30,7 +30,7 @@ import torch
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from instant_nurec_internal.model.blocks.attention import (
+from instant_nurec.model.blocks.attention import (
     AttentionBlock,
     CrossAttention,
     CrossAttentionBlock,
@@ -40,8 +40,8 @@ from instant_nurec_internal.model.blocks.attention import (
     SelfAttention,
     _maybe_layer_scale,
 )
-from instant_nurec_internal.model.blocks.embeds import RotaryPositionEmbed2D
-from instant_nurec_internal.model.blocks.layers import LayerScale
+from instant_nurec.model.blocks.embeds import RotaryPositionEmbed2D
+from instant_nurec.model.blocks.layers import LayerScale
 
 
 # ---------------------------------------------------------------------------

@@ -16,11 +16,8 @@
 #!/usr/bin/env python3
 """Dataset-load smoke pass over an ncorev4 ``clips/`` tree.
 
-Complements ``internal/scripts/jit_contract_scan.py``. That one checks
-the JIT input contract from the JSON header alone (no zarr reads); this
-one constructs ``NCoreInstantNuRecDataset`` for each clip and pulls one
-sample, surfacing reader-level failures that aren't visible in the
-header:
+Constructs ``NCoreInstantNuRecDataset`` for each clip and pulls one sample,
+surfacing reader-level failures that are not visible from the JSON header:
 
 * sensor calibration fields missing or malformed in the zarr archive,
 * cuboid-track schema variations,
@@ -306,19 +303,19 @@ def main(argv: list[str] | None = None) -> int:
         "--frame-width",
         type=int,
         default=DEFAULT_FRAME_WIDTH,
-        help="Rectification target width (matches JIT contract).",
+        help="Rectification target width (matches released model input contract).",
     )
     parser.add_argument(
         "--frame-height",
         type=int,
         default=DEFAULT_FRAME_HEIGHT,
-        help="Rectification target height (matches JIT contract).",
+        help="Rectification target height (matches released model input contract).",
     )
     parser.add_argument(
         "--n-frames-per-sample",
         type=int,
         default=DEFAULT_N_FRAMES_PER_SAMPLE,
-        help="Frame batcher window size (matches JIT contract).",
+        help="Frame batcher window size (matches released model input contract).",
     )
     parser.add_argument(
         "--max-clips",

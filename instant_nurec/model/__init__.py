@@ -15,15 +15,15 @@
 
 import logging
 import os
+import zipfile
 
 from typing import TYPE_CHECKING, Optional
 
 import torch
 
-from torch import nn
-
 from instant_nurec import pretrained
-from instant_nurec.model.jit_adapter import JITKelvinAdapter
+from instant_nurec.model.inference import KelvinInferenceModel
+from instant_nurec.model.static_core import KelvinStaticCore
 from instant_nurec.model.system import GaussiansInstantNuRecSystem
 
 
@@ -35,11 +35,15 @@ logger = logging.getLogger(__name__)
 
 
 class ModelNotFoundError(RuntimeError):
-    """``instant_nurec.pt`` couldn't be resolved (no HF download, no env override)."""
+    """The pretrained weight checkpoint could not be resolved."""
+
+
+class ModelCheckpointError(RuntimeError):
+    """The resolved file is not a source-model state dictionary."""
 
 
 def _resolve_model_pt_path() -> Optional[str]:
-    """Return the local path to ``instant_nurec.pt`` or ``None`` on failure."""
+    """Return the local path to the weight checkpoint or ``None`` on failure."""
     try:
         return pretrained.download_instant_nurec_pt()
     except pretrained.PretrainedModelError:
@@ -111,65 +115,56 @@ def _preflight_validate_camera_ids(config: "InstantNuRecConfig") -> None:
     )
 
 
+def _load_model_state_dict(path: str) -> dict[str, torch.Tensor]:
+    """Load a weights-only checkpoint and reject legacy traced archives."""
+    if zipfile.is_zipfile(path):
+        with zipfile.ZipFile(path) as archive:
+            if any(name.endswith("/constants.pkl") for name in archive.namelist()):
+                raise ModelCheckpointError(
+                    f"{path} is a legacy traced-model archive. Download "
+                    f"{pretrained.MODEL_FILENAME} or point INSTANT_NUREC_FULL_PT "
+                    "at the released weights-only checkpoint."
+                )
+
+    state_dict = torch.load(path, map_location="cpu", weights_only=True)
+    if not isinstance(state_dict, dict) or not all(
+        isinstance(key, str) and isinstance(value, torch.Tensor)
+        for key, value in state_dict.items()
+    ):
+        raise ModelCheckpointError(
+            f"{path} must contain a plain state dictionary of string keys and tensors."
+        )
+    return state_dict
+
+
 def make(config: "InstantNuRecConfig") -> GaussiansInstantNuRecSystem:
-    """Load ``instant_nurec.pt`` and build a ``GaussiansInstantNuRecSystem``.
+    """Build the eager source model and load its pretrained weights.
 
     Resolution: ``INSTANT_NUREC_FULL_PT`` env var takes priority; otherwise
     the artifact is fetched from Hugging Face.
-
-    The full ``GaussiansInstantNuRecSystem.__init__`` is bypassed via
-    ``__new__`` + manual attribute assignment.
     """
     full_pt_path = _resolve_model_pt_path()
     if not full_pt_path or not os.path.exists(full_pt_path):
         raise ModelNotFoundError(
-            f"instant_nurec.pt not found. Either set INSTANT_NUREC_FULL_PT to a "
+            f"{pretrained.MODEL_FILENAME} not found. Either set INSTANT_NUREC_FULL_PT to a "
             f"local .pt path or ensure {pretrained.MODEL_REPO_ID!r} is reachable."
         )
 
-    from instant_nurec.datasets.datamodule import InstantNuRecDataModule
-
     _preflight_validate_camera_ids(config)
+    logger.info("Loading source-model weights from %s.", full_pt_path)
+    static_core = KelvinStaticCore(config.model)
+    static_core.load_state_dict(_load_model_state_dict(full_pt_path), strict=True)
 
-    logger.info("Loading JIT system from %s.", full_pt_path)
-    # Disable JIT kernel fusion before load. The bisect against the
-    # eager-pickle path on clip 000da9de showed the load+fuse cycle
-    # introduces 2-4 orders of magnitude more drift than the trace itself:
-    # gs_densities went from eager-vs-traced 1.7e-5 to traced-vs-loaded
-    # 9.3e-1, which directly flips Gaussians across the density-prune
-    # threshold (the +5/+20/-6 cull-boundary count drift documented at
-    # commit 7ec41ad in internal/parity_proofs/MR_description.md).
-    # Empty fusion strategy disables nnc/tensorexpr fusion while keeping
-    # the profiling executor (disabling that hits a size_t underflow inside
-    # the legacy executor's vector indexing on the recorded graph).
-    torch.jit.set_fusion_strategy([("STATIC", 0), ("DYNAMIC", 0)])
-    jit_module = torch.jit.load(full_pt_path, map_location="cpu")
-    adapter = JITKelvinAdapter(jit_module=jit_module)
-
-    n_context_cams = len(config.dataset.predict.context_camera_ids)
-    if adapter.expected_v % n_context_cams != 0:
-        raise ModelNotFoundError(
-            f"Model expects {adapter.expected_v} input frames; "
-            f"len(context_camera_ids)={n_context_cams} doesn't divide it. "
-            f"Update context_camera_ids so its length divides "
-            f"{adapter.expected_v}."
-        )
-    n_frames_per_sample = adapter.expected_v // n_context_cams
-
-    system: GaussiansInstantNuRecSystem = GaussiansInstantNuRecSystem.__new__(
-        GaussiansInstantNuRecSystem
+    dataset_config = config.dataset.predict
+    assert dataset_config is not None, "dataset.predict must be configured for inference"
+    model = KelvinInferenceModel(
+        static_core,
+        scene_rescale=config.model.scene_rescale,
+        expected_frames=(
+            len(dataset_config.context_camera_ids)
+            * dataset_config.frame_batch_sampler.n_frames_per_sample
+        ),
+        expected_height=dataset_config.camera_subsampler.frame_height,
+        expected_width=dataset_config.camera_subsampler.frame_width,
     )
-    nn.Module.__init__(system)
-    system.out_dir = config.out_dir
-    system.run_id = config.run_id
-    system.config = config.system
-    system.predict_config = config.predict
-    system.export_preprocess = config.model.export_preprocess
-    system.datamodule = InstantNuRecDataModule(
-        config,
-        frame_width=adapter.expected_w,
-        frame_height=adapter.expected_h,
-        n_frames_per_sample=n_frames_per_sample,
-    )
-    system.model = adapter
-    return system
+    return GaussiansInstantNuRecSystem(config, model)

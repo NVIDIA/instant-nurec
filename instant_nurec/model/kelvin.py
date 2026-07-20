@@ -25,11 +25,11 @@ import torch.nn as nn
 from einops import rearrange
 
 from instant_nurec.datasets.tracks import CuboidTracks
-from instant_nurec_internal.config_schema.models import KelvinFullModelConfig as KelvinModelConfig
-from instant_nurec_internal.model.backbone.decoders import KelvinDPTDecoder
-from instant_nurec_internal.model.backbone.encoders import KelvinDAv3Encoder
-from instant_nurec_internal.model.backbone.sky import CubemapDecoderSky
-from instant_nurec_internal.model.post_processing import PerCameraAffinePostProcessing
+from instant_nurec.config_schema.models import KelvinModelConfig
+from instant_nurec.model.backbone.decoders import KelvinDPTDecoder
+from instant_nurec.model.backbone.encoders import KelvinDAv3Encoder
+from instant_nurec.model.backbone.sky import CubemapDecoderSky
+from instant_nurec.model.post_processing import PerCameraAffinePostProcessing
 from instant_nurec.primitives.kelvin_primitive import KelvinInstantNuRecPrimitive
 from instant_nurec.utils.motion import TimeRemapping
 from instant_nurec.utils.batch import DataAndRenderingBatch
@@ -95,7 +95,7 @@ class KelvinInstantNuRec(nn.Module):
         encoded_latent,
         camera_idxs: torch.Tensor,
     ) -> torch.Tensor:
-        # Lives on the static-only path: post_processing parameters ship inside the JIT artifact.
+        # This affine transform is also used by the static PLY inference path.
         _, affine_latents = self.post_processing.transform_tokens(
             rearrange(encoded_latent.deepest, "B V h w C -> B (V h w) C"), camera_idxs
         )
@@ -138,9 +138,7 @@ class KelvinInstantNuRec(nn.Module):
             self.scene_rescale,
         )
 
-        # Non-static heads (sky cubemap, dynamic layers in decoder_returns) -- relocated to
-        # internal/ in a follow-up commit; produced eagerly here so reconstruct() stays
-        # bitwise-identical with the pre-refactor output.
+        # Decode the non-static sky head for full-model callers.
         sky_cubemaps = self.sky.decode(encoded_latent, context).contiguous()
 
         affine_matrix = self._compute_affine_matrix(encoded_latent, camera_idxs)

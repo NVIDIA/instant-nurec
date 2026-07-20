@@ -42,8 +42,14 @@ class NCoreInstantNuRecCuboidTracksParamsConfig(BaseConfigSchema):
 class AdaptiveSequentialFrameBatchSamplerConfig(BaseConfigSchema):
     """Adaptive sequential frame-batch sampler config.
 
-    ``n_frames_per_sample`` is sourced by the runtime, not via this config.
+    The released checkpoint was trained with 18 input frames per sample.
     """
+
+    n_frames_per_sample: int = Field(
+        default=18,
+        gt=0,
+        description="Number of frames in each model input sample.",
+    )
 
     n_samples_per_sequence: int = Field(
         default=8,
@@ -62,6 +68,21 @@ class AdaptiveSequentialFrameBatchSamplerConfig(BaseConfigSchema):
             "n_frames_per_sample, this sets each chunk's max timespan; tighter values "
             "mean more chunks needed to cover a clip."
         ),
+    )
+
+
+class CameraSubsamplerConfig(BaseConfigSchema):
+    """Image dimensions expected by the released model."""
+
+    frame_width: int = Field(
+        default=784,
+        gt=0,
+        description="Width after aspect-preserving resize and center crop.",
+    )
+    frame_height: int = Field(
+        default=448,
+        gt=0,
+        description="Height after aspect-preserving resize and center crop.",
     )
 
 
@@ -85,6 +106,11 @@ class NCoreInstantNuRecDatasetConfig(BaseConfigSchema):
         "max_angle = min(max_fov / 2, camera_model.max_angle). This will make boundary pixels classified as invalid",
     )
     n_camera_mask_dilation_iterations: int = Field(default=10)
+
+    camera_subsampler: CameraSubsamplerConfig = Field(
+        default_factory=CameraSubsamplerConfig,
+        description="Image resize and crop applied before model inference.",
+    )
 
     context_camera_ids: list[str] = Field(
         default_factory=lambda: ["camera_front_wide_120fov"],

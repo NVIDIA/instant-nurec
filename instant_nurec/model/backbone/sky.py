@@ -20,14 +20,14 @@ from einops import rearrange, repeat
 from torch import nn
 
 from instant_nurec.utils.nn_extensions import TypedModuleList
-from instant_nurec_internal.config_schema.models import (
-    KelvinFullModelConfig as KelvinModelConfig,
+from instant_nurec.config_schema.models import (
+    KelvinModelConfig,
     KelvinSkyCubemapDecoderConfig,
 )
-from instant_nurec_internal.model.blocks.attention import CrossAttentionBlock, KVProjector
-from instant_nurec_internal.model.blocks.dpt import DPTFusionHead, DPTReassembleBlock
-from instant_nurec_internal.model.blocks.embeds import PatchEmbed, PositionalEmbed
-from instant_nurec_internal.model.backbone.base import KelvinLatent
+from instant_nurec.model.blocks.attention import CrossAttentionBlock, KVProjector
+from instant_nurec.model.blocks.dpt import DPTFusionHead, DPTReassembleBlock
+from instant_nurec.model.blocks.embeds import PatchEmbed, PositionalEmbed
+from instant_nurec.model.backbone.base import KelvinLatent
 from instant_nurec.utils.cubemap import cubemap_ray_directions
 from instant_nurec.utils.batch import DataAndRenderingBatch
 from instant_nurec.utils.misc import unpack_optional

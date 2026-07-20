@@ -25,14 +25,14 @@ from einops import rearrange
 from torch import nn
 
 from ncore.data import ConcreteCameraModelParametersUnion, OpenCVPinholeCameraModelParameters
-from instant_nurec_internal.config_schema.models import (
+from instant_nurec.config_schema.models import (
     KelvinDAv3EncoderConfig,
-    KelvinFullModelConfig as KelvinModelConfig,
+    KelvinModelConfig,
 )
-from instant_nurec_internal.model.blocks.aa_vit import AlternateAttentionVisionTransformer
-from instant_nurec_internal.model.blocks.dav3 import CameraEncoder
-from instant_nurec_internal.model.blocks.embeds import PatchEmbed
-from instant_nurec_internal.model.backbone.base import (
+from instant_nurec.model.blocks.aa_vit import AlternateAttentionVisionTransformer
+from instant_nurec.model.blocks.dav3 import CameraEncoder
+from instant_nurec.model.blocks.embeds import PatchEmbed
+from instant_nurec.model.backbone.base import (
     KelvinLatent,
     KelvinMultiscaleFeaturesLatent,
 )

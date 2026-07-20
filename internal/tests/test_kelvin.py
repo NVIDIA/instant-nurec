@@ -14,8 +14,7 @@
 # limitations under the License.
 
 """Branch-coverage tests for ``KelvinInstantNuRec._compute_affine_matrix`` and
-``KelvinInstantNuRec._build_primitives`` -- the pure-Python helpers extracted
-out of ``reconstruct()`` to set up the JIT boundary in follow-up commits.
+``KelvinInstantNuRec._build_primitives``.
 
 Both helpers are exercised here without instantiating a full
 ``KelvinInstantNuRec`` (which would pull in the GPU-only encoder/decoder
@@ -38,8 +37,8 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 
-from instant_nurec_internal.model.backbone.base import KelvinMultiscaleFeaturesLatent  # noqa: E402
-from instant_nurec_internal.model.kelvin import KelvinInstantNuRec  # noqa: E402
+from instant_nurec.model.backbone.base import KelvinMultiscaleFeaturesLatent  # noqa: E402
+from instant_nurec.model.kelvin import KelvinInstantNuRec  # noqa: E402
 from instant_nurec.primitives.kelvin_primitive import (  # noqa: E402
     KelvinDynamicLayer,
     KelvinStaticLayer,

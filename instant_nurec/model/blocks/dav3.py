@@ -16,8 +16,8 @@
 import torch
 import torch.nn as nn
 
-from instant_nurec_internal.model.blocks.attention import AttentionBlock
-from instant_nurec_internal.model.blocks.layers import FeedForwardMLP
+from instant_nurec.model.blocks.attention import AttentionBlock
+from instant_nurec.model.blocks.layers import FeedForwardMLP
 from instant_nurec.utils.geometry import so3_matrix_to_quat
 
 
