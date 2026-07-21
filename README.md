@@ -34,6 +34,37 @@ but run on different runtimes: Instant-NuRec is a native-Python
 feed-forward preview (seconds per clip); NuRec is a Docker-based
 per-scene refinement pipeline that produces a high-fidelity USDZ.
 
+![InstantNuRec demo](docs/demo.gif)
+
+## Support
+
+For common errors and fixes (HF auth, driver / CUDA mismatch, OOM at
+chunk-prep, `--max-chunks` truncation), see
+[TROUBLESHOOTING.md](TROUBLESHOOTING.md).
+
+- **Usage questions and discussion:** post on the
+  [NVIDIA Developer Forum (Omniverse / NuRec)](https://forums.developer.nvidia.com/c/omniverse/platform/nurec/752).
+- **Code-level bugs, documentation issues, and feature requests:** file a
+  [GitHub issue](../../issues/new/choose) using the appropriate template. For
+  bugs, include the full traceback, `nvidia-smi`, and `python --version`.
+- **Security vulnerabilities:** use
+  [NVIDIA's Vulnerability Disclosure Program](https://app.intigriti.com/programs/nvidia/nvidiavdp/detail).
+  Do not file security issues publicly.
+
+### Background
+
+Instant NuRec is a feed-forward reconstruction model that converts
+driving logs into 3D Gaussian Splatting (3DGS) representations. Its
+vision-transformer backbone and DPT-decoders output a high-fidelity
+3D environment that's ready for simulations.
+
+Instant NuRec leverages the following foundational technologies:
+[Depth-Anything-V3](https://github.com/ByteDance-Seed/depth-anything-3),
+[STORM](https://github.com/NVlabs/GaussianSTORM), and
+[BTimer](https://research.nvidia.com/labs/toronto-ai/bullet-timer/).
+
+## Pipeline Overview
+
 NCore V4 Sequence ─► Frame Batching ─► Eager PyTorch Model ─► 3D Gaussians ─► PLY (per-chunk or merged)
 
 ## User Guide
@@ -274,17 +305,6 @@ The PLY you just wrote is usable directly as a static reconstruction.
 If you want a high-fidelity, fully-trained scene, feed the PLY into
 [NuRec](https://docs.nvidia.com/nurec/nurec/reconstruct-av-scene.html)
 as initialization for per-scene refinement.
-
-## Support
-
-For common errors and fixes (HF auth, driver / CUDA mismatch, OOM at
-chunk-prep, `--max-chunks` truncation), see
-[TROUBLESHOOTING.md](TROUBLESHOOTING.md). Anything not listed there:
-file a [GitHub issue](../../issues/new/choose). For runtime bugs, include the
-full traceback, `nvidia-smi`, and `python --version`. Report security
-vulnerabilities through [NVIDIA's Vulnerability Disclosure
-Program](https://app.intigriti.com/programs/nvidia/nvidiavdp/detail); do not
-file security issues publicly.
 
 ## License
 
