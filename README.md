@@ -306,17 +306,6 @@ If you want a high-fidelity, fully-trained scene, feed the PLY into
 [NuRec](https://docs.nvidia.com/nurec/nurec/reconstruct-av-scene.html)
 as initialization for per-scene refinement.
 
-## Support
-
-For common errors and fixes (HF auth, driver / CUDA mismatch, OOM at
-chunk-prep, `--max-chunks` truncation), see
-[TROUBLESHOOTING.md](TROUBLESHOOTING.md). Anything not listed there:
-file a [GitHub issue](../../issues/new/choose). For runtime bugs, include the
-full traceback, `nvidia-smi`, and `python --version`. Report security
-vulnerabilities through [NVIDIA's Vulnerability Disclosure
-Program](https://app.intigriti.com/programs/nvidia/nvidiavdp/detail); do not
-file security issues publicly.
-
 ## License
 
 This project is licensed under the Apache License 2.0. See [LICENSE.txt](LICENSE.txt)
