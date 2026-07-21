@@ -1,0 +1,24 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# .github/ISSUE_TEMPLATE/config.yml - NuRec family
+#
+# GitHub Issues is reserved for code-level bugs, documentation requests,
+# and feature requests. Usage questions and security reports are routed via
+# the two contact links below.
+
+blank_issues_enabled: false
+
+contact_links:
+  - name: "💬 Submit a question (usage, how-to)"
+    url: https://forums.developer.nvidia.com/c/omniverse/platform/nurec/752
+    about: >
+      For usage questions and discussion, please post on the NVIDIA Developer
+      Forum (Omniverse / NuRec category). The support team monitors this
+      category and answers there.
+
+  - name: "🚨 Report a security vulnerability - NVIDIA Intigriti VDP"
+    url: https://app.intigriti.com/programs/nvidia/nvidiavdp/detail
+    about: >
+      Please do NOT file security issues publicly on GitHub. Use the NVIDIA
+      Vulnerability Disclosure Program form on Intigriti.
