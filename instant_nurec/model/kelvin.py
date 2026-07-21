@@ -25,7 +25,7 @@ import torch.nn as nn
 from einops import rearrange
 
 from instant_nurec.datasets.tracks import CuboidTracks
-from instant_nurec.config_schema.models import KelvinModelConfig
+from instant_nurec.config_schema.models import KelvinModelConfig, KelvinPointQueryCADecoderConfig
 from instant_nurec.model.backbone.decoders import KelvinDPTDecoder
 from instant_nurec.model.backbone.encoders import KelvinDAv3Encoder
 from instant_nurec.model.backbone.sky import CubemapDecoderSky
@@ -48,6 +48,11 @@ class KelvinInstantNuRec(nn.Module):
 
     def __init__(self, config: KelvinModelConfig):
         super().__init__()
+        if isinstance(config.decoder, KelvinPointQueryCADecoderConfig):
+            raise TypeError(
+                "KelvinInstantNuRec full-model composition only supports the dense DPT decoder; "
+                "use KelvinStaticCore for point-query inference"
+            )
         self.config = config
         self.encoder = KelvinDAv3Encoder(config.encoder, config)
         self.decoder = KelvinDPTDecoder(config.decoder, config)

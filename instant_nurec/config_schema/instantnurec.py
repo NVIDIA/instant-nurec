@@ -21,9 +21,9 @@ import shortuuid
 
 from instant_nurec.config_schema.base_schema import BaseConfigSchema, Field
 from instant_nurec.config_schema.dataset import InstantNuRecSplitsConfig
-from instant_nurec.config_schema.models import KelvinModelConfig
+from instant_nurec.config_schema.models import KelvinModelConfig, KelvinPointQueryCADecoderConfig
 from instant_nurec.config_schema.predict import PredictConfig
-from instant_nurec.pretrained import DEFAULT_MODEL_VARIANT, ModelVariant
+from instant_nurec.pretrained import DEFAULT_MODEL_VARIANT, ModelVariant, get_model_profile
 
 
 class GaussiansInstantNuRecSystemConfig(BaseConfigSchema):
@@ -68,5 +68,26 @@ class InstantNuRecConfig(BaseConfigSchema):
     )
 
     def model_post_init(self, __context) -> None:
+        profile = get_model_profile(self.release_profile)
+        configured_decoder_kind = (
+            "point-query"
+            if isinstance(self.model.decoder, KelvinPointQueryCADecoderConfig)
+            else "pixel-aligned"
+        )
+        if configured_decoder_kind != profile.decoder_kind:
+            raise ValueError(
+                f"release_profile={self.release_profile!r} requires a "
+                f"{profile.decoder_kind} decoder, but model.decoder is "
+                f"{configured_decoder_kind}"
+            )
+        predict_dataset = self.dataset.predict
+        if profile.decoder_kind == "point-query" and predict_dataset is not None:
+            context_camera_ids = tuple(predict_dataset.context_camera_ids)
+            if context_camera_ids != profile.context_camera_ids:
+                required = ", ".join(profile.context_camera_ids)
+                raise ValueError(
+                    f"release_profile={self.release_profile!r} requires context camera(s): {required}"
+                )
+
         if (env_run_id := os.environ.get("INSTANT_NUREC_RUN_ID")) is not None:
             self.run_id = env_run_id

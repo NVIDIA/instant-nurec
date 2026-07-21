@@ -48,8 +48,10 @@ def make_parser() -> argparse.ArgumentParser:
         choices=MODEL_VARIANTS,
         default=DEFAULT_MODEL_VARIANT,
         help=(
-            "Released model profile. pa-front uses one 784x448 camera; "
-            "pa-multiview uses three 504x280 cameras by default. "
+            "Released model profile. pa-front uses one 784x448 camera with 18 frames; "
+            "pa-multiview uses three 504x280 cameras with 18 frames each by default; "
+            "pq-front uses the selective point-query decoder with 18 front-camera "
+            "frames. "
             f"Default: {DEFAULT_MODEL_VARIANT}."
         ),
     )
@@ -102,9 +104,10 @@ def make_parser() -> argparse.ArgumentParser:
         default=None,
         help=(
             "Override a profile's ncorev4 context camera. Repeat the flag to "
-            "provide multiple cameras in canonical order. pa-front requires "
-            "one camera; pa-multiview supports 1, 3, or 5. If omitted, the "
-            "selected profile's camera set is used."
+            "provide multiple cameras in canonical order. The selected profile "
+            "validates its camera contract. pq-front is fixed to "
+            "camera_front_wide_120fov. If omitted, the profile's default camera "
+            "set is used."
         ),
     )
     parser.add_argument(
@@ -113,11 +116,10 @@ def make_parser() -> argparse.ArgumentParser:
         default=_DEFAULT_MAX_CHUNKS,
         help=(
             f"Maximum number of time-chunks processed per clip "
-            f"(default: {_DEFAULT_MAX_CHUNKS}). One chunk spans up to 13.5 s, "
-            f"so the default covers 8 * 13.5 = 108 s. Longer clips are "
+            f"(default: {_DEFAULT_MAX_CHUNKS}). One chunk spans up to 13.5 s. "
+            f"Longer clips are "
             f"truncated and a WARNING is logged naming the dropped chunk "
-            f"count and the --max-chunks value needed to cover the full clip; "
-            f"bump it to ceil(clip_seconds / 13.5) to silence the warning."
+            f"count and the --max-chunks value needed to cover the full clip."
         ),
     )
     parser.add_argument(
@@ -140,7 +142,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         InstantNuRecSplitsConfig,
     )
     from instant_nurec.config_schema.instantnurec import InstantNuRecConfig
-    from instant_nurec.config_schema.models import KelvinDPTDecoderConfig, KelvinModelConfig
+    from instant_nurec.config_schema.models import (
+        KelvinDPTDecoderConfig,
+        KelvinModelConfig,
+        KelvinPointQueryCADecoderConfig,
+    )
     from instant_nurec.config_schema.predict import PredictConfig, PrimitiveMergeConfig
     from instant_nurec.ncore_input import resolve_ncore_paths
     from instant_nurec.predict.run import run_predict
@@ -156,11 +162,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             "Repeat --camera-id once per camera."
         )
 
+    decoder_config = (
+        KelvinPointQueryCADecoderConfig(motion_depth=profile.motion_depth)
+        if profile.decoder_kind == "point-query"
+        else KelvinDPTDecoderConfig(motion_depth=profile.motion_depth)
+    )
+
     config = InstantNuRecConfig(
         out_dir=str(args.output_dir),
         release_profile=args.model,
         model=KelvinModelConfig(
-            decoder=KelvinDPTDecoderConfig(motion_depth=profile.motion_depth),
+            decoder=decoder_config,
         ),
         dataset=InstantNuRecSplitsConfig(
             predict=NCoreInstantNuRecDatasetConfig(

@@ -76,6 +76,15 @@ def test_parser_accepts_multiview_and_repeated_camera_ids() -> None:
     assert args.camera_ids == ["front", "left", "right"]
 
 
+def test_parser_accepts_point_query_profile() -> None:
+    from instant_nurec.cli import make_parser
+
+    args = make_parser().parse_args(
+        ["--model", "pq-front", "--ncore-path", "/x", "--output-dir", "/y"]
+    )
+    assert args.model == "pq-front"
+
+
 def test_parser_rejects_unknown_model() -> None:
     from instant_nurec.cli import make_parser
     with pytest.raises(SystemExit):
@@ -226,6 +235,50 @@ def test_main_multiview_uses_release_profile(
     assert cfg.dataset.predict.camera_subsampler.frame_height == 280
     assert cfg.dataset.predict.frame_batch_sampler.n_frames_per_sample == 18
     assert cfg.model.decoder.motion_depth == 1
+
+
+def test_main_point_query_uses_point_query_decoder(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    fake_run_predict = _install_runtime_stubs(monkeypatch)
+    json_path = _make_json_path(tmp_path)
+    from instant_nurec.cli import main
+    from instant_nurec.config_schema.models import KelvinPointQueryCADecoderConfig
+
+    assert main(["--model", "pq-front", "--ncore-path", str(json_path), "--output-dir", "/o"]) == 0
+    cfg = fake_run_predict.call_args.args[0]
+    assert cfg.release_profile == "pq-front"
+    assert cfg.dataset.predict.context_camera_ids == ["camera_front_wide_120fov"]
+    assert (
+        cfg.dataset.predict.camera_subsampler.frame_width,
+        cfg.dataset.predict.camera_subsampler.frame_height,
+    ) == (784, 448)
+    assert cfg.dataset.predict.frame_batch_sampler.n_frames_per_sample == 18
+    assert isinstance(cfg.model.decoder, KelvinPointQueryCADecoderConfig)
+
+
+def test_main_point_query_rejects_non_front_camera(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _install_runtime_stubs(monkeypatch)
+    json_path = _make_json_path(tmp_path)
+    from instant_nurec.cli import main
+
+    with pytest.raises(ValueError, match="requires context camera"):
+        main(
+            [
+                "--model",
+                "pq-front",
+                "--ncore-path",
+                str(json_path),
+                "--output-dir",
+                "/o",
+                "--camera-id",
+                "camera_cross_left_120fov",
+            ]
+        )
 
 
 def test_main_multiview_accepts_five_camera_overrides(

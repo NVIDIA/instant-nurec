@@ -18,10 +18,11 @@ limitations under the License.
 
 The runtime config is constructed in code from `pydantic` models. Field
 defaults are encoded directly on each schema; `cli.py` only specifies the
-fields it overrides via CLI flags (input dataset path, output directory,
-merge mode, camera id, max chunks).
+fields it overrides via CLI flags (model profile, input dataset path, output
+directory, merge mode, camera id, max chunks).
 
-Model parameters are sourced by the runtime, not via these schemas.
+Architecture and inference parameters are typed here; learned tensors come
+from the selected weights-only checkpoint.
 
 ## What's in scope here
 
@@ -30,7 +31,7 @@ Model parameters are sourced by the runtime, not via these schemas.
 | `instantnurec.py` | `InstantNuRecConfig` (top-level), `GaussiansInstantNuRecSystemConfig` |
 | `dataset.py` | `InstantNuRecSplitsConfig`, `NCoreInstantNuRecDatasetConfig`, `AdaptiveSequentialFrameBatchSamplerConfig`, `NCoreInstantNuRecCuboidTracksParamsConfig` |
 | `predict.py` | `PredictConfig`, `PrimitiveMergeConfig` |
-| `models.py` | `KelvinModelConfig` (slim — only `export_preprocess`), `PrimitiveExportPreprocessConfig` |
+| `models.py` | `KelvinModelConfig`, encoder and dense/point-query decoder configs, activation and export-preprocess configs |
 
 ## BaseConfigSchema
 

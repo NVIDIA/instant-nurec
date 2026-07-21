@@ -48,8 +48,6 @@ class GaussiansActivationConfig(BaseConfigSchema):
     )
 
 
-
-
 class KelvinDAv3EncoderConfig(BaseConfigSchema):
     depth: int = Field(default=12)
     n_heads: int = Field(default=12)
@@ -62,6 +60,8 @@ class KelvinDAv3EncoderConfig(BaseConfigSchema):
 
 
 class KelvinDPTDecoderConfig(BaseConfigSchema):
+    name: Literal["dpt-decoder"] = "dpt-decoder"
+
     dpt_dim: int = Field(default=128)
     dpt_reassemble_hidden_dims: List[int] = Field(default_factory=lambda: [96, 192, 384, 768])
 
@@ -76,6 +76,56 @@ class KelvinDPTDecoderConfig(BaseConfigSchema):
 
     def model_post_init(self, __context) -> None:
         assert self.dpt_dim > 0, "DPT dimension must be positive"
+
+
+class KelvinPointQueryCADecoderConfig(BaseConfigSchema):
+    """Configuration for the selective point-query cross-attention decoder."""
+
+    name: Literal["point-query-ca-decoder"] = "point-query-ca-decoder"
+
+    # Shared DPT heads for depth, context features, and checkpoint compatibility.
+    dpt_dim: int = Field(default=128)
+    dpt_reassemble_hidden_dims: List[int] = Field(default_factory=lambda: [96, 192, 384, 768])
+    checkpointing: bool = Field(default=True, description="Whether to checkpoint the DPT heads")
+    dpt_chunk_size: int = Field(default=4, description="Chunk size for the DPT heads. -1 disables chunking.")
+    time_encoding_dim: int = Field(default=256, description="Dimension of the time sinusoidal encoding")
+    motion_depth: int = Field(default=1, description="Depth of the motion head")
+
+    # Cross-attention Gaussian head.
+    ca_depth: int = Field(default=3, ge=1, description="Number of cross-attention decoder blocks")
+    use_qk_norm: bool = Field(default=True, description="Whether to normalize cross-attention queries and keys")
+    layer_scale_init_values: float | None = Field(default=1e-4, description="Layer-scale initialization")
+    xyz_downsample_stride: int = Field(default=2, ge=1, description="Stride for the regular point-query grid")
+    grid_center_stride: int = Field(
+        default=8,
+        ge=1,
+        description="Number of candidate-grid cells per side represented by one point-query token",
+    )
+
+    # Selective ROAD queries. Selection uses predicted semantic logits in public inference.
+    road_xyz_downsample_stride: int | None = Field(
+        default=1,
+        ge=1,
+        description="Stride for extra ROAD point queries; None disables the selective ROAD branch",
+    )
+    road_token_threshold: float = Field(
+        default=1.0,
+        gt=0.0,
+        le=1.0,
+        description="Minimum ROAD fraction in a token for the token to be selected",
+    )
+    road_max_tokens_per_view: int | None = Field(
+        default=512,
+        ge=1,
+        description="Maximum number of selective ROAD tokens emitted per input view",
+    )
+
+    def model_post_init(self, __context) -> None:
+        assert self.dpt_dim > 0, "DPT dimension must be positive"
+        if self.road_xyz_downsample_stride is not None:
+            assert self.road_max_tokens_per_view is not None, (
+                "road_max_tokens_per_view must be set when selective ROAD queries are enabled"
+            )
 
 
 class KelvinSkyCubemapDecoderConfig(BaseConfigSchema):
@@ -106,7 +156,10 @@ class KelvinModelConfig(BaseConfigSchema):
     patch_shape: Tuple[int, int] = Field(default=(14, 14))
 
     encoder: KelvinDAv3EncoderConfig = Field(default_factory=KelvinDAv3EncoderConfig)
-    decoder: KelvinDPTDecoderConfig = Field(default_factory=KelvinDPTDecoderConfig)
+    decoder: KelvinDPTDecoderConfig | KelvinPointQueryCADecoderConfig = Field(
+        default_factory=KelvinDPTDecoderConfig,
+        discriminator="name",
+    )
     activations: GaussiansActivationConfig = Field(
         default_factory=GaussiansActivationConfig, description="Activation functions configuration."
     )

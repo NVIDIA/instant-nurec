@@ -37,6 +37,7 @@ from instant_nurec.model.inference import (  # noqa: E402
     _PLACEHOLDER_SKY_CUBEMAP_SIZE,
     KelvinInferenceModel,
 )
+from instant_nurec.model.static_core import KelvinPointQueryStaticOutput  # noqa: E402
 from instant_nurec.primitives.kelvin_primitive import (  # noqa: E402
     KelvinDynamicLayer,
     KelvinSemanticClass,
@@ -79,6 +80,26 @@ class _FakeStaticCore(torch.nn.Module):
         affine = torch.zeros(B, self.n_cams, 3, 4)
         affine[..., :3] = torch.eye(3)
         return gs_xyz, gs_rotations, gs_scales, gs_densities, gs_rgb, semantic, normals, affine
+
+
+class _FakePointQueryStaticCore(_FakeStaticCore):
+    """Sparse-output counterpart used to cover point-query packaging."""
+
+    def forward(self, rgb, c2w, fov, rays, distance_to_depth_scale, camera_idxs):
+        dense = super().forward(rgb, c2w, fov, rays, distance_to_depth_scale, camera_idxs)
+        xyz, rotations, scales, densities, color, semantic, normals, affine = dense
+        source_indices = torch.tensor([[0, 5, 9]], dtype=torch.int64)
+        return KelvinPointQueryStaticOutput(
+            positions=xyz.reshape(self.B, -1, 3)[:, source_indices[0]],
+            rotations=rotations.reshape(self.B, -1, 4)[:, source_indices[0]],
+            scales=scales.reshape(self.B, -1, 3)[:, source_indices[0]],
+            densities=densities.reshape(self.B, -1, 1)[:, source_indices[0]],
+            rgb=color.reshape(self.B, -1, 3)[:, source_indices[0]],
+            semantic_class=semantic.reshape(self.B, -1)[:, source_indices[0]],
+            normals=normals.reshape(self.B, -1, 3)[:, source_indices[0]],
+            affine_matrix=affine,
+            source_indices=source_indices,
+        )
 
 
 def _make_adapter(static_core: _FakeStaticCore, scene_rescale: float = 0.5) -> KelvinInferenceModel:
@@ -186,6 +207,121 @@ def test_reconstruct_drops_movable_pixels_in_semantic_only_mode():
     out = adapter.reconstruct([_fake_batch(V, H, W)], cuboid_tracks=None)
 
     assert len(out[0].static_layer) == V * H * W - 1
+
+
+def test_reconstruct_with_tracks_keeps_unassociated_movable_gaussians(monkeypatch):
+    from types import SimpleNamespace
+
+    from instant_nurec.model import inference as inference_mod
+    from instant_nurec.utils.types import TrackFlags
+
+    class _AllMovableStaticCore(_FakeStaticCore):
+        def forward(self, *args):
+            output = list(super().forward(*args))
+            output[5].fill_(KelvinSemanticClass.MOVABLE.value)
+            return tuple(output)
+
+    class _DynamicTrack:
+        def ray_intersection(self, origins, directions, timestamps, **kwargs):
+            del origins, directions, timestamps, kwargs
+            return SimpleNamespace(
+                intersections_tracks_idx=torch.zeros(2, 2, dtype=torch.int64),
+                intersections_cnt=torch.tensor([1, 0], dtype=torch.int64),
+            )
+
+    monkeypatch.setattr(
+        inference_mod.CuboidTracks.Ops,
+        "subset_from_mask",
+        lambda tracks, mask: _DynamicTrack(),
+    )
+
+    def _fake_warp(**kwargs):
+        # The first MOVABLE Gaussian is associated with a dynamic track; the
+        # second is parked/unassociated and must remain in the static export.
+        assert torch.equal(kwargs["aux_tracks_idx"].reshape(-1), torch.tensor([0, -1]))
+        return kwargs["aux_tracks_idx"] >= 0, []
+
+    monkeypatch.setattr(inference_mod, "warp_points_with_cuboid_tracks", _fake_warp)
+
+    core = _AllMovableStaticCore(B=1, V=1, H=1, W=2, n_cams=1)
+    adapter = _make_adapter(core)
+    tracks = SimpleNamespace(tracks_flags=torch.tensor([int(TrackFlags.DYNAMIC)]))
+
+    primitive = adapter.reconstruct([_fake_batch(V=1, H=1, W=2)], [tracks])[0]
+
+    assert len(primitive.static_layer) == 1
+    assert torch.equal(primitive.static_layer.positions, torch.tensor([[3.0, 4.0, 5.0]]))
+    assert primitive.static_layer.semantic_class.item() == KelvinSemanticClass.MOVABLE.value
+
+
+def test_reconstruct_packages_sparse_point_query_output():
+    V, H, W = 2, 4, 4
+    core = _FakePointQueryStaticCore(B=1, V=V, H=H, W=W, n_cams=1)
+    adapter = _make_adapter(core)
+
+    out = adapter.reconstruct([_fake_batch(V, H, W)], cuboid_tracks=None)
+
+    assert len(out[0].static_layer) == 3
+    assert torch.equal(
+        out[0].static_layer.positions,
+        torch.arange(V * H * W * 3, dtype=torch.float32).reshape(-1, 3)[[0, 5, 9]],
+    )
+
+
+def test_sparse_dynamic_mask_gathers_aligned_source_rays_and_timestamps(monkeypatch):
+    from types import SimpleNamespace
+
+    from instant_nurec.model import inference as inference_mod
+    from instant_nurec.utils.types import TrackFlags
+
+    adapter = _make_adapter(_FakePointQueryStaticCore(B=1, V=1, H=2, W=3, n_cams=1))
+    rendering = _fake_batch(V=1, H=2, W=3).rendering.camera
+    rendering.rays = torch.arange(6 * 6, dtype=torch.float32).reshape(1, 2, 3, 6)
+    rendering.rays_timestamps_us = torch.arange(6, dtype=torch.int64).reshape(1, 2, 3, 1)
+    source_indices = torch.tensor([[4, 1]], dtype=torch.int64)
+    captured = {}
+
+    class _DynamicTrack:
+        def ray_intersection(self, origins, directions, timestamps, **kwargs):
+            captured["origins"] = origins
+            captured["directions"] = directions
+            captured["ray_timestamps"] = timestamps
+            return SimpleNamespace(
+                intersections_tracks_idx=torch.zeros(2, 2, dtype=torch.int64),
+                intersections_cnt=torch.ones(2, dtype=torch.int64),
+            )
+
+    dynamic_track = _DynamicTrack()
+    monkeypatch.setattr(
+        inference_mod.CuboidTracks.Ops,
+        "subset_from_mask",
+        lambda tracks, mask: dynamic_track,
+    )
+
+    def _fake_warp(**kwargs):
+        captured["points"] = kwargs["points"]
+        captured["source_timestamps"] = kwargs["source_timestamps_us"]
+        return torch.tensor([True, False]), []
+
+    monkeypatch.setattr(inference_mod, "warp_points_with_cuboid_tracks", _fake_warp)
+    xyz = torch.arange(6, dtype=torch.float32).reshape(1, 2, 3)
+    semantic = torch.full((1, 2), KelvinSemanticClass.MOVABLE.value, dtype=torch.int64)
+    tracks = SimpleNamespace(tracks_flags=torch.tensor([int(TrackFlags.DYNAMIC)]))
+
+    dynamic_mask = adapter._compute_dynamic_mask(
+        xyz,
+        semantic,
+        rendering,
+        tracks,
+        source_indices,
+    )
+
+    flat_rays = rendering.rays.reshape(-1, 6)[source_indices[0]]
+    assert torch.equal(captured["origins"], flat_rays[:, :3])
+    assert torch.equal(captured["directions"], flat_rays[:, 3:])
+    assert torch.equal(captured["ray_timestamps"], torch.tensor([4, 1]))
+    assert torch.equal(captured["source_timestamps"], torch.tensor([[4], [1]]))
+    assert torch.equal(dynamic_mask, torch.tensor([True, False]))
 
 
 def test_reconstruct_uses_placeholder_sky_cubemap_shape():

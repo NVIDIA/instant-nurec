@@ -18,7 +18,7 @@
 
 Invocation::
 
-    python run_inference.py --model <pa-front|pa-multiview> \
+    python run_inference.py --model <pa-front|pa-multiview|pq-front> \
         --ncore-path <path> --output-dir <path> [--merge] [--n-gaussians N]
 
 Defers to ``instant_nurec.cli.main``.

@@ -86,6 +86,19 @@ def test_resolve_forwards_multiview_variant(monkeypatch):
     assert calls == ["pa-multiview"]
 
 
+def test_resolve_forwards_point_query_variant(monkeypatch):
+    calls = []
+
+    monkeypatch.setattr(
+        pretrained,
+        "download_instant_nurec_pt",
+        lambda model_variant, **kwargs: calls.append(model_variant) or "/tmp/pq.pth",
+    )
+
+    assert _resolve_model_pt_path("pq-front") == "/tmp/pq.pth"
+    assert calls == ["pq-front"]
+
+
 # ---------- _validate_camera_ids ----------
 
 
