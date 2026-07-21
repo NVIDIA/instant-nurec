@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 
 MODEL_REPO_ID = "nvidia/instant-nurec"
 
-ModelVariant = Literal["pa-front", "pa-multiview"]
+ModelVariant = Literal["pa-front", "pa-multiview", "pq-front"]
 MODEL_VARIANTS: tuple[ModelVariant, ...] = get_args(ModelVariant)
 DEFAULT_MODEL_VARIANT: ModelVariant = "pa-front"
 
@@ -53,6 +53,7 @@ class ModelProfile:
     n_frames_per_sample: int
     motion_depth: int
     supported_camera_counts: tuple[int, ...]
+    decoder_kind: Literal["pixel-aligned", "point-query"]
 
 
 MODEL_PROFILES: dict[ModelVariant, ModelProfile] = {
@@ -64,6 +65,7 @@ MODEL_PROFILES: dict[ModelVariant, ModelProfile] = {
         n_frames_per_sample=18,
         motion_depth=1,
         supported_camera_counts=(1,),
+        decoder_kind="pixel-aligned",
     ),
     "pa-multiview": ModelProfile(
         filename="pth/instant_nurec_pa_multiview_1.1.0.pth",
@@ -77,6 +79,17 @@ MODEL_PROFILES: dict[ModelVariant, ModelProfile] = {
         n_frames_per_sample=18,
         motion_depth=1,
         supported_camera_counts=(1, 3, 5),
+        decoder_kind="pixel-aligned",
+    ),
+    "pq-front": ModelProfile(
+        filename="pth/instant_nurec_pq_road_1.0.0.pth",
+        context_camera_ids=("camera_front_wide_120fov",),
+        frame_width=784,
+        frame_height=448,
+        n_frames_per_sample=18,
+        motion_depth=1,
+        supported_camera_counts=(1,),
+        decoder_kind="point-query",
     ),
 }
 

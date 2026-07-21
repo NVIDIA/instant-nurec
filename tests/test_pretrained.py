@@ -51,13 +51,14 @@ def test_env_var_override_short_circuits_download(monkeypatch, tmp_path):
     assert pretrained.download_instant_nurec_pt() == str(fake_pt)
 
 
-def test_release_profiles_expose_front_and_multiview_contracts():
+def test_release_profiles_expose_pa_front_and_multiview_contracts():
     front = pretrained.get_model_profile("pa-front")
     assert front.filename == "pth/instant_nurec_pa_front_1.1.0.pth"
     assert front.context_camera_ids == ("camera_front_wide_120fov",)
     assert (front.frame_width, front.frame_height) == (784, 448)
     assert front.n_frames_per_sample == 18
     assert front.supported_camera_counts == (1,)
+    assert front.decoder_kind == "pixel-aligned"
 
     multiview = pretrained.get_model_profile("pa-multiview")
     assert multiview.filename == "pth/instant_nurec_pa_multiview_1.1.0.pth"
@@ -69,6 +70,18 @@ def test_release_profiles_expose_front_and_multiview_contracts():
     assert (multiview.frame_width, multiview.frame_height) == (504, 280)
     assert multiview.n_frames_per_sample == 18
     assert multiview.supported_camera_counts == (1, 3, 5)
+    assert multiview.decoder_kind == "pixel-aligned"
+
+
+def test_point_query_front_profile_contract():
+    front = pretrained.get_model_profile("pq-front")
+
+    assert front.filename == "pth/instant_nurec_pq_road_1.0.0.pth"
+    assert front.decoder_kind == "point-query"
+    assert front.context_camera_ids == ("camera_front_wide_120fov",)
+    assert (front.frame_width, front.frame_height) == (784, 448)
+    assert front.n_frames_per_sample == 18
+    assert front.supported_camera_counts == (1,)
 
 
 def test_unknown_release_profile_is_rejected():
@@ -125,6 +138,18 @@ def test_download_multiview_uses_its_profile_filename(monkeypatch):
 
     assert out.endswith("instant_nurec_pa_multiview_1.1.0.pth")
     assert captured["filename"] == pretrained.MODEL_PROFILES["pa-multiview"].filename
+
+
+def test_download_point_query_uses_profile_filename(monkeypatch):
+    captured: dict = {}
+
+    fake_hf = types.ModuleType("huggingface_hub")
+    fake_hf.hf_hub_download = lambda **kw: captured.update(kw) or "/cached/pq.pth"
+    fake_hf.try_to_load_from_cache = lambda **kw: None
+    monkeypatch.setitem(sys.modules, "huggingface_hub", fake_hf)
+
+    assert pretrained.download_instant_nurec_pt("pq-front") == "/cached/pq.pth"
+    assert captured["filename"] == "pth/instant_nurec_pq_road_1.0.0.pth"
 
 
 def test_download_without_cache_dir_omits_cache_dir_kwarg(monkeypatch):

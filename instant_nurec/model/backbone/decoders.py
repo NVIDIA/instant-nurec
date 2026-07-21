@@ -29,14 +29,21 @@ from instant_nurec.config_schema.models import (
     KelvinDAv3EncoderConfig,
     KelvinDPTDecoderConfig,
     KelvinModelConfig,
+    KelvinPointQueryCADecoderConfig,
 )
 from instant_nurec.model.activations import GaussianActivations, GaussianParams
 from instant_nurec.model.blocks.aa_vit import AlternateAttentionVisionTransformer
+from instant_nurec.model.blocks.attention import CrossAttentionBlock, KVProjector
 from instant_nurec.model.blocks.dpt import DPTFullHead
 from instant_nurec.model.blocks.embeds import ContinuousTimeEmbed
 from instant_nurec.model.backbone.base import (
     KelvinLatent,
     KelvinMultiscaleFeaturesLatent,
+)
+from instant_nurec.model.backbone.grid_tokens import (
+    FullResInputs,
+    build_grid_tokens,
+    concat_grid_tokens,
 )
 from instant_nurec.primitives.kelvin_primitive import (
     KelvinDynamicLayer,
@@ -46,6 +53,7 @@ from instant_nurec.primitives.kelvin_primitive import (
 from instant_nurec.utils.motion import TimeRemapping, warp_points_with_cuboid_tracks
 from instant_nurec.utils.batch import DataAndRenderingBatch
 from instant_nurec.utils.misc import unpack_optional
+from instant_nurec.utils.nn_extensions import TypedModuleList
 
 
 logger = logging.getLogger(__name__)
@@ -56,6 +64,20 @@ class KelvinDecoderReturn:
     # Allowing all dynamic layers
     static_layer: KelvinStaticLayer | None
     dynamic_layers: list[KelvinDynamicLayer]
+
+
+@dataclass(kw_only=True, slots=True)
+class KelvinPointQueryDecoderReturn:
+    """Sparse static fields emitted by :class:`KelvinPointQueryCADecoder`."""
+
+    positions: torch.Tensor
+    rotations: torch.Tensor
+    scales: torch.Tensor
+    densities: torch.Tensor
+    rgb: torch.Tensor
+    semantic_class: torch.Tensor
+    normals: torch.Tensor
+    source_indices: torch.Tensor
 
 
 class KelvinDPTDecoder(nn.Module):
@@ -476,3 +498,175 @@ class KelvinDPTDecoder(nn.Module):
             )
 
         return return_values
+
+
+class KelvinPointQueryCADecoder(KelvinDPTDecoder):
+    """Selective point-query Gaussian head on top of the shared DPT heads.
+
+    The module hierarchy intentionally matches the released checkpoint. The
+    public-only decode method omits training supervision and dynamic-layer
+    construction; dynamic-track filtering is performed by the inference
+    wrapper after sparse Gaussians have been emitted.
+    """
+
+    config: KelvinPointQueryCADecoderConfig
+
+    def __init__(self, config: KelvinPointQueryCADecoderConfig, model_config: KelvinModelConfig):
+        dpt_config = KelvinDPTDecoderConfig(
+            dpt_dim=config.dpt_dim,
+            dpt_reassemble_hidden_dims=config.dpt_reassemble_hidden_dims,
+            checkpointing=config.checkpointing,
+            dpt_chunk_size=config.dpt_chunk_size,
+            time_encoding_dim=config.time_encoding_dim,
+            motion_depth=config.motion_depth,
+        )
+        super().__init__(dpt_config, model_config)
+        self.config = config
+
+        # The point-query checkpoint replaces the dense DPT Gaussian head.
+        del self.gaussians_head
+
+        embed_dim = model_config.encoder.embed_dim
+        n_heads = model_config.encoder.n_heads
+        gaussians_per_token = config.grid_center_stride**2
+        n_gaussian_parameters = 3 + 4 + 1  # scale, rotation, opacity
+
+        self.xyz_embed = nn.Sequential(
+            nn.Linear(gaussians_per_token * 3, embed_dim),
+            nn.LayerNorm(embed_dim),
+        )
+        self.ca_feature_norm = nn.LayerNorm(embed_dim)
+        self.ca_kv_projector = KVProjector(
+            dim=embed_dim,
+            n_heads=n_heads,
+            kv_bias=True,
+            k_norm=config.use_qk_norm,
+        )
+        self.ca_blocks = TypedModuleList(
+            [
+                CrossAttentionBlock(
+                    embed_dim,
+                    n_heads,
+                    qkv_bias=True,
+                    attn_drop=0.0,
+                    proj_drop=0.0,
+                    qk_norm=config.use_qk_norm,
+                    mlp_ratio=4.0,
+                    dropout=0.0,
+                    layer_scale_init_values=config.layer_scale_init_values,
+                    kv_projector=None,
+                )
+                for _ in range(config.ca_depth)
+            ]
+        )
+
+        if not isinstance(model_config.encoder, KelvinDAv3EncoderConfig):
+            raise TypeError("KelvinPointQueryCADecoder requires a KelvinDAv3EncoderConfig encoder")
+        n_scales = len(model_config.encoder.take_block_indices)
+        self.ca_kv_proj = nn.Linear(n_scales * embed_dim, embed_dim, bias=False)
+        self.gs_linear = nn.Linear(embed_dim, gaussians_per_token * n_gaussian_parameters)
+
+    @torch.autocast("cuda", enabled=False)
+    def decode_static_gaussians(
+        self,
+        encoded_latent: KelvinMultiscaleFeaturesLatent,
+        *,
+        full_xyz: torch.Tensor,
+        context_rgb: torch.Tensor,
+        context_semantic_logits: torch.Tensor,
+        context_world_normal: torch.Tensor,
+        scene_rescale: float,
+    ) -> KelvinPointQueryDecoderReturn:
+        """Decode regular and selective ROAD queries into sparse Gaussians.
+
+        All full-resolution tensors use ``(B, V, H, W, C)`` layout. ROAD
+        candidates and the opacity-valid mask are derived solely from predicted
+        semantic logits; the public path does not require GT semantic labels.
+        """
+        batch_size, n_views, height, width, xyz_dim = full_xyz.shape
+        if xyz_dim != 3:
+            raise ValueError(f"full_xyz must end in three channels, got {tuple(full_xyz.shape)}")
+        if context_rgb.shape != (batch_size, n_views, height, width, 3):
+            raise ValueError(f"Unexpected context_rgb shape: {tuple(context_rgb.shape)}")
+        if context_world_normal.shape != (batch_size, n_views, height, width, 3):
+            raise ValueError(f"Unexpected context_world_normal shape: {tuple(context_world_normal.shape)}")
+        if context_semantic_logits.shape[:4] != (batch_size, n_views, height, width):
+            raise ValueError(f"Unexpected context_semantic_logits shape: {tuple(context_semantic_logits.shape)}")
+
+        semantic_probs = torch.softmax(context_semantic_logits, dim=-1)
+        semantic_class = torch.argmax(context_semantic_logits, dim=-1)
+        valid_mask = KelvinSemanticClass.opacity_mask_from_semantic_probs(semantic_probs)
+        source_indices = torch.arange(
+            n_views * height * width,
+            dtype=torch.int64,
+            device=full_xyz.device,
+        ).reshape(1, n_views, height, width)
+        source_indices = source_indices.expand(batch_size, -1, -1, -1)
+
+        full = FullResInputs(
+            xyz=full_xyz,
+            valid_mask=valid_mask,
+            ctx_rgb=context_rgb,
+            sem_class=semantic_class,
+            normals=context_world_normal,
+            source_indices=source_indices,
+        )
+        token_groups = [
+            build_grid_tokens(
+                stride=self.config.xyz_downsample_stride,
+                cell_size=self.config.grid_center_stride,
+                full=full,
+            )
+        ]
+
+        if self.config.road_xyz_downsample_stride is not None:
+            if self.config.road_max_tokens_per_view is None:
+                raise ValueError("road_max_tokens_per_view must be set when selective ROAD queries are enabled")
+            road_pixel_mask = semantic_class == int(KelvinSemanticClass.ROAD)
+            token_groups.append(
+                build_grid_tokens(
+                    stride=self.config.road_xyz_downsample_stride,
+                    cell_size=self.config.grid_center_stride,
+                    full=full,
+                    keep_pixel_mask=road_pixel_mask,
+                    keep_token_threshold=self.config.road_token_threshold,
+                    max_tokens_per_view=self.config.road_max_tokens_per_view,
+                )
+            )
+
+        query_xyz = torch.cat([tokens.query_xyz for tokens in token_groups], dim=1)
+        queries = self.xyz_embed(query_xyz.flatten(-2, -1))
+
+        kv_features = self.ca_kv_proj(
+            torch.cat(
+                [rearrange(feature, "B V h w C -> B (V h w) C") for feature in encoded_latent.features],
+                dim=-1,
+            )
+        )
+        kv_features = self.ca_feature_norm(kv_features)
+        projected_keys, projected_values = self.ca_kv_projector(k=kv_features, v=kv_features)
+        for block in self.ca_blocks:
+            queries = block(queries, projected_keys, projected_values)
+
+        gaussians_per_token = self.config.grid_center_stride**2
+        gaussian_attributes = rearrange(
+            self.gs_linear(queries),
+            "B M (K P) -> B (M K) P",
+            K=gaussians_per_token,
+        )
+        tokens = concat_grid_tokens(token_groups)
+        scale, rotation, opacity = gaussian_attributes.split([3, 4, 1], dim=-1)
+        scale = self.gaussian_activations.scale(scale, scene_rescale=scene_rescale)
+        rotation = self.gaussian_activations.rotation(rotation)
+        opacity = self.gaussian_activations.opacity(opacity) * tokens.point_valid_mask.detach()
+
+        return KelvinPointQueryDecoderReturn(
+            positions=tokens.gs_xyz,
+            rotations=rotation,
+            scales=scale,
+            densities=opacity,
+            rgb=tokens.gs_ctx_rgb,
+            semantic_class=tokens.gs_sem_class,
+            normals=tokens.gs_normals,
+            source_indices=tokens.gs_source_indices,
+        )
