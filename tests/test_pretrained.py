@@ -51,6 +51,31 @@ def test_env_var_override_short_circuits_download(monkeypatch, tmp_path):
     assert pretrained.download_instant_nurec_pt() == str(fake_pt)
 
 
+def test_release_profiles_expose_front_and_multiview_contracts():
+    front = pretrained.get_model_profile("pa-front")
+    assert front.filename == "pth/instant_nurec_pa_front_1.1.0.pth"
+    assert front.context_camera_ids == ("camera_front_wide_120fov",)
+    assert (front.frame_width, front.frame_height) == (784, 448)
+    assert front.n_frames_per_sample == 18
+    assert front.supported_camera_counts == (1,)
+
+    multiview = pretrained.get_model_profile("pa-multiview")
+    assert multiview.filename == "pth/instant_nurec_pa_multiview_1.1.0.pth"
+    assert multiview.context_camera_ids == (
+        "camera_front_wide_120fov",
+        "camera_cross_left_120fov",
+        "camera_cross_right_120fov",
+    )
+    assert (multiview.frame_width, multiview.frame_height) == (504, 280)
+    assert multiview.n_frames_per_sample == 18
+    assert multiview.supported_camera_counts == (1, 3, 5)
+
+
+def test_unknown_release_profile_is_rejected():
+    with pytest.raises(ValueError, match="Unknown model variant"):
+        pretrained.get_model_profile("not-a-model")
+
+
 def test_env_var_pointing_at_missing_file_falls_through(monkeypatch, tmp_path):
     """If INSTANT_NUREC_FULL_PT points nowhere, we still reach hf_hub_download."""
     monkeypatch.setenv("INSTANT_NUREC_FULL_PT", str(tmp_path / "nope.pt"))
@@ -82,6 +107,24 @@ def test_download_forwards_explicit_cache_dir_kwarg(monkeypatch, tmp_path):
     assert captured["repo_id"] == pretrained.MODEL_REPO_ID
     assert captured["filename"] == pretrained.MODEL_FILENAME
     assert captured["cache_dir"] == str(tmp_path / "explicit")
+
+
+def test_download_multiview_uses_its_profile_filename(monkeypatch):
+    captured: dict = {}
+
+    def _fake_dl(**kw):
+        captured.update(kw)
+        return "/some/cached/path/instant_nurec_pa_multiview_1.1.0.pth"
+
+    fake_hf = types.ModuleType("huggingface_hub")
+    fake_hf.hf_hub_download = _fake_dl
+    fake_hf.try_to_load_from_cache = lambda **kw: None
+    monkeypatch.setitem(sys.modules, "huggingface_hub", fake_hf)
+
+    out = pretrained.download_instant_nurec_pt("pa-multiview")
+
+    assert out.endswith("instant_nurec_pa_multiview_1.1.0.pth")
+    assert captured["filename"] == pretrained.MODEL_PROFILES["pa-multiview"].filename
 
 
 def test_download_without_cache_dir_omits_cache_dir_kwarg(monkeypatch):

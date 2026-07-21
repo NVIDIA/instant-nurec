@@ -256,6 +256,19 @@ def test_config_post_init_no_env(tmp_path, monkeypatch):
     monkeypatch.delenv("INSTANT_NUREC_RUN_ID", raising=False)
     cfg = InstantNuRecConfig(**_make_config_kwargs(tmp_path))
     assert cfg.run_id  # auto-generated shortuuid
+    assert cfg.release_profile == "pa-front"
+
+
+def test_config_accepts_multiview_release_profile(tmp_path):
+    cfg = InstantNuRecConfig(
+        **_make_config_kwargs(tmp_path, release_profile="pa-multiview")
+    )
+    assert cfg.release_profile == "pa-multiview"
+
+
+def test_config_rejects_unknown_release_profile(tmp_path):
+    with pytest.raises(ValidationError):
+        InstantNuRecConfig(**_make_config_kwargs(tmp_path, release_profile="unknown"))
 
 
 def test_config_post_init_env_run_id_overrides(tmp_path, monkeypatch):

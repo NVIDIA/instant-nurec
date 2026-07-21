@@ -23,6 +23,7 @@ from instant_nurec.config_schema.base_schema import BaseConfigSchema, Field
 from instant_nurec.config_schema.dataset import InstantNuRecSplitsConfig
 from instant_nurec.config_schema.models import KelvinModelConfig
 from instant_nurec.config_schema.predict import PredictConfig
+from instant_nurec.pretrained import DEFAULT_MODEL_VARIANT, ModelVariant
 
 
 class GaussiansInstantNuRecSystemConfig(BaseConfigSchema):
@@ -41,6 +42,11 @@ class InstantNuRecConfig(BaseConfigSchema):
     """
 
     seed: int = Field(default=38, description="Random seed.")
+
+    release_profile: ModelVariant = Field(
+        default=DEFAULT_MODEL_VARIANT,
+        description="Released checkpoint/input profile to use for inference.",
+    )
 
     out_dir: str
 
