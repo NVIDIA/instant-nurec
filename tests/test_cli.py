@@ -55,6 +55,46 @@ def test_parser_default_merge_is_false() -> None:
     assert args.merge is False
 
 
+def test_parser_defaults_to_pa_front() -> None:
+    from instant_nurec.cli import make_parser
+    args = make_parser().parse_args(["--ncore-path", "/x", "--output-dir", "/y"])
+    assert args.model == "pa-front"
+    assert args.camera_ids is None
+
+
+def test_parser_accepts_multiview_and_repeated_camera_ids() -> None:
+    from instant_nurec.cli import make_parser
+    args = make_parser().parse_args([
+        "--model", "pa-multiview",
+        "--ncore-path", "/x",
+        "--output-dir", "/y",
+        "--camera-id", "front",
+        "--camera-id", "left",
+        "--camera-id", "right",
+    ])
+    assert args.model == "pa-multiview"
+    assert args.camera_ids == ["front", "left", "right"]
+
+
+def test_parser_accepts_point_query_profile() -> None:
+    from instant_nurec.cli import make_parser
+
+    args = make_parser().parse_args(
+        ["--model", "pq-front", "--ncore-path", "/x", "--output-dir", "/y"]
+    )
+    assert args.model == "pq-front"
+
+
+def test_parser_rejects_unknown_model() -> None:
+    from instant_nurec.cli import make_parser
+    with pytest.raises(SystemExit):
+        make_parser().parse_args([
+            "--model", "unknown",
+            "--ncore-path", "/x",
+            "--output-dir", "/y",
+        ])
+
+
 def test_parser_default_n_gaussians() -> None:
     from instant_nurec.cli import make_parser
     args = make_parser().parse_args(["--ncore-path", "/x", "--output-dir", "/y"])
@@ -163,6 +203,119 @@ def test_main_no_merge_constructs_config_with_disabled_merge(
     assert cfg.out_dir == "/o"
     assert cfg.dataset.predict.ncore_json_paths == [str(json_path.resolve())]
     assert cfg.predict.primitive_merge.enabled is False
+    assert cfg.release_profile == "pa-front"
+    assert cfg.dataset.predict.context_camera_ids == ["camera_front_wide_120fov"]
+    assert cfg.dataset.predict.camera_subsampler.frame_width == 784
+    assert cfg.dataset.predict.camera_subsampler.frame_height == 448
+
+
+def test_main_multiview_uses_release_profile(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    fake_run_predict = _install_runtime_stubs(monkeypatch)
+    json_path = _make_json_path(tmp_path)
+    from instant_nurec.cli import main
+
+    rc = main([
+        "--model", "pa-multiview",
+        "--ncore-path", str(json_path),
+        "--output-dir", "/o",
+    ])
+
+    assert rc == 0
+    cfg = fake_run_predict.call_args.args[0]
+    assert cfg.release_profile == "pa-multiview"
+    assert cfg.dataset.predict.context_camera_ids == [
+        "camera_front_wide_120fov",
+        "camera_cross_left_120fov",
+        "camera_cross_right_120fov",
+    ]
+    assert cfg.dataset.predict.supervision_camera_ids == cfg.dataset.predict.context_camera_ids
+    assert cfg.dataset.predict.camera_subsampler.frame_width == 504
+    assert cfg.dataset.predict.camera_subsampler.frame_height == 280
+    assert cfg.dataset.predict.frame_batch_sampler.n_frames_per_sample == 18
+    assert cfg.model.decoder.motion_depth == 1
+
+
+def test_main_point_query_uses_point_query_decoder(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    fake_run_predict = _install_runtime_stubs(monkeypatch)
+    json_path = _make_json_path(tmp_path)
+    from instant_nurec.cli import main
+    from instant_nurec.config_schema.models import KelvinPointQueryCADecoderConfig
+
+    assert main(["--model", "pq-front", "--ncore-path", str(json_path), "--output-dir", "/o"]) == 0
+    cfg = fake_run_predict.call_args.args[0]
+    assert cfg.release_profile == "pq-front"
+    assert cfg.dataset.predict.context_camera_ids == ["camera_front_wide_120fov"]
+    assert (
+        cfg.dataset.predict.camera_subsampler.frame_width,
+        cfg.dataset.predict.camera_subsampler.frame_height,
+    ) == (784, 448)
+    assert cfg.dataset.predict.frame_batch_sampler.n_frames_per_sample == 18
+    assert isinstance(cfg.model.decoder, KelvinPointQueryCADecoderConfig)
+
+
+def test_main_point_query_rejects_non_front_camera(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _install_runtime_stubs(monkeypatch)
+    json_path = _make_json_path(tmp_path)
+    from instant_nurec.cli import main
+
+    with pytest.raises(ValueError, match="requires context camera"):
+        main(
+            [
+                "--model",
+                "pq-front",
+                "--ncore-path",
+                str(json_path),
+                "--output-dir",
+                "/o",
+                "--camera-id",
+                "camera_cross_left_120fov",
+            ]
+        )
+
+
+def test_main_multiview_accepts_five_camera_overrides(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    fake_run_predict = _install_runtime_stubs(monkeypatch)
+    json_path = _make_json_path(tmp_path)
+    from instant_nurec.cli import main
+    cameras = ["front", "cross-left", "cross-right", "rear-left", "rear-right"]
+    argv = [
+        "--model", "pa-multiview",
+        "--ncore-path", str(json_path),
+        "--output-dir", "/o",
+    ]
+    for camera in cameras:
+        argv.extend(["--camera-id", camera])
+
+    assert main(argv) == 0
+    cfg = fake_run_predict.call_args.args[0]
+    assert cfg.dataset.predict.context_camera_ids == cameras
+
+
+def test_main_rejects_unsupported_multiview_camera_count(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    _install_runtime_stubs(monkeypatch)
+    json_path = _make_json_path(tmp_path)
+    from instant_nurec.cli import main
+
+    with pytest.raises(ValueError, match="expects 1, 3, 5 context camera"):
+        main([
+            "--model", "pa-multiview",
+            "--ncore-path", str(json_path),
+            "--output-dir", "/o",
+            "--camera-id", "front",
+            "--camera-id", "left",
+        ])
 
 
 def test_main_lst_path_resolves_each_line(

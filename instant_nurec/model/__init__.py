@@ -42,10 +42,12 @@ class ModelCheckpointError(RuntimeError):
     """The resolved file is not a source-model state dictionary."""
 
 
-def _resolve_model_pt_path() -> Optional[str]:
+def _resolve_model_pt_path(
+    model_variant: pretrained.ModelVariant = pretrained.DEFAULT_MODEL_VARIANT,
+) -> Optional[str]:
     """Return the local path to the weight checkpoint or ``None`` on failure."""
     try:
-        return pretrained.download_instant_nurec_pt()
+        return pretrained.download_instant_nurec_pt(model_variant)
     except pretrained.PretrainedModelError:
         return None
 
@@ -115,14 +117,18 @@ def _preflight_validate_camera_ids(config: "InstantNuRecConfig") -> None:
     )
 
 
-def _load_model_state_dict(path: str) -> dict[str, torch.Tensor]:
+def _load_model_state_dict(
+    path: str,
+    *,
+    expected_filename: str = pretrained.MODEL_FILENAME,
+) -> dict[str, torch.Tensor]:
     """Load a weights-only checkpoint and reject legacy traced archives."""
     if zipfile.is_zipfile(path):
         with zipfile.ZipFile(path) as archive:
             if any(name.endswith("/constants.pkl") for name in archive.namelist()):
                 raise ModelCheckpointError(
                     f"{path} is a legacy traced-model archive. Download "
-                    f"{pretrained.MODEL_FILENAME} or point INSTANT_NUREC_FULL_PT "
+                    f"{expected_filename} or point INSTANT_NUREC_FULL_PT "
                     "at the released weights-only checkpoint."
                 )
 
@@ -143,17 +149,21 @@ def make(config: "InstantNuRecConfig") -> GaussiansInstantNuRecSystem:
     Resolution: ``INSTANT_NUREC_FULL_PT`` env var takes priority; otherwise
     the artifact is fetched from Hugging Face.
     """
-    full_pt_path = _resolve_model_pt_path()
+    profile = pretrained.get_model_profile(config.release_profile)
+    full_pt_path = _resolve_model_pt_path(config.release_profile)
     if not full_pt_path or not os.path.exists(full_pt_path):
         raise ModelNotFoundError(
-            f"{pretrained.MODEL_FILENAME} not found. Either set INSTANT_NUREC_FULL_PT to a "
+            f"{profile.filename} not found. Either set INSTANT_NUREC_FULL_PT to a "
             f"local .pt path or ensure {pretrained.MODEL_REPO_ID!r} is reachable."
         )
 
     _preflight_validate_camera_ids(config)
     logger.info("Loading source-model weights from %s.", full_pt_path)
     static_core = KelvinStaticCore(config.model)
-    static_core.load_state_dict(_load_model_state_dict(full_pt_path), strict=True)
+    static_core.load_state_dict(
+        _load_model_state_dict(full_pt_path, expected_filename=profile.filename),
+        strict=True,
+    )
 
     dataset_config = config.dataset.predict
     assert dataset_config is not None, "dataset.predict must be configured for inference"

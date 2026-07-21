@@ -36,6 +36,7 @@ htmlcov/
 .scratch*/
 
 # Generated runtime artifacts
+artifacts/
 *.pt
 *.ckpt
 *.pkl

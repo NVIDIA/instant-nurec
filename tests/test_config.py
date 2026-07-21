@@ -33,11 +33,14 @@ from pydantic import ValidationError
 from instant_nurec.config_schema.dataset import (
     AdaptiveSequentialFrameBatchSamplerConfig,
     CameraSubsamplerConfig,
+    InstantNuRecSplitsConfig,
+    NCoreInstantNuRecDatasetConfig,
     NCoreInstantNuRecCuboidTracksParamsConfig,
 )
 from instant_nurec.config_schema.instantnurec import GaussiansInstantNuRecSystemConfig, InstantNuRecConfig
 from instant_nurec.config_schema.models import (
     KelvinModelConfig,
+    KelvinPointQueryCADecoderConfig,
     PrimitiveExportPreprocessConfig,
 )
 from instant_nurec.config_schema.predict import PredictConfig, PrimitiveMergeConfig
@@ -256,6 +259,67 @@ def test_config_post_init_no_env(tmp_path, monkeypatch):
     monkeypatch.delenv("INSTANT_NUREC_RUN_ID", raising=False)
     cfg = InstantNuRecConfig(**_make_config_kwargs(tmp_path))
     assert cfg.run_id  # auto-generated shortuuid
+    assert cfg.release_profile == "pa-front"
+
+
+def test_config_accepts_multiview_release_profile(tmp_path):
+    cfg = InstantNuRecConfig(
+        **_make_config_kwargs(tmp_path, release_profile="pa-multiview")
+    )
+    assert cfg.release_profile == "pa-multiview"
+
+
+def test_config_accepts_point_query_release_profile(tmp_path):
+    cfg = InstantNuRecConfig(
+        **_make_config_kwargs(
+            tmp_path,
+            release_profile="pq-front",
+            model=KelvinModelConfig(decoder=KelvinPointQueryCADecoderConfig()),
+        )
+    )
+    assert cfg.release_profile == "pq-front"
+
+
+def test_config_rejects_point_query_profile_with_pixel_aligned_decoder(tmp_path):
+    with pytest.raises(ValidationError, match="requires a point-query decoder"):
+        InstantNuRecConfig(**_make_config_kwargs(tmp_path, release_profile="pq-front"))
+
+
+def test_config_rejects_point_query_profile_with_non_front_camera(tmp_path):
+    model = KelvinModelConfig(decoder=KelvinPointQueryCADecoderConfig())
+    dataset = InstantNuRecSplitsConfig(
+        predict=NCoreInstantNuRecDatasetConfig(
+            ncore_json_paths=[str(tmp_path / "input.json")],
+            context_camera_ids=["camera_cross_left_120fov"],
+            supervision_camera_ids=["camera_cross_left_120fov"],
+        )
+    )
+    with pytest.raises(ValidationError, match="requires context camera"):
+        InstantNuRecConfig(
+            **_make_config_kwargs(
+                tmp_path,
+                release_profile="pq-front",
+                model=model,
+                dataset=dataset,
+            )
+        )
+
+
+@pytest.mark.parametrize("profile", ["pa-front", "pa-multiview"])
+def test_config_rejects_pixel_aligned_profile_with_point_query_decoder(tmp_path, profile):
+    with pytest.raises(ValidationError, match="requires a pixel-aligned decoder"):
+        InstantNuRecConfig(
+            **_make_config_kwargs(
+                tmp_path,
+                release_profile=profile,
+                model=KelvinModelConfig(decoder=KelvinPointQueryCADecoderConfig()),
+            )
+        )
+
+
+def test_config_rejects_unknown_release_profile(tmp_path):
+    with pytest.raises(ValidationError):
+        InstantNuRecConfig(**_make_config_kwargs(tmp_path, release_profile="unknown"))
 
 
 def test_config_post_init_env_run_id_overrides(tmp_path, monkeypatch):

@@ -32,7 +32,7 @@ import torch
 from torch import nn
 
 from instant_nurec.datasets.tracks import CuboidTracks
-from instant_nurec.model.static_core import KelvinStaticCore
+from instant_nurec.model.static_core import KelvinPointQueryStaticOutput, KelvinStaticCore
 from instant_nurec.primitives.kelvin_primitive import (
     KelvinDynamicLayer,
     KelvinInstantNuRecPrimitive,
@@ -149,6 +149,7 @@ class KelvinInferenceModel(nn.Module):
         semantic_argmax: torch.Tensor,
         rendering_camera,
         cuboid_tracks_b: CuboidTracks | None,
+        source_indices: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """Compute the dynamic mask.
 
@@ -158,7 +159,8 @@ class KelvinInferenceModel(nn.Module):
         With ``cuboid_tracks_b``: refine via point-cuboid intersection
         (and fallback ray-cuboid intersection on movable rays).
         """
-        # Single-batch slice: shapes (V, H, W, 3) and (V, H, W).
+        # Single-batch slice: dense outputs have shapes (V, H, W, 3) and
+        # (V, H, W); point-query outputs have shapes (N, 3) and (N,).
         gs_xyz_v = gs_xyz[0]
         semantic_v = semantic_argmax[0]
 
@@ -172,6 +174,12 @@ class KelvinInferenceModel(nn.Module):
         movable_mask = semantic_v == self._semantic_movable_value()
         rays = rendering_camera.rays  # (V, H, W, 6)
         ray_ts = unpack_optional(rendering_camera.rays_timestamps_us)  # (V, H, W, 1)
+        if source_indices is not None:
+            # The sparse decoder carries each Gaussian's flattened source-pixel
+            # index so cuboid-track association uses the aligned ray and time.
+            source_indices_v = source_indices[0].long()
+            rays = rays.reshape(-1, 6)[source_indices_v]
+            ray_ts = ray_ts.reshape(-1, 1)[source_indices_v]
 
         aux_ray_intersection_result = dynamic_track.ray_intersection(
             rays[..., :3][movable_mask],
@@ -225,21 +233,38 @@ class KelvinInferenceModel(nn.Module):
         for bidx, batch in enumerate(context):
             tensors = self._extract_tensors(batch)
             self._validate_input_shape(tensors[0])
-            (
-                gs_xyz,
-                gs_rotations,
-                gs_scales,
-                gs_densities,
-                gs_rgb,
-                semantic_argmax,
-                normals,
-                affine,
-            ) = self.static_core(*tensors)
+            static_output = self.static_core(*tensors)
+            if isinstance(static_output, KelvinPointQueryStaticOutput):
+                gs_xyz = static_output.positions
+                gs_rotations = static_output.rotations
+                gs_scales = static_output.scales
+                gs_densities = static_output.densities
+                gs_rgb = static_output.rgb
+                semantic_argmax = static_output.semantic_class
+                normals = static_output.normals
+                affine = static_output.affine_matrix
+                source_indices = static_output.source_indices
+            else:
+                (
+                    gs_xyz,
+                    gs_rotations,
+                    gs_scales,
+                    gs_densities,
+                    gs_rgb,
+                    semantic_argmax,
+                    normals,
+                    affine,
+                ) = static_output
+                source_indices = None
 
             rendering_camera = unpack_optional(unpack_optional(batch.rendering).camera)
             cuboid_tracks_b = cuboid_tracks[bidx] if cuboid_tracks is not None else None
             dynamic_mask = self._compute_dynamic_mask(
-                gs_xyz, semantic_argmax, rendering_camera, cuboid_tracks_b
+                gs_xyz,
+                semantic_argmax,
+                rendering_camera,
+                cuboid_tracks_b,
+                source_indices,
             )
 
             # Flatten and gather static-only.

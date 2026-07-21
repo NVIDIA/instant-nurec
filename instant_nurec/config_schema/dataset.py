@@ -42,7 +42,9 @@ class NCoreInstantNuRecCuboidTracksParamsConfig(BaseConfigSchema):
 class AdaptiveSequentialFrameBatchSamplerConfig(BaseConfigSchema):
     """Adaptive sequential frame-batch sampler config.
 
-    The released checkpoint was trained with 18 input frames per sample.
+    Release profiles supply this value. Each current profile uses 18 frames per
+    camera, and the total model view dimension is this value multiplied by the
+    context-camera count.
     """
 
     n_frames_per_sample: int = Field(
@@ -72,7 +74,7 @@ class AdaptiveSequentialFrameBatchSamplerConfig(BaseConfigSchema):
 
 
 class CameraSubsamplerConfig(BaseConfigSchema):
-    """Image dimensions expected by the released model."""
+    """Image dimensions expected by the selected release profile."""
 
     frame_width: int = Field(
         default=784,
