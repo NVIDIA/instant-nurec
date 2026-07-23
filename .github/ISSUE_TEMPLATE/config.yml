@@ -17,8 +17,3 @@ contact_links:
       Forum (Omniverse / NuRec category). The support team monitors this
       category and answers there.
 
-  - name: "🚨 Report a security vulnerability - NVIDIA Intigriti VDP"
-    url: https://app.intigriti.com/programs/nvidia/nvidiavdp/detail
-    about: >
-      Please do NOT file security issues publicly on GitHub. Use the NVIDIA
-      Vulnerability Disclosure Program form on Intigriti.
