@@ -19,7 +19,8 @@
 #
 # Bootstraps a venv and installs the locked dependency tree via ``uv sync``.
 # The default workflow does not install the optional gsplat reference renderer;
-# use ``uv sync --extra render`` before passing ``--render-preview``.
+# use ``uv sync --extra render`` before passing ``--render-preview`` or
+# ``--render-video``.
 # ``run_inference.py`` is the canonical entrypoint.
 
 set -euo pipefail
@@ -61,4 +62,9 @@ first context frame with the sky composited behind the Gaussians:
 
     uv sync --extra render
     ./run.sh --ncore-path /path/to/sequence.json --output-dir /tmp/out --render-preview
+
+To render every original frame along the calibrated source trajectory (ffmpeg
+with libx264 must be installed):
+
+    ./run.sh --ncore-path /path/to/sequence.json --output-dir /tmp/out --merge --render-video
 EOF

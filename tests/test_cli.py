@@ -152,6 +152,15 @@ def test_parser_render_preview_flag_sets_true() -> None:
     assert args.render_preview is True
 
 
+def test_parser_render_video_flag_sets_true() -> None:
+    from instant_nurec.cli import make_parser
+
+    args = make_parser().parse_args(
+        ["--ncore-path", "/x", "--output-dir", "/y", "--render-video"]
+    )
+    assert args.render_video is True
+
+
 def test_parser_merge_no_longer_takes_choice_argument() -> None:
     """The old `--merge {none, frustum-ownership}` form must error so we
     don't silently treat 'frustum-ownership' as a positional argument."""
@@ -268,6 +277,132 @@ def test_main_render_preview_reports_missing_dependency_before_inference(
         )
 
     assert "install the render extra" in capsys.readouterr().err
+    fake_run_predict.assert_not_called()
+
+
+def test_main_render_video_requires_merge_before_preflight(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    fake_run_predict = _install_runtime_stubs(monkeypatch)
+    json_path = _make_json_path(tmp_path)
+    from instant_nurec.cli import main
+
+    with pytest.raises(SystemExit, match="2"):
+        main(
+            [
+                "--ncore-path",
+                str(json_path),
+                "--output-dir",
+                "/o",
+                "--render-video",
+            ]
+        )
+
+    assert "--render-video requires --merge" in capsys.readouterr().err
+    fake_run_predict.assert_not_called()
+
+
+def test_main_render_video_preflights_dependencies_and_sets_config(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    fake_run_predict = _install_runtime_stubs(monkeypatch)
+    json_path = _make_json_path(tmp_path)
+    from instant_nurec.cli import main
+    from instant_nurec.predict import render_preview, render_video
+
+    gsplat_preflight = MagicMock(return_value=object())
+    ffmpeg_preflight = MagicMock(return_value="/usr/bin/ffmpeg")
+    monkeypatch.setattr(render_preview, "require_gsplat", gsplat_preflight)
+    monkeypatch.setattr(render_video, "require_ffmpeg", ffmpeg_preflight)
+
+    assert main(
+        [
+            "--ncore-path",
+            str(json_path),
+            "--output-dir",
+            "/o",
+            "--merge",
+            "--render-video",
+            "--max-chunks",
+            "12",
+        ]
+    ) == 0
+
+    gsplat_preflight.assert_called_once_with()
+    ffmpeg_preflight.assert_called_once_with()
+    cfg = fake_run_predict.call_args.args[0]
+    assert cfg.predict.render_video is True
+    assert cfg.predict.primitive_merge.enabled is True
+    assert cfg.system.predict_batch_size == 12
+    assert cfg.dataset.predict.frame_batch_sampler.n_samples_per_sequence == 12
+
+
+def test_main_render_video_rejects_multiple_resolved_sequences(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    fake_run_predict = _install_runtime_stubs(monkeypatch)
+    first = _make_json_path(tmp_path)
+    second = tmp_path / "second.json"
+    second.write_text("{}")
+    sequence_list = tmp_path / "sequences.lst"
+    sequence_list.write_text(f"{first}\n{second}\n")
+    from instant_nurec.cli import main
+    from instant_nurec.predict import render_preview, render_video
+
+    monkeypatch.setattr(render_preview, "require_gsplat", lambda: object())
+    monkeypatch.setattr(render_video, "require_ffmpeg", lambda: "/usr/bin/ffmpeg")
+
+    with pytest.raises(SystemExit, match="2"):
+        main(
+            [
+                "--ncore-path",
+                str(sequence_list),
+                "--output-dir",
+                "/o",
+                "--merge",
+                "--render-video",
+            ]
+        )
+
+    assert "requires exactly one resolved NCore sequence" in capsys.readouterr().err
+    fake_run_predict.assert_not_called()
+
+
+def test_main_render_video_reports_missing_ffmpeg_before_inference(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    fake_run_predict = _install_runtime_stubs(monkeypatch)
+    json_path = _make_json_path(tmp_path)
+    from instant_nurec.cli import main
+    from instant_nurec.predict import render_preview, render_video
+
+    monkeypatch.setattr(render_preview, "require_gsplat", lambda: object())
+
+    def fail_ffmpeg():
+        raise RuntimeError("install ffmpeg")
+
+    monkeypatch.setattr(render_video, "require_ffmpeg", fail_ffmpeg)
+
+    with pytest.raises(SystemExit, match="2"):
+        main(
+            [
+                "--ncore-path",
+                str(json_path),
+                "--output-dir",
+                "/o",
+                "--merge",
+                "--render-video",
+            ]
+        )
+
+    assert "install ffmpeg" in capsys.readouterr().err
     fake_run_predict.assert_not_called()
 
 

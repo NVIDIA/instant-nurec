@@ -69,6 +69,16 @@ format = "flat"
 torch = { index = "pytorch-cu128" }
 torchvision = { index = "pytorch-cu128" }
 torch-scatter = { index = "pyg-torch-2.7.0-cu128" }
+# This public upstream commit fixes F-theta projection culling at the FP32
+# Newton noise floor and exposes explicit world-ray 3DGUT rendering.  Both are
+# required to render NCore calibration and rolling-shutter trajectories without
+# falling back to a pinhole approximation.
+gsplat = { git = "https://github.com/nerfstudio-project/gsplat.git", rev = "a337c3dcaca733ddc3e16bdc156c536aaf5e19ba" }
+
+[tool.uv.extra-build-variables]
+# Match the PyPI install mode: package the CUDA sources and JIT-compile only
+# the kernels used on the installed PyTorch/CUDA runtime.
+gsplat = { BUILD_NO_CUDA = "1" }
 
 [tool.ruff]
 target-version = "py311"

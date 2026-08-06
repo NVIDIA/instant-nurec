@@ -95,16 +95,21 @@ source .venv/bin/activate
 tree from `uv.lock` into `.venv/`. In this default installation, the only
 CUDA dependency is whatever the pinned `torch` wheel ships with.
 
-The optional sky-composited reference render uses `gsplat`, which is not
+The optional calibrated sky-composited renders use `gsplat`, which is not
 installed by `setup.sh`. Install the render extra before using
-`--render-preview`:
+`--render-preview` or `--render-video`:
 
 ```bash
 uv sync --extra render
 ```
 
+The first calibrated render JIT-compiles the pinned public CUDA kernels for
+the active PyTorch/CUDA/GPU target and can take several minutes; subsequent
+runs reuse the cache.
+
 The PLY, sky sidecar, and cubemap quick-look image do not require this
-extra.
+extra. Full-video export also requires `ffmpeg` with the `libx264` encoder on
+`PATH`.
 
 This repo is native-Python only — no Docker required. If you want a
 container, use the standard
@@ -207,6 +212,7 @@ the stem is `<sequence_id>`; without it, each stem is
 | `<stem>.sky.npz` | World-aligned cubemap, visibility mask, per-camera affine matrices, face order, and format metadata. Keep this machine-readable sidecar next to the PLY. |
 | `<stem>.sky.png` | 3×2 cubemap-face layout for a quick visual check; this is an atlas, not a camera render. |
 | `<stem>.render.png` | First context frame with the cubemap alpha-composited behind the Gaussians and the camera affine correction applied. Written only with `--render-preview`. |
+| `<stem>.render.mp4` | Every original frame from the first context camera, rendered at the profile resolution with its calibrated projection, exposure start/end trajectory, rolling shutter, sky, and camera affine. Written only with `--merge --render-video`. |
 
 The `<stem>.sky.npz` sidecar uses format version 1 and can be loaded with
 `numpy.load(path, allow_pickle=False)`. It contains exactly these keys, where
@@ -252,7 +258,7 @@ order; the numeric sensor index is an identifier, not an array index.
 For a composited RGB color `c`, apply row `[A | b]` as
 `clamp(A @ c + b, 0, 1)`, after sky alpha compositing.
 
-To also produce the rendered preview:
+To also produce a calibrated still preview and full source-trajectory video:
 
 ```bash
 uv sync --extra render
@@ -261,7 +267,8 @@ python run_inference.py \
     --ncore-path /path/to/sequence.json \
     --output-dir /tmp/out \
     --merge \
-    --render-preview
+    --render-preview \
+    --render-video
 ```
 
 Standard 3DGS PLY has no field for an environment cubemap or per-camera
@@ -269,12 +276,19 @@ ISP correction. Consequently, SuperSplat and `ply_viewer` display the
 Gaussian foreground from `<stem>.ply` but do not automatically show the
 sky from `<stem>.sky.npz`; a sidecar-aware renderer must composite it.
 
-`--render-preview` is a diagnostic reference-view renderer, not a full
-native-camera or novel-view renderer. It renders the Gaussian foreground
-with a simple-pinhole approximation at the exposure-end pose and writes
-only the first context frame associated with each exported PLY. Cubemap
-sampling still uses the original NCore rays, including their camera model
-and rolling-shutter geometry.
+Both render outputs currently support NCore F-theta cameras and use their
+calibrated per-pixel world rays, including the original projection and
+interpolated exposure start/end rolling-shutter poses. `--render-preview`
+writes the first context frame associated with each exported PLY.
+`--render-video` reopens the source sequence and streams every original frame
+from the first configured context camera without loading the full ray sequence
+into memory. It requires `--merge`, because a complete trajectory should be
+rendered against one complete merged scene. The video path currently accepts
+one resolved NCore sequence per invocation and fails with the required
+`--max-chunks` value if the configured cap would truncate its reconstruction.
+These are source-trajectory checks, not arbitrary novel-view renders. Other
+camera models and F-theta cameras with an external windshield-distortion model
+are rejected explicitly rather than silently approximated.
 
 ##### View your output
 
@@ -330,7 +344,8 @@ python run_inference.py \
 
 Output bundles are written under
 `out_dir/<run_id>/ply/<sequence_id>/<stem>.*`; the optional
-`<stem>.render.png` appears only with `--render-preview`.
+`<stem>.render.png` appears only with `--render-preview`, and
+`<stem>.render.mp4` appears only with `--merge --render-video`.
 
 #### CLI reference
 
@@ -343,7 +358,8 @@ Output bundles are written under
 | `--n-gaussians` | `2000000` | Target number of static Gaussians after voxelization. Only consulted when `--merge` is set. The voxel size is searched iteratively via bracketed binary search to land the count in `[0.9 * target, target]`. |
 | `--camera-id` | profile-dependent | Override a context camera. Repeat once per camera in canonical order. `pa-front` requires 1; `pa-multiview` supports 1, 3, or 5; `pq-front` is fixed to `camera_front_wide_120fov`. |
 | `--max-chunks` | `8` | Maximum number of time-chunks processed per clip. One chunk spans up to 13.5 s, so the default covers 108 s. Longer clips are truncated and a `WARNING` logs the required value. |
-| `--render-preview` | absent (false) | Write `<stem>.render.png` for the first context frame of each exported PLY, with the sky composited behind the Gaussians. Requires `uv sync --extra render`; foreground projection is a simple-pinhole approximation. |
+| `--render-preview` | absent (false) | Write `<stem>.render.png` for the first context frame of each exported PLY, using the calibrated NCore F-theta projection, exposure trajectory, and sky. Requires `uv sync --extra render`. |
+| `--render-video` | absent (false) | Write `<stem>.render.mp4` from every original frame of the first context camera, using calibrated NCore F-theta rays, rolling-shutter poses, sky, and camera affine. Requires one resolved sequence, `--merge`, enough `--max-chunks` for full coverage, `uv sync --extra render`, and `ffmpeg` with `libx264`. |
 | `--log-level` | `INFO` | `DEBUG` / `INFO` / `WARNING` / `ERROR` / `CRITICAL`. |
 
 #### Environment variables

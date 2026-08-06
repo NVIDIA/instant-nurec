@@ -123,6 +123,8 @@ def test_predict_config_defaults():
     cfg = PredictConfig()
     assert isinstance(cfg.primitive_merge, PrimitiveMergeConfig)
     assert cfg.primitive_merge.enabled is False
+    assert cfg.render_preview is False
+    assert cfg.render_video is False
 
 
 # ---------------------------------------------------------------------------

@@ -34,6 +34,7 @@ from instant_nurec.predict.export_ply import export_ply
 from instant_nurec.predict.export_sky import export_sky
 from instant_nurec.predict.primitive_merge import KelvinPrimitiveMerge
 from instant_nurec.predict.render_preview import render_reference_preview
+from instant_nurec.predict.render_video import render_reference_video
 from instant_nurec.primitives.base import BaseInstantNuRecPrimitive
 from instant_nurec.primitives.kelvin_primitive import KelvinInstantNuRecPrimitive
 from instant_nurec.utils.batch import DataAndRenderingBatch, InstantNuRecDataBatch
@@ -133,13 +134,6 @@ class GaussiansInstantNuRecSystem(nn.Module):
                 / meta["sequence_id"]
                 / f"{meta['sequence_id']}{chunk_suffix}.ply"
             )
-            render_stats = None
-            if getattr(self.predict_config, "render_preview", False):
-                render_stats = render_reference_preview(
-                    cast(KelvinInstantNuRecPrimitive, primitive),
-                    context,
-                    path.with_suffix(".render.png"),
-                )
             export_ply(
                 primitives=primitive,
                 rig_trajectories=rig,
@@ -152,12 +146,46 @@ class GaussiansInstantNuRecSystem(nn.Module):
             print(f"Wrote 3DGS PLY ({n:,} gaussians): {path.resolve()}", flush=True)
             print(f"Wrote sky sidecar: {sidecar_path.resolve()}", flush=True)
             print(f"Wrote sky preview: {preview_path.resolve()}", flush=True)
+
+            render_stats = None
+            if getattr(self.predict_config, "render_preview", False):
+                render_stats = render_reference_preview(
+                    cast(KelvinInstantNuRecPrimitive, primitive),
+                    context,
+                    path.with_suffix(".render.png"),
+                )
+            video_stats = None
+            if getattr(self.predict_config, "render_video", False):
+                predict_dataset = self.datamodule.predict_dataset
+                if predict_dataset is None:
+                    raise RuntimeError("Predict dataset is unavailable while exporting the calibrated video")
+                camera_id = predict_dataset.config.context_camera_ids[0]
+                full_camera_rig = predict_dataset.load_full_camera_rig(
+                    meta["ncore_json_path"],
+                    rig,
+                    camera_id=camera_id,
+                )
+                video_stats = render_reference_video(
+                    cast(KelvinInstantNuRecPrimitive, primitive),
+                    full_camera_rig,
+                    path.with_suffix(".render.mp4"),
+                )
             if render_stats is not None:
                 print(
                     "Wrote sky-composited render "
                     f"(background={render_stats.background_fraction:.1%}, "
                     f"sky contribution={render_stats.sky_contribution_mean:.4f}): "
                     f"{render_stats.path.resolve()}",
+                    flush=True,
+                )
+            if video_stats is not None:
+                print(
+                    "Wrote calibrated source-trajectory video "
+                    f"({video_stats.frame_count:,} frames, {video_stats.fps:.3f} fps, "
+                    f"{video_stats.duration_seconds:.2f}s, "
+                    f"background={video_stats.background_fraction:.1%}, "
+                    f"sky contribution={video_stats.sky_contribution_mean:.4f}): "
+                    f"{video_stats.path.resolve()}",
                     flush=True,
                 )
 
