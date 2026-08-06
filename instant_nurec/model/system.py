@@ -17,9 +17,9 @@ from __future__ import annotations
 
 import gc
 import logging
-import os
 
 from pathlib import Path
+from typing import cast
 
 import torch
 
@@ -31,9 +31,12 @@ from instant_nurec.config_schema.instantnurec import GaussiansInstantNuRecSystem
 from instant_nurec.datasets.datamodule import InstantNuRecDataModule
 from instant_nurec.model.inference import KelvinInferenceModel
 from instant_nurec.predict.export_ply import export_ply
+from instant_nurec.predict.export_sky import export_sky
 from instant_nurec.predict.primitive_merge import KelvinPrimitiveMerge
+from instant_nurec.predict.render_preview import render_reference_preview
 from instant_nurec.primitives.base import BaseInstantNuRecPrimitive
-from instant_nurec.utils.batch import InstantNuRecDataBatch
+from instant_nurec.primitives.kelvin_primitive import KelvinInstantNuRecPrimitive
+from instant_nurec.utils.batch import DataAndRenderingBatch, InstantNuRecDataBatch
 from instant_nurec.utils.types import RigTrajectories
 
 
@@ -116,21 +119,47 @@ class GaussiansInstantNuRecSystem(nn.Module):
         if out_batch.meta is None or out_batch.context_rig is None:
             return
 
-        def export_chunk(primitive: BaseInstantNuRecPrimitive, rig: RigTrajectories, meta: dict, chunk_suffix: str) -> None:
-            path = os.path.join(
-                self.out_dir,
-                self.run_id,
-                "ply",
-                meta["sequence_id"],
-                meta["sequence_id"] + chunk_suffix + ".ply",
+        def export_chunk(
+            primitive: BaseInstantNuRecPrimitive,
+            context: DataAndRenderingBatch,
+            rig: RigTrajectories,
+            meta: dict,
+            chunk_suffix: str,
+        ) -> None:
+            path = (
+                Path(self.out_dir)
+                / self.run_id
+                / "ply"
+                / meta["sequence_id"]
+                / f"{meta['sequence_id']}{chunk_suffix}.ply"
             )
+            render_stats = None
+            if getattr(self.predict_config, "render_preview", False):
+                render_stats = render_reference_preview(
+                    cast(KelvinInstantNuRecPrimitive, primitive),
+                    context,
+                    path.with_suffix(".render.png"),
+                )
             export_ply(
                 primitives=primitive,
                 rig_trajectories=rig,
-                path=Path(path),
+                path=path,
+            )
+            sidecar_path, preview_path = export_sky(
+                cast(KelvinInstantNuRecPrimitive, primitive), rig, path
             )
             n = primitive.static_layer.densities.numel()
-            print(f"Wrote 3DGS PLY ({n:,} gaussians): {Path(path).resolve()}", flush=True)
+            print(f"Wrote 3DGS PLY ({n:,} gaussians): {path.resolve()}", flush=True)
+            print(f"Wrote sky sidecar: {sidecar_path.resolve()}", flush=True)
+            print(f"Wrote sky preview: {preview_path.resolve()}", flush=True)
+            if render_stats is not None:
+                print(
+                    "Wrote sky-composited render "
+                    f"(background={render_stats.background_fraction:.1%}, "
+                    f"sky contribution={render_stats.sky_contribution_mean:.4f}): "
+                    f"{render_stats.path.resolve()}",
+                    flush=True,
+                )
 
         for chunk_idx in range(n_chunks):
             meta = out_batch.meta[chunk_idx]
@@ -138,6 +167,7 @@ class GaussiansInstantNuRecSystem(nn.Module):
             chunk_suffix = "" if self.predict_config.primitive_merge.enabled else f"_chunk{chunk_idx}"
             export_chunk(
                 primitives_list[chunk_idx],
+                out_batch.context[chunk_idx],
                 out_batch.context_rig[chunk_idx],
                 meta,
                 chunk_suffix,

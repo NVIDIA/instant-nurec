@@ -73,6 +73,47 @@ def _make_primitive(positions: torch.Tensor) -> KelvinInstantNuRecPrimitive:
     )
 
 
+def test_merge_sky_cubemaps_prefers_observed_texels() -> None:
+    first = _make_primitive(torch.zeros(1, 3))
+    second = _make_primitive(torch.zeros(1, 3))
+    first.sky_cubemap.fill_(1.0)
+    second.sky_cubemap.zero_()
+    first.sky_cubemap_mask = torch.zeros(6, 4, 4, 1)
+    second.sky_cubemap_mask = torch.zeros(6, 4, 4, 1)
+    first.sky_cubemap_mask[:, :2] = 1.0
+    second.sky_cubemap_mask[:, 2:] = 1.0
+    merger = KelvinPrimitiveMerge(PrimitiveMergeConfig())
+
+    cubemap, mask = merger._merge_sky_cubemaps(
+        [first, second],
+        None,  # type: ignore[arg-type]
+        [],
+    )
+
+    torch.testing.assert_close(cubemap[:, :2], torch.full((6, 2, 4, 3), 1.01 / 1.02))
+    torch.testing.assert_close(cubemap[:, 2:], torch.full((6, 2, 4, 3), 0.01 / 1.02))
+    torch.testing.assert_close(mask, torch.ones_like(mask))
+
+
+def test_merge_sky_cubemaps_averages_fallbacks_without_masks(caplog) -> None:
+    first = _make_primitive(torch.zeros(1, 3))
+    second = _make_primitive(torch.zeros(1, 3))
+    first.sky_cubemap.fill_(0.2)
+    second.sky_cubemap.fill_(0.8)
+    merger = KelvinPrimitiveMerge(PrimitiveMergeConfig())
+
+    with caplog.at_level(logging.WARNING, logger="instant_nurec.predict.primitive_merge"):
+        cubemap, mask = merger._merge_sky_cubemaps(
+            [first, second],
+            None,  # type: ignore[arg-type]
+            [],
+        )
+
+    torch.testing.assert_close(cubemap, torch.full_like(cubemap, 0.5))
+    torch.testing.assert_close(mask, torch.zeros_like(mask))
+    assert sum("has no sky cubemap mask" in record.message for record in caplog.records) == 2
+
+
 class TestMaybeVoxelizeStaticLayer:
     """Branch coverage for the iterative voxelization search.
 

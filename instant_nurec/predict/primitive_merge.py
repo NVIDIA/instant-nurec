@@ -340,12 +340,29 @@ class KelvinPrimitiveMerge:
 
     def _merge_sky_cubemaps(
         self,
-        sky_cubemaps: list[torch.Tensor],
+        primitives: list[KelvinInstantNuRecPrimitive],
         batch: InstantNuRecDataBatch,
         batch_rig_transforms: list[torch.Tensor],
-    ) -> torch.Tensor:
+        floor_weight: float = 0.01,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         del batch, batch_rig_transforms
-        return torch.stack(sky_cubemaps, dim=0).mean(dim=0)
+        weighted_sum = torch.zeros_like(primitives[0].sky_cubemap)
+        weight_sum = torch.zeros_like(weighted_sum)
+        merged_mask = torch.zeros_like(weighted_sum[..., :1])
+        for chunk_idx, primitive in enumerate(primitives):
+            mask = primitive.sky_cubemap_mask
+            if mask is None:
+                logger.warning(
+                    "Chunk %d has no sky cubemap mask; using floor weight %.4g only.",
+                    chunk_idx,
+                    floor_weight,
+                )
+                mask = torch.zeros_like(primitive.sky_cubemap[..., :1])
+            weights = mask + floor_weight
+            weighted_sum += primitive.sky_cubemap * weights
+            weight_sum += weights
+            merged_mask = torch.maximum(merged_mask, mask)
+        return weighted_sum / weight_sum.clamp_min(1e-8), merged_mask
 
     @torch.autocast(device_type="cuda", enabled=False)
     def _merge_affine_matrices(self, affine_matrices: list[torch.Tensor]) -> tuple[torch.Tensor, list[torch.Tensor]]:
@@ -400,14 +417,15 @@ class KelvinPrimitiveMerge:
         for b_idx, y_inv_matrix in enumerate(y_inv_matrices):
             all_primitives[b_idx].color_transform(y_inv_matrix)
 
-        merged_sky_cubemap = self._merge_sky_cubemaps(
-            [p.sky_cubemap for p in all_primitives], batch, batch_rig_transforms
+        merged_sky_cubemap, merged_sky_cubemap_mask = self._merge_sky_cubemaps(
+            all_primitives, batch, batch_rig_transforms
         )
 
         merged_primitive = KelvinInstantNuRecPrimitive(
             static_layer=KelvinStaticLayer.concatenate(all_static_layers),
             dynamic_layers=[KelvinDynamicLayer.concatenate(all_dynamic_layers)],
             sky_cubemap=merged_sky_cubemap,
+            sky_cubemap_mask=merged_sky_cubemap_mask,
             affine_matrix=merged_affine_matrix,
         )
         return merged_primitive

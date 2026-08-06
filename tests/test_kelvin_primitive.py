@@ -17,7 +17,13 @@
 
 import torch
 
-from instant_nurec.primitives.kelvin_primitive import KelvinStaticLayer
+from instant_nurec.config_schema.models import PrimitiveExportPreprocessConfig
+from instant_nurec.primitives.kelvin_primitive import (
+    KelvinDynamicLayer,
+    KelvinInstantNuRecPrimitive,
+    KelvinSemanticClass,
+    KelvinStaticLayer,
+)
 
 
 def _identity_quat_wxyz(n: int) -> torch.Tensor:
@@ -121,3 +127,47 @@ class TestKelvinStaticLayerVoxelize:
         # With confidence=ones, weights are uniform softmax(1) -> 0.5 each.
         torch.testing.assert_close(out.densities, torch.tensor([[0.5]]), atol=1e-5, rtol=1e-5)
         torch.testing.assert_close(out.rgb, torch.tensor([[0.5, 0.5, 0.0]]), atol=1e-5, rtol=1e-5)
+
+
+def test_preprocess_fills_unobserved_cubemap_with_pruned_road_color() -> None:
+    static = _make_layer(torch.zeros(4, 3), with_semantic=True)
+    static.semantic_class[:] = KelvinSemanticClass.ROAD
+    static.densities = torch.tensor([[0.9], [0.9], [0.9], [0.1]])
+    static.rgb = torch.tensor(
+        [
+            [0.1, 0.1, 0.1],
+            [0.2, 0.2, 0.2],
+            [0.9, 0.9, 0.9],
+            [0.0, 1.0, 0.0],
+        ]
+    )
+    dynamic = KelvinDynamicLayer(
+        rotations=torch.empty(0, 4),
+        scales=torch.empty(0, 3),
+        rgb=torch.empty(0, 3),
+        max_densities=torch.empty(0, 1),
+        keyframe_positions=torch.empty(0, 3, 3),
+        keyframe_timestamps_us=torch.empty(0, 3, dtype=torch.int64),
+    )
+    sky = torch.full((6, 4, 4, 3), 0.8)
+    mask = torch.zeros(6, 4, 4, 1)
+    mask[:, :2] = 1.0
+    primitive = KelvinInstantNuRecPrimitive(
+        static_layer=static,
+        dynamic_layers=[dynamic],
+        sky_cubemap=sky,
+        sky_cubemap_mask=mask,
+        affine_matrix=torch.eye(3, 4).unsqueeze(0),
+    )
+
+    output = primitive.preprocess_for_export(
+        None,  # type: ignore[arg-type]
+        PrimitiveExportPreprocessConfig(density_prune_threshold=0.5, infill_road_color=True),
+    )
+
+    assert len(output.static_layer) == 3
+    torch.testing.assert_close(output.sky_cubemap[:, :2], torch.full((6, 2, 4, 3), 0.8))
+    torch.testing.assert_close(
+        output.sky_cubemap[:, 2:],
+        torch.tensor([0.2, 0.2, 0.2]).expand(6, 2, 4, 3),
+    )

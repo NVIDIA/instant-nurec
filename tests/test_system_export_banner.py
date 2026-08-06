@@ -25,6 +25,18 @@ sys.path.insert(0, str(REPO_ROOT))
 from instant_nurec.model import system as system_mod  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def _stub_sky_export(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        system_mod,
+        "export_sky",
+        lambda primitive, rig, path: (
+            path.with_suffix(".sky.npz"),
+            path.with_suffix(".sky.png"),
+        ),
+    )
+
+
 def _make_primitive(n_gaussians: int) -> MagicMock:
     primitive = MagicMock()
     primitive.static_layer.densities = torch.zeros(n_gaussians)
@@ -80,6 +92,8 @@ def test_banner_uses_no_chunk_suffix_when_merge_enabled(
     out = capsys.readouterr().out
     expected = (tmp_path / "run1" / "ply" / "seq_y" / "seq_y.ply").resolve()
     assert f"Wrote 3DGS PLY (1,883,483 gaussians): {expected}" in out
+    assert f"Wrote sky sidecar: {expected.with_suffix('.sky.npz')}" in out
+    assert f"Wrote sky preview: {expected.with_suffix('.sky.png')}" in out
 
 
 def test_banner_count_uses_thousands_separator(

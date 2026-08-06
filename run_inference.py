@@ -19,7 +19,12 @@
 Invocation::
 
     python run_inference.py --model <pa-front|pa-multiview|pq-front> \
-        --ncore-path <path> --output-dir <path> [--merge] [--n-gaussians N]
+        --ncore-path <path> --output-dir <path> [--merge] [--n-gaussians N] \
+        [--render-preview]
+
+Each exported PLY has adjacent ``.sky.npz`` and ``.sky.png`` outputs.
+``--render-preview`` additionally writes ``.render.png`` and requires
+``uv sync --extra render``.
 
 Defers to ``instant_nurec.cli.main``.
 """

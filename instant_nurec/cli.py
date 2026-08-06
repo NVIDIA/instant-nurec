@@ -70,7 +70,7 @@ def make_parser() -> argparse.ArgumentParser:
         "--output-dir",
         type=Path,
         required=True,
-        help="Directory for PLY output.",
+        help="Directory for PLY and sky-output bundles.",
     )
     parser.add_argument(
         "--merge",
@@ -123,6 +123,15 @@ def make_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--render-preview",
+        action="store_true",
+        help=(
+            "Render the first context frame of each output chunk as a PNG, "
+            "compositing the observation-derived sky behind the Gaussians. "
+            "Install with `uv sync --extra render` first."
+        ),
+    )
+    parser.add_argument(
         "--log-level",
         choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
         default="INFO",
@@ -132,8 +141,17 @@ def make_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    args = make_parser().parse_args(argv)
+    parser = make_parser()
+    args = parser.parse_args(argv)
     logging.basicConfig(level=getattr(logging, args.log_level.upper()))
+
+    if args.render_preview:
+        from instant_nurec.predict.render_preview import require_gsplat
+
+        try:
+            require_gsplat()
+        except RuntimeError as exc:
+            parser.error(str(exc))
 
     # Lazy imports keep argparse-only invocations (e.g. --help) cheap.
     from instant_nurec.config_schema.dataset import (
@@ -195,6 +213,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 enable_voxelization=args.merge,
                 target_n_gaussians=args.n_gaussians,
             ),
+            render_preview=args.render_preview,
         ),
     )
     run_predict(config)

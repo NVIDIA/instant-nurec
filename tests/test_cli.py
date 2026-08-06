@@ -143,6 +143,15 @@ def test_parser_merge_flag_sets_true() -> None:
     assert args.merge is True
 
 
+def test_parser_render_preview_flag_sets_true() -> None:
+    from instant_nurec.cli import make_parser
+
+    args = make_parser().parse_args(
+        ["--ncore-path", "/x", "--output-dir", "/y", "--render-preview"]
+    )
+    assert args.render_preview is True
+
+
 def test_parser_merge_no_longer_takes_choice_argument() -> None:
     """The old `--merge {none, frustum-ownership}` form must error so we
     don't silently treat 'frustum-ownership' as a positional argument."""
@@ -207,6 +216,59 @@ def test_main_no_merge_constructs_config_with_disabled_merge(
     assert cfg.dataset.predict.context_camera_ids == ["camera_front_wide_120fov"]
     assert cfg.dataset.predict.camera_subsampler.frame_width == 784
     assert cfg.dataset.predict.camera_subsampler.frame_height == 448
+
+
+def test_main_render_preview_preflights_dependency_and_sets_config(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    fake_run_predict = _install_runtime_stubs(monkeypatch)
+    json_path = _make_json_path(tmp_path)
+    from instant_nurec.cli import main
+    from instant_nurec.predict import render_preview
+
+    preflight = MagicMock(return_value=object())
+    monkeypatch.setattr(render_preview, "require_gsplat", preflight)
+
+    assert main(
+        [
+            "--ncore-path",
+            str(json_path),
+            "--output-dir",
+            "/o",
+            "--render-preview",
+        ]
+    ) == 0
+
+    preflight.assert_called_once_with()
+    assert fake_run_predict.call_args.args[0].predict.render_preview is True
+
+
+def test_main_render_preview_reports_missing_dependency_before_inference(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    fake_run_predict = _install_runtime_stubs(monkeypatch)
+    json_path = _make_json_path(tmp_path)
+    from instant_nurec.cli import main
+    from instant_nurec.predict import render_preview
+
+    def fail_preflight():
+        raise RuntimeError("install the render extra")
+
+    monkeypatch.setattr(render_preview, "require_gsplat", fail_preflight)
+
+    with pytest.raises(SystemExit, match="2"):
+        main(
+            [
+                "--ncore-path",
+                str(json_path),
+                "--output-dir",
+                "/o",
+                "--render-preview",
+            ]
+        )
+
+    assert "install the render extra" in capsys.readouterr().err
+    fake_run_predict.assert_not_called()
 
 
 def test_main_multiview_uses_release_profile(

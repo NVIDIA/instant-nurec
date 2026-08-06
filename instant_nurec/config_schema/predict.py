@@ -61,3 +61,10 @@ class PredictConfig(BaseConfigSchema):
     primitive_merge: PrimitiveMergeConfig = Field(
         default_factory=PrimitiveMergeConfig, description="Configuration for primitive merging"
     )
+    render_preview: bool = Field(
+        default=False,
+        description=(
+            "Render the first context camera frame for each exported chunk, "
+            "including the observation-derived sky cubemap. Requires the render extra."
+        ),
+    )

@@ -18,7 +18,8 @@
 # InstantNuRec Kelvin predict — environment setup.
 #
 # Bootstraps a venv and installs the locked dependency tree via ``uv sync``.
-# The only CUDA dependency is whatever ``torch`` ships with the cu128 wheel.
+# The default workflow does not install the optional gsplat reference renderer;
+# use ``uv sync --extra render`` before passing ``--render-preview``.
 # ``run_inference.py`` is the canonical entrypoint.
 
 set -euo pipefail
@@ -49,9 +50,15 @@ Activate the venv with:
 
 Run inference with:
 
-    ./run.sh --ncore-path /path/to/ncorev4 --output-dir /tmp/out [--merge] [--n-gaussians N]
+    ./run.sh --ncore-path /path/to/sequence.json --output-dir /tmp/out [--merge] [--n-gaussians N]
 
 Or directly:
 
-    python run_inference.py --ncore-path /path/to/ncorev4 --output-dir /tmp/out [--merge] [--n-gaussians N]
+    python run_inference.py --ncore-path /path/to/sequence.json --output-dir /tmp/out [--merge] [--n-gaussians N]
+
+Each PLY also has .sky.npz and .sky.png outputs. To additionally render the
+first context frame with the sky composited behind the Gaussians:
+
+    uv sync --extra render
+    ./run.sh --ncore-path /path/to/sequence.json --output-dir /tmp/out --render-preview
 EOF

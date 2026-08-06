@@ -33,10 +33,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 
-from instant_nurec.model.inference import (  # noqa: E402
-    _PLACEHOLDER_SKY_CUBEMAP_SIZE,
-    KelvinInferenceModel,
-)
+from instant_nurec.model.inference import KelvinInferenceModel  # noqa: E402
 from instant_nurec.model.static_core import KelvinPointQueryStaticOutput  # noqa: E402
 from instant_nurec.primitives.kelvin_primitive import (  # noqa: E402
     KelvinDynamicLayer,
@@ -79,7 +76,20 @@ class _FakeStaticCore(torch.nn.Module):
         normals = torch.full((B, V, H, W, 3), 0.1)
         affine = torch.zeros(B, self.n_cams, 3, 4)
         affine[..., :3] = torch.eye(3)
-        return gs_xyz, gs_rotations, gs_scales, gs_densities, gs_rgb, semantic, normals, affine
+        sky_cubemap = torch.full((B, 6, 8, 8, 3), 0.25)
+        sky_cubemap_mask = torch.ones(B, 6, 8, 8, 1)
+        return (
+            gs_xyz,
+            gs_rotations,
+            gs_scales,
+            gs_densities,
+            gs_rgb,
+            semantic,
+            normals,
+            affine,
+            sky_cubemap,
+            sky_cubemap_mask,
+        )
 
 
 class _FakePointQueryStaticCore(_FakeStaticCore):
@@ -87,7 +97,7 @@ class _FakePointQueryStaticCore(_FakeStaticCore):
 
     def forward(self, rgb, c2w, fov, rays, distance_to_depth_scale, camera_idxs):
         dense = super().forward(rgb, c2w, fov, rays, distance_to_depth_scale, camera_idxs)
-        xyz, rotations, scales, densities, color, semantic, normals, affine = dense
+        xyz, rotations, scales, densities, color, semantic, normals, affine, sky_cubemap, sky_mask = dense
         source_indices = torch.tensor([[0, 5, 9]], dtype=torch.int64)
         return KelvinPointQueryStaticOutput(
             positions=xyz.reshape(self.B, -1, 3)[:, source_indices[0]],
@@ -99,6 +109,8 @@ class _FakePointQueryStaticCore(_FakeStaticCore):
             normals=normals.reshape(self.B, -1, 3)[:, source_indices[0]],
             affine_matrix=affine,
             source_indices=source_indices,
+            sky_cubemap=sky_cubemap,
+            sky_cubemap_mask=sky_mask,
         )
 
 
@@ -324,15 +336,15 @@ def test_sparse_dynamic_mask_gathers_aligned_source_rays_and_timestamps(monkeypa
     assert torch.equal(dynamic_mask, torch.tensor([True, False]))
 
 
-def test_reconstruct_uses_placeholder_sky_cubemap_shape():
+def test_reconstruct_preserves_observation_derived_sky_cubemap():
     V, H, W = 2, 4, 4
     core = _FakeStaticCore(B=1, V=V, H=H, W=W, n_cams=1)
     adapter = _make_adapter(core)
     out = adapter.reconstruct([_fake_batch(V, H, W)], cuboid_tracks=None)
     sky = out[0].sky_cubemap
-    s = _PLACEHOLDER_SKY_CUBEMAP_SIZE
-    assert sky.shape == (6, s, s, 3)
-    assert torch.all(sky == 0)
+    assert sky.shape == (6, 8, 8, 3)
+    assert torch.all(sky == 0.25)
+    assert torch.all(out[0].sky_cubemap_mask == 1)
 
 
 def test_reconstruct_affine_matrix_shape_squeezed_to_per_camera():
@@ -386,7 +398,7 @@ def test_prepare_context_passthrough():
     assert adapter.prepare_context(context) is context
 
 
-# ---------- _empty_dynamic_layer / _placeholder_sky_cubemap ----------
+# ---------- _empty_dynamic_layer ----------
 
 
 def test_empty_dynamic_layer_has_zero_gaussians_with_correct_dtypes():
@@ -395,14 +407,6 @@ def test_empty_dynamic_layer_has_zero_gaussians_with_correct_dtypes():
     assert len(layer) == 0
     assert layer.keyframe_timestamps_us.dtype == torch.int64
     assert layer.rotations.dtype == torch.float32
-
-
-def test_placeholder_sky_cubemap_dtype_and_shape():
-    adapter = _make_adapter(_FakeStaticCore(1, 1, 1, 1, 1))
-    cube = adapter._placeholder_sky_cubemap(torch.device("cpu"), torch.float64)
-    assert cube.shape == (6, _PLACEHOLDER_SKY_CUBEMAP_SIZE, _PLACEHOLDER_SKY_CUBEMAP_SIZE, 3)
-    assert cube.dtype == torch.float64
-    assert torch.all(cube == 0)
 
 
 def test_pytest_collected(monkeypatch):

@@ -30,6 +30,11 @@ dependencies = [
     "zarr==2.18.2",
 ]
 
+[project.optional-dependencies]
+render = [
+    "gsplat==1.5.3",
+]
+
 [project.scripts]
 instant-nurec = "instant_nurec.cli:main"
 

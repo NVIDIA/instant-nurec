@@ -17,10 +17,10 @@
 
 Applies semantic + optional cuboid-track-based dynamic-mask refinement
 to the per-pixel outputs and packages them into
-``KelvinInstantNuRecPrimitive``. Sky cubemap and dynamic-layer slots
-are filled with zero placeholders to satisfy the primitive invariants
-and the chunk-merge code path; ``export_ply.py`` reads only
-``static_layer``.
+``KelvinInstantNuRecPrimitive``. Released checkpoints omit the learned
+sky head, so :class:`KelvinStaticCore` derives a cubemap from canonical RGB
+and predicted SKY pixels. Dynamic-layer slots remain empty in this static
+PLY compatibility path.
 """
 
 from __future__ import annotations
@@ -45,13 +45,6 @@ from instant_nurec.utils.misc import unpack_optional
 from instant_nurec.utils.motion import warp_points_with_cuboid_tracks
 from instant_nurec.utils.sensor import to_simple_pinhole_model_parameters
 from instant_nurec.utils.types import TrackFlags
-
-
-# Cubemap placeholder size: small enough to keep memory negligible, large
-# enough that the merge code's per-pixel arithmetic produces well-defined
-# results. The merged cubemap is computed but never written -- ``export_ply.py``
-# only reads ``static_layer``.
-_PLACEHOLDER_SKY_CUBEMAP_SIZE = 16
 
 
 class KelvinInferenceModel(nn.Module):
@@ -220,10 +213,6 @@ class KelvinInferenceModel(nn.Module):
             rgb=torch.zeros(0, 3, device=device),
         )
 
-    def _placeholder_sky_cubemap(self, device: torch.device, dtype: torch.dtype) -> torch.Tensor:
-        s = _PLACEHOLDER_SKY_CUBEMAP_SIZE
-        return torch.zeros(6, s, s, 3, device=device, dtype=dtype)
-
     def reconstruct(
         self,
         context: list[DataAndRenderingBatch],
@@ -244,6 +233,8 @@ class KelvinInferenceModel(nn.Module):
                 normals = static_output.normals
                 affine = static_output.affine_matrix
                 source_indices = static_output.source_indices
+                sky_cubemap = static_output.sky_cubemap
+                sky_cubemap_mask = static_output.sky_cubemap_mask
             else:
                 (
                     gs_xyz,
@@ -254,6 +245,8 @@ class KelvinInferenceModel(nn.Module):
                     semantic_argmax,
                     normals,
                     affine,
+                    sky_cubemap,
+                    sky_cubemap_mask,
                 ) = static_output
                 source_indices = None
 
@@ -284,9 +277,8 @@ class KelvinInferenceModel(nn.Module):
                 KelvinInstantNuRecPrimitive(
                     static_layer=static_layer,
                     dynamic_layers=[self._empty_dynamic_layer(static_layer.positions.device)],
-                    sky_cubemap=self._placeholder_sky_cubemap(
-                        static_layer.positions.device, static_layer.positions.dtype
-                    ),
+                    sky_cubemap=sky_cubemap[0],
+                    sky_cubemap_mask=sky_cubemap_mask[0],
                     affine_matrix=affine[0],  # (1, n_cams, 3, 4) -> (n_cams, 3, 4)
                 )
             )

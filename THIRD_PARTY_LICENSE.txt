@@ -790,3 +790,14 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ================================================================================
+
+19. gsplat 1.5.3 (https://github.com/nerfstudio-project/gsplat)
+
+Apache License 2.0
+
+Copyright 2025 Nerfstudio Team
+
+This component is licensed under the Apache License, Version 2.0. The complete
+Apache License 2.0 terms are reproduced in section 2 of this file.
+
+================================================================================
