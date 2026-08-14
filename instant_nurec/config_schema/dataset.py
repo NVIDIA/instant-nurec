@@ -47,6 +47,7 @@ class AdaptiveSequentialFrameBatchSamplerConfig(BaseConfigSchema):
     context-camera count.
     """
 
+    name: Literal["adaptive_sequential", "uniform"] = "adaptive_sequential"
     n_frames_per_sample: int = Field(
         default=18,
         gt=0,
@@ -71,6 +72,11 @@ class AdaptiveSequentialFrameBatchSamplerConfig(BaseConfigSchema):
             "mean more chunks needed to cover a clip."
         ),
     )
+    frame_gap_timestamp_us: int = Field(
+        default=500_000,
+        gt=0,
+        description="Fixed timestamp gap used when name=uniform (the official Kelvin training sampler).",
+    )
 
 
 class CameraSubsamplerConfig(BaseConfigSchema):
@@ -88,18 +94,72 @@ class CameraSubsamplerConfig(BaseConfigSchema):
     )
 
 
-class NCoreInstantNuRecDatasetConfig(BaseConfigSchema):
-    """Predict-side config for the NCorev4 dataset loader.
+class SupervisionFrameBatchConfig(BaseConfigSchema):
+    """Training-only novel-view sampling relative to each context chunk."""
 
-    Required field: ``ncore_json_paths`` — an explicit list of absolute
-    sequence-metadata JSON paths. The CLI's ``resolve_ncore_paths``
-    helper resolves a ``--ncore-path`` (single ``.json`` or ``.lst``)
-    into this list before constructing the config.
+    n_frames_per_camera: int = Field(
+        default=0,
+        ge=0,
+        description="Supervision frames per camera. Zero keeps predict-mode behavior.",
+    )
+    camera_subsampler: CameraSubsamplerConfig = Field(default_factory=CameraSubsamplerConfig)
+    prepend_timestamps_us: int = Field(default=0, ge=0)
+    append_timestamps_us: int = Field(default=0, ge=0)
+    sample_strategy: Literal["random", "stratified"] = "random"
+    include_context_frames: bool = Field(
+        default=False,
+        description="Union context frame indices into the sampled supervision batch.",
+    )
+
+
+class NCoreAuxDataConfig(BaseConfigSchema):
+    """Optional adjacent NCore auxiliary labels used by Kelvin losses."""
+
+    enabled: bool = False
+    enabled_context: bool = False
+    semantic_segmentation: bool = True
+    depth: bool = True
+    egomask: bool = True
+
+
+class ExternalSupervisionCameraIdConfig(BaseConfigSchema):
+    """Camera stored in a sequence-relative external NCore V4 archive."""
+
+    ncore_path: str = Field(
+        description="Path to the external NCore archive, relative to the sequence JSON directory."
+    )
+    camera_id: str
+    unique_sensor_idx: int = Field(
+        ge=0,
+        description="Context-camera affine index intentionally shared by this supervision camera.",
+    )
+    sample_ratio: float = Field(
+        default=1.0,
+        ge=0.0,
+        le=1.0,
+        description="Additional frame downsampling ratio after supervision sampling.",
+    )
+
+
+class NCoreInstantNuRecDatasetConfig(BaseConfigSchema):
+    """NCore V4 sequence configuration for prediction and training.
+
+    Supply either ``ncore_json_paths`` directly or an official-style
+    ``ncore_json_list_path`` manifest. Relative manifest entries can be
+    anchored with ``ncore_json_base_path``.
     """
 
     ncore_json_paths: list[str] = Field(
+        default_factory=list,
         description="Absolute paths to ncorev4 sequence metadata JSON files.",
-        min_length=1,
+    )
+    ncore_json_list_path: str | None = Field(
+        default=None,
+        description="Path to a newline-delimited manifest of NCore V4 sequence JSON files.",
+    )
+    ncore_json_base_path: str | None = Field(
+        default=None,
+        description="Optional base used to resolve relative entries in ncore_json_list_path.",
     )
     open_consolidated: bool = Field(default=True)
     camera_max_fov_deg: float = Field(
@@ -114,7 +174,7 @@ class NCoreInstantNuRecDatasetConfig(BaseConfigSchema):
         description="Image resize and crop applied before model inference.",
     )
 
-    context_camera_ids: list[str] = Field(
+    context_camera_ids: list[str | ExternalSupervisionCameraIdConfig] = Field(
         default_factory=lambda: ["camera_front_wide_120fov"],
         description="A list of camera ids, such as `camera_front_wide_120fov`",
     )
@@ -122,14 +182,37 @@ class NCoreInstantNuRecDatasetConfig(BaseConfigSchema):
     frame_batch_sampler: AdaptiveSequentialFrameBatchSamplerConfig = Field(
         default_factory=AdaptiveSequentialFrameBatchSamplerConfig,
     )
-    supervision_camera_ids: list[str] = Field(
+    supervision_camera_ids: list[str | ExternalSupervisionCameraIdConfig] = Field(
         default_factory=lambda: ["camera_front_wide_120fov"],
         description="A list of camera ids, such as `camera_front_wide_120fov`. This is also used to determine the canonical order of cameras in unique sensor idx",
+    )
+    supervision_frame_batch: SupervisionFrameBatchConfig = Field(
+        default_factory=SupervisionFrameBatchConfig,
+        description="Independent supervision sampling used by Kelvin training.",
     )
 
     cuboid_tracks_params: NCoreInstantNuRecCuboidTracksParamsConfig = Field(
         default_factory=NCoreInstantNuRecCuboidTracksParamsConfig,
     )
+    aux_data: NCoreAuxDataConfig = Field(default_factory=NCoreAuxDataConfig)
+
+    def model_post_init(self, __context) -> None:
+        if not self.ncore_json_paths and self.ncore_json_list_path is None:
+            raise ValueError("Either ncore_json_paths or ncore_json_list_path must be provided")
+
+
+class NCoreMixtureComponentConfig(BaseConfigSchema):
+    sample_ratio: float = Field(default=1.0, ge=0.0)
+    config: NCoreInstantNuRecDatasetConfig
+
+
+class NCoreMixtureDatasetConfig(BaseConfigSchema):
+    """Official-style named mixture of independently configured NCore datasets."""
+
+    mixture: dict[str, NCoreMixtureComponentConfig] = Field(min_length=1)
+
+
+NCoreTrainDatasetConfig = NCoreInstantNuRecDatasetConfig | NCoreMixtureDatasetConfig
 
 
 
@@ -139,4 +222,6 @@ class InstantNuRecSplitsConfig(BaseConfigSchema):
     split; pydantic ``extras="ignore"`` drops the train/val/test entries
     that the pretrained ``parsed.yaml`` still carries."""
 
+    train: NCoreTrainDatasetConfig | None = Field(default=None, description="Dataset used for training")
+    val: NCoreTrainDatasetConfig | None = Field(default=None, description="Dataset used for validation")
     predict: NCoreInstantNuRecDatasetConfig | None = Field(default=None, description="Dataset to use in prediction mode")

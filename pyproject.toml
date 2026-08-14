@@ -1,7 +1,7 @@
 [project]
 name = "instant_nurec"
 version = "0.1.0"
-description = "Standalone InstantNuRec Kelvin predict pipeline (ncorev4 ingest → Kelvin predict → 3D-Gaussian PLY export)."
+description = "InstantNuRec Kelvin training and prediction on calibrated NCore V4 data."
 readme = "README.md"
 requires-python = ">=3.11,<3.12"
 license = { text = "Apache-2.0" }
@@ -33,10 +33,20 @@ dependencies = [
 [project.optional-dependencies]
 render = [
     "gsplat==1.5.3",
+    "nvdiffrast==0.4.0",
+]
+training = [
+    "gsplat==1.5.3",
+    "lpips==0.1.4",
+    "nvdiffrast==0.4.0",
+    "pytorch-lightning==2.6.5",
+    "safetensors==0.6.2",
+    "torchmetrics==1.7.0",
 ]
 
 [project.scripts]
 instant-nurec = "instant_nurec.cli:main"
+instant-nurec-train = "instant_nurec.training.run:main"
 
 [dependency-groups]
 dev = [
@@ -73,7 +83,11 @@ torch-scatter = { index = "pyg-torch-2.7.0-cu128" }
 # Newton noise floor and exposes explicit world-ray 3DGUT rendering.  Both are
 # required to render NCore calibration and rolling-shutter trajectories without
 # falling back to a pinhole approximation.
-gsplat = { git = "https://github.com/nerfstudio-project/gsplat.git", rev = "a337c3dcaca733ddc3e16bdc156c536aaf5e19ba" }
+gsplat = { git = "https://github.com/nerfstudio-project/gsplat.git", rev = "608e19ad1657815b685a14f1735ac830838c240e" }
+nvdiffrast = { git = "https://github.com/NVlabs/nvdiffrast.git", rev = "253ac4fcea7de5f396371124af597e6cc957bfae" }
+
+[tool.uv]
+no-build-isolation-package = ["nvdiffrast"]
 
 [tool.uv.extra-build-variables]
 # Match the PyPI install mode: package the CUDA sources and JIT-compile only

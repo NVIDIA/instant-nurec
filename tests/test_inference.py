@@ -135,9 +135,7 @@ def _fake_batch(V: int = 2, H: int = 4, W: int = 4):
     the masking branch can read from without a real dataloader."""
     from types import SimpleNamespace
 
-    timestamps_startend_us = torch.tensor(
-        [[0, 1_000_000]] * V, dtype=torch.int64
-    )  # (V, 2)
+    timestamps_startend_us = torch.tensor([[0, 1_000_000]] * V, dtype=torch.int64)  # (V, 2)
     rays = torch.zeros(V, H, W, 6)
     rays[..., 5] = 1.0  # rays_dir = (0,0,1) so xyz = origin + depth*z
     distance_to_depth_scale = torch.ones(V, H, W, 1)
@@ -149,10 +147,7 @@ def _fake_batch(V: int = 2, H: int = 4, W: int = 4):
     # the result of ``to_simple_pinhole_model_parameters`` (which gets
     # monkeypatched in the test fixture below), so a SimpleNamespace stand-in
     # is enough.
-    sensor_params = [
-        SimpleNamespace(resolution=(W, H), focal_length=(float(W), float(H)))
-        for _ in range(V)
-    ]
+    sensor_params = [SimpleNamespace(resolution=(W, H), focal_length=(float(W), float(H))) for _ in range(V)]
 
     rendering_camera = SimpleNamespace(
         rays=rays,
@@ -233,26 +228,17 @@ def test_reconstruct_with_tracks_keeps_unassociated_movable_gaussians(monkeypatc
             output[5].fill_(KelvinSemanticClass.MOVABLE.value)
             return tuple(output)
 
-    class _DynamicTrack:
-        def ray_intersection(self, origins, directions, timestamps, **kwargs):
-            del origins, directions, timestamps, kwargs
-            return SimpleNamespace(
-                intersections_tracks_idx=torch.zeros(2, 2, dtype=torch.int64),
-                intersections_cnt=torch.tensor([1, 0], dtype=torch.int64),
-            )
-
-    monkeypatch.setattr(
-        inference_mod.CuboidTracks.Ops,
-        "subset_from_mask",
-        lambda tracks, mask: _DynamicTrack(),
-    )
+    def _fake_associate(**kwargs):
+        assert kwargs["points_dynamic_mask"].all()
+        return torch.tensor([[0], [-1]], dtype=torch.int32)
 
     def _fake_warp(**kwargs):
         # The first MOVABLE Gaussian is associated with a dynamic track; the
         # second is parked/unassociated and must remain in the static export.
-        assert torch.equal(kwargs["aux_tracks_idx"].reshape(-1), torch.tensor([0, -1]))
-        return kwargs["aux_tracks_idx"] >= 0, []
+        assert torch.equal(kwargs["tracks_idx"].reshape(-1), torch.tensor([0, -1]))
+        return kwargs["tracks_idx"] >= 0, []
 
+    monkeypatch.setattr(inference_mod, "associate_points_with_cuboid_tracks", _fake_associate)
     monkeypatch.setattr(inference_mod, "warp_points_with_cuboid_tracks", _fake_warp)
 
     core = _AllMovableStaticCore(B=1, V=1, H=1, W=2, n_cams=1)
@@ -264,6 +250,34 @@ def test_reconstruct_with_tracks_keeps_unassociated_movable_gaussians(monkeypatc
     assert len(primitive.static_layer) == 1
     assert torch.equal(primitive.static_layer.positions, torch.tensor([[3.0, 4.0, 5.0]]))
     assert primitive.static_layer.semantic_class.item() == KelvinSemanticClass.MOVABLE.value
+
+
+def test_dynamic_mask_unassigns_static_tracks(monkeypatch):
+    from types import SimpleNamespace
+
+    from instant_nurec.model import inference as inference_mod
+    from instant_nurec.utils.types import TrackFlags
+
+    adapter = _make_adapter(_FakeStaticCore(B=1, V=1, H=1, W=2, n_cams=1))
+    rendering = _fake_batch(V=1, H=1, W=2).rendering.camera
+    xyz = torch.zeros(1, 1, 1, 2, 3)
+    semantic = torch.full((1, 1, 1, 2), KelvinSemanticClass.MOVABLE.value, dtype=torch.int64)
+    tracks = SimpleNamespace(tracks_flags=torch.tensor([int(TrackFlags.NONE), int(TrackFlags.DYNAMIC)]))
+
+    monkeypatch.setattr(
+        inference_mod,
+        "associate_points_with_cuboid_tracks",
+        lambda **kwargs: torch.tensor([[[[0], [1]]]], dtype=torch.int32),
+    )
+
+    def _fake_warp(**kwargs):
+        assert torch.equal(kwargs["tracks_idx"], torch.tensor([[[[-1], [1]]]], dtype=torch.int32))
+        return kwargs["tracks_idx"] != -1, []
+
+    monkeypatch.setattr(inference_mod, "warp_points_with_cuboid_tracks", _fake_warp)
+
+    dynamic_mask = adapter._compute_dynamic_mask(xyz, semantic, rendering, tracks)
+    assert torch.equal(dynamic_mask, torch.tensor([[[False, True]]]))
 
 
 def test_reconstruct_packages_sparse_point_query_output():
@@ -280,7 +294,7 @@ def test_reconstruct_packages_sparse_point_query_output():
     )
 
 
-def test_sparse_dynamic_mask_gathers_aligned_source_rays_and_timestamps(monkeypatch):
+def test_sparse_dynamic_mask_gathers_aligned_source_timestamps(monkeypatch):
     from types import SimpleNamespace
 
     from instant_nurec.model import inference as inference_mod
@@ -293,28 +307,16 @@ def test_sparse_dynamic_mask_gathers_aligned_source_rays_and_timestamps(monkeypa
     source_indices = torch.tensor([[4, 1]], dtype=torch.int64)
     captured = {}
 
-    class _DynamicTrack:
-        def ray_intersection(self, origins, directions, timestamps, **kwargs):
-            captured["origins"] = origins
-            captured["directions"] = directions
-            captured["ray_timestamps"] = timestamps
-            return SimpleNamespace(
-                intersections_tracks_idx=torch.zeros(2, 2, dtype=torch.int64),
-                intersections_cnt=torch.ones(2, dtype=torch.int64),
-            )
-
-    dynamic_track = _DynamicTrack()
-    monkeypatch.setattr(
-        inference_mod.CuboidTracks.Ops,
-        "subset_from_mask",
-        lambda tracks, mask: dynamic_track,
-    )
+    def _fake_associate(**kwargs):
+        captured["points"] = kwargs["points"]
+        captured["source_timestamps"] = kwargs["points_timestamps_us"]
+        captured["dynamic_mask"] = kwargs["points_dynamic_mask"]
+        return torch.tensor([[0], [-1]], dtype=torch.int32)
 
     def _fake_warp(**kwargs):
-        captured["points"] = kwargs["points"]
-        captured["source_timestamps"] = kwargs["source_timestamps_us"]
-        return torch.tensor([True, False]), []
+        return kwargs["tracks_idx"] != -1, []
 
+    monkeypatch.setattr(inference_mod, "associate_points_with_cuboid_tracks", _fake_associate)
     monkeypatch.setattr(inference_mod, "warp_points_with_cuboid_tracks", _fake_warp)
     xyz = torch.arange(6, dtype=torch.float32).reshape(1, 2, 3)
     semantic = torch.full((1, 2), KelvinSemanticClass.MOVABLE.value, dtype=torch.int64)
@@ -328,11 +330,9 @@ def test_sparse_dynamic_mask_gathers_aligned_source_rays_and_timestamps(monkeypa
         source_indices,
     )
 
-    flat_rays = rendering.rays.reshape(-1, 6)[source_indices[0]]
-    assert torch.equal(captured["origins"], flat_rays[:, :3])
-    assert torch.equal(captured["directions"], flat_rays[:, 3:])
-    assert torch.equal(captured["ray_timestamps"], torch.tensor([4, 1]))
     assert torch.equal(captured["source_timestamps"], torch.tensor([[4], [1]]))
+    assert captured["dynamic_mask"].all()
+    assert torch.equal(captured["points"], xyz[0])
     assert torch.equal(dynamic_mask, torch.tensor([True, False]))
 
 

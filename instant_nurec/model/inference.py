@@ -42,7 +42,10 @@ from instant_nurec.primitives.kelvin_primitive import (
 from instant_nurec.utils.batch import DataAndRenderingBatch
 from instant_nurec.utils.geometry import tquat_to_se3_matrix
 from instant_nurec.utils.misc import unpack_optional
-from instant_nurec.utils.motion import warp_points_with_cuboid_tracks
+from instant_nurec.utils.motion import (
+    associate_points_with_cuboid_tracks,
+    warp_points_with_cuboid_tracks,
+)
 from instant_nurec.utils.sensor import to_simple_pinhole_model_parameters
 from instant_nurec.utils.types import TrackFlags
 
@@ -118,8 +121,7 @@ class KelvinInferenceModel(nn.Module):
         c2w = c2w.unsqueeze(0)  # (1, V, 4, 4)
 
         pinhole_parameters = [
-            to_simple_pinhole_model_parameters(rendering.sensor_model_parameters[vidx])
-            for vidx in range(data.b)
+            to_simple_pinhole_model_parameters(rendering.sensor_model_parameters[vidx]) for vidx in range(data.b)
         ]
         fov_list = []
         for p in pinhole_parameters:
@@ -129,9 +131,7 @@ class KelvinInferenceModel(nn.Module):
         fov = torch.tensor(fov_list, dtype=torch.float32, device=rgb.device).unsqueeze(0)
 
         camera_idxs = (
-            torch.tensor([meta.unique_sensor_idx for meta in data.meta], dtype=torch.int64)
-            .to(rgb.device)
-            .unsqueeze(0)
+            torch.tensor([meta.unique_sensor_idx for meta in data.meta], dtype=torch.int64).to(rgb.device).unsqueeze(0)
         )
 
         return rgb, c2w, fov, rays, distance_to_depth_scale, camera_idxs
@@ -149,8 +149,8 @@ class KelvinInferenceModel(nn.Module):
         Without ``cuboid_tracks_b``: dynamic_mask is purely the semantic
         argmax-equals-MOVABLE.
 
-        With ``cuboid_tracks_b``: refine via point-cuboid intersection
-        (and fallback ray-cuboid intersection on movable rays).
+        With ``cuboid_tracks_b``: associate points using the same two-pass
+        cuboid contract as training, then keep only dynamic-track assignments.
         """
         # Single-batch slice: dense outputs have shapes (V, H, W, 3) and
         # (V, H, W); point-query outputs have shapes (N, 3) and (N,).
@@ -160,42 +160,34 @@ class KelvinInferenceModel(nn.Module):
         if cuboid_tracks_b is None:
             return semantic_v == self._semantic_movable_value()
 
-        dynamic_track = CuboidTracks.Ops.subset_from_mask(
-            cuboid_tracks_b, cuboid_tracks_b.tracks_flags & TrackFlags.DYNAMIC != 0
-        )
-
         movable_mask = semantic_v == self._semantic_movable_value()
-        rays = rendering_camera.rays  # (V, H, W, 6)
         ray_ts = unpack_optional(rendering_camera.rays_timestamps_us)  # (V, H, W, 1)
         if source_indices is not None:
             # The sparse decoder carries each Gaussian's flattened source-pixel
-            # index so cuboid-track association uses the aligned ray and time.
+            # index so cuboid-track association uses the aligned time.
             source_indices_v = source_indices[0].long()
-            rays = rays.reshape(-1, 6)[source_indices_v]
             ray_ts = ray_ts.reshape(-1, 1)[source_indices_v]
 
-        aux_ray_intersection_result = dynamic_track.ray_intersection(
-            rays[..., :3][movable_mask],
-            rays[..., 3:][movable_mask],
-            ray_ts[..., 0][movable_mask],
-            max_intersections_per_ray=2,
+        tracks_idx = associate_points_with_cuboid_tracks(
+            points=gs_xyz_v,
+            points_timestamps_us=ray_ts,
+            points_dynamic_mask=movable_mask.unsqueeze(-1),
+            cuboid_tracks=cuboid_tracks_b,
+            cuboids_dims_padding=self.cuboids_dims_padding,
         )
-        aux_movable_tracks_idx = aux_ray_intersection_result.intersections_tracks_idx[..., 0]
-        aux_movable_tracks_idx[aux_ray_intersection_result.intersections_cnt != 1] = -1
-        aux_tracks_idx = torch.full_like(movable_mask, -1, dtype=aux_movable_tracks_idx.dtype)
-        aux_tracks_idx[movable_mask] = aux_movable_tracks_idx
+        dynamic_track_mask = (cuboid_tracks_b.tracks_flags & TrackFlags.DYNAMIC) != 0
+        if dynamic_track_mask.numel() > 0:
+            is_dynamic_track = dynamic_track_mask[tracks_idx.clamp_min(0).to(torch.long)]
+            tracks_idx.masked_fill_(~is_dynamic_track, -1)
 
-        prev_target_ts = ray_ts.clone()  # placeholder -- only dynamic_mask is used downstream
-        next_target_ts = ray_ts.clone()
         dynamic_mask, _ = warp_points_with_cuboid_tracks(
             points=gs_xyz_v,
             source_timestamps_us=ray_ts,
-            target_timestamps_us_list=[prev_target_ts, next_target_ts],
-            dynamic_tracks=dynamic_track,
-            aux_tracks_idx=aux_tracks_idx,
-            cuboids_dims_padding=self.cuboids_dims_padding,
+            target_timestamps_us_list=[ray_ts],
+            cuboid_tracks=cuboid_tracks_b,
+            tracks_idx=tracks_idx,
         )
-        return dynamic_mask
+        return dynamic_mask.squeeze(-1)
 
     @staticmethod
     def _semantic_movable_value() -> int:

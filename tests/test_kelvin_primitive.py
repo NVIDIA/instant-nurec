@@ -171,3 +171,22 @@ def test_preprocess_fills_unobserved_cubemap_with_pruned_road_color() -> None:
         output.sky_cubemap[:, 2:],
         torch.tensor([0.2, 0.2, 0.2]).expand(6, 2, 4, 3),
     )
+
+
+def test_dynamic_interpolation_uses_piecewise_motion_and_edge_falloff() -> None:
+    layer = KelvinDynamicLayer(
+        rotations=torch.tensor([[1.0, 0.0, 0.0, 0.0]]),
+        scales=torch.ones(1, 3),
+        rgb=torch.zeros(1, 3),
+        max_densities=torch.ones(1, 1),
+        keyframe_positions=torch.tensor([[[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [3.0, 0.0, 0.0]]]),
+        keyframe_timestamps_us=torch.tensor([[10, 20, 30]], dtype=torch.int64),
+    )
+
+    middle = layer.interpolate(25)
+    torch.testing.assert_close(middle.positions, torch.tensor([[2.0, 0.0, 0.0]]))
+    assert 0.0 < middle.densities.item() < 1.0
+
+    before = layer.interpolate(0)
+    torch.testing.assert_close(before.positions, torch.tensor([[-1.0, 0.0, 0.0]]))
+    torch.testing.assert_close(before.densities, torch.zeros(1, 1))

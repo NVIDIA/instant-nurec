@@ -45,12 +45,17 @@ from instant_nurec.model.backbone.grid_tokens import (
     build_grid_tokens,
     concat_grid_tokens,
 )
+from instant_nurec.model.supervision import KelvinMotionSupervision, KelvinSupervisionPack
 from instant_nurec.primitives.kelvin_primitive import (
     KelvinDynamicLayer,
     KelvinSemanticClass,
     KelvinStaticLayer,
 )
-from instant_nurec.utils.motion import TimeRemapping, warp_points_with_cuboid_tracks
+from instant_nurec.utils.motion import (
+    TimeRemapping,
+    associate_points_with_cuboid_tracks,
+    warp_points_with_cuboid_tracks,
+)
 from instant_nurec.utils.batch import DataAndRenderingBatch
 from instant_nurec.utils.misc import unpack_optional
 from instant_nurec.utils.nn_extensions import TypedModuleList
@@ -64,6 +69,7 @@ class KelvinDecoderReturn:
     # Allowing all dynamic layers
     static_layer: KelvinStaticLayer | None
     dynamic_layers: list[KelvinDynamicLayer]
+    supervision_pack: KelvinSupervisionPack
 
 
 @dataclass(kw_only=True, slots=True)
@@ -315,6 +321,7 @@ class KelvinDPTDecoder(nn.Module):
         depth_and_dconf = self.depth_head(img_feats, output_shape=(H, W), chunk_size=self.config.dpt_chunk_size)
         depth_and_dconf = rearrange(depth_and_dconf, "(B V) C H W -> B V C H W", B=B, V=V)
         pred_depth = torch.exp(depth_and_dconf[:, :, 0].unsqueeze(-1) - math.log(scene_rescale))  # (B, V, H, W, 1)
+        pred_distance_confidence = torch.exp(depth_and_dconf[:, :, 1].unsqueeze(-1)) + 1.0
 
         # Forward and activate context
         img_rgb = rearrange(img_rgb, "B V H W C -> (B V) C H W")
@@ -369,41 +376,38 @@ class KelvinDPTDecoder(nn.Module):
             context_next_flow_list: list[torch.Tensor] = []
             context_dynamic_mask_list: list[torch.Tensor] = []
             for bidx in range(B):
-                dynamic_track = CuboidTracks.Ops.subset_from_mask(
-                    cuboid_tracks[bidx], cuboid_tracks[bidx].tracks_flags & TrackFlags.DYNAMIC != 0
-                )
+                batch_cuboid_tracks = cuboid_tracks[bidx]
                 context_xyz = (
                     pred_depth[bidx].detach()
                     / renderings[bidx].distance_to_depth_scale
                     * renderings[bidx].rays[..., 3:]
                     + renderings[bidx].rays[..., :3]
                 )
-                # Auxiliary association via car-ray-cuboid intersection on movable rays. This serves
-                # as a fallback when point-cuboid intersection misses (e.g. due to inaccurate depth).
-                # Rays with multiple intersections are deemed ambiguous (-1).
-                movable_mask = context_dynamic_mask[bidx]
-                aux_ray_intersection_result = dynamic_track.ray_intersection(
-                    renderings[bidx].rays[..., :3][movable_mask],
-                    renderings[bidx].rays[..., 3:][movable_mask],
-                    source_timestamps_us[bidx, ..., 0][movable_mask],
-                    max_intersections_per_ray=2,
+                tracks_idx = associate_points_with_cuboid_tracks(
+                    points=context_xyz,
+                    points_timestamps_us=source_timestamps_us[bidx],
+                    points_dynamic_mask=context_dynamic_mask[bidx].unsqueeze(-1),
+                    cuboid_tracks=batch_cuboid_tracks,
+                    cuboids_dims_padding=self.cuboids_dims_padding,
                 )
-                aux_movable_tracks_idx = aux_ray_intersection_result.intersections_tracks_idx[..., 0]
-                aux_movable_tracks_idx[aux_ray_intersection_result.intersections_cnt != 1] = -1
-                aux_tracks_idx = torch.full_like(movable_mask, -1, dtype=aux_movable_tracks_idx.dtype)
-                aux_tracks_idx[movable_mask] = aux_movable_tracks_idx
+                # Association runs against all tracks so overlapping static
+                # cuboids participate in nearest-box selection. Only dynamic
+                # assignments are retained for motion.
+                dynamic_track_mask = (batch_cuboid_tracks.tracks_flags & TrackFlags.DYNAMIC) != 0
+                if dynamic_track_mask.numel() > 0:
+                    is_dynamic_track = dynamic_track_mask[tracks_idx.clamp_min(0).to(torch.long)]
+                    tracks_idx.masked_fill_(~is_dynamic_track, -1)
 
                 dynamic_mask, (prev_world_points, next_world_points) = warp_points_with_cuboid_tracks(
                     points=context_xyz,
                     source_timestamps_us=source_timestamps_us[bidx],
                     target_timestamps_us_list=[prev_target_timestamps_us[bidx], next_target_timestamps_us[bidx]],
-                    dynamic_tracks=dynamic_track,
-                    aux_tracks_idx=aux_tracks_idx,
-                    cuboids_dims_padding=self.cuboids_dims_padding,
+                    cuboid_tracks=batch_cuboid_tracks,
+                    tracks_idx=tracks_idx,
                 )
                 context_prev_flow_list.append(prev_world_points - context_xyz)
                 context_next_flow_list.append(next_world_points - context_xyz)
-                context_dynamic_mask_list.append(dynamic_mask)
+                context_dynamic_mask_list.append(dynamic_mask.squeeze(-1))
 
             # Replace with ones from gt cuboids.
             context_prev_flow = torch.stack(context_prev_flow_list, dim=0)
@@ -494,6 +498,25 @@ class KelvinDPTDecoder(nn.Module):
                 KelvinDecoderReturn(
                     static_layer=static_layer,
                     dynamic_layers=[dynamic_layer],
+                    supervision_pack=KelvinSupervisionPack(
+                        context_depth=pred_depth[bidx],
+                        context_distance_confidence=pred_distance_confidence[bidx],
+                        context_rgb=context_rgb[bidx],
+                        context_world_normal=context_world_normal[bidx],
+                        context_semantic_logits=context_semantic_logits[bidx],
+                        motion_supervisions=[
+                            KelvinMotionSupervision(
+                                context_flow=context_prev_flow[bidx],
+                                source_timestamps_us=source_timestamps_us[bidx],
+                                target_timestamps_us=prev_target_timestamps_us[bidx],
+                            ),
+                            KelvinMotionSupervision(
+                                context_flow=context_next_flow[bidx],
+                                source_timestamps_us=source_timestamps_us[bidx],
+                                target_timestamps_us=next_target_timestamps_us[bidx],
+                            ),
+                        ],
+                    ),
                 )
             )
 

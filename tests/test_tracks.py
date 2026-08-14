@@ -240,9 +240,7 @@ def test_cuboid_tracks_cuboids_dims_passthrough(stubbed_tracks):
     assert torch.equal(ct.cuboids_dims, ctd.cuboids_dims)
 
 
-def test_cuboid_tracks_to_device_chains_data_to_device(
-    stubbed_tracks, monkeypatch
-):
+def test_cuboid_tracks_to_device_chains_data_to_device(stubbed_tracks, monkeypatch):
     mod, types_mod = stubbed_tracks
     td = _make_tracks_data(types_mod)
     ctd = _make_cuboid_tracks_data(types_mod)
@@ -384,41 +382,83 @@ def test_ray_intersection_calls_vren_and_packs_result(stubbed_tracks, monkeypatc
 # ---------------------------------------------------------------------------
 
 
-def test_point_intersection_interpolate_pose_reshapes_and_rebuilds_se3(
-    stubbed_tracks, monkeypatch
-):
+def test_point_intersection_interpolate_pose_reshapes_and_rebuilds_se3(stubbed_tracks, monkeypatch):
     mod, _ = stubbed_tracks
     ct = _make_cuboid_tracks_with_two(stubbed_tracks)
 
     captured = {}
 
-    def _fake(points, points_ts, packinfo, poses_data, ts_us, padded_dims, max_n):
+    def _fake(**kwargs):
+        points = kwargs["points"]
         captured["points_shape"] = points.shape
-        captured["padded_dims"] = padded_dims
+        captured["padded_dims"] = kwargs["cuboids_dims"]
+        captured["max_intersections"] = kwargs["max_intersections_per_point"]
+        captured["return_local_points"] = kwargs["return_local_points"]
         return (
-            torch.zeros(points.shape[0], 7),
-            torch.zeros(points.shape[0], dtype=torch.long),
+            torch.zeros(points.shape[0], dtype=torch.int32),
+            torch.zeros(points.shape[0], 1, 7),
+            torch.zeros(points.shape[0], 1, dtype=torch.int32),
         )
 
-    monkeypatch.setattr(
-        mod, "_point_cuboidtracks_intersection_interpolate_pose", _fake
-    )
+    monkeypatch.setattr(mod, "_point_cuboidtracks_intersection_interpolate_pose", _fake)
 
     # Multi-dim input: (2, 3, 3)
     points = torch.zeros(2, 3, 3)
     points_ts = torch.zeros(2, 3, dtype=torch.int64)
     padding = torch.zeros(3)
 
-    poses, idx = ct.point_intersection_interpolate_pose(points, points_ts, padding)
+    result = ct.point_intersection_interpolate_pose(points, points_ts, padding)
     # Reshape preserves leading dims.
-    assert idx.shape == (2, 3)
-    # Returned SE3 wraps a tensor of shape (2, 3, 7).
-    assert poses.data.shape == (2, 3, 7)
+    assert result.intersections_cnt.shape == (2, 3)
+    assert result.intersections_tracks_idx.shape == (2, 3, 1)
+    # Returned SE3 wraps a tensor of shape (2, 3, 1, 7).
+    assert result.interpolated_poses.data.shape == (2, 3, 1, 7)
+    assert result.intersections_points_local is None
     # SUT flattens points to (N, 3) before passing to vren.
     assert captured["points_shape"] == (6, 3)
     # SUT adds cuboids_dims + padding before calling vren.
     expected_padded = ct.cuboids_dims + padding
     assert torch.equal(captured["padded_dims"], expected_padded)
+    assert captured["max_intersections"] == 1
+    assert captured["return_local_points"] is False
+
+
+def test_point_intersection_backend_records_multiple_hits_and_local_points():
+    from instant_nurec.datasets.ray_intersections import (
+        point_cuboidtracks_intersection_interpolate_pose,
+    )
+
+    points = torch.tensor([[0.0, 0.0, 0.0]])
+    timestamps = torch.tensor([5], dtype=torch.int64)
+    packinfo = torch.tensor([[0, 2], [2, 2]], dtype=torch.int32)
+    poses = torch.tensor(
+        [
+            [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0],
+            [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0],
+            [0.25, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0],
+            [0.25, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0],
+        ]
+    )
+    track_timestamps = torch.tensor([0, 10, 0, 10], dtype=torch.int64)
+    dimensions = torch.full((2, 3), 2.0)
+
+    counts, interpolated_poses, tracks_idx, points_local = point_cuboidtracks_intersection_interpolate_pose(
+        points,
+        timestamps,
+        packinfo,
+        poses,
+        track_timestamps,
+        dimensions,
+        max_track_n_poses=2,
+        max_intersections_per_point=2,
+        return_local_points=True,
+    )
+
+    assert torch.equal(counts, torch.tensor([2], dtype=torch.int32))
+    assert torch.equal(tracks_idx, torch.tensor([[0, 1]], dtype=torch.int32))
+    assert interpolated_poses.shape == (1, 2, 7)
+    assert points_local is not None
+    assert torch.allclose(points_local, torch.tensor([[[0.0, 0.0, 0.0], [-0.25, 0.0, 0.0]]]))
 
 
 # ---------------------------------------------------------------------------
@@ -562,9 +602,7 @@ def test_factory_from_numpy_rejects_invalid_timestamp_dtype(stubbed_tracks):
 # ---------------------------------------------------------------------------
 
 
-def test_interpolate_tracks_poses_returns_se3_with_right_shape(
-    stubbed_tracks, monkeypatch
-):
+def test_interpolate_tracks_poses_returns_se3_with_right_shape(stubbed_tracks, monkeypatch):
     mod, _ = stubbed_tracks
     ct = _make_cuboid_tracks_with_two(stubbed_tracks)
 
@@ -574,9 +612,7 @@ def test_interpolate_tracks_poses_returns_se3_with_right_shape(
     def _fake_searchsorted(ts_us, packinfo, query_ts, tracks_idx):
         return torch.full((query_ts.shape[0],), 1, dtype=torch.long)
 
-    monkeypatch.setattr(
-        mod, "_packed_searchsorted_indexed_vals", _fake_searchsorted
-    )
+    monkeypatch.setattr(mod, "_packed_searchsorted_indexed_vals", _fake_searchsorted)
 
     timestamps_us = torch.tensor([5, 10], dtype=torch.int64)
     tracks_idx = torch.tensor([0, 0], dtype=torch.long)

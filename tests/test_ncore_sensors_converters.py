@@ -80,11 +80,17 @@ def stubbed_converters(monkeypatch):
     class FThetaCameraModel(CameraModel):
         pass
 
+    class OpenCVPinholeCameraModel(CameraModel):
+        pass
+
+    captured["OpenCVPinholeCameraModel"] = OpenCVPinholeCameraModel
+
     class BivariateWindshieldModel:
         pass
 
     sensors_ncore.CameraModel = CameraModel
     sensors_ncore.FThetaCameraModel = FThetaCameraModel
+    sensors_ncore.OpenCVPinholeCameraModel = OpenCVPinholeCameraModel
     sensors_ncore.BivariateWindshieldModel = BivariateWindshieldModel
     ncore_mod.data = data_mod
     ncore_mod.sensors = sensors_ncore
@@ -124,6 +130,13 @@ def stubbed_converters(monkeypatch):
         kt.FThetaProjection,
         "from_components",
         _wrap_from_components(kt.FThetaProjection, "FThetaProjection"),
+    )
+    monkeypatch.setattr(
+        kt.OpenCVPinholeProjection,
+        "from_components",
+        _wrap_from_components(
+            kt.OpenCVPinholeProjection, "OpenCVPinholeProjection"
+        ),
     )
     monkeypatch.setattr(
         kt.BivariateWindshieldDistortion,
@@ -191,9 +204,44 @@ def _make_ftheta(model_cls, ShutterType, ref_poly):
     return m
 
 
+def _make_opencv_pinhole(model_cls, ShutterType):
+    m = model_cls()
+    m.focal_length = torch.tensor([1000.0, 990.0])
+    m.principal_point = torch.tensor([640.0, 360.0])
+    m.radial_coeffs = torch.arange(6, dtype=torch.float32) * 1e-3
+    m.tangential_coeffs = torch.tensor([1e-4, -2e-4])
+    m.thin_prism_coeffs = torch.arange(4, dtype=torch.float32) * 1e-5
+    m.resolution = torch.tensor([1280, 720])
+    m.shutter_type = _shutter_obj(ShutterType.GLOBAL)
+    m.external_distortion = None
+    return m
+
+
 # ---------------------------------------------------------------------------
 # convert() — projection branches
 # ---------------------------------------------------------------------------
+
+
+def test_convert_opencv_pinhole_preserves_full_calibration(stubbed_converters):
+    mod, captured, _ftheta, _bw, ShutterType, *_ = stubbed_converters
+    OpenCVPinholeCameraModel = captured["OpenCVPinholeCameraModel"]
+    cam = _make_opencv_pinhole(OpenCVPinholeCameraModel, ShutterType)
+
+    result = mod.CameraModelConverter.convert(cam)
+
+    pinhole_call = next(
+        call for call in captured["calls"] if call[0] == "OpenCVPinholeProjection"
+    )
+    torch.testing.assert_close(pinhole_call[1]["focal_length"], cam.focal_length)
+    torch.testing.assert_close(pinhole_call[1]["principal_point"], cam.principal_point)
+    torch.testing.assert_close(pinhole_call[1]["radial_coeffs"], cam.radial_coeffs)
+    torch.testing.assert_close(
+        pinhole_call[1]["tangential_coeffs"], cam.tangential_coeffs
+    )
+    torch.testing.assert_close(
+        pinhole_call[1]["thin_prism_coeffs"], cam.thin_prism_coeffs
+    )
+    assert result.resolution == (1280, 720)
 
 
 def test_convert_ftheta_angle_to_pixeldist_uses_forward_polynomial(stubbed_converters):
@@ -233,8 +281,7 @@ def test_convert_ftheta_pixeldist_to_angle_uses_backward_polynomial(stubbed_conv
 
 
 def test_convert_unsupported_camera_type_raises(stubbed_converters):
-    """Any non-FTheta camera model triggers ``TypeError`` — OpenCVPinhole /
-    OpenCVFisheye are intentionally not supported on the input side."""
+    """Unknown camera models remain explicit unsupported cases."""
     (mod, *_) = stubbed_converters
 
     class _Mystery:

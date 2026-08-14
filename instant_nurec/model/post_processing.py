@@ -52,6 +52,7 @@ class PerCameraAffinePostProcessing(nn.Module):
             allow_legacy_state_dict=True,
         )
         self.affine_token = nn.Parameter(torch.randn(self.embed_dim) * self.init_token_scale)
+        self._detach_linear_grad = False
 
     def _transform_tokens_cross_attention(
         self, x: torch.Tensor, camera_idxs: torch.Tensor
@@ -102,12 +103,21 @@ class PerCameraAffinePostProcessing(nn.Module):
             affine_bias: (B, n_affine_tokens, 3)
         """
         affine: torch.Tensor = self.affine_linear(x.float())  # (B, n_affine_tokens, 3 * 4)
+        if self._detach_linear_grad:
+            affine = affine.detach()
         affine_matrix, affine_bias = affine.split([3 * 3, 3], dim=-1)
         affine_matrix = (
             rearrange(affine_matrix, "B n (a b) -> B n a b", a=3, b=3)
             + torch.eye(3, device=x.device, dtype=x.dtype)[None, None]
         )
         return affine_matrix, affine_bias
+
+    def zero_init(self) -> None:
+        self.affine_linear.weight.data.zero_()
+        self.affine_linear.bias.data.zero_()
+
+    def set_detach_linear_grad(self, detach: bool) -> None:
+        self._detach_linear_grad = detach
 
     def forward(self, *args, **kwargs):
         raise NotImplementedError("Please use transform_tokens or decode_affine instead.")

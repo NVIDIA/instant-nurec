@@ -1,0 +1,131 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+from __future__ import annotations
+
+import argparse
+import logging
+
+from pathlib import Path
+from typing import Sequence
+
+import yaml
+import torch
+
+from pytorch_lightning import Trainer, seed_everything
+from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.loggers import CSVLogger
+
+from instant_nurec.config_schema.train import KelvinTrainConfig
+from instant_nurec.training.data import KelvinTrainingDataModule
+from instant_nurec.training.system import KelvinTrainingSystem
+
+
+logger = logging.getLogger(__name__)
+
+
+def _is_distributed_run(config: KelvinTrainConfig) -> bool:
+    if config.system.num_nodes > 1:
+        return True
+    devices = config.system.devices
+    if isinstance(devices, int):
+        if devices == -1:
+            return torch.cuda.device_count() > 1
+        return devices > 1
+    if devices == "auto":
+        if config.system.accelerator == "cpu":
+            return False
+        return torch.cuda.device_count() > 1
+    if devices == "-1":
+        return torch.cuda.device_count() > 1
+    return len([item for item in devices.split(",") if item.strip()]) > 1
+
+
+def resolve_training_strategy(config: KelvinTrainConfig) -> str:
+    """Apply Bazel's find-unused requirement to distributed Kelvin runs."""
+
+    strategy = config.system.strategy
+    if _is_distributed_run(config) and strategy in {
+        "auto",
+        "ddp",
+        "ddp_find_unused_parameters_false",
+    }:
+        return "ddp_find_unused_parameters_true"
+    return strategy
+
+
+def load_training_config(path: Path) -> KelvinTrainConfig:
+    payload = yaml.safe_load(path.read_text())
+    if not isinstance(payload, dict):
+        raise ValueError(f"Training config must be a YAML mapping: {path}")
+    return KelvinTrainConfig.model_validate(payload)
+
+
+def run_training(config: KelvinTrainConfig) -> Path:
+    seed_everything(config.seed, workers=True)
+    effective_strategy = resolve_training_strategy(config)
+    if effective_strategy != config.system.strategy:
+        logger.info(
+            "Using %s instead of %s because Kelvin has conditionally unused parameters in distributed training.",
+            effective_strategy,
+            config.system.strategy,
+        )
+        config.system.strategy = effective_strategy
+    out_dir = Path(config.out_dir) / config.run_id
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "resolved.yaml").write_text(yaml.safe_dump(config.model_dump(mode="json"), sort_keys=False))
+    datamodule = KelvinTrainingDataModule(config)
+    checkpoint = ModelCheckpoint(
+        dirpath=out_dir / "checkpoints",
+        filename="epoch={epoch:02d}-step={step}",
+        save_last=True,
+        save_top_k=-1,
+        every_n_train_steps=config.system.save_every_n_train_steps,
+        every_n_epochs=1 if config.system.save_every_n_train_steps is None else None,
+        save_on_train_epoch_end=True,
+    )
+    trainer = Trainer(
+        default_root_dir=out_dir,
+        accelerator=config.system.accelerator,
+        devices=config.system.devices,
+        num_nodes=config.system.num_nodes,
+        strategy=config.system.strategy,
+        precision=config.system.precision,
+        max_epochs=config.system.max_epochs,
+        deterministic=config.system.deterministic,
+        logger=CSVLogger(save_dir=out_dir, name="logs"),
+        callbacks=[checkpoint],
+        log_every_n_steps=config.system.log_every_n_steps,
+        limit_train_batches=config.system.limit_train_batches,
+        limit_val_batches=config.system.limit_val_batches,
+        use_distributed_sampler=True,
+        # Required for the official epoch/item/global-seed dataset RNG.
+        reload_dataloaders_every_n_epochs=1,
+    )
+    system = KelvinTrainingSystem(config)
+    trainer.fit(
+        system,
+        datamodule=datamodule,
+        ckpt_path=str(config.resume_from_checkpoint) if config.resume_from_checkpoint else None,
+    )
+    return out_dir
+
+
+def make_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Train Kelvin models from NCore V4 data")
+    parser.add_argument("--config", type=Path, required=True)
+    parser.add_argument("--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"])
+    return parser
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    args = make_parser().parse_args(argv)
+    logging.basicConfig(level=getattr(logging, args.log_level))
+    config = load_training_config(args.config)
+    output = run_training(config)
+    logger.info("Training completed: %s", output)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

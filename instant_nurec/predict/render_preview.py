@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import inspect
+import os
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -30,9 +31,23 @@ class RenderPreviewStats:
     sky_contribution_mean: float
 
 
+def _configure_gsplat_build() -> None:
+    """Limit gsplat's fallback JIT build to Instant NuRec's render contract.
+
+    Upstream gsplat otherwise builds every renderer and a broad set of channel
+    specializations.  Instant NuRec uses only calibrated 3DGUT with RGB (three
+    channels) and RGB-d (four channels).  ``setdefault`` keeps explicit user or
+    deployment build choices authoritative.
+    """
+
+    os.environ.setdefault("BUILD_3DGUT", "1")
+    os.environ.setdefault("NUM_CHANNELS", "3,4")
+
+
 def require_gsplat():
     """Import and return gsplat's rasterizer before reconstruction starts."""
 
+    _configure_gsplat_build()
     try:
         from gsplat import rasterization
     except (ImportError, OSError) as exc:  # pragma: no cover - depends on optional install
@@ -102,15 +117,7 @@ def _looks_like_ftheta(parameters: object) -> bool:
 def _ftheta_gsplat_parameters(parameters: object) -> tuple[object, object, object]:
     """Convert NCore F-theta parameters to public gsplat's host types."""
 
-    external_distortion = getattr(parameters, "external_distortion_parameters", None)
-    if external_distortion is None:
-        external_distortion = getattr(parameters, "external_distortion", None)
-    if external_distortion is not None:
-        raise NotImplementedError(
-            "F-theta rendering with external windshield distortion is not "
-            "supported by this public calibrated-render path."
-        )
-
+    _configure_gsplat_build()
     try:
         from gsplat.rendering import (
             FThetaCameraDistortionParameters,
@@ -152,6 +159,85 @@ def _ftheta_gsplat_parameters(parameters: object) -> tuple[object, object, objec
     return ftheta_coeffs, rolling_shutter, RollingShutterType.GLOBAL
 
 
+def _external_distortion_gsplat_parameters(parameters: object) -> object | None:
+    """Convert NCore's bivariate windshield model to the gsplat host object."""
+
+    external = getattr(parameters, "external_distortion_parameters", None)
+    if external is None:
+        external = getattr(parameters, "external_distortion", None)
+    if external is None:
+        return None
+    required = (
+        "reference_poly",
+        "horizontal_poly",
+        "vertical_poly",
+        "horizontal_poly_inverse",
+        "vertical_poly_inverse",
+    )
+    if not all(hasattr(external, name) for name in required):
+        raise TypeError(f"Unsupported external distortion model: {type(external).__name__}")
+    _configure_gsplat_build()
+    try:
+        from gsplat.rendering import (
+            BivariateWindshieldModelParameters,
+            ExternalDistortionReferencePolynomial,
+        )
+    except (ImportError, OSError) as exc:  # pragma: no cover - optional install
+        raise RuntimeError("The pinned gsplat build is required for windshield distortion") from exc
+
+    reference_name = getattr(
+        external.reference_poly,
+        "name",
+        str(external.reference_poly).rsplit(".", maxsplit=1)[-1],
+    )
+    try:
+        reference_poly = ExternalDistortionReferencePolynomial[reference_name]
+    except KeyError as exc:
+        raise ValueError(f"Unsupported external-distortion reference polynomial: {external.reference_poly!r}") from exc
+
+    result = BivariateWindshieldModelParameters()
+    result.reference_poly = reference_poly
+    for name in required[1:]:
+        values = torch.as_tensor(getattr(external, name), dtype=torch.float32, device="cpu")
+        if values.numel() > BivariateWindshieldModelParameters.MAX_COEFFS:
+            raise ValueError(
+                f"{name} has {values.numel()} coefficients; gsplat supports at most "
+                f"{BivariateWindshieldModelParameters.MAX_COEFFS}"
+            )
+        setattr(result, name, values)
+    return result
+
+
+def _kelvin_ut_parameters() -> object:
+    """Return the exact 3DGUT unscented-transform profile used by Kelvin."""
+
+    _configure_gsplat_build()
+    try:
+        from gsplat.rendering import UnscentedTransformParameters
+    except (ImportError, OSError) as exc:  # pragma: no cover - optional install
+        raise RuntimeError("The pinned gsplat build is required for calibrated rendering") from exc
+    return UnscentedTransformParameters(
+        alpha=1.0,
+        beta=2.0,
+        kappa=0.0,
+        in_image_margin_factor=0.1,
+        require_all_sigma_points_valid=True,
+    )
+
+
+def _kelvin_renderer_config() -> object:
+    """Select the PA recipe's parallel-batch eval3d rasterizer."""
+
+    _configure_gsplat_build()
+    try:
+        from gsplat.rendering import RendererConfig_ParallelBatch
+    except (ImportError, OSError) as exc:  # pragma: no cover - optional install
+        raise RuntimeError(
+            "The pinned gsplat build with ParallelBatch support is required for Kelvin rendering"
+        ) from exc
+    return RendererConfig_ParallelBatch()
+
+
 @torch.inference_mode()
 def render_composited_frame(
     primitive: KelvinInstantNuRecPrimitive,
@@ -187,6 +273,7 @@ def render_composited_frame(
 
     rasterization = require_gsplat()
     ftheta_coeffs, rolling_shutter, global_shutter = _ftheta_gsplat_parameters(sensor_parameters)
+    external_distortion_coeffs = _external_distortion_gsplat_parameters(sensor_parameters)
     focal = float(sensor_parameters.angle_to_pixeldist_poly[1])
     cx, cy = (float(value) for value in sensor_parameters.principal_point)
     intrinsics = torch.tensor(
@@ -223,10 +310,13 @@ def render_composited_frame(
         camera_model="ftheta",
         packed=False,
         with_ut=True,
+        ut_params=_kelvin_ut_parameters(),
+        renderer_config=_kelvin_renderer_config(),
         with_eval3d=True,
         global_z_order=False,
         rays=world_rays.unsqueeze(0),
         ftheta_coeffs=ftheta_coeffs,
+        external_distortion_coeffs=external_distortion_coeffs,
         rolling_shutter=rolling_shutter,
         viewmats_rs=(world_to_camera_end.unsqueeze(0) if rolling_shutter != global_shutter else None),
     )

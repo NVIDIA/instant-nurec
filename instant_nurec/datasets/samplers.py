@@ -71,7 +71,9 @@ class AdaptiveSequentialFrameBatchSampler:
         sample_idx: int,
         camera_frame_timestamps_us: dict[str, np.ndarray],
         time_intervals: list[HalfClosedInterval],
+        rng: np.random.Generator | None = None,
     ) -> SampledSensorFrameIdxs:
+        del rng
         assert len(camera_frame_timestamps_us) > 0, "No camera timestamps is provided to the frame batch sampler"
         assert 0 <= sample_idx < self.n_samples_per_sequence, "Sample index out of bounds"
         assert len(time_intervals) > 0, "No time intervals to sample from"
@@ -122,3 +124,51 @@ class AdaptiveSequentialFrameBatchSampler:
 
         return sampled_sensor_frame_idxs
 
+
+class UniformFrameBatchSampler:
+    """Official Kelvin sampler: random start followed by a fixed time gap."""
+
+    def __init__(self, config: AdaptiveSequentialFrameBatchSamplerConfig, n_frames_per_sample: int):
+        self.n_frames_per_sample = n_frames_per_sample
+        self.n_samples_per_sequence = config.n_samples_per_sequence
+        self.frame_gap_timestamp_us = config.frame_gap_timestamp_us
+
+    def sample_frame_batch(
+        self,
+        sample_idx: int,
+        camera_frame_timestamps_us: dict[str, np.ndarray],
+        time_intervals: list[HalfClosedInterval],
+        rng: np.random.Generator | None = None,
+    ) -> SampledSensorFrameIdxs:
+        assert camera_frame_timestamps_us, "No camera timestamps provided to frame batch sampler"
+        assert 0 <= sample_idx < self.n_samples_per_sequence, "Sample index out of bounds"
+        if rng is None:
+            rng = np.random.default_rng()
+
+        total_gap = self.frame_gap_timestamp_us * (self.n_frames_per_sample - 1)
+        valid_intervals = [
+            (interval.start, interval.end - total_gap)
+            for interval in time_intervals
+            if interval.end - interval.start >= total_gap
+        ]
+        if not valid_intervals:
+            longest = max((interval.end - interval.start for interval in time_intervals), default=0)
+            raise ValueError(
+                f"Uniform sampling needs a contiguous span of {total_gap} us, but the longest is {longest} us"
+            )
+        counts = [end - start + 1 for start, end in valid_intervals]
+        draw = int(rng.integers(sum(counts)))
+        first_timestamp = 0
+        for (start, _), count in zip(valid_intervals, counts):
+            if draw < count:
+                first_timestamp = start + draw
+                break
+            draw -= count
+
+        reference_timestamps = [
+            first_timestamp + index * self.frame_gap_timestamp_us for index in range(self.n_frames_per_sample)
+        ]
+        return {
+            camera_id: [get_closest_frame_index(timestamps, timestamp) for timestamp in reference_timestamps]
+            for camera_id, timestamps in camera_frame_timestamps_us.items()
+        }

@@ -187,6 +187,13 @@ class CuboidTracks(Tracks):
 
     cuboidtracks_data: CuboidTracksData
 
+    @dataclass(kw_only=True, slots=True)
+    class PointIntersectionResult:
+        intersections_cnt: torch.Tensor
+        interpolated_poses: lt.SE3
+        intersections_tracks_idx: torch.Tensor
+        intersections_points_local: torch.Tensor | None
+
     @property
     def cuboids_dims(self) -> torch.Tensor:
         return self.cuboidtracks_data.cuboids_dims
@@ -352,40 +359,59 @@ class CuboidTracks(Tracks):
         self,
         points: torch.Tensor,
         points_timestamps_us: torch.Tensor,
-        cuboids_dims_padding: torch.Tensor,
-    ) -> tuple[lt.SE3, torch.Tensor]:
+        cuboids_dims_padding: torch.Tensor | None = None,
+        max_intersections_per_point: int = 1,
+        with_local_points: bool = False,
+    ) -> CuboidTracks.PointIntersectionResult:
         """
-        For each point, returns the interpolated pose of the tracks that it is inside, as well as the track idx.
+        Return the cuboid-track intersections for each point.
 
         Inputs:
         - points: 3D points to check for inside check, [..., 3] [float]
         - points_timestamps_us: per point timestamp, [...] [int64]
-        - cuboids_dims_padding: 3d padding to add to cuboids, broadcastable to N_tracks x 3 [float]
+        - cuboids_dims_padding: optional 3d padding to add to cuboids,
+          broadcastable to N_tracks x 3 [float]
+        - max_intersections_per_point: maximum number of intersections stored per point
+        - with_local_points: whether to return point coordinates in each intersected cuboid frame
 
         Returns:
-        - interpolated_poses: for each point, the pose of the cuboid it is inside, [...] [SE3]
-        - interpolated_tracks_idx: for each point, the index of the intersected track (-1 if no intersection), [...] [int]
+        - PointIntersectionResult with leading dimensions matching ``points``
         """
 
         data_shape = points.shape[:-1]
         points = points.reshape(-1, 3).contiguous()
         points_timestamps_us = points_timestamps_us.reshape(-1).contiguous()
 
-        interpolated_tracks_pose_data, interpolated_tracks_idx = (
-            _point_cuboidtracks_intersection_interpolate_pose(
-                points,
-                points_timestamps_us,
-                self.tracks_packinfo,
-                self.tracks_poses.data,
-                self.tracks_timestamps_us,
-                self.cuboids_dims + cuboids_dims_padding,
-                self.max_track_n_poses,
-            )
+        cuboids_dims = self.cuboids_dims
+        if cuboids_dims_padding is not None:
+            cuboids_dims = cuboids_dims + cuboids_dims_padding
+
+        outputs = _point_cuboidtracks_intersection_interpolate_pose(
+            points=points,
+            points_timestamps_us=points_timestamps_us,
+            tracks_packinfo=self.tracks_packinfo,
+            tracks_poses=self.tracks_poses.data,
+            tracks_timestamps_us=self.tracks_timestamps_us,
+            cuboids_dims=cuboids_dims,
+            max_track_n_poses=self.max_track_n_poses,
+            max_intersections_per_point=max_intersections_per_point,
+            return_local_points=with_local_points,
         )
+        intersections_cnt = outputs[0].reshape(data_shape)
+        interpolated_tracks_pose_data = outputs[1]
+        intersections_tracks_idx = outputs[2].reshape(data_shape + (max_intersections_per_point,))
         interpolated_poses = lt.SE3(
-            interpolated_tracks_pose_data.reshape(data_shape + (interpolated_tracks_pose_data.shape[-1],))
+            interpolated_tracks_pose_data.reshape(data_shape + interpolated_tracks_pose_data.shape[-2:])
         )
-        return interpolated_poses, interpolated_tracks_idx.reshape(data_shape)
+        intersections_points_local = (
+            outputs[3].reshape(data_shape + (max_intersections_per_point, 3)) if with_local_points else None
+        )
+        return CuboidTracks.PointIntersectionResult(
+            intersections_cnt=intersections_cnt,
+            interpolated_poses=interpolated_poses,
+            intersections_tracks_idx=intersections_tracks_idx,
+            intersections_points_local=intersections_points_local,
+        )
 
     def interpolate_tracks_poses(
         self,
@@ -430,5 +456,3 @@ class CuboidTracks(Tracks):
         t_alpha = t_start + alpha[:, None] * (t_end - t_start)
 
         return lt.SE3.InitFromVec(torch.cat([t_alpha[:, :3], R_alpha.vec()], dim=1))
-
-

@@ -1,0 +1,116 @@
+# Kelvin PA-front phase 1, aligned to the audited Bazel context contract.
+# Replace every /absolute/path placeholder before launch.
+seed: 38
+out_dir: /absolute/path/to/kelvin-runs
+phase: context
+bazel_reference: kelvin-pa-front-2026-08-13
+
+dataset:
+  train:
+    mixture:
+      ncore_source_a:
+        sample_ratio: 0.1
+        config: &train_ncore
+          ncore_json_list_path: /absolute/path/to/manifests/train-source-a.lst
+          open_consolidated: true
+          camera_max_fov_deg: 190.0
+          n_camera_mask_dilation_iterations: 10
+          camera_subsampler: {frame_width: 784, frame_height: 448}
+          context_camera_ids: [camera_front_wide_120fov]
+          supervision_camera_ids: [camera_front_wide_120fov]
+          frame_batch_sampler:
+            name: uniform
+            n_frames_per_sample: 18
+            n_samples_per_sequence: 10
+            frame_gap_timestamp_us: 500000
+          supervision_frame_batch:
+            n_frames_per_camera: 6
+            prepend_timestamps_us: 100000
+            append_timestamps_us: 100000
+            sample_strategy: random
+            camera_subsampler: {frame_width: 1296, frame_height: 720}
+            include_context_frames: false
+          aux_data: {enabled: true, enabled_context: true, semantic_segmentation: true, depth: true, egomask: true}
+      ncore_source_b_wide:
+        sample_ratio: 1.0
+        config:
+          <<: *train_ncore
+          ncore_json_list_path: /absolute/path/to/manifests/train-source-b.lst
+          supervision_camera_ids:
+            - camera_front_wide_120fov
+            - ncore_path: nurec/all.zarr.itar
+              camera_id: camera_front_wide_120fov
+              unique_sensor_idx: 0
+              sample_ratio: 0.3
+  val:
+    mixture:
+      ncore_source_a:
+        sample_ratio: 0.1
+        config: &val_ncore
+          <<: *train_ncore
+          ncore_json_list_path: /absolute/path/to/manifests/val-source-a.lst
+      ncore_source_b_wide:
+        sample_ratio: 0.1
+        config:
+          <<: *val_ncore
+          ncore_json_list_path: /absolute/path/to/manifests/val-source-b.lst
+          supervision_camera_ids:
+            - camera_front_wide_120fov
+            - ncore_path: nurec/all.zarr.itar
+              camera_id: camera_front_wide_120fov
+              unique_sensor_idx: 0
+              sample_ratio: 0.3
+
+model:
+  freeze_encoder: false
+  # Production phase 1 must initialize from the official DAv3 base weights.
+  # Leave empty only for a mechanics smoke test from random initialization.
+  init_weights_paths:
+    dav3: /absolute/path/to/dav3/base.safetensors
+  post_processing:
+    enabled: true
+    optimization_start_global_step: 1000
+  decoder:
+    name: dpt-decoder
+
+system:
+  max_epochs: 40
+  train_batch_size: 2
+  val_batch_size: 2
+  train_num_workers: 6
+  val_num_workers: 4
+  precision: bf16-mixed
+  accelerator: gpu
+  devices: auto
+  num_nodes: 1
+  strategy: ddp_find_unused_parameters_true
+  enable_render_global_step: 1000000
+  log_every_n_steps: 10
+  optimizer:
+    lr: 0.0001
+    eps: 1.0e-15
+    betas: [0.9, 0.99]
+    weight_decay: 0.0
+    implementation: auto
+  scheduler:
+    warmup_factor: 0.01
+    warmup_steps: 100
+    cosine_factor: 0.0333
+    cosine_factor_progress: 1.0
+
+loss:
+  primitive_sky_cubemap: 1.0
+  primitive_rgb: 0.1
+  primitive_distance: 1.0
+  primitive_distance_gradient: 1.0
+  primitive_semantics: 0.01
+  primitive_normal: 0.2
+  primitive_velocity: 1.0
+  rgb: 0.0
+  lpips: 0.0
+  distance: 0.0
+  background: 0.0
+  distance_min_m: 0.1
+  primitive_distance_max_m: 300.0
+  primitive_distance_gradient_max_m: 50.0
+  render_distance_max_m: 50.0

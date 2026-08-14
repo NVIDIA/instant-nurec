@@ -46,6 +46,13 @@ from instant_nurec.config_schema.models import (
 from instant_nurec.config_schema.predict import PredictConfig, PrimitiveMergeConfig
 
 
+def test_default_predict_dataset_keeps_auxiliary_labels_disabled():
+    config = NCoreInstantNuRecDatasetConfig(ncore_json_paths=["/tmp/example.json"])
+
+    assert config.aux_data.enabled is False
+    assert config.aux_data.enabled_context is False
+
+
 # ---------------------------------------------------------------------------
 # PrimitiveMergeConfig
 # ---------------------------------------------------------------------------

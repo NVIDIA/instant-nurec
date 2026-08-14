@@ -111,10 +111,12 @@ def test_load_full_camera_rig_keeps_all_exposures_without_images_or_rays(tmp_pat
         seen["camera_ids"] = camera_ids
         return SimpleNamespace(
             camera_sensors={camera_ids[0]: sensor},
-            T_rig_worlds_with_timestamps_us=(
-                np.tile(np.eye(4, dtype=np.float64), (3, 1, 1)),
-                np.array([0, 100_000, 200_000], dtype=np.int64),
-            ),
+            T_rig_worlds_with_timestamps_us={
+                "main": (
+                    np.tile(np.eye(4, dtype=np.float64), (3, 1, 1)),
+                    np.array([0, 100_000, 200_000], dtype=np.int64),
+                )
+            },
         )
 
     class _FakeSubsampler:
@@ -178,10 +180,12 @@ def test_load_full_camera_rig_rejects_mismatched_exposure_counts(tmp_path, monke
         del source
         return SimpleNamespace(
             camera_sensors={camera_ids[0]: sensor},
-            T_rig_worlds_with_timestamps_us=(
-                np.tile(np.eye(4, dtype=np.float64), (3, 1, 1)),
-                np.array([0, 100_000, 200_000], dtype=np.int64),
-            ),
+            T_rig_worlds_with_timestamps_us={
+                "main": (
+                    np.tile(np.eye(4, dtype=np.float64), (3, 1, 1)),
+                    np.array([0, 100_000, 200_000], dtype=np.int64),
+                )
+            },
         )
 
     monkeypatch.setattr(dataset, "_get_loaders_and_sensors", fake_load)
@@ -204,10 +208,12 @@ def test_load_full_camera_rig_pads_pose_coverage_at_source_boundaries(tmp_path, 
         del source
         return SimpleNamespace(
             camera_sensors={camera_ids[0]: sensor},
-            T_rig_worlds_with_timestamps_us=(
-                np.tile(np.eye(4, dtype=np.float64), (3, 1, 1)),
-                np.array([0, 100_000, 200_000], dtype=np.int64),
-            ),
+            T_rig_worlds_with_timestamps_us={
+                "main": (
+                    np.tile(np.eye(4, dtype=np.float64), (3, 1, 1)),
+                    np.array([0, 100_000, 200_000], dtype=np.int64),
+                )
+            },
         )
 
     monkeypatch.setattr(dataset, "_get_loaders_and_sensors", fake_load)
@@ -241,10 +247,12 @@ def test_load_full_camera_rig_rejects_truncated_reconstruction(tmp_path, monkeyp
         del source
         return SimpleNamespace(
             camera_sensors={camera_ids[0]: sensor},
-            T_rig_worlds_with_timestamps_us=(
-                np.tile(np.eye(4, dtype=np.float64), (2, 1, 1)),
-                np.array([0, 120_030_000], dtype=np.int64),
-            ),
+            T_rig_worlds_with_timestamps_us={
+                "main": (
+                    np.tile(np.eye(4, dtype=np.float64), (2, 1, 1)),
+                    np.array([0, 120_030_000], dtype=np.int64),
+                )
+            },
         )
 
     monkeypatch.setattr(dataset, "_get_loaders_and_sensors", fake_load)

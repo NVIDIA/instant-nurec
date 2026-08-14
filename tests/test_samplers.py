@@ -299,3 +299,66 @@ def test_sample_frame_batch_multi_interval_uses_min_start_max_end():
     )
     assert "a" in out
     assert len(out["a"]) == 2
+
+
+# ---------------------------------------------------------------------------
+# UniformFrameBatchSampler (official Kelvin training sampler)
+# ---------------------------------------------------------------------------
+
+
+def _make_uniform_sampler(*, n_frames_per_sample: int = 3, **cfg_overrides):
+    from instant_nurec.config_schema.dataset import AdaptiveSequentialFrameBatchSamplerConfig
+    from instant_nurec.datasets.samplers import UniformFrameBatchSampler
+
+    base = {
+        "name": "uniform",
+        "n_samples_per_sequence": 8,
+        "frame_gap_timestamp_us": 10,
+    }
+    base.update(cfg_overrides)
+    config = AdaptiveSequentialFrameBatchSamplerConfig(**base)
+    return UniformFrameBatchSampler(config, n_frames_per_sample=n_frames_per_sample)
+
+
+def test_uniform_sampler_matches_bazel_random_start_and_fixed_gap():
+    from instant_nurec.utils.types import HalfClosedInterval
+
+    sampler = _make_uniform_sampler()
+    result = sampler.sample_frame_batch(
+        sample_idx=0,
+        camera_frame_timestamps_us={"camera": np.arange(101, dtype=np.int64)},
+        time_intervals=[HalfClosedInterval(0, 100)],
+        rng=np.random.default_rng(42),
+    )
+
+    assert result == {"camera": [7, 17, 27]}
+
+
+def test_uniform_sampler_samples_valid_intervals_by_integer_cardinality():
+    from instant_nurec.utils.types import HalfClosedInterval
+
+    sampler = _make_uniform_sampler(n_frames_per_sample=2, frame_gap_timestamp_us=5)
+    timestamps = np.concatenate([np.arange(0, 11), np.arange(100, 121)])
+    result = sampler.sample_frame_batch(
+        sample_idx=0,
+        camera_frame_timestamps_us={"camera": timestamps},
+        time_intervals=[HalfClosedInterval(0, 10), HalfClosedInterval(100, 120)],
+        rng=np.random.default_rng(0),
+    )
+
+    first, second = (int(timestamps[index]) for index in result["camera"])
+    assert second - first == 5
+    assert (0 <= first <= 5) or (100 <= first <= 115)
+
+
+def test_uniform_sampler_rejects_context_span_that_is_too_short():
+    from instant_nurec.utils.types import HalfClosedInterval
+
+    sampler = _make_uniform_sampler(n_frames_per_sample=3, frame_gap_timestamp_us=10)
+    with pytest.raises(ValueError, match="contiguous span of 20 us"):
+        sampler.sample_frame_batch(
+            sample_idx=0,
+            camera_frame_timestamps_us={"camera": np.arange(10)},
+            time_intervals=[HalfClosedInterval(0, 9)],
+            rng=np.random.default_rng(0),
+        )

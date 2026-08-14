@@ -16,9 +16,9 @@
 """Dataclasses + enums consumed by the in-tree torch ray-gen
 (``ray_gen.py``).
 
-FTheta-only by design. OpenCVPinhole and OpenCVFisheye distortion
-models are intentionally not supported on the input side; the other
-distortion families are explicitly dropped.
+The public torch implementation supports the F-Theta and OpenCV pinhole
+camera models used by Kelvin's ClipGT and Waymo training inputs. Other
+projection families remain explicit unsupported cases.
 """
 
 from __future__ import annotations
@@ -265,6 +265,98 @@ class FThetaProjection(CameraProjection):
 
 
 @dataclass
+class OpenCVPinholeProjection(CameraProjection):
+    """OpenCV pinhole projection with NRE-compatible packed parameters.
+
+    ``intrinsics`` stores ``[fx, fy, cx, cy, k1..k6, p1, p2, s1..s4,
+    width, height]``. Packing the fields matches the official sensor-kernel
+    representation and keeps all floating-point parameters on one device.
+    """
+
+    intrinsics: torch.Tensor  # (18,)
+
+    @classmethod
+    def from_components(
+        cls,
+        focal_length: torch.Tensor,
+        principal_point: torch.Tensor,
+        radial_coeffs: torch.Tensor,
+        tangential_coeffs: torch.Tensor,
+        thin_prism_coeffs: torch.Tensor,
+        resolution: torch.Tensor,
+    ) -> "OpenCVPinholeProjection":
+        intrinsics = torch.cat(
+            [
+                focal_length,
+                principal_point,
+                radial_coeffs,
+                tangential_coeffs,
+                thin_prism_coeffs,
+                resolution.to(dtype=torch.float32),
+            ]
+        )
+        if intrinsics.shape != (18,):
+            raise ValueError(
+                f"OpenCV pinhole intrinsics must have shape (18,), got {tuple(intrinsics.shape)}"
+            )
+        return cls(intrinsics=intrinsics)
+
+    @property
+    def focal_length(self) -> torch.Tensor:
+        return self.intrinsics[0:2]
+
+    @property
+    def principal_point(self) -> torch.Tensor:
+        return self.intrinsics[2:4]
+
+    @property
+    def radial_coeffs(self) -> torch.Tensor:
+        return self.intrinsics[4:10]
+
+    @property
+    def tangential_coeffs(self) -> torch.Tensor:
+        return self.intrinsics[10:12]
+
+    @property
+    def thin_prism_coeffs(self) -> torch.Tensor:
+        return self.intrinsics[12:16]
+
+    @property
+    def resolution(self) -> torch.Tensor:
+        return self.intrinsics[16:18]
+
+    def transform(
+        self,
+        image_domain_scale: float | tuple[float, float],
+        image_domain_offset: tuple[float, float] = (0.0, 0.0),
+        new_resolution: tuple[int, int] | None = None,
+    ) -> "OpenCVPinholeProjection":
+        """Return calibration transformed by image scaling and cropping."""
+        device = self.intrinsics.device
+        dtype = self.intrinsics.dtype
+        if isinstance(image_domain_scale, tuple):
+            scale = torch.tensor(image_domain_scale, device=device, dtype=dtype)
+        else:
+            scale = torch.tensor(
+                [image_domain_scale, image_domain_scale], device=device, dtype=dtype
+            )
+        offset = torch.tensor(image_domain_offset, device=device, dtype=dtype)
+        resolution = (
+            torch.tensor(new_resolution, device=device, dtype=dtype)
+            if new_resolution is not None
+            else self.resolution * scale
+        )
+        return OpenCVPinholeProjection.from_components(
+            focal_length=self.focal_length * scale,
+            principal_point=self.principal_point * scale - offset,
+            radial_coeffs=self.radial_coeffs.clone(),
+            tangential_coeffs=self.tangential_coeffs.clone(),
+            thin_prism_coeffs=self.thin_prism_coeffs.clone(),
+            resolution=resolution,
+        )
+
+
+@dataclass
 class Pose:
     """Static SE(3) pose."""
 
@@ -288,6 +380,7 @@ __all__ = [
     "FThetaPolynomialType",
     "FThetaProjection",
     "NoExternalDistortion",
+    "OpenCVPinholeProjection",
     "Pose",
     "ReferencePolynomial",
     "ShutterType",

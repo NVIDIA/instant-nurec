@@ -20,6 +20,8 @@ from typing import TYPE_CHECKING
 
 import torch
 
+from instant_nurec.utils.misc import unpack_optional
+
 
 if TYPE_CHECKING:
     from instant_nurec.datasets.tracks import CuboidTracks
@@ -95,78 +97,155 @@ class TimeRemapping:
         return (timestamps_us - self.start_timestamp_us) / span
 
 
+def associate_points_with_cuboid_tracks(
+    points: torch.Tensor,
+    points_timestamps_us: torch.Tensor,
+    points_dynamic_mask: torch.Tensor | None,
+    cuboid_tracks: CuboidTracks,
+    cuboids_dims_padding: torch.Tensor | None,
+    second_pass_cuboids_dims_padding_scale: float = 6.0,
+    second_pass_chunk_size: int = 65536,
+) -> torch.Tensor:
+    """Associate world points with cuboid tracks at their timestamps.
+
+    The first pass uses the configured padding. Movable points that miss that
+    pass are checked against wider cuboids and assigned to the hit nearest its
+    original, unpadded bounding box.
+
+    All per-point scalar tensors use a trailing singleton dimension.
+    """
+    data_shape = points.shape[:-1]
+    expected_scalar_shape = data_shape + (1,)
+    assert points_timestamps_us.shape == expected_scalar_shape
+    if points_dynamic_mask is not None:
+        assert points_dynamic_mask.shape == expected_scalar_shape
+
+    if cuboid_tracks.n_tracks == 0:
+        return torch.full(
+            expected_scalar_shape,
+            -1,
+            device=points.device,
+            dtype=cuboid_tracks.tracks_packinfo.dtype,
+        )
+
+    points_ts = points_timestamps_us.squeeze(-1)
+    first_pass = cuboid_tracks.point_intersection_interpolate_pose(
+        points,
+        points_ts,
+        cuboids_dims_padding,
+        max_intersections_per_point=1,
+    )
+    tracks_idx = first_pass.intersections_tracks_idx
+
+    if points_dynamic_mask is None:
+        return tracks_idx
+
+    second_pass_mask = (points_dynamic_mask & (tracks_idx == -1)).squeeze(-1)
+    n_second_pass = int(second_pass_mask.sum().item())
+    if n_second_pass == 0:
+        return tracks_idx
+
+    if cuboids_dims_padding is None:
+        wide_cuboids_dims_padding = torch.full(
+            (3,),
+            second_pass_cuboids_dims_padding_scale,
+            device=points.device,
+            dtype=points.dtype,
+        )
+    else:
+        wide_cuboids_dims_padding = (
+            cuboids_dims_padding.to(device=points.device, dtype=points.dtype) * second_pass_cuboids_dims_padding_scale
+        )
+
+    cuboids_dims = cuboid_tracks.cuboids_dims.to(device=points.device, dtype=points.dtype)
+    second_pass_points = points[second_pass_mask]
+    second_pass_timestamps_us = points_ts[second_pass_mask]
+    best_tracks_idx = torch.full((n_second_pass, 1), -1, device=points.device, dtype=tracks_idx.dtype)
+    has_intersection = torch.zeros((n_second_pass, 1), device=points.device, dtype=torch.bool)
+    chunk_size = max(1, second_pass_chunk_size)
+    for start in range(0, n_second_pass, chunk_size):
+        end = min(start + chunk_size, n_second_pass)
+        second_pass = cuboid_tracks.point_intersection_interpolate_pose(
+            points=second_pass_points[start:end],
+            points_timestamps_us=second_pass_timestamps_us[start:end],
+            cuboids_dims_padding=wide_cuboids_dims_padding,
+            max_intersections_per_point=64,
+            with_local_points=True,
+        )
+        wide_tracks_idx = second_pass.intersections_tracks_idx
+        wide_points_local = unpack_optional(second_pass.intersections_points_local)
+        wide_valid_mask = wide_tracks_idx != -1
+        if not torch.any(wide_valid_mask):
+            continue
+
+        matched_dims = cuboids_dims[wide_tracks_idx.clamp_min(0).to(torch.long)]
+        distance_to_bbox = torch.linalg.norm(
+            (wide_points_local.abs() - matched_dims * 0.5).clamp_min(0.0),
+            dim=-1,
+        )
+        distance_to_bbox = torch.where(
+            wide_valid_mask,
+            distance_to_bbox,
+            torch.full_like(distance_to_bbox, torch.inf),
+        )
+        best_hit_idx = torch.argmin(distance_to_bbox, dim=-1, keepdim=True)
+        best_tracks_idx[start:end] = torch.gather(wide_tracks_idx, dim=-1, index=best_hit_idx)
+        has_intersection[start:end] = wide_valid_mask.any(dim=-1, keepdim=True)
+
+    tracks_idx[second_pass_mask] = torch.where(
+        has_intersection,
+        best_tracks_idx,
+        tracks_idx[second_pass_mask],
+    )
+    return tracks_idx
+
+
 def warp_points_with_cuboid_tracks(
     points: torch.Tensor,
     source_timestamps_us: torch.Tensor,
     target_timestamps_us_list: list[torch.Tensor],
-    dynamic_tracks: CuboidTracks,
-    aux_tracks_idx: torch.Tensor,
-    cuboids_dims_padding: torch.Tensor,
+    cuboid_tracks: CuboidTracks,
+    tracks_idx: torch.Tensor,
 ) -> tuple[torch.Tensor, list[torch.Tensor]]:
-    """
-    Associate each point with a dynamic cuboid track at its source timestamp, then warp
-    it to each given target timestamp using that track's interpolated pose.
+    """Warp track-associated points to each target timestamp.
 
-    Association uses point-cuboid intersection. For points that fail this association,
-    `aux_tracks_idx` (e.g. from a ray-cuboid intersection on the originating ray) is used
-    as a fallback.
-
-    Args:
-        points: [..., 3] world points at the source timestamps.
-        source_timestamps_us: [...] (or [..., 1]) source timestamps per point.
-        target_timestamps_us_list: list of target timestamp tensors, each [...] (or [..., 1]).
-        dynamic_tracks: dynamic CuboidTracks to associate against.
-        aux_tracks_idx: [...] fallback track ids for points whose point-cuboid
-            intersection returns -1; pass -1 for "no fallback" entries.
-        cuboids_dims_padding: 3D padding broadcastable to N_tracks x 3.
-
-    Returns:
-        - dynamic_mask: [...] bool, True for points associated with a track.
-        - warped_points_list: per target, a [..., 3] tensor where associated points are
-          warped to the corresponding target timestamp and unassociated points are unchanged.
+    All per-point scalar tensors use a trailing singleton dimension. Track
+    indices are expected to come from :func:`associate_points_with_cuboid_tracks`.
     """
     data_shape = points.shape[:-1]
+    expected_scalar_shape = data_shape + (1,)
+    assert source_timestamps_us.shape == expected_scalar_shape
+    for target_timestamps_us in target_timestamps_us_list:
+        assert target_timestamps_us.shape == expected_scalar_shape
+    assert tracks_idx.shape == expected_scalar_shape
 
-    def _squeeze_trailing_one(t: torch.Tensor) -> torch.Tensor:
-        # Accept either [...] or [..., 1] timestamp shapes for caller convenience.
-        if t.ndim == len(data_shape) + 1 and t.shape[-1] == 1:
-            return t.squeeze(-1)
-        return t
-
-    src_ts = _squeeze_trailing_one(source_timestamps_us)
-    tgt_ts_list = [_squeeze_trailing_one(t) for t in target_timestamps_us_list]
-
-    # Main association: point inside cuboid at source timestamp.
-    _, tracks_idx = dynamic_tracks.point_intersection_interpolate_pose(points, src_ts, cuboids_dims_padding)  # [...]
-
-    # Fallback association via aux idx (e.g. ray-cuboid for movable rays).
-    unassoc = tracks_idx == -1
-    tracks_idx[unassoc] = aux_tracks_idx[unassoc]
+    source_timestamps_us = source_timestamps_us.squeeze(-1)
+    target_timestamps_us_list = [timestamps.squeeze(-1) for timestamps in target_timestamps_us_list]
+    tracks_idx = tracks_idx.squeeze(-1)
 
     dynamic_mask = tracks_idx != -1
     sel = torch.where(dynamic_mask)
-    sel_tracks_idx = tracks_idx[sel]
+    sel_tracks_idx = tracks_idx[sel].to(dtype=cuboid_tracks.tracks_packinfo.dtype)
 
     warped_points_list: list[torch.Tensor]
 
-    # Shortcut if no dynamic points are found.
     if sel_tracks_idx.numel() == 0:
-        warped_points_list = [points.clone() for _ in tgt_ts_list]
-        return dynamic_mask, warped_points_list
+        warped_points_list = [points.clone() for _ in target_timestamps_us_list]
+        return dynamic_mask.unsqueeze(-1), warped_points_list
 
-    inv_current_pose = dynamic_tracks.interpolate_tracks_poses(
-        timestamps_us=src_ts[sel],
+    inv_current_pose = cuboid_tracks.interpolate_tracks_poses(
+        timestamps_us=source_timestamps_us[sel],
         tracks_idx=sel_tracks_idx,
     ).inv()
 
     warped_points_list = []
-    for tgt_ts in tgt_ts_list:
-        target_pose = dynamic_tracks.interpolate_tracks_poses(
-            timestamps_us=tgt_ts[sel],
+    for target_timestamps_us in target_timestamps_us_list:
+        target_pose = cuboid_tracks.interpolate_tracks_poses(
+            timestamps_us=target_timestamps_us[sel],
             tracks_idx=sel_tracks_idx,
         )
         new_points = points.clone()
         new_points[sel] = (target_pose * inv_current_pose) * new_points[sel]  # type: ignore[operator]
         warped_points_list.append(new_points)
 
-    return dynamic_mask, warped_points_list
+    return dynamic_mask.unsqueeze(-1), warped_points_list

@@ -28,6 +28,22 @@ import torch
 from ncore.data import ConcreteCameraModelParametersUnion
 
 
+class RayFlags(IntFlag):
+    """Per-ray label flags, bit-for-bit compatible with Bazel NRE."""
+
+    RGB_LABEL = auto()
+    VALID_SEMANTIC = auto()
+    SKY_SEMANTIC = auto()
+    ROAD_SEMANTIC = auto()
+    VEHICLE_SEMANTIC = auto()
+    EGO_SEMANTIC = auto()
+    DROPPED = auto()
+    VALID_NORMAL = auto()
+    INVALID = auto()
+    HARMONIZED = auto()
+    SYNTHETIC = auto()
+
+
 
 @dataclass(slots=True)
 class HalfClosedInterval:

@@ -15,19 +15,21 @@ NVIDIA InstantNuRec is a feed-forward neural reconstruction model for autonomous
 
 3D simulation platforms are critical for autonomous driving because they enable end-to-end policy evaluation, thereby reducing development costs and improving safety. In recent years, neural simulation has become predominant, with methods such as NuRec playing a central role; however, these methods remain relatively slow and typically require per-scene tuning. In this work, we present Instant NuRec, a feed-forward neural reconstruction model that turns a multi-view driving log into a fully simulatable 3D Gaussian Splatting (3DGS) world in a single forward pass. The model accepts multi-view input from a calibrated camera rig and emits a layered output consisting of static and dynamic 3DGS layers, a sky cubemap, and per-camera ISP corrections, while providing native support for non-pinhole camera models via 3DGUT. It reconstructs a 10–20-second multi-camera scene in roughly 1.5 seconds and achieves a PSNR on the Waymo Open Dataset that is 2.01 dB above the strongest evaluated baseline. Instant NuRec is deeply integrated into NuRec and is compatible with AlpaSim for closed-loop simulation.
 
-> **Repository scope:** This standalone CLI exports the static scene Gaussians
-> to PLY together with an observation-derived sky cubemap sidecar and optional
-> reference render. The abstract above describes the complete research model,
-> including layers that are not part of this static export path.
+> **Repository scope:** The default inference CLI exports static scene
+> Gaussians, an observation-derived sky cubemap, and optional calibrated
+> renders. The repository also includes two-phase dense PA-front training; see
+> [docs/TRAINING.md](docs/TRAINING.md). Varying-camera, point-query, and TokenGS
+> training remain Bazel-only model-development paths.
 
 ![InstantNuRec demo](docs/demo.gif)
 
 ## Pipeline Overview
 
-This repo goes from ncorev4 ingest → frame batch prep → forward pass
-→ 3D-Gaussian PLY and sky-cubemap export. The PLY output is usable
-directly as a static reconstruction, and can also serve as initialization
-for downstream NuRec training to reach higher fidelity.
+The inference path goes from NCore V4 ingest → frame batch prep → forward
+pass → 3D-Gaussian PLY and sky-cubemap export. The training path uses the
+same calibrated data contract for context supervision followed by
+differentiable novel-view rendering. Exported PLYs remain usable directly as
+static reconstructions or as initialization for downstream NuRec refinement.
 
 Instant-NuRec and
 [NuRec](https://docs.nvidia.com/nurec/nurec/reconstruct-av-scene.html)
@@ -43,6 +45,9 @@ per-scene refinement pipeline that produces a high-fidelity USDZ.
 For common errors and fixes (HF auth, driver / CUDA mismatch, OOM at
 chunk-prep, `--max-chunks` truncation), see
 [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
+
+For two-phase Kelvin training, NVIDIA ClipGT preparation, and Waymo Open
+Dataset download/conversion, see [docs/TRAINING.md](docs/TRAINING.md).
 
 - **Usage questions and discussion:** post on the
   [NVIDIA Developer Forum (Omniverse / NuRec)](https://forums.developer.nvidia.com/c/omniverse/platform/nurec/752).
@@ -98,6 +103,12 @@ CUDA dependency is whatever the pinned `torch` wheel ships with.
 The optional calibrated sky-composited renders use `gsplat`, which is not
 installed by `setup.sh`. Install the render extra before using
 `--render-preview` or `--render-video`:
+
+The render and training extras install nvdiffrast under NVIDIA's Source Code
+License (1-Way Commercial). Non-NVIDIA use is limited to non-commercial
+research or evaluation; read the complete terms in
+[THIRD_PARTY_LICENSE.txt](THIRD_PARTY_LICENSE.txt) before installing or
+redistributing these extras.
 
 ```bash
 uv sync --extra render
@@ -260,6 +271,9 @@ For a composited RGB color `c`, apply row `[A | b]` as
 
 To also produce a calibrated still preview and full source-trajectory video:
 
+This command installs the render extra governed by the nvdiffrast terms linked
+in the setup section above.
+
 ```bash
 uv sync --extra render
 python run_inference.py \
@@ -406,10 +420,17 @@ instant-nurec/
 <details>
 <summary><b>Development</b></summary>
 
+The full test environment installs the training extra governed by the
+nvdiffrast terms linked in the setup section above.
+
 ```bash
+uv sync --frozen --extra training
 .venv/bin/python -m pytest tests/ -q
 .venv/bin/ruff check .
 ```
+
+The training extra is required to collect the full test suite. Base-only
+inference installations can run the inference-specific tests directly.
 
 </details>
 

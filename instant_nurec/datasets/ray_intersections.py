@@ -58,13 +58,13 @@ def _slab_aabb_intersection(
 
 
 def ray_cuboidtracks_intersection(
-    rays_o: torch.Tensor,                # (N_rays, 3)
-    rays_d: torch.Tensor,                # (N_rays, 3)
-    rays_timestamps_us: torch.Tensor,    # (N_rays,) int64
-    tracks_packinfo: torch.Tensor,       # (N_tracks, 2) int32 [start, count]
-    tracks_poses: torch.Tensor,          # (N_total_poses, 7) [tx ty tz qx qy qz qw]
+    rays_o: torch.Tensor,  # (N_rays, 3)
+    rays_d: torch.Tensor,  # (N_rays, 3)
+    rays_timestamps_us: torch.Tensor,  # (N_rays,) int64
+    tracks_packinfo: torch.Tensor,  # (N_tracks, 2) int32 [start, count]
+    tracks_poses: torch.Tensor,  # (N_total_poses, 7) [tx ty tz qx qy qz qw]
     tracks_timestamps_us: torch.Tensor,  # (N_total_poses,) int64
-    cuboids_dims: torch.Tensor,          # (N_tracks, 3) cuboid xyz extents
+    cuboids_dims: torch.Tensor,  # (N_tracks, 3) cuboid xyz extents
     max_track_n_poses: int,
     max_intersections_per_ray: int,
     with_intersections_ts: bool,
@@ -82,13 +82,9 @@ def ray_cuboidtracks_intersection(
     dtype = rays_o.dtype
 
     intersections_cnt = torch.zeros(n_rays, dtype=torch.int32, device=device)
-    intersections_tracks_idx = torch.full(
-        (n_rays, max_intersections_per_ray), -1, dtype=torch.int32, device=device
-    )
+    intersections_tracks_idx = torch.full((n_rays, max_intersections_per_ray), -1, dtype=torch.int32, device=device)
     intersections_ts = (
-        torch.full(
-            (n_rays, max_intersections_per_ray, 2), -1.0, dtype=dtype, device=device
-        )
+        torch.full((n_rays, max_intersections_per_ray, 2), -1.0, dtype=dtype, device=device)
         if with_intersections_ts
         else None
     )
@@ -118,9 +114,7 @@ def ray_cuboidtracks_intersection(
         track_poses_slice = tracks_poses[start : start + n_poses]
 
         # Per-ray time-range gate.
-        in_range = (rays_timestamps_us >= track_ts[0]) & (
-            rays_timestamps_us <= track_ts[-1]
-        )
+        in_range = (rays_timestamps_us >= track_ts[0]) & (rays_timestamps_us <= track_ts[-1])
         ray_idxs = in_range.nonzero(as_tuple=False).squeeze(-1)
         if ray_idxs.numel() == 0:
             continue
@@ -149,12 +143,8 @@ def ray_cuboidtracks_intersection(
         # Local-frame ray.
         # The kernel does R^T (transpose) — world→local rotation.
         R_world_to_local = quat_xyzw_to_rotmat(q_interp).transpose(-1, -2)
-        rays_o_local = torch.bmm(
-            R_world_to_local, (rays_o[ray_idxs] - c_interp).unsqueeze(-1)
-        ).squeeze(-1)
-        rays_d_local = torch.bmm(R_world_to_local, rays_d[ray_idxs].unsqueeze(-1)).squeeze(
-            -1
-        )
+        rays_o_local = torch.bmm(R_world_to_local, (rays_o[ray_idxs] - c_interp).unsqueeze(-1)).squeeze(-1)
+        rays_d_local = torch.bmm(R_world_to_local, rays_d[ray_idxs].unsqueeze(-1)).squeeze(-1)
 
         half_dims = (cuboids_dims[track_id] * 0.5).expand_as(rays_o_local)
         t_pair = _slab_aabb_intersection(rays_o_local, rays_d_local, half_dims)
@@ -176,9 +166,7 @@ def ray_cuboidtracks_intersection(
             if cnt_now < max_intersections_per_ray:
                 intersections_tracks_idx[r_idx, cnt_now] = track_id
                 if with_intersections_ts:
-                    intersections_ts[r_idx, cnt_now, 0] = max(
-                        float(t_near[hit_local[i]].item()), 0.0
-                    )
+                    intersections_ts[r_idx, cnt_now, 0] = max(float(t_near[hit_local[i]].item()), 0.0)
                     intersections_ts[r_idx, cnt_now, 1] = float(t_far[hit_local[i]].item())
 
     if with_intersections_ts:
@@ -187,32 +175,45 @@ def ray_cuboidtracks_intersection(
 
 
 def point_cuboidtracks_intersection_interpolate_pose(
-    points: torch.Tensor,                # (N_points, 3)
+    points: torch.Tensor,  # (N_points, 3)
     points_timestamps_us: torch.Tensor,  # (N_points,) int64
-    tracks_packinfo: torch.Tensor,       # (N_tracks, 2) int32 [start, count]
-    tracks_poses: torch.Tensor,          # (N_total_poses, 7)
+    tracks_packinfo: torch.Tensor,  # (N_tracks, 2) int32 [start, count]
+    tracks_poses: torch.Tensor,  # (N_total_poses, 7)
     tracks_timestamps_us: torch.Tensor,  # (N_total_poses,) int64
-    cuboids_dims: torch.Tensor,          # (N_tracks, 3)
+    cuboids_dims: torch.Tensor,  # (N_tracks, 3)
     max_track_n_poses: int,
+    max_intersections_per_point: int = 1,
+    return_local_points: bool = False,
 ):
-    """Per (point, track) inside-cuboid test with interpolated pose.
+    """Per-(point, track) inside-cuboid test with interpolated poses.
 
     Returns:
-      interpolated_tracks_pose: (N_points, 7)
-      interpolated_tracks_idx: (N_points,) int32, -1 if no intersection.
+      intersections_cnt: (N_points,) int32
+      interpolated_tracks_pose: (N_points, max_intersections_per_point, 7)
+      interpolated_tracks_idx: (N_points, max_intersections_per_point) int32
+      interpolated_points_local: optional
+        (N_points, max_intersections_per_point, 3)
     """
+    if max_intersections_per_point < 1:
+        raise ValueError("max_intersections_per_point must be positive")
+
     n_points = points.shape[0]
     n_tracks = tracks_packinfo.shape[0]
     device = points.device
     dtype = points.dtype
 
-    interpolated_tracks_pose = torch.zeros((n_points, 7), dtype=dtype, device=device)
-    interpolated_tracks_idx = torch.full(
-        (n_points,), -1, dtype=torch.int32, device=device
+    intersections_cnt = torch.zeros(n_points, dtype=torch.int32, device=device)
+    interpolated_tracks_pose = torch.zeros((n_points, max_intersections_per_point, 7), dtype=dtype, device=device)
+    interpolated_tracks_idx = torch.full((n_points, max_intersections_per_point), -1, dtype=torch.int32, device=device)
+    interpolated_points_local = (
+        torch.zeros((n_points, max_intersections_per_point, 3), dtype=dtype, device=device)
+        if return_local_points
+        else None
     )
 
     if n_points == 0 or max_track_n_poses == 0 or n_tracks == 0:
-        return interpolated_tracks_pose, interpolated_tracks_idx
+        outputs = (intersections_cnt, interpolated_tracks_pose, interpolated_tracks_idx)
+        return outputs + ((interpolated_points_local,) if return_local_points else ())
 
     track_lengths = tracks_packinfo[:, 1].to(torch.int64)
 
@@ -224,9 +225,7 @@ def point_cuboidtracks_intersection_interpolate_pose(
         track_ts = tracks_timestamps_us[start : start + n_poses]
         track_poses_slice = tracks_poses[start : start + n_poses]
 
-        in_range = (points_timestamps_us >= track_ts[0]) & (
-            points_timestamps_us <= track_ts[-1]
-        )
+        in_range = (points_timestamps_us >= track_ts[0]) & (points_timestamps_us <= track_ts[-1])
         pt_idxs = in_range.nonzero(as_tuple=False).squeeze(-1)
         if pt_idxs.numel() == 0:
             continue
@@ -248,26 +247,32 @@ def point_cuboidtracks_intersection_interpolate_pose(
         q_pointtime = quat_xyzw_slerp(q_start, q_end, t_interp)
 
         R_world_to_local = quat_xyzw_to_rotmat(q_pointtime).transpose(-1, -2)
-        point_local = torch.bmm(
-            R_world_to_local, (points[pt_idxs] - c_pointtime).unsqueeze(-1)
-        ).squeeze(-1)
+        point_local = torch.bmm(R_world_to_local, (points[pt_idxs] - c_pointtime).unsqueeze(-1)).squeeze(-1)
 
         half_dim = cuboids_dims[track_id] * 0.5
         # Strict-inequality inside-cuboid check (matches the CUDA kernel:
         # ``point_bbox > -dim/2 && point_bbox < dim/2``).
-        inside = (
-            (point_local > -half_dim).all(dim=-1) & (point_local < half_dim).all(dim=-1)
-        )
+        inside = (point_local > -half_dim).all(dim=-1) & (point_local < half_dim).all(dim=-1)
         hit_local = inside.nonzero(as_tuple=False).squeeze(-1)
         if hit_local.numel() == 0:
             continue
         hit_pts = pt_idxs[hit_local]
 
-        # Last-write-wins: if multiple tracks hit the same point, the
-        # CUDA kernel races (atomicAdd-like behaviour); empirically the
-        # standalone uses a track-disjoint dataset, so we just overwrite.
-        interpolated_tracks_pose[hit_pts, :3] = c_pointtime[hit_local]
-        interpolated_tracks_pose[hit_pts, 3:] = q_pointtime[hit_local]
-        interpolated_tracks_idx[hit_pts] = track_id
+        # The CUDA implementation atomically reserves the next output slot and
+        # keeps counting even when the configured output capacity is exceeded.
+        slots = intersections_cnt[hit_pts].to(torch.long)
+        intersections_cnt[hit_pts] += 1
+        recorded = slots < max_intersections_per_point
+        if not torch.any(recorded):
+            continue
+        recorded_points = hit_pts[recorded]
+        recorded_slots = slots[recorded]
+        recorded_local = hit_local[recorded]
+        interpolated_tracks_pose[recorded_points, recorded_slots, :3] = c_pointtime[recorded_local]
+        interpolated_tracks_pose[recorded_points, recorded_slots, 3:] = q_pointtime[recorded_local]
+        interpolated_tracks_idx[recorded_points, recorded_slots] = track_id
+        if interpolated_points_local is not None:
+            interpolated_points_local[recorded_points, recorded_slots] = point_local[recorded_local]
 
-    return interpolated_tracks_pose, interpolated_tracks_idx
+    outputs = (intersections_cnt, interpolated_tracks_pose, interpolated_tracks_idx)
+    return outputs + ((interpolated_points_local,) if return_local_points else ())
