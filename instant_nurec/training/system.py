@@ -7,10 +7,12 @@ import logging
 import math
 
 from pathlib import Path
+from typing import Literal
 
 import torch
 
 from pytorch_lightning import LightningModule
+from torchmetrics.image import PeakSignalNoiseRatio
 
 from instant_nurec.config_schema.train import KelvinTrainConfig
 from instant_nurec.datasets.tracks import CuboidTracks, TrackFlags
@@ -69,6 +71,13 @@ class KelvinTrainingSystem(LightningModule):
         self._weights_initialized = False
         self._warned_skipped_losses: set[str] = set()
         self.save_hyperparameters(config.model_dump(mode="json"))
+
+    def setup(self, stage: str) -> None:
+        del stage
+        # Keep independent state so Lightning can reset/synchronize train and
+        # validation metrics with the same lifecycle as the Bazel system.
+        self.train_psnr = PeakSignalNoiseRatio(data_range=1)
+        self.validation_psnr = PeakSignalNoiseRatio(data_range=1)
 
     def configure_optimizers(self):
         optimizer, implementation = make_kelvin_optimizer(
@@ -215,7 +224,34 @@ class KelvinTrainingSystem(LightningModule):
             )
             motion.reference_flow = warped[0] - points
 
-    def forward_losses(self, batch: InstantNuRecDataBatch) -> KelvinLossReturn:
+    @staticmethod
+    def _render_psnr_inputs(render_output, supervision) -> tuple[torch.Tensor, torch.Tensor] | None:
+        if render_output is None or supervision is None or supervision.data.camera is None:
+            return None
+        labels = supervision.data.camera.labels
+        if labels.rgb is None:
+            return None
+        rgb_ray_mask = (
+            labels.get_mask_flags_all(RayFlags.RGB_LABEL) & labels.get_mask_flags_none(RayFlags.INVALID)
+        ).squeeze(-1)
+        return render_output.rgb[rgb_ray_mask], labels.rgb[rgb_ray_mask]
+
+    def _log_psnr(
+        self,
+        predicted_rgbs: list[torch.Tensor],
+        ground_truth_rgbs: list[torch.Tensor],
+        mode: Literal["train", "val"],
+    ) -> None:
+        if predicted_rgbs and ground_truth_rgbs:
+            psnr_metric = self.train_psnr if mode == "train" else self.validation_psnr
+            psnr_metric(torch.cat(predicted_rgbs, dim=0), torch.cat(ground_truth_rgbs, dim=0))
+            self.log(f"{mode}/psnr", psnr_metric, prog_bar=True)
+        elif mode == "val":
+            # Phase one does not render.  Match Bazel's increasing placeholder
+            # so val/psnr remains available to ModelCheckpoint.
+            self.log("val/psnr", 0.1 * self.current_epoch, prog_bar=True)
+
+    def forward_losses(self, batch: InstantNuRecDataBatch, mode: Literal["train", "val"]) -> KelvinLossReturn:
         batch.maybe_compute_rendering_data(device=self.device)
         tracks = (
             [CuboidTracks.Factory.from_pack(pack) for pack in batch.cuboid_tracks]
@@ -227,6 +263,8 @@ class KelvinTrainingSystem(LightningModule):
         per_item = []
         component_values: dict[str, list[torch.Tensor]] = {}
         skipped: list[str] = []
+        predicted_rgbs: list[torch.Tensor] = []
+        ground_truth_rgbs: list[torch.Tensor] = []
         for index, (primitive, pack, context) in enumerate(zip(primitives, packs, batch.context)):
             supervision = batch.supervision[index] if batch.supervision is not None else None
             if supervision is not None:
@@ -237,11 +275,18 @@ class KelvinTrainingSystem(LightningModule):
                 if supervision is None:
                     raise RuntimeError("Render-stage training requires independently sampled supervision frames")
                 render_output = render_kelvin_supervision(primitive, supervision)
+            with torch.no_grad():
+                psnr_inputs = self._render_psnr_inputs(render_output, supervision)
+                if psnr_inputs is not None:
+                    predicted_rgb, ground_truth_rgb = psnr_inputs
+                    predicted_rgbs.append(predicted_rgb)
+                    ground_truth_rgbs.append(ground_truth_rgb)
             result = self.loss(pack, context, render_output, supervision)
             per_item.append(result.total_value)
             skipped.extend(result.skipped)
             for name, value in result.values.items():
                 component_values.setdefault(name, []).append(value)
+        self._log_psnr(predicted_rgbs, ground_truth_rgbs, mode)
         # Official aggregation is a mean over batch elements, not a sum.
         total = torch.stack(per_item).mean()
         skipped_names = set(skipped)
@@ -264,7 +309,7 @@ class KelvinTrainingSystem(LightningModule):
         with BroadcastExceptions(self.trainer):
             optimizer = self.optimizers(use_pl_optimizer=True)
             optimizer.zero_grad()
-            result = self.forward_losses(batch)
+            result = self.forward_losses(batch, "train")
 
         with BroadcastExceptions(self.trainer):
             self.manual_backward(result.total_value)
@@ -288,7 +333,7 @@ class KelvinTrainingSystem(LightningModule):
 
     def validation_step(self, batch: InstantNuRecDataBatch, batch_idx: int):
         del batch_idx
-        result = self.forward_losses(batch)
+        result = self.forward_losses(batch, "val")
         self.log("val/loss", result.total_value, prog_bar=True, on_epoch=True, sync_dist=True)
         return result.total_value
 

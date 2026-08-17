@@ -122,8 +122,8 @@ instant-nurec-train --help
 ```
 
 The base environment pins `nvidia-ncore==18.7.0`; the training extra pins
-PyTorch Lightning 2.6.5, TorchMetrics 1.7.0, LPIPS 0.1.4, and the calibrated
-`gsplat` renderer. `optimizer.implementation: auto`
+PyTorch Lightning 2.6.5, TorchMetrics 1.7.0, LPIPS 0.1.4, Weights & Biases
+0.28.2, and the calibrated `gsplat` renderer. `optimizer.implementation: auto`
 uses `apex.optimizers.FusedAdam` when available and otherwise logs a warning and
 uses `torch.optim.Adam`. Set `apex-fused-adam` to fail rather than fall back when
 exact optimizer-kernel parity matters.
@@ -455,6 +455,12 @@ Replace the manifest, output, and initialization path placeholders in both
 files. For Waymo, replace the complete mixture with the direct dataset block
 above and use the RGB-only losses below; do not retain the ClipGT external
 `nurec/all.zarr.itar` supervision entry.
+
+The checked-in configs log to W&B project `NRE`. Leave `logger.entity` empty to
+use the account's default entity, or set it explicitly. Authenticate once with
+`wandb login`, and change `logger.run_name`, `group`, and `tags` to identify the
+experiment. `run_id` is also the stable W&B run ID; resume from a copy of the
+run's `resolved.yaml` so checkpoint and W&B histories continue together.
 Validate the resolved config without allocating a GPU:
 
 ```bash
@@ -512,12 +518,24 @@ Outputs are written under `<out_dir>/<run_id>/`:
 ├── resolved.yaml
 ├── checkpoints/
 │   ├── last.ckpt
-│   └── epoch=...-step=....ckpt
-└── logs/version_0/metrics.csv
+│   └── epoch=...-psnr=....ckpt
+└── wandb/...
 ```
 
 Every checkpoint stores `kelvin_training_contract` with the audited reference label,
 phase, selected optimizer implementation, and world size.
+
+The render phase reports `train/psnr` and `val/psnr` using the official metric:
+after calibrated Gaussian/sky composition and affine ISP correction, it keeps
+pixels with `RGB_LABEL` and without `INVALID`, then computes one global
+`10 * log10(1 / MSE)` value with data range 1. Synthetic and harmonized RGB
+pixels remain included. Phase 1 does not render; its increasing `val/psnr =
+0.1 * epoch` is checkpoint plumbing only and must never be read as image
+quality. On the same equal91 ClipGT split, resolution, and masks as the
+reference recipe, 23.5 dB is a reasonable quality gate, 23.8 dB for two
+consecutive full validation epochs is strong convergence evidence, and roughly
+24 dB is the historical reference range. Do not transfer those thresholds to
+Waymo or another data protocol.
 
 ### A bounded end-to-end smoke test
 
@@ -563,7 +581,13 @@ For multi-node work, set the same `num_nodes`, `devices`, config, code commit,
 and visible dataset paths on every node, then launch through the site's Slurm
 or torchrun integration. Do not wrap a Lightning self-spawning `devices: 8`
 run in a second eight-process launcher. Confirm from startup logs that world
-size equals `num_nodes * devices`.
+size equals `num_nodes * devices`. Generate one run ID before launch and export
+it to every rank as `NRE_ENV_RUN_ID`; otherwise independently parsed YAMLs would
+generate different output directories and W&B IDs:
+
+```bash
+export NRE_ENV_RUN_ID="kelvin-context-$(date -u +%Y%m%d-%H%M%S)"
+```
 
 ## Checkpoint initialization and resume
 
@@ -668,7 +692,8 @@ Use this order; stop at the first failure:
 7. Resume it and confirm the global step advances.
 8. Initialize render phase from that checkpoint and run one calibrated CUDA
    render/backward step.
-9. Run one short validation epoch and inspect `metrics.csv` for finite loss.
+9. Run one short validation epoch and inspect W&B for finite loss and, in
+   phase 2, the masked `val/psnr` metric.
 10. Only then remove batch limits and launch the 40-epoch phases.
 
 Useful gates from the repository root are:
@@ -678,10 +703,9 @@ pytest -q
 ruff check instant_nurec tests
 ```
 
-The standalone validation loop currently reports aggregate loss components; it
-does not yet reproduce the internal PSNR/depth metric dashboard. Compare model
-quality only after evaluating the same checkpoint, cameras, frames, masks, and
-metric implementation on both systems.
+The standalone loop now reproduces the official masked RGB PSNR. Compare model
+quality only when checkpoint, cameras, frames, masks, resolution, and metric
+protocol are the same; the paper's Waymo PSNR is a separate evaluation.
 
 ## Remaining differences from the Bazel system
 
@@ -703,8 +727,9 @@ recipe. Keep these bounded differences visible in experiment reports:
   RGB/background masks return zero/skip rather than the Bazel path's NaN.
 - Lowercase Waymo `cyclist` is deliberately treated as dynamic, correcting the
   converter/class-list mismatch present across the pinned repositories.
-- Remote-cache and media/dashboard integrations are not reproduced. The
-  standalone loop reports loss components, not the full PSNR/depth dashboard.
+- Remote-cache and media/dashboard integrations are not reproduced. W&B logs
+  losses, learning rate, and RGB PSNR, but not the full internal depth/media
+  dashboard.
 
 The real-data verification completed bounded context, resume, and render
 optimization steps; it did not run both 40-epoch phases to convergence, did not

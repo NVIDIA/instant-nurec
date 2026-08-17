@@ -48,6 +48,8 @@ class AuxShardDataLoader:
     """Read NCore camera labels from adjacent sharded auxiliary stores.
 
     The naming convention is ``<data-shard>.aux.<signal>.zarr[.itar]``.
+    A signal-specific override replaces matching adjacent stores rather than
+    being loaded alongside them.
     Stores are optional: an empty loader simply reports every signal absent.
     """
 
@@ -56,23 +58,43 @@ class AuxShardDataLoader:
         sequence_id: str,
         dataset_paths: list[Path] | list[UPath],
         open_consolidated: bool = True,
+        signal_override_paths: dict[str, UPath] | None = None,
     ) -> None:
         store_paths: set[UPath] = set()
+        signal_override_paths = signal_override_paths or {}
+        matched_override_keys: set[str] = set()
         for raw_dataset_path in dataset_paths:
             dataset_path = UPath(raw_dataset_path).absolute()
             dataset_base_name = dataset_path.stem.split(".")[0]
             for path in dataset_path.parent.iterdir():
+                path_signal_name: str | None = None
                 if path.is_file():
                     supported = path.name.endswith(".zarr.itar")
                     matches = path.name.startswith(dataset_base_name + ".aux.") or path.name.startswith(
                         dataset_base_name + "-annotations"
                     )
                     if supported and matches:
+                        path_signal_name = path.name.split(".")[-3]
                         store_paths.add(path)
                 elif path.is_dir() and path.name.endswith(".zarr") and path.name.startswith(
                     dataset_base_name + ".aux."
                 ):
+                    path_signal_name = path.name.split(".")[-2]
                     store_paths.add(path)
+
+                if path_signal_name is not None and path_signal_name in signal_override_paths:
+                    store_paths.discard(path)
+                    store_paths.add(signal_override_paths[path_signal_name])
+                    matched_override_keys.add(path_signal_name)
+
+        for unmatched_key in sorted(set(signal_override_paths) - matched_override_keys):
+            logging.warning(
+                "signal_override_paths entry %r -> %s had no effect: no native aux store matches "
+                "this signal name for sequence %r.",
+                unmatched_key,
+                signal_override_paths[unmatched_key],
+                sequence_id,
+            )
 
         self.aux_shard_stores: list[zarr.storage.Store] = []
         self.base_groups: DefaultDict[str, list[zarr.Group]] = defaultdict(list)

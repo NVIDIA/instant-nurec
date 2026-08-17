@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import os
+
 from pathlib import Path
 from typing import Literal
 
@@ -28,6 +30,20 @@ class KelvinSchedulerConfig(BaseConfigSchema):
     cosine_factor_progress: float = Field(default=1.0, gt=0, le=1)
 
 
+class KelvinLoggerConfig(BaseConfigSchema):
+    """Experiment logger settings for standalone Kelvin training."""
+
+    name: Literal["csv", "wandb"] = "csv"
+    project: str = "NRE"
+    entity: str = ""
+    run_name: str | None = None
+    group: str = ""
+    tags: list[str] = Field(default_factory=list)
+    job_type: str = ""
+    offline: bool = False
+    log_model: bool = False
+
+
 class KelvinSystemTrainConfig(BaseConfigSchema):
     max_epochs: int = Field(default=40, ge=1)
     train_batch_size: int = Field(default=2, ge=1)
@@ -51,6 +67,9 @@ class KelvinSystemTrainConfig(BaseConfigSchema):
     limit_val_batches: int | float | None = None
     log_every_n_steps: int = Field(default=10, ge=1)
     save_every_n_train_steps: int | None = Field(default=None, ge=1)
+    checkpoint_monitor: str = "val/psnr"
+    checkpoint_mode: Literal["min", "max"] = "max"
+    save_top_k: int = Field(default=2, ge=0)
     optimizer: KelvinOptimizerConfig = Field(default_factory=KelvinOptimizerConfig)
     scheduler: KelvinSchedulerConfig = Field(default_factory=KelvinSchedulerConfig)
 
@@ -104,10 +123,13 @@ class KelvinTrainConfig(BaseConfigSchema):
     dataset: InstantNuRecSplitsConfig
     model: KelvinModelConfig = Field(default_factory=KelvinModelConfig)
     system: KelvinSystemTrainConfig = Field(default_factory=KelvinSystemTrainConfig)
+    logger: KelvinLoggerConfig = Field(default_factory=KelvinLoggerConfig)
     loss: KelvinLossConfig | None = None
     resume_from_checkpoint: Path | None = None
 
     def model_post_init(self, __context) -> None:
+        if (environment_run_id := os.environ.get("NRE_ENV_RUN_ID")) is not None:
+            self.run_id = environment_run_id
         if self.dataset.train is None:
             raise ValueError("dataset.train is required")
         if self.phase == "render":

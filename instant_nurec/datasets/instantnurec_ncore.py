@@ -718,10 +718,20 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
                     )
                     if self.config.aux_data.enabled:
                         try:
+                            signal_override_paths: dict[str, UPath] = {}
+                            if isinstance(self.config.aux_data.depth, str):
+                                depth_override_path = parse_universal_path(
+                                    self.config.aux_data.depth.replace(
+                                        "{{clip_id}}", sequence_loader.sequence_id
+                                    )
+                                )
+                                if depth_override_path.exists():
+                                    signal_override_paths["depth"] = depth_override_path
                             aux_loaders[loader_key] = ncore_utils.AuxShardDataLoader(
                                 sequence_id=sequence_loader.sequence_id,
                                 dataset_paths=current_dataset_paths,
                                 open_consolidated=self.open_consolidated,
+                                signal_override_paths=signal_override_paths,
                             )
                         except ValueError as exc:
                             raise InstantNuRecDataError(

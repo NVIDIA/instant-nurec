@@ -118,7 +118,13 @@ class NCoreAuxDataConfig(BaseConfigSchema):
     enabled: bool = False
     enabled_context: bool = False
     semantic_segmentation: bool = True
-    depth: bool = True
+    depth: bool | str = Field(
+        default=True,
+        description=(
+            "True to load adjacent NCore depth, False to disable depth, or a path "
+            "to override the adjacent depth store. Supported template variable: {{clip_id}}."
+        ),
+    )
     egomask: bool = True
 
 

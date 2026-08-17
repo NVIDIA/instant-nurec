@@ -5,6 +5,17 @@ out_dir: /absolute/path/to/kelvin-runs
 phase: render
 bazel_reference: kelvin-pa-front-2026-08-13
 
+logger:
+  name: wandb
+  project: NRE
+  entity: ""
+  run_name: kelvin-pa-front-render
+  group: kelvin-pa-front
+  tags: [instant-nurec, kelvin, render]
+  job_type: render
+  offline: false
+  log_model: false
+
 dataset:
   train:
     mixture:
@@ -84,6 +95,9 @@ system:
   strategy: ddp_find_unused_parameters_true
   enable_render_global_step: 0
   log_every_n_steps: 10
+  checkpoint_monitor: val/psnr
+  checkpoint_mode: max
+  save_top_k: 2
   optimizer:
     lr: 0.0001
     eps: 1.0e-15

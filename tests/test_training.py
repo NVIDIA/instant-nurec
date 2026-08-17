@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 import torch
 import yaml
+from torchmetrics.image import PeakSignalNoiseRatio
 from torchvision.transforms.functional import gaussian_blur
 
 import instant_nurec.training.renderer as renderer_module
@@ -19,6 +20,7 @@ from instant_nurec.config_schema.dataset import (
     NCoreMixtureDatasetConfig,
 )
 from instant_nurec.config_schema.train import (
+    KelvinLoggerConfig,
     KelvinLossConfig,
     KelvinSchedulerConfig,
     KelvinSystemTrainConfig,
@@ -31,7 +33,7 @@ from instant_nurec.primitives.kelvin_primitive import KelvinInstantNuRecPrimitiv
 from instant_nurec.training.losses import KelvinLosses
 from instant_nurec.training.optim import CosineWithWarmupPBScheduler
 from instant_nurec.training.renderer import KelvinRenderOutput, render_kelvin_supervision
-from instant_nurec.training.run import resolve_training_strategy
+from instant_nurec.training.run import make_checkpoint_callback, make_training_logger, resolve_training_strategy
 from instant_nurec.training.system import KelvinTrainingSystem
 from instant_nurec.utils.batch import (
     CameraFrameLabels,
@@ -67,7 +69,63 @@ def test_context_phase_keeps_official_optimizer_defaults(tmp_path):
     assert config.system.optimizer.eps == 1.0e-15
     assert config.system.optimizer.betas == (0.9, 0.99)
     assert config.system.precision == "bf16-mixed"
+    assert config.logger == KelvinLoggerConfig()
     assert config.loss == KelvinLossConfig.context_phase()
+
+
+def test_wandb_logger_uses_stable_run_id_for_resume(tmp_path, monkeypatch):
+    captured = {}
+
+    class FakeWandbLogger:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    monkeypatch.setattr(training_run_module, "WandbLogger", FakeWandbLogger)
+    config = KelvinTrainConfig(
+        out_dir=tmp_path,
+        run_id="stable-run-id",
+        dataset=InstantNuRecSplitsConfig(train=_dataset_config()),
+        logger=KelvinLoggerConfig(
+            name="wandb",
+            project="NRE",
+            entity="nvidia-toronto",
+            run_name="kelvin-test",
+            group="kelvin",
+            tags=["training"],
+            job_type="render",
+        ),
+    )
+
+    logger = make_training_logger(config, tmp_path / config.run_id)
+
+    assert isinstance(logger, FakeWandbLogger)
+    assert captured["id"] == "stable-run-id"
+    assert captured["resume"] == "allow"
+    assert captured["project"] == "NRE"
+    assert captured["entity"] == "nvidia-toronto"
+
+
+def test_training_run_id_can_be_shared_across_slurm_ranks(tmp_path, monkeypatch):
+    monkeypatch.setenv("NRE_ENV_RUN_ID", "shared-slurm-run")
+
+    config = KelvinTrainConfig(
+        out_dir=tmp_path,
+        run_id="rank-local-yaml-value",
+        dataset=InstantNuRecSplitsConfig(train=_dataset_config()),
+    )
+
+    assert config.run_id == "shared-slurm-run"
+
+
+def test_epoch_checkpoint_tracks_official_validation_psnr(tmp_path):
+    config = KelvinTrainConfig(out_dir=tmp_path, dataset=InstantNuRecSplitsConfig(train=_dataset_config()))
+
+    checkpoint = make_checkpoint_callback(config, tmp_path / config.run_id)
+
+    assert checkpoint.monitor == "val/psnr"
+    assert checkpoint.mode == "max"
+    assert checkpoint.save_top_k == 2
+    assert checkpoint.save_last
 
 
 def test_fresh_weights_initialize_before_lightning_sanity_validation():
@@ -142,6 +200,11 @@ def test_checked_in_training_configs_validate(filename, phase, enable_render_ste
     assert config.system.enable_render_global_step == enable_render_step
     assert config.system.deterministic == "warn"
     assert config.system.strategy == "ddp_find_unused_parameters_true"
+    assert config.system.checkpoint_monitor == "val/psnr"
+    assert config.system.checkpoint_mode == "max"
+    assert config.system.save_top_k == 2
+    assert config.logger.name == "wandb"
+    assert config.logger.project == "NRE"
     assert isinstance(config.dataset.train, NCoreMixtureDatasetConfig)
     expected_train_ratios = {"ncore_source_a": 0.1, "ncore_source_b_wide": 1.0 if phase == "context" else 0.1}
     assert {name: item.sample_ratio for name, item in config.dataset.train.mixture.items()} == expected_train_ratios
@@ -320,6 +383,60 @@ def test_render_rgb_semantic_weights_keep_full_valid_denominator():
 
     torch.testing.assert_close(values["rgb"], torch.tensor(0.625))
     assert not skipped
+
+
+def test_render_psnr_uses_only_valid_rgb_labeled_rays():
+    flags = torch.tensor(
+        [
+            [
+                [
+                    [int(RayFlags.RGB_LABEL)],
+                    [int(RayFlags.RGB_LABEL | RayFlags.INVALID)],
+                    [0],
+                    [int(RayFlags.RGB_LABEL | RayFlags.SYNTHETIC)],
+                    [int(RayFlags.RGB_LABEL | RayFlags.HARMONIZED)],
+                ]
+            ]
+        ],
+        dtype=torch.int32,
+    )
+    labels = CameraFrameLabels(rgb=torch.zeros((1, 1, 5, 3)), flags=flags)
+    output = KelvinRenderOutput(
+        rgb=torch.tensor([[[[0.1, 0.1, 0.1], [1.0, 1.0, 1.0], [0.75, 0.75, 0.75], [0.1, 0.1, 0.1], [0.1, 0.1, 0.1]]]]),
+        opacity=torch.zeros((1, 1, 5, 1)),
+        distance=torch.zeros((1, 1, 5, 1)),
+        sky_rgb=torch.zeros((1, 1, 5, 3)),
+    )
+
+    predicted, target = KelvinTrainingSystem._render_psnr_inputs(output, _camera_batch(labels))
+
+    torch.testing.assert_close(predicted, torch.full((3, 3), 0.1))
+    torch.testing.assert_close(target, torch.zeros((3, 3)))
+    torch.testing.assert_close(PeakSignalNoiseRatio(data_range=1)(predicted, target), torch.tensor(20.0))
+
+
+def test_psnr_accumulates_pixels_globally_and_context_uses_placeholder():
+    logged = []
+    system = SimpleNamespace(
+        train_psnr=PeakSignalNoiseRatio(data_range=1),
+        validation_psnr=PeakSignalNoiseRatio(data_range=1),
+        current_epoch=3,
+        log=lambda *args, **kwargs: logged.append((args, kwargs)),
+    )
+    predicted = [torch.ones((1, 3)), torch.full((9, 3), 0.1)]
+    target = [torch.zeros_like(value) for value in predicted]
+
+    KelvinTrainingSystem._log_psnr(system, predicted, target, "val")
+
+    metric = logged[0][0][1]
+    torch.testing.assert_close(
+        metric.compute(), torch.tensor(-10.0 * np.log10(0.109), dtype=torch.float32), rtol=1e-5, atol=1e-5
+    )
+    assert logged[0][0][0] == "val/psnr"
+
+    logged.clear()
+    KelvinTrainingSystem._log_psnr(system, [], [], "val")
+    assert logged == [(("val/psnr", pytest.approx(0.3)), {"prog_bar": True})]
 
 
 def test_render_distance_matches_harmonized_and_synthetic_masks():

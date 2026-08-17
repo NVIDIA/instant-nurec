@@ -14,7 +14,7 @@ import torch
 
 from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import ModelCheckpoint
-from pytorch_lightning.loggers import CSVLogger
+from pytorch_lightning.loggers import CSVLogger, WandbLogger
 
 from instant_nurec.config_schema.train import KelvinTrainConfig
 from instant_nurec.training.data import KelvinTrainingDataModule
@@ -61,6 +61,45 @@ def load_training_config(path: Path) -> KelvinTrainConfig:
     return KelvinTrainConfig.model_validate(payload)
 
 
+def make_training_logger(config: KelvinTrainConfig, out_dir: Path):
+    if config.logger.name == "csv":
+        return CSVLogger(save_dir=out_dir, name="logs")
+    return WandbLogger(
+        name=config.logger.run_name,
+        save_dir=out_dir,
+        offline=config.logger.offline,
+        id=config.run_id,
+        project=config.logger.project,
+        entity=config.logger.entity or None,
+        log_model=config.logger.log_model,
+        group=config.logger.group or None,
+        tags=config.logger.tags,
+        job_type=config.logger.job_type or None,
+        resume="allow",
+    )
+
+
+def make_checkpoint_callback(config: KelvinTrainConfig, out_dir: Path) -> ModelCheckpoint:
+    if config.system.save_every_n_train_steps is not None:
+        return ModelCheckpoint(
+            dirpath=out_dir / "checkpoints",
+            filename="epoch={epoch:02d}-step={step}",
+            save_last=True,
+            save_top_k=-1,
+            every_n_train_steps=config.system.save_every_n_train_steps,
+        )
+    return ModelCheckpoint(
+        dirpath=out_dir / "checkpoints",
+        filename="epoch={epoch:02d}-psnr={val/psnr:.2f}",
+        save_last=True,
+        save_top_k=config.system.save_top_k,
+        monitor=config.system.checkpoint_monitor,
+        mode=config.system.checkpoint_mode,
+        every_n_epochs=1,
+        auto_insert_metric_name=False,
+    )
+
+
 def run_training(config: KelvinTrainConfig) -> Path:
     seed_everything(config.seed, workers=True)
     effective_strategy = resolve_training_strategy(config)
@@ -75,15 +114,7 @@ def run_training(config: KelvinTrainConfig) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "resolved.yaml").write_text(yaml.safe_dump(config.model_dump(mode="json"), sort_keys=False))
     datamodule = KelvinTrainingDataModule(config)
-    checkpoint = ModelCheckpoint(
-        dirpath=out_dir / "checkpoints",
-        filename="epoch={epoch:02d}-step={step}",
-        save_last=True,
-        save_top_k=-1,
-        every_n_train_steps=config.system.save_every_n_train_steps,
-        every_n_epochs=1 if config.system.save_every_n_train_steps is None else None,
-        save_on_train_epoch_end=True,
-    )
+    checkpoint = make_checkpoint_callback(config, out_dir)
     trainer = Trainer(
         default_root_dir=out_dir,
         accelerator=config.system.accelerator,
@@ -93,7 +124,7 @@ def run_training(config: KelvinTrainConfig) -> Path:
         precision=config.system.precision,
         max_epochs=config.system.max_epochs,
         deterministic=config.system.deterministic,
-        logger=CSVLogger(save_dir=out_dir, name="logs"),
+        logger=make_training_logger(config, out_dir),
         callbacks=[checkpoint],
         log_every_n_steps=config.system.log_every_n_steps,
         limit_train_batches=config.system.limit_train_batches,

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from dataclasses import dataclass
+from pathlib import Path
 from types import SimpleNamespace
 
 import ncore.data
@@ -12,8 +13,11 @@ import numpy as np
 import pytest
 import torch
 
+from upath import UPath
+
 from instant_nurec.config_schema.dataset import NCoreInstantNuRecDatasetConfig
 from instant_nurec.datasets.instantnurec_ncore import NCoreInstantNuRecDataset
+from instant_nurec.utils import ncore_utils
 from instant_nurec.utils.types import FrameConversion, RigTrajectories
 
 
@@ -92,6 +96,59 @@ def _reference_rig() -> RigTrajectories:
         rig_trajectories=[trajectory],
         camera_calibrations=OrderedDict([(CAMERA_ID, calibration)]),
     )
+
+
+def test_loader_resolves_official_aux_depth_clip_id_override(tmp_path, monkeypatch) -> None:
+    clip_id = "clipgt-bde0aab2-145d-482b-8880-87e98cdd4a03"
+    source_path = tmp_path / "sequence.json"
+    source_path.write_text("{}")
+    data_shard = tmp_path / "clip.000.zarr.itar"
+    data_shard.touch()
+    depth_template = tmp_path / "depths" / "{{clip_id}}" / "{{clip_id}}.aux.depth.zarr.itar"
+    depth_override = tmp_path / "depths" / clip_id / f"{clip_id}.aux.depth.zarr.itar"
+    depth_override.parent.mkdir(parents=True)
+    depth_override.touch()
+    dataset = NCoreInstantNuRecDataset(
+        NCoreInstantNuRecDatasetConfig(
+            ncore_json_paths=[str(source_path)],
+            context_camera_ids=[CAMERA_ID],
+            supervision_camera_ids=[CAMERA_ID],
+            aux_data={"enabled": True, "depth": str(depth_template)},
+        ),
+        frame_width=784,
+        frame_height=448,
+        n_frames_per_sample=18,
+    )
+    pose_edge = SimpleNamespace(
+        T_source_target=np.eye(4, dtype=np.float64)[None],
+        timestamps_us=np.array([0], dtype=np.int64),
+    )
+    sequence_loader = SimpleNamespace(
+        sequence_id=clip_id,
+        pose_graph=SimpleNamespace(get_edge=lambda source, target: pose_edge),
+        get_camera_sensor=lambda camera_id: SimpleNamespace(camera_id=camera_id),
+    )
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(
+        ncore_utils,
+        "parse_sequence_meta_file",
+        lambda path: (clip_id, None, [UPath(data_shard)]),
+    )
+    monkeypatch.setattr(ncore_utils, "create_sequence_loader", lambda **kwargs: sequence_loader)
+
+    class _AuxLoader:
+        def __init__(self, **kwargs) -> None:
+            captured.update(kwargs)
+
+    monkeypatch.setattr(ncore_utils, "AuxShardDataLoader", _AuxLoader)
+
+    result = dataset._get_loaders_and_sensors(source_path, dataset.all_context_camera_ids)
+
+    assert "main" in result.aux_loaders
+    signal_override_paths = captured["signal_override_paths"]
+    assert isinstance(signal_override_paths, dict)
+    assert Path(signal_override_paths["depth"].path) == depth_override
 
 
 def test_load_full_camera_rig_keeps_all_exposures_without_images_or_rays(tmp_path, monkeypatch) -> None:

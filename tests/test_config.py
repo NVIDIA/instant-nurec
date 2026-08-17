@@ -51,6 +51,17 @@ def test_default_predict_dataset_keeps_auxiliary_labels_disabled():
 
     assert config.aux_data.enabled is False
     assert config.aux_data.enabled_context is False
+    assert config.aux_data.depth is True
+
+
+def test_auxiliary_depth_accepts_official_clip_id_override_template():
+    template = "/depth/{{clip_id}}/{{clip_id}}.aux.depth.zarr.itar"
+    config = NCoreInstantNuRecDatasetConfig(
+        ncore_json_paths=["/tmp/example.json"],
+        aux_data={"enabled": True, "depth": template},
+    )
+
+    assert config.aux_data.depth == template
 
 
 # ---------------------------------------------------------------------------

@@ -235,6 +235,87 @@ def test_create_sequence_loader_passes_args_to_v4_loader(stubbed_ncore_utils, tm
 
 
 # ---------------------------------------------------------------------------
+# AuxShardDataLoader
+# ---------------------------------------------------------------------------
+
+
+def _write_aux_store(path: Path, *, sequence_id: str, signal: str, source: str) -> None:
+    import zarr
+
+    root = zarr.open_group(str(path), mode="w")
+    root.attrs.update(
+        sequence_id=sequence_id,
+        shard_id=0,
+        shard_count=1,
+        aux_root_group_name="annotations",
+    )
+    group = root.require_group("annotations").require_group(signal)
+    group.attrs["source"] = source
+
+
+def test_aux_loader_replaces_matching_adjacent_signal_with_override(
+    stubbed_ncore_utils, tmp_path
+):
+    mod, _ = stubbed_ncore_utils
+    from upath import UPath
+
+    source = tmp_path / "clip.000.zarr"
+    source.mkdir()
+    _write_aux_store(
+        tmp_path / "clip.aux.depth.zarr",
+        sequence_id="clip-id",
+        signal="depth",
+        source="adjacent",
+    )
+    _write_aux_store(
+        tmp_path / "clip.aux.egomask.zarr",
+        sequence_id="clip-id",
+        signal="egomask",
+        source="adjacent",
+    )
+    override = tmp_path / "override.aux.depth.zarr"
+    _write_aux_store(
+        override,
+        sequence_id="clip-id",
+        signal="depth",
+        source="override",
+    )
+
+    loader = mod.AuxShardDataLoader(
+        sequence_id="clip-id",
+        dataset_paths=[UPath(source)],
+        open_consolidated=False,
+        signal_override_paths={"depth": UPath(override)},
+    )
+
+    assert len(loader.base_groups["depth"]) == 1
+    assert loader.base_groups["depth"][0].attrs["source"] == "override"
+    assert loader.base_groups["egomask"][0].attrs["source"] == "adjacent"
+
+
+def test_aux_loader_preserves_adjacent_discovery_without_override(stubbed_ncore_utils, tmp_path):
+    mod, _ = stubbed_ncore_utils
+    from upath import UPath
+
+    source = tmp_path / "clip.000.zarr"
+    source.mkdir()
+    _write_aux_store(
+        tmp_path / "clip.aux.depth.zarr",
+        sequence_id="clip-id",
+        signal="depth",
+        source="adjacent",
+    )
+
+    loader = mod.AuxShardDataLoader(
+        sequence_id="clip-id",
+        dataset_paths=[UPath(source)],
+        open_consolidated=False,
+    )
+
+    assert loader.base_groups["depth"][0].attrs["source"] == "adjacent"
+
+
+# ---------------------------------------------------------------------------
 # get_mask_image
 # ---------------------------------------------------------------------------
 
