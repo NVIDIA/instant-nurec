@@ -601,6 +601,16 @@ These are different operations:
   optimizer, scheduler, epoch, and global step. Use it only to continue the
   same phase/config.
 
+Training checkpoints are mid-epoch resumable. The checkpoint stores the next
+unprocessed training batch, and the reconstructed sampler skips exactly the
+completed prefix of the same seed/epoch permutation. Its reported length stays
+equal to the full epoch length; this is intentional so Lightning continues
+with the original epoch-global `batch_idx` and the progress-based Kelvin
+scheduler follows the same learning-rate sequence. In DDP, Lightning replaces
+the random sampler inside the skip batch sampler with its distributed sampler,
+while retaining the restored batch cursor. Keep the seed, dataset/manifests,
+batch size, world size, and sampler inputs unchanged when resuming.
+
 To resume, copy the original resolved YAML, add:
 
 ```yaml
@@ -619,6 +629,29 @@ checkpoint = torch.load(sys.argv[1], map_location="cpu", weights_only=False)
 print(checkpoint["kelvin_training_contract"])
 print("epoch", checkpoint["epoch"], "global_step", checkpoint["global_step"])
 PY
+```
+
+### Slurm preemption
+
+`system.save_on_preemption` defaults to `true`. On POSIX systems the trainer
+handles `SIGUSR1` by finishing the current batch, atomically publishing
+`checkpoints/last.ckpt`, marking W&B as preempting when supported, and exiting
+with status 1. Checkpointing is collective in DDP, but the host launcher only
+needs to forward the signal to rank zero; the callback synchronizes the
+decision across ranks. An outer Slurm script can then call `scontrol requeue`
+from the host. No Slurm executable or cluster-specific requeue logic is needed
+inside the training container.
+
+The data-cursor callback is registered before both periodic checkpoints and
+the signal checkpoint, so the just-completed batch is not replayed. A signal
+during validation restarts the validation loop from its beginning after
+resume; this is required because epoch-level metric accumulators cannot be
+recovered exactly in the middle of validation. Disable the handler only when
+another launcher owns `SIGUSR1`:
+
+```yaml
+system:
+  save_on_preemption: false
 ```
 
 ## No-auxiliary versus production-auxiliary training

@@ -67,6 +67,10 @@ class KelvinSystemTrainConfig(BaseConfigSchema):
     limit_val_batches: int | float | None = None
     log_every_n_steps: int = Field(default=10, ge=1)
     save_every_n_train_steps: int | None = Field(default=None, ge=1)
+    save_on_preemption: bool = Field(
+        default=True,
+        description="Atomically save checkpoints/last.ckpt and exit when SIGUSR1 is received.",
+    )
     checkpoint_monitor: str = "val/psnr"
     checkpoint_mode: Literal["min", "max"] = "max"
     save_top_k: int = Field(default=2, ge=0)

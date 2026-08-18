@@ -13,11 +13,12 @@ import yaml
 import torch
 
 from pytorch_lightning import Trainer, seed_everything
-from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.callbacks import Callback, ModelCheckpoint
 from pytorch_lightning.loggers import CSVLogger, WandbLogger
 
 from instant_nurec.config_schema.train import KelvinTrainConfig
-from instant_nurec.training.data import KelvinTrainingDataModule
+from instant_nurec.training.callbacks import AtomicCheckpointAndExitOnSignalCallback, PreemptionInterrupt
+from instant_nurec.training.data import KelvinTrainingDataModule, ResumableDataModuleCallback
 from instant_nurec.training.system import KelvinTrainingSystem
 
 
@@ -87,6 +88,9 @@ def make_checkpoint_callback(config: KelvinTrainConfig, out_dir: Path) -> ModelC
             save_last=True,
             save_top_k=-1,
             every_n_train_steps=config.system.save_every_n_train_steps,
+            # The signal callback also publishes last.ckpt. Keep a single
+            # rolling resume target instead of creating last-v1.ckpt.
+            enable_version_counter=False,
         )
     return ModelCheckpoint(
         dirpath=out_dir / "checkpoints",
@@ -97,7 +101,26 @@ def make_checkpoint_callback(config: KelvinTrainConfig, out_dir: Path) -> ModelC
         mode=config.system.checkpoint_mode,
         every_n_epochs=1,
         auto_insert_metric_name=False,
+        enable_version_counter=False,
     )
+
+
+def make_training_callbacks(
+    config: KelvinTrainConfig,
+    out_dir: Path,
+    datamodule: KelvinTrainingDataModule,
+) -> list[Callback]:
+    """Build callbacks in checkpoint-safe order.
+
+    The data cursor must advance before either the signal callback or regular
+    ModelCheckpoint observes the DataModule state.
+    """
+
+    callbacks: list[Callback] = [ResumableDataModuleCallback(datamodule)]
+    if config.system.save_on_preemption:
+        callbacks.append(AtomicCheckpointAndExitOnSignalCallback(out_dir / "checkpoints" / "last.ckpt"))
+    callbacks.append(make_checkpoint_callback(config, out_dir))
+    return callbacks
 
 
 def run_training(config: KelvinTrainConfig) -> Path:
@@ -114,7 +137,6 @@ def run_training(config: KelvinTrainConfig) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "resolved.yaml").write_text(yaml.safe_dump(config.model_dump(mode="json"), sort_keys=False))
     datamodule = KelvinTrainingDataModule(config)
-    checkpoint = make_checkpoint_callback(config, out_dir)
     trainer = Trainer(
         default_root_dir=out_dir,
         accelerator=config.system.accelerator,
@@ -125,7 +147,7 @@ def run_training(config: KelvinTrainConfig) -> Path:
         max_epochs=config.system.max_epochs,
         deterministic=config.system.deterministic,
         logger=make_training_logger(config, out_dir),
-        callbacks=[checkpoint],
+        callbacks=make_training_callbacks(config, out_dir, datamodule),
         log_every_n_steps=config.system.log_every_n_steps,
         limit_train_batches=config.system.limit_train_batches,
         limit_val_batches=config.system.limit_val_batches,
@@ -153,7 +175,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = make_parser().parse_args(argv)
     logging.basicConfig(level=getattr(logging, args.log_level))
     config = load_training_config(args.config)
-    output = run_training(config)
+    try:
+        output = run_training(config)
+    except PreemptionInterrupt as error:
+        logger.warning("Training preempted cleanly: %s", error)
+        return 1
     logger.info("Training completed: %s", output)
     return 0
 
