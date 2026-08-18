@@ -33,7 +33,12 @@ from instant_nurec.primitives.kelvin_primitive import KelvinInstantNuRecPrimitiv
 from instant_nurec.training.losses import KelvinLosses
 from instant_nurec.training.optim import CosineWithWarmupPBScheduler
 from instant_nurec.training.renderer import KelvinRenderOutput, render_kelvin_supervision
-from instant_nurec.training.run import make_checkpoint_callback, make_training_logger, resolve_training_strategy
+from instant_nurec.training.run import (
+    initialize_resume_logger_before_distributed_setup,
+    make_checkpoint_callback,
+    make_training_logger,
+    resolve_training_strategy,
+)
 from instant_nurec.training.system import KelvinTrainingSystem
 from instant_nurec.utils.batch import (
     CameraFrameLabels,
@@ -103,6 +108,99 @@ def test_wandb_logger_uses_stable_run_id_for_resume(tmp_path, monkeypatch):
     assert captured["resume"] == "allow"
     assert captured["project"] == "NRE"
     assert captured["entity"] == "nvidia-toronto"
+
+
+def test_resumed_wandb_initializes_on_external_global_rank_zero_before_ddp(tmp_path, monkeypatch):
+    accesses = []
+
+    class FakeLogger:
+        @property
+        def experiment(self):
+            accesses.append("experiment")
+            return object()
+
+    checkpoint = tmp_path / "last.ckpt"
+    config = KelvinTrainConfig(
+        out_dir=tmp_path,
+        resume_from_checkpoint=checkpoint,
+        dataset=InstantNuRecSplitsConfig(train=_dataset_config()),
+        logger=KelvinLoggerConfig(name="wandb"),
+    )
+    monkeypatch.setenv("SLURM_PROCID", "0")
+
+    assert initialize_resume_logger_before_distributed_setup(config, FakeLogger())
+    assert accesses == ["experiment"]
+
+
+def test_resumed_wandb_remains_lazy_on_nonzero_external_rank(tmp_path, monkeypatch):
+    class FakeLogger:
+        @property
+        def experiment(self):
+            raise AssertionError("nonzero ranks must not initialize W&B")
+
+    checkpoint = tmp_path / "last.ckpt"
+    config = KelvinTrainConfig(
+        out_dir=tmp_path,
+        resume_from_checkpoint=checkpoint,
+        dataset=InstantNuRecSplitsConfig(train=_dataset_config()),
+        logger=KelvinLoggerConfig(name="wandb"),
+    )
+    monkeypatch.setenv("SLURM_PROCID", "3")
+
+    assert not initialize_resume_logger_before_distributed_setup(config, FakeLogger())
+
+
+def test_fresh_wandb_run_keeps_lightning_lazy_initialization(tmp_path, monkeypatch):
+    class FakeLogger:
+        @property
+        def experiment(self):
+            raise AssertionError("fresh runs should keep Lightning's normal lazy initialization")
+
+    config = KelvinTrainConfig(
+        out_dir=tmp_path,
+        dataset=InstantNuRecSplitsConfig(train=_dataset_config()),
+        logger=KelvinLoggerConfig(name="wandb"),
+    )
+    monkeypatch.setenv("SLURM_PROCID", "0")
+
+    assert not initialize_resume_logger_before_distributed_setup(config, FakeLogger())
+
+
+@pytest.mark.parametrize(("resume", "expected_autolog"), [(False, True), (True, False)])
+def test_trainer_autologs_hparams_only_for_fresh_runs(tmp_path, monkeypatch, resume, expected_autolog):
+    captured = {}
+
+    class FakeTrainer:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+        def fit(self, *args, **kwargs):
+            captured["fit_ckpt_path"] = kwargs["ckpt_path"]
+
+    checkpoint = tmp_path / "last.ckpt"
+    config = KelvinTrainConfig(
+        out_dir=tmp_path,
+        resume_from_checkpoint=checkpoint if resume else None,
+        dataset=InstantNuRecSplitsConfig(train=_dataset_config()),
+    )
+    config.system.accelerator = "cpu"
+    config.system.devices = 1
+    monkeypatch.setattr(training_run_module, "Trainer", FakeTrainer)
+    monkeypatch.setattr(training_run_module, "seed_everything", lambda *args, **kwargs: None)
+    monkeypatch.setattr(training_run_module, "KelvinTrainingDataModule", lambda _config: object())
+    monkeypatch.setattr(training_run_module, "KelvinTrainingSystem", lambda _config: object())
+    monkeypatch.setattr(training_run_module, "make_training_logger", lambda *args: object())
+    monkeypatch.setattr(training_run_module, "make_training_callbacks", lambda *args: [])
+    monkeypatch.setattr(
+        training_run_module,
+        "initialize_resume_logger_before_distributed_setup",
+        lambda *args: False,
+    )
+
+    training_run_module.run_training(config)
+
+    assert captured["enable_autolog_hparams"] is expected_autolog
+    assert captured["fit_ckpt_path"] == (str(checkpoint) if resume else None)
 
 
 def test_training_run_id_can_be_shared_across_slurm_ranks(tmp_path, monkeypatch):

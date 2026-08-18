@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 
 from pathlib import Path
 from typing import Sequence
@@ -80,6 +81,45 @@ def make_training_logger(config: KelvinTrainConfig, out_dir: Path):
     )
 
 
+def initialize_resume_logger_before_distributed_setup(config: KelvinTrainConfig, training_logger) -> bool:
+    """Initialize a resumed W&B run before Lightning enters DDP setup.
+
+    Lightning lazily creates logger experiments inside its setup hook, between
+    distributed collectives.  If a resumed W&B client blocks there, rank zero
+    never enters the matching barrier while all other ranks wait in NCCL.
+    External launchers already expose the global rank, so initialize W&B on
+    rank zero before ``Trainer.fit`` creates the process group instead.
+
+    Returns whether this process initialized the logger, which also keeps the
+    rank policy directly testable without starting a distributed job.
+    """
+
+    if config.logger.name != "wandb" or config.resume_from_checkpoint is None:
+        return False
+
+    external_rank = next(
+        (
+            int(value)
+            for name in ("RANK", "SLURM_PROCID", "OMPI_COMM_WORLD_RANK")
+            if (value := os.environ.get(name)) is not None
+        ),
+        None,
+    )
+    if external_rank not in {None, 0}:
+        return False
+    if external_rank is None and _is_distributed_run(config):
+        logger.warning(
+            "Cannot identify the external global rank before distributed setup; "
+            "leaving resumed W&B initialization to Lightning."
+        )
+        return False
+
+    logger.info("Initializing resumed W&B run before distributed setup on global rank zero.")
+    _ = training_logger.experiment
+    logger.info("Resumed W&B run initialized before distributed setup.")
+    return True
+
+
 def make_checkpoint_callback(config: KelvinTrainConfig, out_dir: Path) -> ModelCheckpoint:
     if config.system.save_every_n_train_steps is not None:
         return ModelCheckpoint(
@@ -137,6 +177,8 @@ def run_training(config: KelvinTrainConfig) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "resolved.yaml").write_text(yaml.safe_dump(config.model_dump(mode="json"), sort_keys=False))
     datamodule = KelvinTrainingDataModule(config)
+    training_logger = make_training_logger(config, out_dir)
+    initialize_resume_logger_before_distributed_setup(config, training_logger)
     trainer = Trainer(
         default_root_dir=out_dir,
         accelerator=config.system.accelerator,
@@ -146,8 +188,11 @@ def run_training(config: KelvinTrainConfig) -> Path:
         precision=config.system.precision,
         max_epochs=config.system.max_epochs,
         deterministic=config.system.deterministic,
-        logger=make_training_logger(config, out_dir),
+        logger=training_logger,
         callbacks=make_training_callbacks(config, out_dir, datamodule),
+        # A resumed W&B run already has its config. Avoid a second rank-zero
+        # config update between distributed collectives after setup.
+        enable_autolog_hparams=config.resume_from_checkpoint is None,
         log_every_n_steps=config.system.log_every_n_steps,
         limit_train_batches=config.system.limit_train_batches,
         limit_val_batches=config.system.limit_val_batches,
