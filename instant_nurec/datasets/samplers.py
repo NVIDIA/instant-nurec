@@ -20,6 +20,7 @@ import logging
 import numpy as np
 
 from instant_nurec.config_schema.dataset import AdaptiveSequentialFrameBatchSamplerConfig
+from instant_nurec.datasets.instantnurec_base import InstantNuRecDataError
 from instant_nurec.utils.types import HalfClosedInterval
 
 
@@ -153,7 +154,7 @@ class UniformFrameBatchSampler:
         ]
         if not valid_intervals:
             longest = max((interval.end - interval.start for interval in time_intervals), default=0)
-            raise ValueError(
+            raise InstantNuRecDataError(
                 f"Uniform sampling needs a contiguous span of {total_gap} us, but the longest is {longest} us"
             )
         counts = [end - start + 1 for start, end in valid_intervals]

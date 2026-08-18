@@ -10,9 +10,9 @@ import os
 from dataclasses import dataclass, field
 
 import numpy as np
-import torch
 
 from instant_nurec.config_schema.dataset import NCoreMixtureDatasetConfig
+from instant_nurec.datasets.instantnurec_base import BaseInstantNuRecIndexableDataset
 from instant_nurec.datasets.instantnurec_ncore import NCoreInstantNuRecDataset
 from instant_nurec.utils.batch import InstantNuRecDataBatch
 
@@ -20,7 +20,7 @@ from instant_nurec.utils.batch import InstantNuRecDataBatch
 logger = logging.getLogger(__name__)
 
 
-class NCoreMixtureDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
+class NCoreMixtureDataset(BaseInstantNuRecIndexableDataset[InstantNuRecDataBatch]):
     """Mixture sampling with the same length and resampling contract as Bazel NRE."""
 
     @dataclass
@@ -51,9 +51,16 @@ class NCoreMixtureDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
                 return self.dataset[index]
             return self.dataset[int(rng.integers(self.full_length))]
 
-    def __init__(self, config: NCoreMixtureDatasetConfig, *, global_seed: int | None = None) -> None:
+    def __init__(
+        self,
+        config: NCoreMixtureDatasetConfig,
+        *,
+        global_seed: int | None = None,
+        retry_on_error: bool = False,
+    ) -> None:
         self.datasets: list[NCoreMixtureDataset.SubDataset] = []
         self._global_seed = global_seed
+        self._retry_on_error = retry_on_error
         self._rng_epoch = -1
         self._epoch = -1
         for name, component in config.mixture.items():
@@ -66,6 +73,7 @@ class NCoreMixtureDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
                 frame_height=dataset_config.camera_subsampler.frame_height,
                 n_frames_per_sample=dataset_config.frame_batch_sampler.n_frames_per_sample,
                 global_seed=global_seed,
+                retry_on_error=retry_on_error,
             )
             self.datasets.append(self.SubDataset(name, dataset, component.sample_ratio))
         if not self.datasets:
@@ -100,10 +108,13 @@ class NCoreMixtureDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
         digest = hashlib.sha256(f"{self._rng_epoch}_{batch_idx}_{global_seed}".encode()).digest()
         return np.random.default_rng(seed=int.from_bytes(digest[:8], "big"))
 
-    def __getitem__(self, batch_idx: int) -> InstantNuRecDataBatch:
+    def getitem_allow_exceptions(
+        self,
+        batch_idx: int,
+        rng: np.random.Generator,
+    ) -> InstantNuRecDataBatch:
         if not 0 <= batch_idx < len(self):
             raise IndexError(f"Mixture index {batch_idx} is outside [0, {len(self)})")
-        rng = self._get_rng(batch_idx)
         component_index = batch_idx
         for component in self.datasets:
             if component_index < component.sampled_length:

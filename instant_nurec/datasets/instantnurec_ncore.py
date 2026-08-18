@@ -36,7 +36,11 @@ import instant_nurec.utils.ncore_utils as ncore_utils
 from instant_nurec.datasets.tracks import CuboidTracks, CuboidTracksDataPack, TrackFlags
 from instant_nurec.datasets.utils import compute_cuboid_df, consolidate_cuboid_tracks
 from instant_nurec.config_schema.dataset import ExternalSupervisionCameraIdConfig, NCoreInstantNuRecDatasetConfig
-from instant_nurec.datasets.instantnurec_base import CameraSubsampler, InstantNuRecDataError
+from instant_nurec.datasets.instantnurec_base import (
+    BaseInstantNuRecIndexableDataset,
+    CameraSubsampler,
+    InstantNuRecDataError,
+)
 from instant_nurec.datasets.samplers import (
     AdaptiveSequentialFrameBatchSampler,
     SampledSensorFrameIdxs,
@@ -73,7 +77,7 @@ def interval_list_intersect(
     return intersected_intervals
 
 
-class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
+class NCoreInstantNuRecDataset(BaseInstantNuRecIndexableDataset[InstantNuRecDataBatch]):
     """
     The native ncore dataset loader
     """
@@ -166,6 +170,7 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
         frame_height: int,
         n_frames_per_sample: int,
         global_seed: int | None = None,
+        retry_on_error: bool = False,
     ):
         # ``frame_width`` / ``frame_height`` / ``n_frames_per_sample`` are
         # passed in by the caller (typically ``instant_nurec.model.make``),
@@ -174,6 +179,7 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
         self._frame_height = frame_height
         self._n_frames_per_sample = n_frames_per_sample
         self._global_seed = global_seed
+        self._retry_on_error = retry_on_error
 
         self.open_consolidated = config.open_consolidated
         self.camera_max_fov_deg = config.camera_max_fov_deg
@@ -935,13 +941,16 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
             camera_calibrations=OrderedDict([(selected_camera_id, camera_calibration)]),
         )
 
-    def __getitem__(self, batch_idx: int) -> InstantNuRecDataBatch:
+    def getitem_allow_exceptions(
+        self,
+        batch_idx: int,
+        rng: np.random.Generator,
+    ) -> InstantNuRecDataBatch:
         # Disable fsspect INFO logs to not spam the logs.
         logging.getLogger("fsspec").setLevel(logging.WARNING)
 
         sequence_idx: int = batch_idx // self.num_samples_per_sequence
         sample_idx: int = batch_idx % self.num_samples_per_sequence
-        rng = self._get_rng(batch_idx)
 
         frame_batch_sampler = self._build_frame_batch_sampler()
         assert sample_idx < frame_batch_sampler.n_samples_per_sequence, "Sample index out of bounds"

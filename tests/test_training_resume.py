@@ -20,6 +20,7 @@ from instant_nurec.training.callbacks import AtomicCheckpointAndExitOnSignalCall
 from instant_nurec.training.data import KelvinTrainingDataModule, ResumableDataModuleCallback, SkipBatchSampler
 from instant_nurec.training.optim import CosineWithWarmupPBScheduler
 from instant_nurec.training.run import make_training_callbacks
+from instant_nurec.datasets.mixture import NCoreMixtureDataset
 
 
 class _ToyDataset(Dataset):
@@ -58,6 +59,19 @@ class _ToyKelvinDataModule(KelvinTrainingDataModule):
     def _make_dataset(self, dataset_config):
         del dataset_config
         return _ToyDataset()
+
+
+class _ToyMixtureKelvinDataModule(KelvinTrainingDataModule):
+    def _make_dataset(self, dataset_config):
+        del dataset_config
+        child = _ToyDataset(size=1)
+        mixture = object.__new__(NCoreMixtureDataset)
+        mixture.datasets = [NCoreMixtureDataset.SubDataset("toy", child, 1.0)]
+        mixture._global_seed = self.config.seed
+        mixture._retry_on_error = True
+        mixture._rng_epoch = -1
+        mixture._epoch = -1
+        return mixture
 
 
 class _ResumeProbe(LightningModule):
@@ -102,6 +116,31 @@ class _ResumeProbe(LightningModule):
             }
         )
         return loss.detach()
+
+
+class _EpochPropagationProbe(LightningModule):
+    def __init__(self, records: list[tuple[int, int, int, int, int]]) -> None:
+        super().__init__()
+        self.weight = torch.nn.Parameter(torch.tensor(0.0))
+        self.records = records
+
+    def configure_optimizers(self):
+        return torch.optim.SGD([self.weight], lr=0.1)
+
+    def training_step(self, batch: torch.Tensor, batch_idx: int):
+        del batch, batch_idx
+        mixture = self.trainer.datamodule.train_dataset
+        child = mixture.datasets[0].dataset
+        self.records.append(
+            (
+                self.current_epoch,
+                mixture._rng_epoch,
+                child.rng_epoch,
+                mixture.epoch,
+                child.epoch,
+            )
+        )
+        return self.weight.square()
 
 
 class _TriggerPreemption(Callback):
@@ -175,6 +214,36 @@ def test_resumable_callback_precedes_all_checkpoint_callbacks(tmp_path) -> None:
     assert isinstance(callbacks[1], AtomicCheckpointAndExitOnSignalCallback)
     assert isinstance(callbacks[2], ModelCheckpoint)
     callbacks[1].teardown(None, None, "fit")
+
+
+def test_real_trainer_propagates_each_epoch_to_mixture_and_children(monkeypatch) -> None:
+    monkeypatch.setattr(
+        training_data_module,
+        "InstantNuRecDataBatch",
+        SimpleNamespace(collate_fn=default_collate),
+    )
+    records: list[tuple[int, int, int, int, int]] = []
+    datamodule = _ToyMixtureKelvinDataModule(_toy_config())
+    trainer = Trainer(
+        accelerator="cpu",
+        devices=1,
+        max_epochs=2,
+        reload_dataloaders_every_n_epochs=1,
+        logger=False,
+        enable_checkpointing=False,
+        enable_model_summary=False,
+        enable_progress_bar=False,
+        num_sanity_val_steps=0,
+        limit_val_batches=0,
+        deterministic=True,
+    )
+
+    trainer.fit(_EpochPropagationProbe(records), datamodule=datamodule)
+
+    assert records == [
+        (0, 0, 0, 0, 0),
+        (1, 1, 1, 1, 1),
+    ]
 
 
 def test_mid_epoch_checkpoint_resume_has_no_replay_and_preserves_schedule(tmp_path, monkeypatch) -> None:

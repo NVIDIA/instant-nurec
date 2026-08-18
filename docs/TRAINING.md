@@ -244,6 +244,13 @@ training config; validation keeps
 `rng_epoch=-1`. Dataloaders are recreated each epoch so worker processes see
 the new training epoch.
 
+Like the reference dataset, training and validation retry a failed indexed
+sample with a deterministic replacement, without revisiting an already failed
+index, for at most ten attempts. This keeps intentionally short or corrupt
+outliers from aborting distributed training without changing manifest length,
+mixture weights, or epoch permutations. Prediction remains one-shot and fails
+loud so an inference input is never silently replaced.
+
 For source B, supervision also samples the sequence-relative
 `nurec/all.zarr.itar` camera at ratio 0.3. Those frames carry
 `RayFlags.SYNTHETIC`, so rendered RGB receives weight 0.25. They use

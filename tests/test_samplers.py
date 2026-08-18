@@ -352,10 +352,11 @@ def test_uniform_sampler_samples_valid_intervals_by_integer_cardinality():
 
 
 def test_uniform_sampler_rejects_context_span_that_is_too_short():
+    from instant_nurec.datasets.instantnurec_base import InstantNuRecDataError
     from instant_nurec.utils.types import HalfClosedInterval
 
     sampler = _make_uniform_sampler(n_frames_per_sample=3, frame_gap_timestamp_us=10)
-    with pytest.raises(ValueError, match="contiguous span of 20 us"):
+    with pytest.raises(InstantNuRecDataError, match="contiguous span of 20 us"):
         sampler.sample_frame_batch(
             sample_idx=0,
             camera_frame_timestamps_us={"camera": np.arange(10)},

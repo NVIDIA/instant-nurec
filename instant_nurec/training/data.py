@@ -70,13 +70,18 @@ class KelvinTrainingDataModule(LightningDataModule):
 
     def _make_dataset(self, dataset_config):
         if not isinstance(dataset_config, NCoreInstantNuRecDatasetConfig):
-            return NCoreMixtureDataset(dataset_config, global_seed=self.config.seed)
+            return NCoreMixtureDataset(
+                dataset_config,
+                global_seed=self.config.seed,
+                retry_on_error=True,
+            )
         return NCoreInstantNuRecDataset(
             dataset_config,
             frame_width=dataset_config.camera_subsampler.frame_width,
             frame_height=dataset_config.camera_subsampler.frame_height,
             n_frames_per_sample=dataset_config.frame_batch_sampler.n_frames_per_sample,
             global_seed=self.config.seed,
+            retry_on_error=True,
         )
 
     def train_dataloader(self) -> DataLoader:
@@ -84,7 +89,7 @@ class KelvinTrainingDataModule(LightningDataModule):
         assert dataset_config is not None
         if self.train_dataset is None:
             self.train_dataset = self._make_dataset(dataset_config)
-        trainer = getattr(self, "_trainer", None)
+        trainer = getattr(self, "trainer", None)
         if trainer is not None:
             self.train_dataset.set_rng_epoch(trainer.current_epoch)
             self.train_dataset.set_epoch(trainer.current_epoch)
@@ -123,7 +128,7 @@ class KelvinTrainingDataModule(LightningDataModule):
             return []
         if self.val_dataset is None:
             self.val_dataset = self._make_dataset(dataset_config)
-        trainer = getattr(self, "_trainer", None)
+        trainer = getattr(self, "trainer", None)
         if trainer is not None:
             # Validation samples are deliberately epoch-independent.  Only the
             # augmentation epoch changes; rng_epoch stays at its default -1.
