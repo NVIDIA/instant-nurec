@@ -297,9 +297,24 @@ class CameraFrameLabels:
         seq: List[Self],
         device: torch.device = torch.device("cpu"),
     ) -> Self:
+        # Match the Bazel data contract: a camera without depth contributes
+        # zero distance when collated with cameras that do have depth.  Depth
+        # losses already treat zero as invalid, while keeping one dense tensor
+        # lets real and synthetic supervision frames share a batch.
+        metric_distance_seq = [item.metric_distance for item in seq]
+        if (
+            first_not_none_distance := next(
+                (distance for distance in metric_distance_seq if distance is not None), None
+            )
+        ) is not None:
+            metric_distance_seq = [
+                torch.zeros_like(first_not_none_distance) if distance is None else distance
+                for distance in metric_distance_seq
+            ]
+
         return cls(
             rgb=collate_fn([item.rgb for item in seq], device),
-            metric_distance=collate_fn([item.metric_distance for item in seq], device),
+            metric_distance=collate_fn(metric_distance_seq, device),
             normals=collate_fn([item.normals for item in seq], device),
             flags=collate_fn([item.flags for item in seq], device),
         )
