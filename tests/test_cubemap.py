@@ -138,6 +138,125 @@ def test_cubemap_ray_directions_face_centers_align_with_dominant_axis():
 
 
 # ---------------------------------------------------------------------------
+# Cubemap sampling and observation-derived sky
+# ---------------------------------------------------------------------------
+
+
+def test_face_mapping_and_sampling_round_trip():
+    import torch
+
+    from instant_nurec.utils.cubemap import (
+        cubemap_ray_directions,
+        directions_to_cubemap_face_uv,
+        sample_sky_cubemap,
+    )
+
+    directions = cubemap_ray_directions(8, torch.device("cpu"))
+    face, uv = directions_to_cubemap_face_uv(directions)
+    assert face.shape == (6, 8, 8)
+    assert uv.shape == (6, 8, 8, 2)
+    for face_index in range(6):
+        assert torch.all(face[face_index] == face_index)
+
+    colors = torch.tensor(
+        [
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 1.0],
+            [1.0, 1.0, 0.0],
+            [1.0, 0.0, 1.0],
+            [0.0, 1.0, 1.0],
+        ]
+    )
+    cubemap = colors[:, None, None, :].expand(6, 8, 8, 3).contiguous()
+    sampled = sample_sky_cubemap(cubemap, directions)
+    torch.testing.assert_close(sampled, cubemap)
+
+
+def test_observed_sky_uses_sky_pixels_and_finite_fallback():
+    import torch
+
+    from instant_nurec.utils.cubemap import build_observed_sky_cubemap
+
+    directions = torch.tensor(
+        [
+            [0.0, 0.0, 1.0],
+            [0.0, 0.0, -1.0],
+            [1.0, 0.0, 0.2],
+        ]
+    )
+    rgb = torch.tensor(
+        [
+            [0.20, 0.45, 0.90],
+            [0.12, 0.14, 0.16],
+            [0.22, 0.48, 0.88],
+        ]
+    )
+    cubemap = build_observed_sky_cubemap(
+        8,
+        directions,
+        rgb,
+        sky_mask=torch.tensor([True, False, True]),
+        road_mask=torch.tensor([False, True, False]),
+    )
+
+    assert cubemap.shape == (6, 8, 8, 3)
+    # +Z is face 4; the directly observed center texel retains source sky RGB.
+    torch.testing.assert_close(cubemap[4, 4, 4], rgb[0])
+    # ROAD infill is deliberately deferred until after Gaussian density
+    # pruning; the observation-derived base cube only needs a finite fallback.
+    assert torch.isfinite(cubemap).all()
+
+
+def test_observed_sky_returns_softened_visibility_mask():
+    import torch
+
+    from instant_nurec.utils.cubemap import build_observed_sky_cubemap_with_mask
+
+    directions = torch.tensor(
+        [
+            [0.0, 0.0, 1.0],
+            [0.1, 0.0, 0.99],
+            [0.0, 0.0, -1.0],
+        ]
+    )
+    rgb = torch.tensor(
+        [
+            [0.20, 0.45, 0.90],
+            [0.22, 0.48, 0.88],
+            [0.12, 0.14, 0.16],
+        ]
+    )
+    cubemap, mask = build_observed_sky_cubemap_with_mask(
+        64,
+        directions,
+        rgb,
+        sky_mask=torch.tensor([True, True, False]),
+        road_mask=torch.tensor([False, False, True]),
+    )
+
+    assert cubemap.shape == (6, 64, 64, 3)
+    assert mask.shape == (6, 64, 64, 1)
+    assert 0.0 <= float(mask.min()) <= float(mask.max()) <= 1.0
+    assert mask[4, 32, 32, 0] > 0.9
+    assert torch.isfinite(mask).all()
+
+
+def test_soften_cubemap_mask_dilates_then_feathers():
+    import torch
+
+    from instant_nurec.utils.cubemap import soften_cubemap_mask
+
+    mask = torch.zeros(6, 64, 64, 1)
+    mask[0, 32, 32, 0] = 1.0
+    softened = soften_cubemap_mask(mask)
+
+    assert softened[0, 32, 32, 0] > 0.9
+    assert 0.0 < softened[0, 32, 52, 0] < 1.0
+    assert softened[1:].count_nonzero() == 0
+
+
+# ---------------------------------------------------------------------------
 # rotate_sky_cubemap
 # ---------------------------------------------------------------------------
 

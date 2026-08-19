@@ -29,6 +29,13 @@ class PrimitiveExportPreprocessConfig(BaseConfigSchema):
     density_prune_threshold: float = Field(
         default=0.01, description="Density threshold for pruning Gaussians in each chunk."
     )
+    infill_road_color: bool = Field(
+        default=True,
+        description=(
+            "Fill cubemap directions without observed SKY pixels with a "
+            "representative color from density-pruned ROAD Gaussians."
+        ),
+    )
 
 
 class GaussiansActivationConfig(BaseConfigSchema):

@@ -15,17 +15,19 @@ NVIDIA InstantNuRec is a feed-forward neural reconstruction model for autonomous
 
 3D simulation platforms are critical for autonomous driving because they enable end-to-end policy evaluation, thereby reducing development costs and improving safety. In recent years, neural simulation has become predominant, with methods such as NuRec playing a central role; however, these methods remain relatively slow and typically require per-scene tuning. In this work, we present Instant NuRec, a feed-forward neural reconstruction model that turns a multi-view driving log into a fully simulatable 3D Gaussian Splatting (3DGS) world in a single forward pass. The model accepts multi-view input from a calibrated camera rig and emits a layered output consisting of static and dynamic 3DGS layers, a sky cubemap, and per-camera ISP corrections, while providing native support for non-pinhole camera models via 3DGUT. It reconstructs a 10–20-second multi-camera scene in roughly 1.5 seconds and achieves a PSNR on the Waymo Open Dataset that is 2.01 dB above the strongest evaluated baseline. Instant NuRec is deeply integrated into NuRec and is compatible with AlpaSim for closed-loop simulation.
 
-> **Repository scope:** This standalone CLI exports only the static scene
-> Gaussians to PLY. The abstract above describes the complete research model.
+> **Repository scope:** This standalone CLI exports the static scene Gaussians
+> to PLY together with an observation-derived sky cubemap sidecar and optional
+> reference render. The abstract above describes the complete research model,
+> including layers that are not part of this static export path.
 
 ![InstantNuRec demo](docs/demo.gif)
 
 ## Pipeline Overview
 
 This repo goes from ncorev4 ingest → frame batch prep → forward pass
-→ 3D-Gaussian PLY export. The PLY output is usable directly as a
-static reconstruction, and can also serve as initialization for
-downstream NuRec training to reach higher fidelity.
+→ 3D-Gaussian PLY and sky-cubemap export. The PLY output is usable
+directly as a static reconstruction, and can also serve as initialization
+for downstream NuRec training to reach higher fidelity.
 
 Instant-NuRec and
 [NuRec](https://docs.nvidia.com/nurec/nurec/reconstruct-av-scene.html)
@@ -65,7 +67,7 @@ Instant NuRec leverages the following foundational technologies:
 
 ## Pipeline Overview
 
-NCore V4 Sequence ─► Frame Batching ─► Eager PyTorch Model ─► 3D Gaussians ─► PLY (per-chunk or merged)
+NCore V4 Sequence ─► Frame Batching ─► Eager PyTorch Model ─► 3D Gaussians + Sky ─► Export Bundle
 
 ## User Guide
 
@@ -90,8 +92,24 @@ source .venv/bin/activate
 ```
 
 `setup.sh` runs `uv sync --frozen`, which installs the locked dependency
-tree from `uv.lock` into `.venv/`. The only CUDA dependency is whatever
-the pinned `torch` wheel ships with.
+tree from `uv.lock` into `.venv/`. In this default installation, the only
+CUDA dependency is whatever the pinned `torch` wheel ships with.
+
+The optional calibrated sky-composited renders use `gsplat`, which is not
+installed by `setup.sh`. Install the render extra before using
+`--render-preview` or `--render-video`:
+
+```bash
+uv sync --extra render
+```
+
+The first calibrated render JIT-compiles the pinned public CUDA kernels for
+the active PyTorch/CUDA/GPU target and can take several minutes; subsequent
+runs reuse the cache.
+
+The PLY, sky sidecar, and cubemap quick-look image do not require this
+extra. Full-video export also requires `ffmpeg` with the `libx264` encoder on
+`PATH`.
 
 This repo is native-Python only — no Docker required. If you want a
 container, use the standard
@@ -170,16 +188,107 @@ python run_inference.py \
     --merge
 ```
 
-For the default `pa-front` command above, success looks like a single PLY at
+For the default `pa-front` command above, success looks like one merged export
+bundle whose PLY is at
 `./demo_output/<run_id>/ply/pai_000da9de-.../pai_000da9de-....ply` —
 ~1.88 M Gaussians, kl-optimal voxelized from 2.87 M merged (3.18 M
 pre-merge across 2 chunks) to land in `[0.9 * --n-gaussians,
 --n-gaussians]` (default target 2 M). Omit `--merge` to write
-per-chunk PLYs instead (voxelization is bundled with merge and
+per-chunk bundles instead (voxelization is bundled with merge and
 runs only when the flag is set).
 
 To run another model on the same clip, select its profile, such as
 `--model pa-multiview` or `--model pq-front`.
+
+##### Sky outputs and rendered preview
+
+Every exported PLY has two sky files with the same stem. With `--merge`,
+the stem is `<sequence_id>`; without it, each stem is
+`<sequence_id>_chunk<N>`.
+
+| output | contents |
+| --- | --- |
+| `<stem>.ply` | Static 3D Gaussian scene. |
+| `<stem>.sky.npz` | World-aligned cubemap, visibility mask, per-camera affine matrices, face order, and format metadata. Keep this machine-readable sidecar next to the PLY. |
+| `<stem>.sky.png` | 3×2 cubemap-face layout for a quick visual check; this is an atlas, not a camera render. |
+| `<stem>.render.png` | First context frame with the cubemap alpha-composited behind the Gaussians and the camera affine correction applied. Written only with `--render-preview`. |
+| `<stem>.render.mp4` | Every original frame from the first context camera, rendered at the profile resolution with its calibrated projection, exposure start/end trajectory, rolling shutter, sky, and camera affine. Written only with `--merge --render-video`. |
+
+The `<stem>.sky.npz` sidecar uses format version 1 and can be loaded with
+`numpy.load(path, allow_pickle=False)`. It contains exactly these keys, where
+`S` is the cubemap face size (448 for the current released profiles) and `C`
+is the number of distinct context-camera sensors:
+
+| key | shape | NumPy dtype | meaning |
+| --- | --- | --- | --- |
+| `format_version` | scalar `()` | `int32` | The integer `1`. |
+| `sky_cubemap` | `(6, S, S, 3)` | `float16` | World-aligned canonical RGB cubemap. Values are intentionally not clamped before the camera affine transform. |
+| `sky_cubemap_mask` | `(6, S, S, 1)` | `float16` | Feathered observation-coverage weights in `[0, 1]`. |
+| `affine_matrix` | `(C, 3, 4)` | `float32` | Per-sensor RGB affine transforms `[A | b]`. |
+| `affine_sensor_indices` | `(C,)` | `int64` | `unique_sensor_idx` corresponding to each affine row. |
+| `affine_sensor_ids` | `(C,)` | Unicode | NCore sensor ID corresponding to each affine row. |
+| `face_order` | `(6,)` | Unicode `<U6` | `("right", "left", "top", "bottom", "front", "back")`. |
+| `face_axes` | `(6,)` | Unicode `<U2` | `("+X", "-X", "-Y", "+Y", "+Z", "-Z")`. |
+| `uv_convention` | scalar `()` | Unicode | `"u_left_to_right_v_top_to_bottom"`. |
+| `coordinate_frame` | scalar `()` | Unicode `<U11` | `"ncore_world"`. |
+| `sky_source` | scalar `()` | Unicode | `"observed_rgb_semantics"`, `"observed_rgb_semantics_plus_fallback"`, or `"synthetic_fallback"`. |
+| `sky_observed_fraction` | scalar `()` | `float32` | Mean feathered observation-mask coverage. |
+
+Cubemap directions use the `ncore_world` `(x, y, z)` axes. For a nonzero
+direction, let `a = max(|x|, |y|, |z|)`; the dominant signed axis selects a
+face, and `(u, v)` are `grid_sample` coordinates in `[-1, 1]` (`+u` moves
+right across an image row and `+v` moves down across image rows):
+
+| index / face | dominant axis | `u` | `v` |
+| --- | --- | --- | --- |
+| `0` / `right` | `+X` | `-z/a` | `y/a` |
+| `1` / `left` | `-X` | `z/a` | `y/a` |
+| `2` / `top` | `-Y` | `x/a` | `z/a` |
+| `3` / `bottom` | `+Y` | `x/a` | `-z/a` |
+| `4` / `front` | `+Z` | `x/a` | `y/a` |
+| `5` / `back` | `-Z` | `-x/a` | `y/a` |
+
+The `<stem>.sky.png` quick-look lays these faces out as
+`[[left, front, right], [back, bottom, top]]`.
+
+Affine row `i` corresponds to `affine_sensor_indices[i]` and
+`affine_sensor_ids[i]`. Their order comes from the context rig's ordered camera
+calibrations, which follows the configured profile or repeated `--camera-id`
+order; the numeric sensor index is an identifier, not an array index.
+For a composited RGB color `c`, apply row `[A | b]` as
+`clamp(A @ c + b, 0, 1)`, after sky alpha compositing.
+
+To also produce a calibrated still preview and full source-trajectory video:
+
+```bash
+uv sync --extra render
+python run_inference.py \
+    --model pa-front \
+    --ncore-path /path/to/sequence.json \
+    --output-dir /tmp/out \
+    --merge \
+    --render-preview \
+    --render-video
+```
+
+Standard 3DGS PLY has no field for an environment cubemap or per-camera
+ISP correction. Consequently, SuperSplat and `ply_viewer` display the
+Gaussian foreground from `<stem>.ply` but do not automatically show the
+sky from `<stem>.sky.npz`; a sidecar-aware renderer must composite it.
+
+Both render outputs currently support NCore F-theta cameras and use their
+calibrated per-pixel world rays, including the original projection and
+interpolated exposure start/end rolling-shutter poses. `--render-preview`
+writes the first context frame associated with each exported PLY.
+`--render-video` reopens the source sequence and streams every original frame
+from the first configured context camera without loading the full ray sequence
+into memory. It requires `--merge`, because a complete trajectory should be
+rendered against one complete merged scene. The video path currently accepts
+one resolved NCore sequence per invocation and fails with the required
+`--max-chunks` value if the configured cap would truncate its reconstruction.
+These are source-trajectory checks, not arbitrary novel-view renders. Other
+camera models and F-theta cameras with an external windshield-distortion model
+are rejected explicitly rather than silently approximated.
 
 ##### View your output
 
@@ -233,7 +342,10 @@ python run_inference.py \
     --output-dir /tmp/out
 ```
 
-Output layout: PLYs only, under `out_dir/<run_id>/ply/<sequence_id>/...ply`.
+Output bundles are written under
+`out_dir/<run_id>/ply/<sequence_id>/<stem>.*`; the optional
+`<stem>.render.png` appears only with `--render-preview`, and
+`<stem>.render.mp4` appears only with `--merge --render-video`.
 
 #### CLI reference
 
@@ -241,11 +353,13 @@ Output layout: PLYs only, under `out_dir/<run_id>/ply/<sequence_id>/...ply`.
 | --- | --- | --- |
 | `--model` | `pa-front` | Input/checkpoint profile: `pa-front`, `pa-multiview`, or `pq-front`. |
 | `--ncore-path` | (required) | A `.json` file (single sequence) or a `.lst` manifest (one JSON path per line). |
-| `--output-dir` | (required) | Directory the pipeline writes PLYs into. |
+| `--output-dir` | (required) | Directory the pipeline writes PLY and sky-output bundles into. |
 | `--merge` | absent (false) | Boolean flag. When set, merges per-chunk primitives into a single frustum-ownership PLY per sequence (`<seq>.ply`) and runs kl-optimal voxelization (target count from `--n-gaussians`). Absent (default): per-chunk PLYs (`<seq>_chunk{N}.ply`), no voxelization. |
 | `--n-gaussians` | `2000000` | Target number of static Gaussians after voxelization. Only consulted when `--merge` is set. The voxel size is searched iteratively via bracketed binary search to land the count in `[0.9 * target, target]`. |
 | `--camera-id` | profile-dependent | Override a context camera. Repeat once per camera in canonical order. `pa-front` requires 1; `pa-multiview` supports 1, 3, or 5; `pq-front` is fixed to `camera_front_wide_120fov`. |
 | `--max-chunks` | `8` | Maximum number of time-chunks processed per clip. One chunk spans up to 13.5 s, so the default covers 108 s. Longer clips are truncated and a `WARNING` logs the required value. |
+| `--render-preview` | absent (false) | Write `<stem>.render.png` for the first context frame of each exported PLY, using the calibrated NCore F-theta projection, exposure trajectory, and sky. Requires `uv sync --extra render`. |
+| `--render-video` | absent (false) | Write `<stem>.render.mp4` from every original frame of the first context camera, using calibrated NCore F-theta rays, rolling-shutter poses, sky, and camera affine. Requires one resolved sequence, `--merge`, enough `--max-chunks` for full coverage, `uv sync --extra render`, and `ffmpeg` with `libx264`. |
 | `--log-level` | `INFO` | `DEBUG` / `INFO` / `WARNING` / `ERROR` / `CRITICAL`. |
 
 #### Environment variables
@@ -271,10 +385,10 @@ instant-nurec/
 │   │   ├── backbone/               # multi-view encoder, dense/PQ decoders, sky decoder
 │   │   ├── blocks/                 # attention, embeddings, DPT, camera encoding
 │   │   ├── kelvin.py               # dense full-model composition
-│   │   ├── static_core.py          # eager PLY-reconstruction heads
+│   │   ├── static_core.py          # eager static + observed-sky reconstruction heads
 │   │   ├── inference.py            # masking + primitive packaging
 │   │   └── system.py               # predict-loop harness
-│   ├── predict/                    # predict loop + PLY export + merge
+│   ├── predict/                    # predict loop + PLY/sky export + preview + merge
 │   ├── primitives/                 # KelvinInstantNuRecPrimitive
 │   └── utils/                      # batch / geometry / sensors / nn-extensions
 ├── tests/                          # branch-coverage tests

@@ -15,6 +15,7 @@
 
 import dataclasses
 import logging
+import math
 
 from collections import OrderedDict
 from dataclasses import dataclass
@@ -174,6 +175,30 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
         from instant_nurec.datasets.instantnurec_base import CameraSubsampler
 
         return CameraSubsampler(frame_width=self._frame_width, frame_height=self._frame_height)
+
+    def _subsample_camera_model_parameters(
+        self,
+        camera_sensor: ncore.data.CameraSensorProtocol,
+        camera_subsampler: CameraSubsampler,
+    ) -> ncore.data.ConcreteCameraModelParametersUnion:
+        """Copy and resize/crop a source camera calibration for inference."""
+
+        camera_model_parameters = dataclasses.replace(camera_sensor.model_parameters)
+
+        # Some camera models have bad linear_cde values. Fix only the copy so
+        # the source NCore calibration remains untouched.
+        if isinstance(camera_model_parameters, ncore.data.FThetaCameraModelParameters) and np.all(
+            camera_model_parameters.linear_cde == 0.0
+        ):
+            camera_model_parameters.linear_cde = np.array([1.0, 0.0, 0.0], dtype=np.float32)
+
+        if isinstance(camera_model_parameters, ncore.data.FThetaCameraModelParameters):
+            camera_model_parameters.max_angle = min(
+                np.deg2rad(self.camera_max_fov_deg) / 2.0,
+                camera_model_parameters.max_angle,
+            )
+
+        return camera_subsampler.apply_camera_parameters(camera_model_parameters)
 
     def __len__(self) -> int:
         return len(self.ncore_json_paths) * self.num_samples_per_sequence
@@ -373,21 +398,7 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
         current_unique_frame_idx: int = 0
         for camera_id in frame_batch_camera_ids:
             camera_sensor = camera_sensors[camera_id]
-            camera_model_parameters_copy = dataclasses.replace(camera_sensor.model_parameters)
-
-            # Some camera models have bad linear_cde values, manually fix them without overwriting originals
-            if isinstance(camera_model_parameters_copy, ncore.data.FThetaCameraModelParameters) and np.all(
-                camera_model_parameters_copy.linear_cde == 0.0
-            ):
-                camera_model_parameters_copy.linear_cde = np.array([1.0, 0.0, 0.0], dtype=np.float32)
-
-            if isinstance(camera_model_parameters_copy, ncore.data.FThetaCameraModelParameters):
-                # (This would make boundary pixels of omnidirectional cameras to be classified as invalid)
-                camera_model_parameters_copy.max_angle = min(
-                    np.deg2rad(self.camera_max_fov_deg) / 2.0, camera_model_parameters_copy.max_angle
-                )
-
-            camera_model_parameters = camera_subsampler.apply_camera_parameters(camera_model_parameters_copy)
+            camera_model_parameters = self._subsample_camera_model_parameters(camera_sensor, camera_subsampler)
             all_camera_model_parameters[camera_id] = camera_model_parameters
             frame_timestamps_us_list = []
             for frame_idx in frame_batch[str(camera_id)]:
@@ -517,6 +528,186 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
             T_rig_worlds_with_timestamps_us=T_rig_worlds_with_timestamps_us,
             sequence_loader=sequence_loader,
             camera_sensors=camera_sensors,
+        )
+
+    def load_full_camera_rig(
+        self,
+        ncore_json_path: str | UPath,
+        reference_rig: RigTrajectories,
+        camera_id: str | None = None,
+    ) -> RigTrajectories:
+        """Load every source exposure for one context camera as a lightweight rig.
+
+        The returned rig reuses the supplied reference rig's aligned world
+        trajectory and coordinate conversion, but rebuilds the selected camera
+        calibration from the source NCore sequence using the exact resize/crop
+        transform used for model inference. Only calibration, poses, and frame
+        start/end timestamps are materialized; images and per-pixel rays remain
+        lazy so callers can render one frame at a time.
+        """
+
+        context_camera_lookup = {str(context_camera): context_camera for context_camera in self.all_context_camera_ids}
+        if camera_id is None:
+            if len(context_camera_lookup) != 1:
+                raise ValueError(
+                    "camera_id is required when more than one context camera is configured; "
+                    f"available cameras: {sorted(context_camera_lookup)}"
+                )
+            selected_camera = next(iter(context_camera_lookup.values()))
+        else:
+            try:
+                selected_camera = context_camera_lookup[camera_id]
+            except KeyError as exc:
+                raise ValueError(
+                    f"Camera {camera_id!r} is not a configured context camera; "
+                    f"available cameras: {sorted(context_camera_lookup)}"
+                ) from exc
+
+        selected_camera_id = str(selected_camera)
+        if selected_camera_id not in reference_rig.camera_calibrations:
+            raise ValueError(f"Reference rig has no calibration for context camera {selected_camera_id!r}")
+        reference_calibration = reference_rig.camera_calibrations[selected_camera_id]
+        reference_trajectories = [
+            trajectory
+            for trajectory in reference_rig.rig_trajectories
+            if trajectory.sequence_id == reference_calibration.sequence_id
+        ]
+        if len(reference_trajectories) != 1:
+            raise ValueError(
+                "Expected exactly one reference trajectory for camera "
+                f"{selected_camera_id!r}, found {len(reference_trajectories)}"
+            )
+        reference_trajectory = reference_trajectories[0]
+
+        source_path = ncore_json_path if isinstance(ncore_json_path, UPath) else parse_universal_path(ncore_json_path)
+        if not source_path.exists():
+            raise InstantNuRecDataError(f"{source_path} does not exist.")
+        loaders_sensors = self._get_loaders_and_sensors(source_path, self.all_context_camera_ids)
+        camera_sensor = loaders_sensors.camera_sensors[selected_camera]
+
+        frame_start_timestamps_us = np.asarray(
+            camera_sensor.get_frames_timestamps_us(ncore.data.FrameTimepoint.START),
+            dtype=np.int64,
+        )
+        frame_end_timestamps_us = np.asarray(
+            camera_sensor.get_frames_timestamps_us(ncore.data.FrameTimepoint.END),
+            dtype=np.int64,
+        )
+        if frame_start_timestamps_us.ndim != 1 or frame_end_timestamps_us.ndim != 1:
+            raise ValueError("Source camera frame timestamps must be one-dimensional")
+        if frame_start_timestamps_us.shape != frame_end_timestamps_us.shape:
+            raise ValueError(
+                "Source camera START/END timestamp counts differ: "
+                f"{len(frame_start_timestamps_us)} != {len(frame_end_timestamps_us)}"
+            )
+        if len(frame_start_timestamps_us) == 0:
+            raise ValueError(f"Source camera {selected_camera_id!r} has no frames")
+        if np.any(frame_end_timestamps_us < frame_start_timestamps_us):
+            raise ValueError("Source camera frame END timestamps must not precede START timestamps")
+
+        # Full-video output must not outrun the scene reconstruction. Mirror the
+        # sampler's interval/chunk calculation across every configured context
+        # camera and fail explicitly when --max-chunks would truncate the clip.
+        rig_timestamps_us = np.asarray(loaders_sensors.T_rig_worlds_with_timestamps_us[1])
+        sequence_start_timestamp_us = int(rig_timestamps_us.min())
+        sequence_end_timestamp_us = int(rig_timestamps_us.max())
+        for context_camera in self.all_context_camera_ids:
+            if context_camera == selected_camera:
+                context_end_timestamps_us = frame_end_timestamps_us
+            else:
+                context_end_timestamps_us = np.asarray(
+                    loaders_sensors.camera_sensors[context_camera].get_frames_timestamps_us(
+                        ncore.data.FrameTimepoint.END
+                    ),
+                    dtype=np.int64,
+                )
+            if context_end_timestamps_us.ndim != 1 or len(context_end_timestamps_us) == 0:
+                raise ValueError(f"Context camera {context_camera!s} has no one-dimensional END timestamps")
+            sequence_start_timestamp_us = max(
+                sequence_start_timestamp_us,
+                int(context_end_timestamps_us.min()) - 100_000,
+            )
+            sequence_end_timestamp_us = min(
+                sequence_end_timestamp_us,
+                int(context_end_timestamps_us.max()) + 100_000,
+            )
+        if sequence_end_timestamp_us < sequence_start_timestamp_us:
+            raise ValueError("Context-camera and rig-pose timestamp ranges do not overlap")
+        max_chunk_timespan_us = (
+            self.config.frame_batch_sampler.max_frame_gap_timestamp_us * self._n_frames_per_sample
+        )
+        required_chunks = max(
+            1,
+            math.ceil(
+                (sequence_end_timestamp_us - sequence_start_timestamp_us) / max_chunk_timespan_us
+            ),
+        )
+        if required_chunks > self.num_samples_per_sequence:
+            raise ValueError(
+                "Full calibrated video requires a complete reconstructed scene, but "
+                f"--max-chunks={self.num_samples_per_sequence} covers only the first part of this clip. "
+                f"Rerun with --max-chunks {required_chunks}."
+            )
+
+        frame_timestamps_us = torch.from_numpy(
+            np.stack([frame_start_timestamps_us, frame_end_timestamps_us], axis=1)
+        ).to(device=reference_trajectory.T_rig_world_timestamps_us.device)
+
+        # Keep interpolation valid at every exposure boundary. Some source
+        # sequences start/end just outside the nominal rig-pose range; constant
+        # endpoint padding matches the inference loader's trajectory policy.
+        full_T_rig_worlds = reference_trajectory.T_rig_worlds
+        full_T_rig_world_timestamps_us = reference_trajectory.T_rig_world_timestamps_us
+        sensor_min_timestamp_us = int(frame_start_timestamps_us.min()) - 1
+        sensor_max_timestamp_us = int(frame_end_timestamps_us.max()) + 1
+        if sensor_min_timestamp_us < int(full_T_rig_world_timestamps_us[0].item()):
+            full_T_rig_worlds = torch.cat([full_T_rig_worlds[:1], full_T_rig_worlds], dim=0)
+            full_T_rig_world_timestamps_us = torch.cat(
+                [
+                    full_T_rig_world_timestamps_us.new_tensor([sensor_min_timestamp_us]),
+                    full_T_rig_world_timestamps_us,
+                ],
+                dim=0,
+            )
+        if sensor_max_timestamp_us > int(full_T_rig_world_timestamps_us[-1].item()):
+            full_T_rig_worlds = torch.cat([full_T_rig_worlds, full_T_rig_worlds[-1:]], dim=0)
+            full_T_rig_world_timestamps_us = torch.cat(
+                [
+                    full_T_rig_world_timestamps_us,
+                    full_T_rig_world_timestamps_us.new_tensor([sensor_max_timestamp_us]),
+                ],
+                dim=0,
+            )
+
+        camera_subsampler = self._build_camera_subsampler()
+        camera_model_parameters = self._subsample_camera_model_parameters(camera_sensor, camera_subsampler)
+        source_T_sensor_rig = np.asarray(unpack_optional(camera_sensor.T_sensor_rig))
+        camera_calibration = RigTrajectories.CameraCalibration(
+            sequence_id=reference_calibration.sequence_id,
+            unique_sensor_idx=reference_calibration.unique_sensor_idx,
+            T_sensor_rig=to_torch(
+                source_T_sensor_rig,
+                device=reference_calibration.T_sensor_rig.device,
+                dtype=reference_calibration.T_sensor_rig.dtype,
+            ),
+            camera_model_parameters=camera_model_parameters,
+        )
+        full_trajectory = RigTrajectories.RigTrajectory(
+            sequence_id=reference_trajectory.sequence_id,
+            cameras_frame_timestamps_us={selected_camera_id: frame_timestamps_us},
+            T_rig_worlds=full_T_rig_worlds,
+            T_rig_world_timestamps_us=full_T_rig_world_timestamps_us,
+        )
+        logger.info(
+            "Loaded %d source frames for render camera %s without images or rays.",
+            len(frame_timestamps_us),
+            selected_camera_id,
+        )
+        return RigTrajectories(
+            T_world_base=reference_rig.T_world_base,
+            world_to_scene=reference_rig.world_to_scene,
+            rig_trajectories=[full_trajectory],
+            camera_calibrations=OrderedDict([(selected_camera_id, camera_calibration)]),
         )
 
     def __getitem__(self, batch_idx: int) -> InstantNuRecDataBatch:

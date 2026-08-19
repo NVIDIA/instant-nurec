@@ -37,6 +37,7 @@ from instant_nurec.model.backbone.decoders import KelvinDPTDecoder, KelvinPointQ
 from instant_nurec.model.backbone.encoders import KelvinDAv3Encoder
 from instant_nurec.model.post_processing import PerCameraAffinePostProcessing
 from instant_nurec.config_schema.models import KelvinModelConfig, KelvinPointQueryCADecoderConfig
+from instant_nurec.utils.cubemap import build_observed_sky_cubemap_with_mask
 
 
 @dataclass(kw_only=True, slots=True)
@@ -58,12 +59,15 @@ class KelvinPointQueryStaticOutput:
     normals: torch.Tensor
     affine_matrix: torch.Tensor
     source_indices: torch.Tensor
+    sky_cubemap: torch.Tensor
+    sky_cubemap_mask: torch.Tensor
 
 
 class KelvinStaticCore(nn.Module):
     """Static Gaussian reconstruction heads used by public inference."""
 
-    # Class indices for KelvinSemanticClass.{EGO,SKY,MOVABLE}.
+    # Class indices for KelvinSemanticClass.{EGO,SKY,ROAD,MOVABLE}.
+    _SEMANTIC_ROAD: int = 3
     _SEMANTIC_EGO: int = 1
     _SEMANTIC_SKY: int = 2
     _SEMANTIC_MOVABLE: int = 4
@@ -83,6 +87,7 @@ class KelvinStaticCore(nn.Module):
             init_token_scale=0.02,
         )
         self.scene_rescale = inference_config.scene_rescale
+        self.sky_cubemap_size = inference_config.sky.cubemap_size
 
     @torch.autocast("cuda", enabled=False)
     def forward(
@@ -103,6 +108,8 @@ class KelvinStaticCore(nn.Module):
             torch.Tensor,  # semantic_argmax    (B, V, H, W)   int64
             torch.Tensor,  # normals            (B, V, H, W, 3)
             torch.Tensor,  # affine             (B, n_affine_tokens, 3, 4)
+            torch.Tensor,  # sky_cubemap        (B, 6, S, S, 3)
+            torch.Tensor,  # sky_cubemap_mask   (B, 6, S, S, 1)
         ]
         | KelvinPointQueryStaticOutput
     ):
@@ -169,6 +176,23 @@ class KelvinStaticCore(nn.Module):
         )
         context_rgb = self.decoder.gaussian_activations.rgb(context_rgb)
         context_world_normal = torch.nn.functional.normalize(context_world_normal, dim=-1)
+        semantic_argmax = torch.argmax(context_semantic_logits, dim=-1)  # (B, V, H, W)
+
+        # Public checkpoints intentionally omit the learned ``sky.*`` head.
+        # Build the renderable cubemap from the dense decoder's canonical RGB
+        # and SKY semantics instead; this uses only released weights.
+        observed_sky = [
+            build_observed_sky_cubemap_with_mask(
+                self.sky_cubemap_size,
+                rays[bidx, ..., 3:],
+                context_rgb[bidx],
+                semantic_argmax[bidx] == self._SEMANTIC_SKY,
+                semantic_argmax[bidx] == self._SEMANTIC_ROAD,
+            )
+            for bidx in range(B)
+        ]
+        sky_cubemap = torch.stack([item[0] for item in observed_sky], dim=0)
+        sky_cubemap_mask = torch.stack([item[1] for item in observed_sky], dim=0)
 
         # Point-query replaces the dense Gaussian head with sparse queries.
         point_query_output = None
@@ -200,7 +224,6 @@ class KelvinStaticCore(nn.Module):
             gs_opacity = self.decoder.gaussian_activations.opacity(gs_opacity) * (gs_valid_mask > 0.5).float().detach()
             gs_world_quaternion = self.decoder.gaussian_activations.rotation(gs_world_quaternion)
             gs_xyz = rays[..., :3] + rays[..., 3:] * gs_distance  # (B, V, H, W, 3)
-            semantic_argmax = torch.argmax(context_semantic_logits, dim=-1)  # (B, V, H, W)
 
         # ----- Per-camera affine post-processing -----
         encoded_deepest_tokens = rearrange(encoded_deepest, "B V h w C -> B (V h w) C")
@@ -222,6 +245,8 @@ class KelvinStaticCore(nn.Module):
                 normals=point_query_output.normals,
                 affine_matrix=affine_matrix,
                 source_indices=point_query_output.source_indices,
+                sky_cubemap=sky_cubemap,
+                sky_cubemap_mask=sky_cubemap_mask,
             )
 
         return (
@@ -233,4 +258,6 @@ class KelvinStaticCore(nn.Module):
             semantic_argmax,
             context_world_normal,
             affine_matrix,
+            sky_cubemap,
+            sky_cubemap_mask,
         )

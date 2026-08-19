@@ -337,6 +337,7 @@ class KelvinInstantNuRecPrimitive(BaseInstantNuRecPrimitive):
 
     # Sky attributes
     sky_cubemap: torch.Tensor
+    sky_cubemap_mask: torch.Tensor | None
 
     # Post-processing attributes
     affine_matrix: torch.Tensor
@@ -347,10 +348,12 @@ class KelvinInstantNuRecPrimitive(BaseInstantNuRecPrimitive):
         dynamic_layers: list[KelvinDynamicLayer],
         sky_cubemap: torch.Tensor,
         affine_matrix: torch.Tensor,
+        sky_cubemap_mask: torch.Tensor | None = None,
     ):
         self.static_layer = static_layer
         self.dynamic_layers = dynamic_layers
         self.sky_cubemap = sky_cubemap
+        self.sky_cubemap_mask = sky_cubemap_mask
         self.affine_matrix = affine_matrix
         self._post_init_validation()
 
@@ -360,6 +363,10 @@ class KelvinInstantNuRecPrimitive(BaseInstantNuRecPrimitive):
         assert self.sky_cubemap.shape == (6, cubemap_size, cubemap_size, 3), (
             "Sky cubemap must have shape (6, height, width, 3)"
         )
+        if self.sky_cubemap_mask is not None:
+            assert self.sky_cubemap_mask.shape == (6, cubemap_size, cubemap_size, 1), (
+                "Sky cubemap mask must have shape (6, height, width, 1)"
+            )
         assert self.affine_matrix.ndim == 3, "Affine matrix must have shape (n_cameras, 3, 4)"
         assert self.affine_matrix.shape[1:] == (3, 4), "Affine matrix must have shape (n_cameras, 3, 4)"
 
@@ -379,7 +386,7 @@ class KelvinInstantNuRecPrimitive(BaseInstantNuRecPrimitive):
         config: PrimitiveExportPreprocessConfig,
         context_rig: RigTrajectories | None = None,
     ) -> Self:
-        """Filter static and dynamic layers by density threshold; do not apply rigid transform (merge does that)."""
+        """Prune Gaussian layers and prepare the observed-sky cubemap."""
         del context_batch, context_rig  # unused (Celsius's project_to_z_offset path was Kelvin-irrelevant)
         static_mask = self.static_layer.densities[:, 0] > config.density_prune_threshold
         new_static_layer = self.static_layer.mask(static_mask)
@@ -387,10 +394,29 @@ class KelvinInstantNuRecPrimitive(BaseInstantNuRecPrimitive):
         for dynamic_layer in self.dynamic_layers:
             dynamic_mask = dynamic_layer.max_densities[:, 0] > config.density_prune_threshold
             new_dynamic_layers.append(dynamic_layer.mask(dynamic_mask))
+
+        sky_cubemap = self.sky_cubemap
+        if config.infill_road_color and self.sky_cubemap_mask is not None:
+            if new_static_layer.semantic_class is None:
+                logger.warning("ROAD sky infill requested, but static Gaussians have no semantic classes")
+            else:
+                road_mask = new_static_layer.semantic_class[:, 0] == int(KelvinSemanticClass.ROAD)
+                if road_mask.any():
+                    road_colors = new_static_layer.rgb[road_mask].float()
+                    median_color = road_colors.median(dim=0).values
+                    representative_index = (road_colors - median_color).square().sum(dim=-1).argmin()
+                    road_color = road_colors[representative_index]
+                    sky_cubemap = (
+                        self.sky_cubemap * self.sky_cubemap_mask
+                        + road_color.reshape(1, 1, 1, 3) * (1.0 - self.sky_cubemap_mask)
+                    )
+                else:
+                    logger.warning("ROAD sky infill requested, but no ROAD Gaussians survived density pruning")
         return self.__class__(
             static_layer=new_static_layer,
             dynamic_layers=new_dynamic_layers,
-            sky_cubemap=self.sky_cubemap,
+            sky_cubemap=sky_cubemap,
+            sky_cubemap_mask=self.sky_cubemap_mask,
             affine_matrix=self.affine_matrix,
         )
 
@@ -400,6 +426,11 @@ class KelvinInstantNuRecPrimitive(BaseInstantNuRecPrimitive):
             static_layer=self.static_layer.rigid_transform(T_new),
             dynamic_layers=[layer.rigid_transform(T_new) for layer in self.dynamic_layers],
             sky_cubemap=rotate_sky_cubemap(self.sky_cubemap, T_new[:3, :3]),
+            sky_cubemap_mask=(
+                rotate_sky_cubemap(self.sky_cubemap_mask, T_new[:3, :3])
+                if self.sky_cubemap_mask is not None
+                else None
+            ),
             affine_matrix=self.affine_matrix,
         )
 
@@ -411,4 +442,3 @@ class KelvinInstantNuRecPrimitive(BaseInstantNuRecPrimitive):
         for layer in self.dynamic_layers:
             layer.rgb = layer.rgb @ y[:3, :3].T + y[:3, 3]
         self.sky_cubemap = self.sky_cubemap @ y[:3, :3].T + y[:3, 3]
-

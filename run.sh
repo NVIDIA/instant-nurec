@@ -17,6 +17,10 @@
 
 # Thin wrapper around ``python run_inference.py`` that validates the user's
 # ``--ncore-path`` and ``--output-dir`` arguments before invoking the CLI.
+# Each PLY export also writes ``.sky.npz`` and ``.sky.png`` files;
+# ``--render-preview`` additionally writes ``.render.png``; ``--render-video``
+# writes ``.render.mp4`` and also requires ``--merge`` and ffmpeg with libx264.
+# Both require the optional dependencies installed by ``uv sync --extra render``.
 
 set -euo pipefail
 
@@ -46,7 +50,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$NCORE_PATH" ]] || [[ -z "$OUTPUT_DIR" ]]; then
-    echo "usage: $0 [--model pa-front|pa-multiview] --ncore-path <path> --output-dir <path> [--merge] [--n-gaussians N] [--log-level ...]" >&2
+    echo "usage: $0 [--model pa-front|pa-multiview|pq-front] --ncore-path <path> --output-dir <path> [--merge] [--n-gaussians N] [--render-preview] [--render-video] [--log-level ...]" >&2
     exit 64
 fi
 
