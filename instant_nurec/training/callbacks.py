@@ -83,7 +83,7 @@ class AtomicCheckpointAndExitOnSignalCallback(Callback):
     ) -> None:
         del pl_module, outputs, batch
         if batch_idx % self.check_every_n_batches == 0:
-            self._check_preempting(trainer)
+            self._check_preempting(trainer, restart_validation=False)
 
     def on_validation_batch_end(
         self,
@@ -96,9 +96,9 @@ class AtomicCheckpointAndExitOnSignalCallback(Callback):
     ) -> None:
         del pl_module, outputs, batch, dataloader_idx
         if batch_idx % self.check_every_n_batches == 0:
-            self._check_preempting(trainer)
+            self._check_preempting(trainer, restart_validation=True)
 
-    def _check_preempting(self, trainer: Trainer) -> None:
+    def _check_preempting(self, trainer: Trainer, *, restart_validation: bool) -> None:
         # A host launcher normally signals rank zero, but reduce across all
         # ranks as well so forwarding the signal to any worker is sufficient.
         self.preempting = trainer.strategy.reduce_boolean_decision(self.preempting, all=False)
@@ -117,7 +117,18 @@ class AtomicCheckpointAndExitOnSignalCallback(Callback):
         train_progress = trainer.fit_loop.epoch_loop.batch_progress
         train_progress.total.completed = train_progress.total.processed
         train_progress.current.completed = train_progress.current.processed
-        trainer.fit_loop.epoch_loop.val_loop.batch_progress.reset()
+        validation_progress = trainer.fit_loop.epoch_loop.val_loop.batch_progress
+        validation_progress.reset()
+        if restart_validation:
+            # Lightning 2.6 recognizes a mid-evaluation restart only when the
+            # checkpoint contains one started but not yet processed batch. An
+            # all-zero progress state is instead classified as a checkpoint on
+            # the last train batch, which makes TrainingEpochLoop skip the next
+            # validation run entirely. Store the minimal interrupted-batch
+            # sentinel; EvaluationLoop.reset_on_restart() clears it before the
+            # validation dataloader is replayed from batch zero.
+            validation_progress.increment_ready()
+            validation_progress.increment_started()
 
         if trainer.is_global_zero:
             self.checkpoint_path.parent.mkdir(parents=True, exist_ok=True)

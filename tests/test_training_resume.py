@@ -42,10 +42,10 @@ class _ToyDataset(Dataset):
         self.epoch = epoch
 
 
-def _toy_config() -> SimpleNamespace:
+def _toy_config(*, with_validation: bool = False) -> SimpleNamespace:
     return SimpleNamespace(
         seed=38,
-        dataset=SimpleNamespace(train=object(), val=None),
+        dataset=SimpleNamespace(train=object(), val=object() if with_validation else None),
         system=SimpleNamespace(
             train_batch_size=1,
             train_num_workers=0,
@@ -143,6 +143,29 @@ class _EpochPropagationProbe(LightningModule):
         return self.weight.square()
 
 
+class _ValidationResumeProbe(LightningModule):
+    def __init__(
+        self,
+        train_records: list[tuple[int, int, int]],
+        validation_records: list[tuple[int, int, int]],
+    ) -> None:
+        super().__init__()
+        self.weight = torch.nn.Parameter(torch.tensor(0.0))
+        self.train_records = train_records
+        self.validation_records = validation_records
+
+    def configure_optimizers(self):
+        return torch.optim.SGD([self.weight], lr=0.1)
+
+    def training_step(self, batch: torch.Tensor, batch_idx: int):
+        self.train_records.append((self.current_epoch, batch_idx, int(batch.item())))
+        return (self.weight - batch.float().mean()).square()
+
+    def validation_step(self, batch: torch.Tensor, batch_idx: int):
+        self.validation_records.append((self.current_epoch, batch_idx, int(batch.item())))
+        self.log("val/probe", batch.float().mean(), on_epoch=True, sync_dist=True)
+
+
 class _TriggerPreemption(Callback):
     def __init__(self, target: AtomicCheckpointAndExitOnSignalCallback, batch_idx: int) -> None:
         self.target = target
@@ -150,6 +173,25 @@ class _TriggerPreemption(Callback):
 
     def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx: int) -> None:
         del trainer, pl_module, outputs, batch
+        if batch_idx == self.batch_idx:
+            self.target.preempting = True
+
+
+class _TriggerValidationPreemption(Callback):
+    def __init__(self, target: AtomicCheckpointAndExitOnSignalCallback, batch_idx: int) -> None:
+        self.target = target
+        self.batch_idx = batch_idx
+
+    def on_validation_batch_end(
+        self,
+        trainer,
+        pl_module,
+        outputs,
+        batch,
+        batch_idx: int,
+        dataloader_idx: int = 0,
+    ) -> None:
+        del trainer, pl_module, outputs, batch, dataloader_idx
         if batch_idx == self.batch_idx:
             self.target.preempting = True
 
@@ -167,6 +209,22 @@ def _trainer(callbacks: list[Callback]) -> Trainer:
         num_sanity_val_steps=0,
         limit_val_batches=0,
         deterministic=True,
+    )
+
+
+def _validation_trainer(callbacks: list[Callback]) -> Trainer:
+    return Trainer(
+        accelerator="cpu",
+        devices=1,
+        max_epochs=1,
+        callbacks=callbacks,
+        logger=False,
+        enable_checkpointing=False,
+        enable_model_summary=False,
+        enable_progress_bar=False,
+        num_sanity_val_steps=0,
+        deterministic=True,
+        reload_dataloaders_every_n_epochs=1,
     )
 
 
@@ -292,3 +350,50 @@ def test_mid_epoch_checkpoint_resume_has_no_replay_and_preserves_schedule(tmp_pa
     assert [record["batch_idx"] for record in resumed_records] == [3, 4, 5, 6, 7]
     assert [record["global_step"] for record in resumed_records] == [3, 4, 5, 6, 7]
     assert [record["lr"] for record in combined] == pytest.approx([record["lr"] for record in uninterrupted_records])
+
+
+def test_validation_preemption_restarts_full_validation_without_train_replay(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(
+        training_data_module,
+        "InstantNuRecDataBatch",
+        SimpleNamespace(collate_fn=default_collate),
+    )
+    checkpoint_path = tmp_path / "checkpoints" / "last.ckpt"
+
+    interrupted_train: list[tuple[int, int, int]] = []
+    interrupted_validation: list[tuple[int, int, int]] = []
+    interrupted_datamodule = _ToyKelvinDataModule(_toy_config(with_validation=True))
+    resumable = ResumableDataModuleCallback(interrupted_datamodule)
+    preemption = AtomicCheckpointAndExitOnSignalCallback(checkpoint_path, signal_type=None)
+    trigger = _TriggerValidationPreemption(preemption, batch_idx=2)
+    with pytest.raises(PreemptionInterrupt, match="checkpoint saved"):
+        _validation_trainer([resumable, trigger, preemption]).fit(
+            _ValidationResumeProbe(interrupted_train, interrupted_validation),
+            datamodule=interrupted_datamodule,
+        )
+
+    assert sorted(sample for _, _, sample in interrupted_train) == list(range(8))
+    assert [sample for _, _, sample in interrupted_validation] == [0, 1, 2]
+    assert interrupted_datamodule.state_dict() == {"next_train_batch_idx": 8}
+
+    checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+    validation_progress = checkpoint["loops"]["fit_loop"]["epoch_loop.val_loop.batch_progress"]
+    for scope in ("total", "current"):
+        assert validation_progress[scope] == {
+            "ready": 1,
+            "started": 1,
+            "processed": 0,
+            "completed": 0,
+        }
+
+    resumed_train: list[tuple[int, int, int]] = []
+    resumed_validation: list[tuple[int, int, int]] = []
+    resumed_datamodule = _ToyKelvinDataModule(_toy_config(with_validation=True))
+    _validation_trainer([ResumableDataModuleCallback(resumed_datamodule)]).fit(
+        _ValidationResumeProbe(resumed_train, resumed_validation),
+        datamodule=resumed_datamodule,
+        ckpt_path=checkpoint_path,
+    )
+
+    assert resumed_train == []
+    assert [sample for _, _, sample in resumed_validation] == list(range(8))
