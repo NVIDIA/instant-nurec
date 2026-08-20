@@ -93,6 +93,42 @@ def test_compute_frame_gap_two_cameras_independent():
     assert gap[3, 0].item() == 9949 and gap[3, 1].item() == 9949
 
 
+def test_compute_frame_gap_sparse_camera_idxs():
+    """unique_sensor_idx values are indices into supervision_camera_ids and
+    can be sparse when the context cameras are a strict subset (e.g.
+    supervision = [front(0), left(1), right(2)], context = [front, right]).
+
+    Regression test for the former ``range(num_cameras)`` loop, which only
+    visited camera indices ``{0, ..., num_cameras - 1}`` and silently left any
+    camera with ``index >= num_cameras`` (here: right == 2) at the 500000us
+    fallback instead of its true frame gap.
+    """
+    ts = torch.tensor(
+        [
+            [0, 10000],       # front
+            [10000, 20000],   # front
+            [20000, 30000],   # front
+            [50000, 60000],   # right
+            [60000, 70000],   # right
+            [70000, 80000],   # right
+        ]
+    )
+    cam = torch.tensor([0, 0, 0, 2, 2, 2])
+    gap = TimeRemapping._compute_frame_gap(ts, cam)
+    # Every frame of both cameras gets the true 10000us gap — no fallback.
+    assert torch.equal(gap, torch.full_like(gap, 10000))
+
+
+def test_compute_frame_gap_single_sparse_camera():
+    """A single context camera whose supervision index is nonzero (e.g. only
+    ``right`` == 2 in a larger supervision rig) must still get real gaps; the
+    dense loop bug left such a rig entirely at the 500000us fallback."""
+    ts = torch.tensor([[0, 10000], [10000, 20000], [20000, 30000]])
+    cam = torch.tensor([2, 2, 2])
+    gap = TimeRemapping._compute_frame_gap(ts, cam)
+    assert torch.equal(gap, torch.full_like(gap, 10000))
+
+
 def test_compute_frame_gap_single_frame_per_camera_falls_back_to_500000():
     """When a camera has only one frame, both prev and next are missing,
     triggering the 500000us fallback (0.5s default per the docstring)."""

@@ -66,9 +66,13 @@ class TimeRemapping:
         prev_gap_timestamps_us = torch.zeros_like(frames_timestamps_us)
         next_gap_timestamps_us = torch.zeros_like(frames_timestamps_us)
 
-        # Process for each camera
-        num_cameras: int = frames_camera_idxs.unique().shape[0]
-        for camera_idx in range(num_cameras):
+        # Process for each camera. unique_sensor_idx values are indices into
+        # supervision_camera_ids, so they can be sparse (e.g. {0, 2}) when the
+        # context cameras are a strict subset; iterate the distinct values that
+        # are actually present instead of range(num_cameras), otherwise any
+        # camera whose index >= num_cameras never gets its gaps filled and all
+        # of its frames fall back to the 500000 us default below.
+        for camera_idx in frames_camera_idxs.unique().tolist():
             camera_mask = torch.where(frames_camera_idxs == camera_idx)[0]
             sorted_time, sorted_idx = torch.sort(frames_timestamps_us[camera_mask])
             sorted_time_gap = sorted_time[1:] - sorted_time[:-1]
