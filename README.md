@@ -413,6 +413,25 @@ instant-nurec/
 
 </details>
 
+<details>
+<summary><b>Camera Adaptation</b></summary>
+
+The released model is trained on NVIDIA's Autonomous Vehicle (AV)
+platform data. While the model generalizes reasonably to cameras with similar
+field of view and mounting geometry, **rectifying your source camera to match
+the training intrinsics yields noticeably better reconstruction quality**.
+
+If your camera has different intrinsics, we recommend performing a one-time camera adaptation (intrinsic
+rectification) before running inference. Invalid regions introduced by the
+remapping should be inpainted rather than filled with black to avoid
+training/inference artifacts.
+
+For the complete rectification workflow, target intrinsics extraction, and
+script templates, see
+[`docs/camera_rectification.md`](docs/camera_rectification.md).
+
+</details>
+
 ## What's next?
 
 The PLY you just wrote is usable directly as a static reconstruction.
