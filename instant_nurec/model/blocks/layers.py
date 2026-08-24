@@ -66,6 +66,7 @@ class LayerNorm2d(nn.Module):
 
     def __init__(self, n_dim: int, eps: float = 1e-6) -> None:
         super().__init__()
+        self.n_dim = n_dim
         self.weight = nn.Parameter(torch.ones(n_dim))
         self.bias = nn.Parameter(torch.zeros(n_dim))
         self.eps = eps
@@ -77,8 +78,6 @@ class LayerNorm2d(nn.Module):
         Returns:
             (B, C, H, W) tensor
         """
-        u = x.mean(1, keepdim=True)
-        s = (x - u).pow(2).mean(1, keepdim=True)
-        x = (x - u) / torch.sqrt(s + self.eps)
-        x = self.weight[:, None, None] * x + self.bias[:, None, None]
-        return x
+        x = x.permute(0, 2, 3, 1)
+        x = nn.functional.layer_norm(x, (self.n_dim,), self.weight, self.bias, self.eps)
+        return x.permute(0, 3, 1, 2)

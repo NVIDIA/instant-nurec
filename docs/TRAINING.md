@@ -102,7 +102,10 @@ The differentiable renderer follows the Kelvin 3DGUT contract: `RGB-d` output,
 point required to be valid. The returned distance is opacity-weighted and is
 normalized exactly once in the inverse-distance loss. CUDA sky composition
 uses nvdiffrast cube-boundary filtering so gradients remain continuous across
-cube-face seams.
+cube-face seams. Each complete rendered frame is checkpointed with PyTorch's
+non-reentrant checkpoint implementation. Gaussian foreground is saturated
+before sky composition and the learned affine transform, and RGB MSE compacts
+valid pixels before applying the synthetic-pixel weight.
 
 ## Environment
 
@@ -763,8 +766,9 @@ recipe. Keep these bounded differences visible in experiment reports:
   are not the private dependency commits from the Bazel workspace. The PyTorch
   Adam fallback and public CUDA kernels are not bitwise substitutes.
 - CUDA sky filtering follows the nvdiffrast cube contract; the CPU-only utility
-  fallback samples faces independently and is not seam-equivalent. All-invalid
-  RGB/background masks return zero/skip rather than the Bazel path's NaN.
+  fallback samples faces independently and is not seam-equivalent. An
+  all-invalid rendered RGB mask preserves Kelvin's NaN result, while an
+  all-invalid background mask is reported as skipped.
 - Lowercase Waymo `cyclist` is deliberately treated as dynamic, correcting the
   converter/class-list mismatch present across the pinned repositories.
 - Remote-cache and media/dashboard integrations are not reproduced. W&B logs

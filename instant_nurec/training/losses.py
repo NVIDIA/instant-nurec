@@ -229,14 +229,19 @@ class KelvinLosses(torch.nn.Module):
         labels = unpack_optional(supervision.data.camera).labels
         valid = labels.get_mask_flags_all(RayFlags.RGB_LABEL) & labels.get_mask_flags_none(RayFlags.INVALID)
         synthetic = labels.get_mask_flags_all(RayFlags.SYNTHETIC)
-        rgb_weights = torch.where(synthetic, 0.25, 1.0)
         if self.config.rgb > 0:
             reference_rgb = _required(labels.rgb, "supervision RGB labels")
-            values["rgb"] = _weighted_masked_mean(
-                (output.rgb - reference_rgb).square(),
-                valid,
-                rgb_weights,
+            valid_compact = valid.squeeze(-1)
+            synthetic_compact = synthetic.squeeze(-1)[valid_compact]
+            predicted_rgb = output.rgb.reshape_as(reference_rgb)
+            squared_error = F.mse_loss(
+                predicted_rgb[valid_compact],
+                reference_rgb[valid_compact],
+                reduction="none",
             )
+            nonsynthetic_term = squared_error * (~synthetic_compact)[:, None]
+            synthetic_term = 0.25 * squared_error * synthetic_compact[:, None]
+            values["rgb"] = (nonsynthetic_term + synthetic_term).mean()
 
         if self.config.lpips > 0:
             reference_rgb = _required(labels.rgb, "supervision RGB labels")

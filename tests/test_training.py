@@ -1,8 +1,11 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-from types import SimpleNamespace
+import sys
+
+from enum import Enum
 from pathlib import Path
+from types import ModuleType, SimpleNamespace
 
 import numpy as np
 import pytest
@@ -13,6 +16,7 @@ from torchvision.transforms.functional import gaussian_blur
 
 import instant_nurec.training.renderer as renderer_module
 import instant_nurec.training.run as training_run_module
+import instant_nurec.training.losses as losses_module
 from instant_nurec.config_schema.dataset import (
     ExternalSupervisionCameraIdConfig,
     InstantNuRecSplitsConfig,
@@ -27,6 +31,7 @@ from instant_nurec.config_schema.train import (
     KelvinTrainConfig,
 )
 from instant_nurec.model.post_processing import PerCameraAffinePostProcessing
+from instant_nurec.model.blocks.layers import LayerNorm2d
 from instant_nurec.model.blocks.dav3 import convert_dav3_state_dict
 from instant_nurec.model.supervision import KelvinSupervisionPack
 from instant_nurec.primitives.kelvin_primitive import KelvinInstantNuRecPrimitive, KelvinStaticLayer
@@ -76,6 +81,45 @@ def test_context_phase_keeps_official_optimizer_defaults(tmp_path):
     assert config.system.precision == "bf16-mixed"
     assert config.logger == KelvinLoggerConfig()
     assert config.loss == KelvinLossConfig.context_phase()
+
+
+def test_layer_norm_2d_uses_channel_last_fused_layer_norm(monkeypatch):
+    module = LayerNorm2d(3, eps=1.0e-5)
+    value = torch.arange(24, dtype=torch.float32).reshape(1, 3, 2, 4)
+    calls = []
+    original = torch.nn.functional.layer_norm
+
+    def tracking_layer_norm(input_value, normalized_shape, weight, bias, eps):
+        calls.append((tuple(input_value.shape), normalized_shape, eps))
+        return original(input_value, normalized_shape, weight, bias, eps)
+
+    monkeypatch.setattr(torch.nn.functional, "layer_norm", tracking_layer_norm)
+
+    actual = module(value)
+    expected = original(value.permute(0, 2, 3, 1), (3,), module.weight, module.bias, module.eps).permute(0, 3, 1, 2)
+
+    torch.testing.assert_close(actual, expected, rtol=0, atol=0)
+    assert calls == [((1, 2, 4, 3), (3,), 1.0e-5)]
+
+
+def test_train_epoch_reseeds_runtime_rng_by_epoch_and_rank(monkeypatch):
+    seeds = []
+    monkeypatch.setenv("PL_GLOBAL_SEED", "38")
+    monkeypatch.setattr(torch.distributed, "is_initialized", lambda: True)
+    monkeypatch.setattr(torch.distributed, "get_world_size", lambda: 4)
+    monkeypatch.setattr(torch.distributed, "get_rank", lambda: 2)
+    monkeypatch.setattr(torch, "manual_seed", seeds.append)
+
+    KelvinTrainingSystem.on_train_epoch_start(SimpleNamespace(current_epoch=3))
+
+    assert seeds == [52]
+
+
+def test_train_epoch_does_not_reseed_without_distributed_runtime(monkeypatch):
+    monkeypatch.setattr(torch.distributed, "is_initialized", lambda: False)
+    monkeypatch.setattr(torch, "manual_seed", lambda seed: pytest.fail(f"unexpected seed {seed}"))
+
+    KelvinTrainingSystem.on_train_epoch_start(SimpleNamespace(current_epoch=3))
 
 
 def test_wandb_logger_uses_stable_run_id_for_resume(tmp_path, monkeypatch):
@@ -464,14 +508,63 @@ def test_semantic_targets_use_bazel_priority_and_all_pixels():
     assert not skipped
 
 
-def test_render_rgb_semantic_weights_keep_full_valid_denominator():
+def test_render_rgb_compacts_valid_pixels_before_semantic_weighting(monkeypatch):
     flags = torch.tensor(
-        [[[[int(RayFlags.RGB_LABEL)], [int(RayFlags.RGB_LABEL | RayFlags.SYNTHETIC)]]]],
+        [
+            [
+                [
+                    [int(RayFlags.RGB_LABEL)],
+                    [int(RayFlags.RGB_LABEL | RayFlags.SYNTHETIC)],
+                    [int(RayFlags.RGB_LABEL | RayFlags.INVALID)],
+                    [0],
+                ]
+            ]
+        ],
         dtype=torch.int32,
     )
-    labels = CameraFrameLabels(rgb=torch.zeros((1, 1, 2, 3)), flags=flags)
+    predicted = torch.tensor(
+        [[[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0], [100.0, 100.0, 100.0], [100.0, 100.0, 100.0]]]],
+        requires_grad=True,
+    )
+    labels = CameraFrameLabels(rgb=torch.zeros_like(predicted), flags=flags)
     output = KelvinRenderOutput(
-        rgb=torch.ones((1, 1, 2, 3)),
+        rgb=predicted,
+        opacity=torch.zeros((1, 1, 4, 1)),
+        distance=torch.ones((1, 1, 4, 1)),
+        sky_rgb=torch.zeros((1, 1, 4, 3)),
+    )
+    calls = []
+    original_mse_loss = losses_module.F.mse_loss
+
+    def tracking_mse_loss(actual, target, *, reduction):
+        calls.append((actual.detach().clone(), target.detach().clone(), reduction))
+        return original_mse_loss(actual, target, reduction=reduction)
+
+    monkeypatch.setattr(losses_module.F, "mse_loss", tracking_mse_loss)
+
+    values, skipped = KelvinLosses(_render_only_config(rgb=1.0))._render_losses(output, _camera_batch(labels))
+
+    torch.testing.assert_close(values["rgb"], torch.tensor(1.0))
+    assert len(calls) == 1
+    torch.testing.assert_close(calls[0][0], predicted.detach()[0, 0, :2])
+    torch.testing.assert_close(calls[0][1], torch.zeros((2, 3)))
+    assert calls[0][2] == "none"
+    values["rgb"].backward()
+    assert predicted.grad is not None
+    torch.testing.assert_close(predicted.grad[0, 0, 0], torch.full((3,), 1.0 / 3.0))
+    torch.testing.assert_close(predicted.grad[0, 0, 1], torch.full((3,), 1.0 / 6.0))
+    torch.testing.assert_close(predicted.grad[0, 0, 2:], torch.zeros((2, 3)))
+    assert not skipped
+
+
+def test_render_rgb_empty_valid_set_matches_kelvin_nan_and_zero_gradient():
+    predicted = torch.ones((1, 1, 2, 3), requires_grad=True)
+    labels = CameraFrameLabels(
+        rgb=torch.zeros_like(predicted),
+        flags=torch.zeros((1, 1, 2, 1), dtype=torch.int32),
+    )
+    output = KelvinRenderOutput(
+        rgb=predicted,
         opacity=torch.zeros((1, 1, 2, 1)),
         distance=torch.ones((1, 1, 2, 1)),
         sky_rgb=torch.zeros((1, 1, 2, 3)),
@@ -479,7 +572,10 @@ def test_render_rgb_semantic_weights_keep_full_valid_denominator():
 
     values, skipped = KelvinLosses(_render_only_config(rgb=1.0))._render_losses(output, _camera_batch(labels))
 
-    torch.testing.assert_close(values["rgb"], torch.tensor(0.625))
+    assert torch.isnan(values["rgb"])
+    values["rgb"].backward()
+    assert predicted.grad is not None
+    torch.testing.assert_close(predicted.grad, torch.zeros_like(predicted))
     assert not skipped
 
 
@@ -569,17 +665,65 @@ def test_render_distance_matches_harmonized_and_synthetic_masks():
     assert not skipped
 
 
-def test_renderer_returns_accumulated_hit_distance_for_single_loss_normalization(monkeypatch):
+def test_pinhole_camera_kwargs_match_kelvin_batch_axes(monkeypatch):
+    class FakeRollingShutterType(Enum):
+        GLOBAL = 0
+
+    fake_rendering = ModuleType("gsplat.rendering")
+    setattr(fake_rendering, "RollingShutterType", FakeRollingShutterType)
+    monkeypatch.setitem(sys.modules, "gsplat.rendering", fake_rendering)
+    monkeypatch.setattr(renderer_module, "_configure_gsplat_build", lambda: None)
+    monkeypatch.setattr(renderer_module, "_external_distortion_gsplat_parameters", lambda parameters: None)
+    parameters = OpenCVPinholeCameraModelParameters(
+        resolution=np.array([2, 2], dtype=np.uint64),
+        shutter_type=ShutterType.GLOBAL,
+        external_distortion_parameters=None,
+        principal_point=np.array([1.0, 1.0], dtype=np.float32),
+        focal_length=np.array([2.0, 3.0], dtype=np.float32),
+        radial_coeffs=np.arange(6, dtype=np.float32),
+        tangential_coeffs=np.arange(2, dtype=np.float32),
+        thin_prism_coeffs=np.ones(4, dtype=np.float32),
+    )
+
+    K, kwargs = renderer_module._camera_kwargs(parameters, torch.device("cpu"))
+
+    torch.testing.assert_close(K, torch.tensor([[2.0, 0.0, 1.0], [0.0, 3.0, 1.0], [0.0, 0.0, 1.0]]))
+    assert kwargs["radial_coeffs"].shape == (1, 1, 6)
+    assert kwargs["tangential_coeffs"].shape == (1, 1, 2)
+    assert "thin_prism_coeffs" not in kwargs
+
+
+def test_renderer_checkpoints_full_frame_and_matches_kelvin_postprocess_order(monkeypatch):
     captured = {}
+    checkpoint_calls = []
+    inverse_calls = []
 
     def fake_rasterization(**kwargs):
         captured.update(kwargs)
-        rendered = torch.zeros((1, 2, 2, 4))
+        rendered = torch.zeros((1, 1, 2, 2, 4))
+        rendered[..., :3] = -0.5
         rendered[..., 3] = 0.75
-        opacity = torch.full((1, 2, 2, 1), 0.5)
+        opacity = torch.full((1, 1, 2, 2, 1), 0.5)
         return rendered, opacity, {}
 
+    def fake_checkpoint(function, *args, use_reentrant):
+        checkpoint_calls.append((function, args[-1], use_reentrant))
+        return function(*args)
+
+    def fake_inverse(matrix, *, unbatch):
+        inverse_calls.append((matrix.clone(), unbatch))
+        return torch.eye(4, dtype=matrix.dtype)
+
     monkeypatch.setattr(renderer_module, "require_gsplat", lambda: fake_rasterization)
+    monkeypatch.setattr(renderer_module, "checkpoint", fake_checkpoint)
+    monkeypatch.setattr(renderer_module, "se3_matrix_inverse", fake_inverse)
+    monkeypatch.setattr(renderer_module, "_kelvin_renderer_config", lambda: object())
+    monkeypatch.setattr(renderer_module, "_kelvin_ut_parameters", lambda: object())
+    monkeypatch.setattr(
+        renderer_module,
+        "sample_sky_cubemap",
+        lambda cubemap, directions: torch.full_like(directions, 0.5),
+    )
     monkeypatch.setattr(
         renderer_module,
         "_camera_kwargs",
@@ -638,12 +782,25 @@ def test_renderer_returns_accumulated_hit_distance_for_single_loss_normalization
         ),
         dynamic_layers=[],
         sky_cubemap=torch.zeros((6, 2, 2, 3)),
-        affine_matrix=torch.tensor([[[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0]]]),
+        affine_matrix=torch.tensor([[[2.0, 0.0, 0.0, 0.0], [0.0, 2.0, 0.0, 0.0], [0.0, 0.0, 2.0, 0.0]]]),
     )
 
     output = render_kelvin_supervision(primitive, supervision)
 
+    assert checkpoint_calls == [(renderer_module._render_kelvin_supervision_frame, 0, False)]
+    assert len(inverse_calls) == 2
     assert captured["render_mode"] == "RGB-d"
+    assert captured["means"].shape == (1, 1, 3)
+    assert captured["viewmats"].shape == (1, 1, 4, 4)
+    assert captured["Ks"].shape == (1, 1, 3, 3)
+    assert captured["rays"].shape == (2, 2, 6)
+    assert captured["radius_clip"] == 0.0
+    assert captured["eps2d"] == pytest.approx(0.3)
+    assert captured["sparse_grad"] is False
+    assert captured["absgrad"] is False
+    # clamp(-0.5) + (1 - 0.5) * sky(0.5) = 0.25, then affine scale 2 = 0.5.
+    # Clamping only after composition would instead produce zero.
+    torch.testing.assert_close(output.rgb, torch.full((1, 2, 2, 3), 0.5))
     torch.testing.assert_close(output.distance, torch.full((1, 2, 2, 1), 0.75))
 
 

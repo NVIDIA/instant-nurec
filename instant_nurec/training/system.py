@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import logging
 import math
+import os
 
 from pathlib import Path
 from typing import Literal
@@ -87,6 +88,14 @@ class KelvinTrainingSystem(LightningModule):
         self.optimizer_implementation = implementation
         scheduler = CosineWithWarmupPBScheduler(optimizer, self.config.system.scheduler)
         return {"optimizer": optimizer, "lr_scheduler": {"scheduler": scheduler, "interval": "step"}}
+
+    def on_train_epoch_start(self) -> None:
+        """Match the per-rank, per-epoch runtime RNG contract used by Kelvin training."""
+
+        if torch.distributed.is_initialized():
+            base_seed = int(os.environ.get("PL_GLOBAL_SEED", 0))
+            rank = torch.distributed.get_rank()
+            torch.manual_seed(base_seed + self.current_epoch * torch.distributed.get_world_size() + rank)
 
     @staticmethod
     def _read_raw_state_dict(path: Path) -> dict[str, torch.Tensor]:
