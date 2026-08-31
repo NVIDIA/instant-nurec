@@ -31,6 +31,18 @@ import torch
 from instant_nurec.utils.se3 import quat_xyzw_slerp, quat_xyzw_to_rotmat
 
 
+def _interpolation_fraction(
+    query_timestamps_us: torch.Tensor,
+    start_timestamps_us: torch.Tensor,
+    end_timestamps_us: torch.Tensor,
+    dtype: torch.dtype,
+) -> torch.Tensor:
+    """Compute timestamp interpolation fractions without losing epoch precision."""
+    elapsed_us = query_timestamps_us - start_timestamps_us
+    duration_us = end_timestamps_us - start_timestamps_us
+    return elapsed_us.to(dtype) / duration_us.to(dtype)
+
+
 def _slab_aabb_intersection(
     rays_o: torch.Tensor,  # (N, 3)
     rays_d: torch.Tensor,  # (N, 3)
@@ -132,9 +144,9 @@ def ray_cuboidtracks_intersection(
         end_idx_local = torch.searchsorted(track_ts, ts_q).clamp(min=1, max=n_poses - 1)
         start_idx_local = end_idx_local - 1
 
-        ts_start = track_ts[start_idx_local].to(dtype)
-        ts_end = track_ts[end_idx_local].to(dtype)
-        t_interp = (ts_q.to(dtype) - ts_start) / (ts_end - ts_start)
+        ts_start = track_ts[start_idx_local]
+        ts_end = track_ts[end_idx_local]
+        t_interp = _interpolation_fraction(ts_q, ts_start, ts_end, dtype)
 
         pose_start = track_poses_slice[start_idx_local]
         pose_end = track_poses_slice[end_idx_local]
@@ -234,9 +246,9 @@ def point_cuboidtracks_intersection_interpolate_pose(
         ts_q = points_timestamps_us[pt_idxs]
         end_idx_local = torch.searchsorted(track_ts, ts_q).clamp(min=1, max=n_poses - 1)
         start_idx_local = end_idx_local - 1
-        ts_start = track_ts[start_idx_local].to(dtype)
-        ts_end = track_ts[end_idx_local].to(dtype)
-        t_interp = (ts_q.to(dtype) - ts_start) / (ts_end - ts_start)
+        ts_start = track_ts[start_idx_local]
+        ts_end = track_ts[end_idx_local]
+        t_interp = _interpolation_fraction(ts_q, ts_start, ts_end, dtype)
 
         pose_start = track_poses_slice[start_idx_local]
         pose_end = track_poses_slice[end_idx_local]
