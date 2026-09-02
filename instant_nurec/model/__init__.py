@@ -164,6 +164,15 @@ def make(config: "InstantNuRecConfig") -> GaussiansInstantNuRecSystem:
         _load_model_state_dict(full_pt_path, expected_filename=profile.filename),
         strict=True,
     )
+    # The checkpoint contains the training-time padding buffer. Restore the
+    # inference override after loading so --cuboid-padding is not overwritten.
+    static_core.decoder.cuboids_dims_padding.copy_(
+        torch.as_tensor(
+            config.model.track_padding_m,
+            dtype=static_core.decoder.cuboids_dims_padding.dtype,
+            device=static_core.decoder.cuboids_dims_padding.device,
+        )
+    )
 
     dataset_config = config.dataset.predict
     assert dataset_config is not None, "dataset.predict must be configured for inference"

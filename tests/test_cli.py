@@ -60,6 +60,8 @@ def test_parser_defaults_to_pa_front() -> None:
     args = make_parser().parse_args(["--ncore-path", "/x", "--output-dir", "/y"])
     assert args.model == "pa-front"
     assert args.camera_ids is None
+    assert args.track_label_source == "AUTOLABEL"
+    assert args.cuboid_padding == [1.0, 1.0, 1.0]
 
 
 def test_parser_accepts_multiview_and_repeated_camera_ids() -> None:
@@ -74,6 +76,56 @@ def test_parser_accepts_multiview_and_repeated_camera_ids() -> None:
     ])
     assert args.model == "pa-multiview"
     assert args.camera_ids == ["front", "left", "right"]
+
+
+def test_parser_accepts_track_label_source() -> None:
+    from instant_nurec.cli import make_parser
+
+    args = make_parser().parse_args(
+        [
+            "--ncore-path",
+            "/x",
+            "--output-dir",
+            "/y",
+            "--track-label-source",
+            "EXTERNAL",
+        ]
+    )
+    assert args.track_label_source == "EXTERNAL"
+
+
+def test_parser_rejects_unknown_track_label_source() -> None:
+    from instant_nurec.cli import make_parser
+
+    with pytest.raises(SystemExit):
+        make_parser().parse_args(
+            [
+                "--ncore-path",
+                "/x",
+                "--output-dir",
+                "/y",
+                "--track-label-source",
+                "UNKNOWN",
+            ]
+        )
+
+
+def test_parser_accepts_cuboid_padding() -> None:
+    from instant_nurec.cli import make_parser
+
+    args = make_parser().parse_args(
+        [
+            "--ncore-path",
+            "/x",
+            "--output-dir",
+            "/y",
+            "--cuboid-padding",
+            "2.0",
+            "3.0",
+            "4.0",
+        ]
+    )
+    assert args.cuboid_padding == [2.0, 3.0, 4.0]
 
 
 def test_parser_accepts_point_query_profile() -> None:
@@ -225,6 +277,54 @@ def test_main_no_merge_constructs_config_with_disabled_merge(
     assert cfg.dataset.predict.context_camera_ids == ["camera_front_wide_120fov"]
     assert cfg.dataset.predict.camera_subsampler.frame_width == 784
     assert cfg.dataset.predict.camera_subsampler.frame_height == 448
+    assert cfg.dataset.predict.cuboid_tracks_params.track_label_source == "AUTOLABEL"
+    assert cfg.model.track_padding_m == [1.0, 1.0, 1.0]
+
+
+def test_main_propagates_track_label_source(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    fake_run_predict = _install_runtime_stubs(monkeypatch)
+    json_path = _make_json_path(tmp_path)
+    from instant_nurec.cli import main
+
+    assert main(
+        [
+            "--ncore-path",
+            str(json_path),
+            "--output-dir",
+            "/o",
+            "--track-label-source",
+            "EXTERNAL",
+        ]
+    ) == 0
+
+    cfg = fake_run_predict.call_args.args[0]
+    assert cfg.dataset.predict.cuboid_tracks_params.track_label_source == "EXTERNAL"
+
+
+def test_main_propagates_cuboid_padding(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    fake_run_predict = _install_runtime_stubs(monkeypatch)
+    json_path = _make_json_path(tmp_path)
+    from instant_nurec.cli import main
+
+    assert main(
+        [
+            "--ncore-path",
+            str(json_path),
+            "--output-dir",
+            "/o",
+            "--cuboid-padding",
+            "2.0",
+            "3.0",
+            "4.0",
+        ]
+    ) == 0
+
+    cfg = fake_run_predict.call_args.args[0]
+    assert cfg.model.track_padding_m == [2.0, 3.0, 4.0]
 
 
 def test_main_render_preview_preflights_dependency_and_sets_config(

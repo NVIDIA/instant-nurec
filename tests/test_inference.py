@@ -257,7 +257,10 @@ def test_reconstruct_with_tracks_keeps_unassociated_movable_gaussians(monkeypatc
 
     core = _AllMovableStaticCore(B=1, V=1, H=1, W=2, n_cams=1)
     adapter = _make_adapter(core)
-    tracks = SimpleNamespace(tracks_flags=torch.tensor([int(TrackFlags.DYNAMIC)]))
+    tracks = SimpleNamespace(
+        tracks_flags=torch.tensor([int(TrackFlags.DYNAMIC)]),
+        n_tracks=1,
+    )
 
     primitive = adapter.reconstruct([_fake_batch(V=1, H=1, W=2)], [tracks])[0]
 
@@ -318,7 +321,10 @@ def test_sparse_dynamic_mask_gathers_aligned_source_rays_and_timestamps(monkeypa
     monkeypatch.setattr(inference_mod, "warp_points_with_cuboid_tracks", _fake_warp)
     xyz = torch.arange(6, dtype=torch.float32).reshape(1, 2, 3)
     semantic = torch.full((1, 2), KelvinSemanticClass.MOVABLE.value, dtype=torch.int64)
-    tracks = SimpleNamespace(tracks_flags=torch.tensor([int(TrackFlags.DYNAMIC)]))
+    tracks = SimpleNamespace(
+        tracks_flags=torch.tensor([int(TrackFlags.DYNAMIC)]),
+        n_tracks=1,
+    )
 
     dynamic_mask = adapter._compute_dynamic_mask(
         xyz,

@@ -111,6 +111,26 @@ def make_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--track-label-source",
+        choices=["AUTOLABEL", "EXTERNAL", "GT_SYNTHETIC", "GT_ANNOTATION"],
+        default="AUTOLABEL",
+        help=(
+            "NCore cuboid-track label source used for dynamic-object matching. "
+            "Default: AUTOLABEL."
+        ),
+    )
+    parser.add_argument(
+        "--cuboid-padding",
+        metavar=("X", "Y", "Z"),
+        type=float,
+        nargs=3,
+        default=[1.0, 1.0, 1.0],
+        help=(
+            "Padding in meters added to cuboid-track dimensions along x, y, z "
+            "during dynamic-object matching. Default: 1 1 1."
+        ),
+    )
+    parser.add_argument(
         "--max-chunks",
         type=int,
         default=_DEFAULT_MAX_CHUNKS,
@@ -180,6 +200,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     # Lazy imports keep argparse-only invocations (e.g. --help) cheap.
     from instant_nurec.config_schema.dataset import (
         AdaptiveSequentialFrameBatchSamplerConfig,
+        NCoreInstantNuRecCuboidTracksParamsConfig,
         NCoreInstantNuRecDatasetConfig,
         InstantNuRecSplitsConfig,
     )
@@ -228,6 +249,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         ),
         model=KelvinModelConfig(
             decoder=decoder_config,
+            track_padding_m=args.cuboid_padding,
         ),
         dataset=InstantNuRecSplitsConfig(
             predict=NCoreInstantNuRecDatasetConfig(
@@ -238,6 +260,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 },
                 context_camera_ids=camera_ids,
                 supervision_camera_ids=camera_ids,
+                cuboid_tracks_params=NCoreInstantNuRecCuboidTracksParamsConfig(
+                    track_label_source=args.track_label_source,
+                ),
                 frame_batch_sampler=AdaptiveSequentialFrameBatchSamplerConfig(
                     n_frames_per_sample=profile.n_frames_per_sample,
                     n_samples_per_sequence=args.max_chunks,

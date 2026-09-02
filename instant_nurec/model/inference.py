@@ -157,7 +157,7 @@ class KelvinInferenceModel(nn.Module):
         gs_xyz_v = gs_xyz[0]
         semantic_v = semantic_argmax[0]
 
-        if cuboid_tracks_b is None:
+        if cuboid_tracks_b is None or cuboid_tracks_b.n_tracks == 0:
             return semantic_v == self._semantic_movable_value()
 
         dynamic_track = CuboidTracks.Ops.subset_from_mask(
