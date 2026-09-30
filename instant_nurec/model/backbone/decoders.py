@@ -369,6 +369,10 @@ class KelvinDPTDecoder(nn.Module):
         context_prev_flow = context_prev_flow / scene_rescale
         context_next_flow = context_next_flow / scene_rescale
 
+        # Preserve learned flows for supervision before the cuboid override.
+        learned_prev_flow = context_prev_flow
+        learned_next_flow = context_next_flow
+
         # If cuboid tracks are provided, use them instead.
         if cuboid_tracks is not None:
             # No need to re-scale points here since both cuboids and pred_depth are already scaled.
@@ -506,12 +510,12 @@ class KelvinDPTDecoder(nn.Module):
                         context_semantic_logits=context_semantic_logits[bidx],
                         motion_supervisions=[
                             MotionSupervision(
-                                context_flow=context_prev_flow[bidx],
+                                context_flow=learned_prev_flow[bidx],
                                 source_timestamps_us=source_timestamps_us[bidx],
                                 target_timestamps_us=prev_target_timestamps_us[bidx],
                             ),
                             MotionSupervision(
-                                context_flow=context_next_flow[bidx],
+                                context_flow=learned_next_flow[bidx],
                                 source_timestamps_us=source_timestamps_us[bidx],
                                 target_timestamps_us=next_target_timestamps_us[bidx],
                             ),
