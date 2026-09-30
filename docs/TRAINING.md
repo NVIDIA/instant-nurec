@@ -1,0 +1,709 @@
+# Training Instant NuRec
+
+This guide covers reproducible full-model training in this standalone
+repository, including the Waymo Open Dataset. The checked-in
+profile `full-model-front-v1` identifies the behavior snapshot implemented by
+the public trainer; it is not a claim that distributed runs will be bitwise
+identical.
+
+## What can be trained here
+
+| Model variant | Decoder | Standalone inference | Standalone training | Notes |
+| --- | --- | --- | --- | --- |
+| Front-camera dense model | dense DPT, one Gaussian per context pixel | yes | yes, two phases | Primary supported training path. |
+| Multiview dense model | dense DPT | yes | fixed camera/frame sets | The random 1/3/5-camera and 12/16/18-frame curriculum is not included. |
+| Point-query `noroad` / `road` | sparse cross-attention | yes | no | The full-model composition deliberately rejects the point-query decoder. |
+| TokenGS | token decoder | no | no | Not included in the public training path. |
+
+The runnable examples therefore cover the dense front-camera model. They
+retain the same model, losses, optimizer, scheduler, camera calibration, and
+two-phase structure as the front-camera reference recipe. The final section
+lists the remaining standalone data/orchestration differences explicitly.
+
+## Reference training contract
+
+The reference is the two-phase dense DAv3 front-camera recipe: context
+supervision first, then differentiable novel-view rendering from the phase-one
+checkpoint.
+
+The standalone trainer preserves these training-step rules:
+
+1. Run model/loss batch-start hooks, including the affine-gradient gate.
+2. Zero all optimizer gradients.
+3. Reconstruct context primitives and differentiable supervision tensors.
+4. Add novel-view rendering only after `enable_render_global_step`.
+5. Mean-reduce the per-item total across the batch and call manual backward.
+6. Skip the optimizer only when every parameter gradient is `None`.
+7. Set epoch/local-step progress and step the progress-based scheduler once.
+
+Forward and backward/step are each wrapped in a distributed exception
+broadcast. If one DDP rank fails, every rank exits instead of leaving peers
+blocked at the backward synchronization point.
+
+The shared numerical contract is:
+
+| Setting | Value |
+| --- | --- |
+| epochs per phase | 40 |
+| precision | BF16 mixed precision |
+| optimizer | fused Adam when NVIDIA Apex is installed |
+| learning rate / epsilon / betas | `1e-4` / `1e-15` / `(0.9, 0.99)` |
+| warmup | 100 steps, starting at factor `0.01` |
+| cosine floor | factor `0.0333` at progress `1.0` |
+| front context | 18 frames at a fixed 0.5 s gap, one `camera_front_wide_120fov`, 784x448, batch 2/GPU |
+| front supervision | 6 frames/camera, 1296x720 |
+| context render gate | `1_000_000` (rendering stays disabled) |
+| render gate | `0` |
+| render initialization | phase-one checkpoint; encoder frozen; GS head reinitialized |
+| render DDP | find-unused-parameters enabled |
+
+The context loss weights are sky cubemap L1 `1.0`, context RGB L1 `0.1`,
+distance L1 `1.0` over 0.1-300 m with a 0.98 quantile reduction, multiscale
+distance-gradient L1 `1.0` over 0.1-50 m at strides 1/2/4/8, semantics CE `0.01`,
+normal cosine `0.2`, and velocity L1 `1.0`. The render phase changes sky,
+context RGB, and distance-gradient regularization to `0.01`, and adds rendered
+RGB MSE `1.0`, LPIPS `0.2`, inverse-depth MSE `0.1`, and background MSE `2.0`.
+Synthetic rendered RGB has weight `0.25`. Only missing normal,
+rendered-distance, and velocity supervision is allowed; all other configured
+labels are required.
+
+### Model-family scope
+
+The front-camera path is the complete two-phase reference implemented here.
+The variable-camera path uses a random camera/frame curriculum that is not yet
+exposed by the standalone data schema. Point-query is a one-stage frozen-encoder path with sparse
+cross-attention; TokenGS remains a model-development path without a public
+production data/schedule contract. Use the support table above when reporting
+which variants were actually trained in this repository.
+
+### Camera calibration and affine color transform
+
+There are two separate transformations and both are used during training:
+
+- Geometry uses the original NCore intrinsics, distortion coefficients,
+  `T_sensor_rig`, rig trajectory, exposure start/end poses, and shutter model.
+  OpenCV pinhole, OpenCV fisheye, and F-theta cameras are supported directly;
+  the F-theta path also preserves the optional bivariate windshield model.
+  Rendering uses calibrated world rays and the original rolling/global shutter
+  trajectory rather than substituting a pinhole approximation.
+- Appearance uses a learned per-camera 3x4 RGB affine matrix `[A | b]`.
+  It is applied after foreground/sky alpha composition as
+  `clamp(A @ rgb + b, 0, 1)`. The affine head is zero-initialized, so the
+  initial transform is identity. Its decoded output is detached until global
+  step 1000 when `model.post_processing.optimization_start_global_step: 1000`.
+
+The affine is an ISP/color correction. It does not replace or modify geometric
+camera intrinsics or trajectories.
+
+The differentiable renderer follows the reference 3DGUT contract: `RGB-d` output,
+`RendererConfig_ParallelBatch`, eval3d enabled, and the unscented transform
+`alpha=1`, `beta=2`, `kappa=0`, image-margin factor `0.1`, with every sigma
+point required to be valid. The returned distance is opacity-weighted and is
+normalized exactly once in the inverse-distance loss. CUDA sky composition
+uses nvdiffrast cube-boundary filtering so gradients remain continuous across
+cube-face seams. Each complete rendered frame is checkpointed with PyTorch's
+non-reentrant checkpoint implementation. Gaussian foreground is saturated
+before sky composition and the learned affine transform, and RGB MSE compacts
+valid pixels before applying the synthetic-pixel weight.
+
+## Environment
+
+Use Python 3.11 and an NVIDIA GPU for real training. From the repository root:
+
+The training extra includes nvdiffrast under NVIDIA's Source Code License
+(1-Way Commercial), whose non-NVIDIA use is limited to non-commercial research
+or evaluation. Read the complete terms in `THIRD_PARTY_LICENSE.txt` before
+installing, and obtain the required release/legal approval for redistribution
+or commercial use.
+
+```bash
+uv sync --frozen --extra training
+source .venv/bin/activate
+python -c 'import torch; print(torch.__version__, torch.cuda.get_device_name())'
+instant-nurec-train --help
+```
+
+The base environment pins `nvidia-ncore==18.7.0`; the training extra pins
+PyTorch Lightning 2.6.5, TorchMetrics 1.7.0, LPIPS 0.1.4, Weights & Biases
+0.28.2, and the calibrated `gsplat` renderer. `optimizer.implementation: auto`
+uses `apex.optimizers.FusedAdam` when available and otherwise logs a warning and
+uses `torch.optim.Adam`. Set `apex-fused-adam` to fail rather than fall back when
+exact optimizer-kernel matching matters.
+
+The first phase-two render JIT-compiles the pinned CUDA kernels for the active
+PyTorch/CUDA/GPU target. Instant NuRec limits the fallback build to calibrated
+3DGUT and its RGB/RGB-d channel counts; explicit `BUILD_3DGUT` and
+`NUM_CHANNELS` environment values still take precedence. Ensure a compatible
+CUDA toolkit/compiler is visible, allow several minutes for the first step,
+and keep the extension cache between workers on the same software image.
+
+Download the exact public DAv3 Base initialization used by the pinned recipe.
+The revision and SHA256 below make the input reproducible:
+
+```bash
+mkdir -p checkpoints/dav3
+hf download depth-anything/DA3-BASE model.safetensors \
+  --revision f4a6c9b3c95e41c82048423d3493a81ec3fa810e \
+  --local-dir checkpoints/dav3
+echo 'e01067dc1659613083d9145a9a2547ccdbe6ccbbf83c4fe7b3e8a4e2bdae78b5  checkpoints/dav3/model.safetensors' \
+  | sha256sum --check
+```
+
+Set `model.init_weights_paths.dav3` to that file in the context-phase
+configuration. The standalone converter was validated against this exact
+541,518,028-byte checkpoint.
+
+## NCore V4 input contract
+
+Each dataset split is a list of absolute NCore V4 sequence-metadata `.json`
+files. Every JSON must resolve all of its component-store paths. A training
+sample requires:
+
+- dynamic `rig -> world` poses;
+- the configured camera and its frames, calibration, and `T_sensor_rig`;
+- intrinsics and masks component groups named `default`;
+- a cuboids group named `default` (it may be empty, but the current loader
+  expects the component to exist).
+
+RGB and any named `ego` mask are always consumed. The configured production
+profile strictly requires RGB, metric distance, semantic flags, and sky
+supervision; a missing required signal raises an error. Only normal,
+render-distance, and velocity supervision are allowed to be unavailable, and
+each omitted loss is reported. A plain Waymo conversion has RGB, poses,
+calibration, lidar, and cuboids (the v18.7 converter writes an empty
+camera-mask group), but not the derived dense depth/semantic/normal auxiliary
+labels. It therefore needs the explicit RGB-only profile below.
+
+The loader discovers optional stores adjacent to each NCore data shard using
+`<data-shard>.aux.<signal>.zarr[.itar]` (legacy `-annotations` archives are also
+accepted). It recognizes the `semantic_segmentation`, `depth`, and `egomask`
+groups. Keep these sidecars beside the base stores and enable them explicitly:
+
+```yaml
+aux_data:
+  enabled: true
+  enabled_context: true
+  semantic_segmentation: true
+  depth: true
+  egomask: true
+```
+
+Depth is loaded as metric distance; context normals are derived from that
+distance and calibrated rays. Semantic class names are mapped to the model's sky,
+road, vehicle, ego, and validity flags. Cuboids supply motion supervision.
+
+### Deterministic train/validation manifests
+
+Generate manifests only after conversion has completed. When the source does
+not provide an official split, make a deterministic whole-sequence split.
+NCore 18.7.0's Waymo converter does not emit manifests:
+
+```bash
+mkdir -p "$NCORE_ROOT/manifests"
+find "$NCORE_ROOT/all" -type f -name '*.json' -print | sort \
+  > "$NCORE_ROOT/manifests/all.lst"
+awk 'NR % 10 == 0' "$NCORE_ROOT/manifests/all.lst" \
+  > "$NCORE_ROOT/manifests/val.lst"
+awk 'NR % 10 != 0' "$NCORE_ROOT/manifests/all.lst" \
+  > "$NCORE_ROOT/manifests/train.lst"
+```
+
+For a small dataset, split by whole sequence, never by frame, to prevent
+trajectory leakage. Inspect the result before launching:
+
+```bash
+wc -l "$NCORE_ROOT/manifests/"{all,train,val}.lst
+comm -12 \
+  <(sort "$NCORE_ROOT/manifests/train.lst") \
+  <(sort "$NCORE_ROOT/manifests/val.lst")
+```
+
+`comm` must print nothing. Point each split at its manifest with
+`dataset.{train,val}.ncore_json_list_path`. Entries may be absolute, or relative
+to `ncore_json_base_path` when that optional base is set. Explicit
+`ncore_json_paths` arrays remain available for short, programmatically generated
+runs and take precedence when both forms are present. All paths in the
+committed examples are placeholders and must be replaced with local absolute
+paths.
+
+### Sampling and retry behavior
+
+The checked-in configs use one train manifest and one validation manifest.
+Every sequence yields ten indexed samples. Each item uses 18 uniformly spaced
+context frames at a 500,000 us gap and six random supervision frames. Dataset
+and optional mixture resampling use a NumPy generator seeded from the first
+eight bytes of `SHA256("{rng_epoch}_{item_index}_{global_seed}")`, interpreted
+as one big-endian integer. `global_seed` is the top-level `seed` in the resolved
+training config; validation keeps `rng_epoch=-1`. Dataloaders are recreated
+each epoch so worker processes see the new training epoch.
+
+Training and validation retry a failed indexed sample with a deterministic
+replacement, without revisiting an already failed index, for at most ten
+attempts. This keeps intentionally short or corrupt outliers from aborting
+distributed training without changing manifest length or epoch permutations.
+Prediction remains one-shot and fails loudly so an inference input is never
+silently replaced.
+
+Always verify that train and validation manifests are disjoint before a quality
+run. A single clip may be reused only for an optimizer smoke test, never for
+quality evaluation.
+
+## Waymo Open Dataset v1.4.3 to NCore V4
+
+Waymo data remains subject to the [Waymo Open Dataset Terms](https://waymo.com/open/terms/).
+Accept them and choose the Perception v1.4.3 release on the official
+[download page](https://waymo.com/open/download/). The files are hosted in the
+[v1.4.3 Cloud Storage bucket](https://console.cloud.google.com/storage/browser/waymo_open_dataset_v_1_4_3).
+
+### 1. Download TFRecords
+
+Install and authenticate the Google Cloud CLI, then list the training objects.
+Download one or a few segments first; the full release is large:
+
+```bash
+export RAW_ROOT=/absolute/path/to/waymo-v1.4.3
+mkdir -p "$RAW_ROOT/train-one"
+
+gcloud storage ls \
+  'gs://waymo_open_dataset_v_1_4_3/individual_files/training/*.tfrecord' \
+  > "$RAW_ROOT/training-objects.txt"
+
+# Pick a specific object from the list so the trial is reproducible.
+WAYMO_OBJECT="$(sed -n '1p' "$RAW_ROOT/training-objects.txt")"
+gcloud storage cp "$WAYMO_OBJECT" "$RAW_ROOT/train-one/"
+```
+
+Keep the original TFRecords immutable and record the object names used for each
+split. Do not put segments from the same source sequence in both train and val.
+After validating the one-segment path, the corresponding full downloads are:
+
+```bash
+mkdir -p "$RAW_ROOT/training" "$RAW_ROOT/validation"
+gcloud storage cp \
+  'gs://waymo_open_dataset_v_1_4_3/individual_files/training/*.tfrecord' \
+  "$RAW_ROOT/training/"
+gcloud storage cp \
+  'gs://waymo_open_dataset_v_1_4_3/individual_files/validation/*.tfrecord' \
+  "$RAW_ROOT/validation/"
+```
+
+These transfers are large. Preserve Waymo's official training/validation split
+rather than repartitioning the combined objects.
+
+### 2. Install the official NVIDIA converter
+
+The supported conversion path is the
+[NCore Waymo converter](https://nvidia.github.io/ncore/conversions/waymo/waymo.html),
+not a hand-written TensorFlow parser. Follow the installation and invocation
+instructions for the pinned NCore v18.7.0 release so its schema and command-line
+contract cannot drift.
+
+The converter implementation and flags are documented in the official pinned
+[converter source](https://github.com/NVIDIA/ncore/blob/v18.7.0/tools/data_converter/waymo/converter.py)
+and [README](https://github.com/NVIDIA/ncore/blob/v18.7.0/tools/data_converter/waymo/README.md).
+
+### 3. Convert to split NCore V4 stores
+
+Use the pinned converter's documented Waymo V4 command with a source root,
+an output directory, camera `camera_front_50fov`, lidar `lidar_top`, and the
+`separate-sensors` profile. If GPU conversion is unavailable, follow the
+converter's documented CPU mode; it is slower but produces the same NCore
+layout. The conversion
+smoke test for this guide used an already available Waymo v1.4.2 TFRecord; the
+download instructions target v1.4.3, but that v1.4.3 download was not exercised
+here.
+
+NCore 18.7.0 has no `--duration-sec` option. To make a bounded conversion,
+place only the selected TFRecords directly under `RAW_TRAIN_ONE`; its TFRecord
+glob is non-recursive. The output uses the
+OpenCV pinhole camera model `camera_front_50fov` and lidar `lidar_top`; the
+standalone trainer supports that pinhole calibration directly.
+
+Once the bounded conversion passes, repeat it for `$RAW_ROOT/training` into
+`$NCORE_ROOT/train`, and for `$RAW_ROOT/validation` into `$NCORE_ROOT/val`.
+Generate manifests without mixing the official splits:
+
+```bash
+mkdir -p "$NCORE_ROOT/manifests"
+find "$NCORE_ROOT/train" -type f -name '*.json' -print | sort \
+  > "$NCORE_ROOT/manifests/train.lst"
+find "$NCORE_ROOT/val" -type f -name '*.json' -print | sort \
+  > "$NCORE_ROOT/manifests/val.lst"
+```
+
+For Waymo, use a direct train/val dataset. In both
+splits, select `EXTERNAL` cuboids because the v18.7.0 converter writes every
+Waymo box with that source. `AUTOLABEL` and `GT_ANNOTATION` select no tracks.
+The converter emits no dense auxiliary sidecars, so disable them explicitly:
+
+```yaml
+dataset:
+  train: &waymo
+    ncore_json_list_path: /absolute/path/to/manifests/train.lst
+    camera_subsampler: {frame_width: 784, frame_height: 448}
+    context_camera_ids: [camera_front_50fov]
+    supervision_camera_ids: [camera_front_50fov]
+    frame_batch_sampler:
+      name: uniform
+      n_frames_per_sample: 18
+      n_samples_per_sequence: 10
+      frame_gap_timestamp_us: 500000
+    supervision_frame_batch:
+      n_frames_per_camera: 6
+      prepend_timestamps_us: 100000
+      append_timestamps_us: 100000
+      sample_strategy: random
+      camera_subsampler: {frame_width: 1296, frame_height: 720}
+      include_context_frames: false
+    cuboid_tracks_params:
+      track_label_source: EXTERNAL
+    aux_data:
+      enabled: false
+      enabled_context: false
+      semantic_segmentation: false
+      depth: false
+      egomask: false
+  val:
+    <<: *waymo
+    ncore_json_list_path: /absolute/path/to/manifests/val.lst
+```
+
+The converter stores the original pinhole intrinsics, rational radial,
+tangential and thin-prism distortion, camera extrinsics, and poses. Do not
+rewrite these values to imitate another camera model. This repository accepts
+lowercase `cyclist` as dynamic because the official Waymo converter emits that
+spelling.
+
+An exercised converted sequence completed a reduced two-frame CUDA smoke run:
+one context optimization step, resume to the next global step, and one render
+optimization step with the RGB-only profile. It retained the full
+OpenCV pinhole distortion and rolling-shutter calibration; render training also
+created nonzero optimizer state for the affine camera transform. Apex was not
+installed, so this smoke used the documented PyTorch Adam fallback. It verifies
+the conversion/loader/optimizer/checkpoint/render path, not production quality
+or the unexercised v1.4.3 download.
+
+## Configure a run
+
+Start from:
+
+- `configs/training/full_model_front_context.yaml`
+- `configs/training/full_model_front_render.yaml`
+
+Replace the manifest, output, and initialization path placeholders in both
+files. For Waymo, use the direct dataset block above and the RGB-only losses
+below.
+
+The checked-in configs log to W&B project `instant-nurec`. Leave
+`logger.entity` empty to use the account's default entity, or set it explicitly. Authenticate once with
+`wandb login`, and change `logger.run_name`, `group`, and `tags` to identify the
+experiment. `run_id` is also the stable W&B run ID; resume from a copy of the
+run's `resolved.yaml` so checkpoint and W&B histories continue together.
+Validate the resolved config without allocating a GPU:
+
+```bash
+python - <<'PY'
+from pathlib import Path
+from instant_nurec.training.run import load_training_config
+
+for name in (
+    "configs/training/full_model_front_context.yaml",
+    "configs/training/full_model_front_render.yaml",
+):
+    cfg = load_training_config(Path(name))
+    print(name, cfg.phase, cfg.system.max_epochs, cfg.reference_profile)
+PY
+```
+
+### Phase 1: context supervision
+
+Phase 1 trains the encoder, DPT context geometry/RGB/semantic/motion heads, and
+sky decoder. Rendering is disabled by the one-million-step gate, so neither the
+Gaussian head nor affine output is consumed; both are intentionally unused in
+this phase, and phase 2 reinitializes the Gaussian head. Independently sampled
+supervision frames are still used to build the observed sky-cubemap target.
+
+```bash
+instant-nurec-train \
+  --config configs/training/full_model_front_context.yaml
+```
+
+For reproducible training, initialize the DAv3 encoder from the intended base
+safetensors through `model.init_weights_paths.dav3`.
+The loader converts the official DAv3 keys into the encoder, DPT
+reassembly, and depth head; it zero-initializes the context and Gaussian output
+heads. Sky starts from its model initialization and the affine linear layer
+starts at identity. Do not silently train a production run from random weights.
+A random initialization is useful only for testing forward, backward,
+optimizer, checkpoint, and resume mechanics.
+
+### Phase 2: differentiable render supervision
+
+Set `model.init_weights_paths.full` to phase 1's `last.ckpt`. Phase 2 resets the
+Gaussian head, resets the affine linear layer to identity, freezes the encoder,
+renders every supervision camera with its original calibration, and enables
+the render losses from step zero.
+
+```bash
+instant-nurec-train \
+  --config configs/training/full_model_front_render.yaml
+```
+
+Outputs are written under `<out_dir>/<run_id>/`:
+
+```text
+<run>/
+├── resolved.yaml
+├── checkpoints/
+│   ├── last.ckpt
+│   └── epoch=...-psnr=....ckpt
+└── wandb/...
+```
+
+Every checkpoint stores `training_contract` with the reference profile,
+phase, selected optimizer implementation, and world size.
+
+The render phase reports `train/psnr` and `val/psnr` using the official metric:
+after calibrated Gaussian/sky composition and affine ISP correction, it keeps
+pixels with `RGB_LABEL` and without `INVALID`, then computes one global
+`10 * log10(1 / MSE)` value with data range 1. Synthetic and harmonized RGB
+pixels remain included. Phase 1 does not render; its increasing `val/psnr =
+0.1 * epoch` is checkpoint plumbing only and must never be read as image
+quality. Use a quality gate only when the train/validation split, resolution,
+masks, initialization, and evaluation protocol are all documented; do not
+reuse thresholds across datasets or protocols.
+
+### A bounded end-to-end smoke test
+
+Before a long run, copy each production config and change only:
+
+```yaml
+system:
+  max_epochs: 1
+  train_batch_size: 1
+  val_batch_size: 1
+  train_num_workers: 0
+  val_num_workers: 0
+  devices: 1
+  num_nodes: 1
+  limit_train_batches: 1
+  limit_val_batches: 1
+  save_every_n_train_steps: 1
+```
+
+For a lower-memory plumbing test, also use four context frames and a 196x112
+context crop plus one 196x112 supervision frame. That deliberately changes the
+model/data contract and is not a quality-equivalence run. A successful
+smoke test must complete backward and optimizer step, write `last.ckpt`, then
+resume that checkpoint for at least one more step.
+
+## Distributed training
+
+The batch sizes in the configs are per process/GPU. On one machine, set
+`devices` to the GPU count and use `strategy:
+ddp_find_unused_parameters_true` for both phases. Context leaves the Gaussian
+head and affine output unused while rendering is gated off; render can also
+have conditional branches. The launcher automatically upgrades `auto`, `ddp`,
+or explicit find-unused-false to this safe strategy whenever the requested
+world size is distributed. Lightning starts the local workers:
+
+```bash
+CUDA_VISIBLE_DEVICES=0,1,2,3 \
+  instant-nurec-train --config /path/to/four-gpu-config.yaml
+```
+
+For multi-node work, set the same `num_nodes`, `devices`, config, code commit,
+and visible dataset paths on every node, then launch through the site's Slurm
+or torchrun integration. Do not wrap a Lightning self-spawning `devices: 8`
+run in a second eight-process launcher. Confirm from startup logs that world
+size equals `num_nodes * devices`. Generate one run ID before launch and export
+it to every rank as `INSTANT_NUREC_RUN_ID`; otherwise independently parsed
+YAMLs would generate different output directories and W&B IDs:
+
+```bash
+export INSTANT_NUREC_RUN_ID="context-$(date -u +%Y%m%d-%H%M%S)"
+```
+
+## Checkpoint initialization and resume
+
+These are different operations:
+
+- `model.init_weights_paths.dav3` initializes phase 1 from the official DAv3
+  safetensors; `model.init_weights_paths.full` initializes a new run from a
+  complete model/Lightning state dict. Use `full` for phase 2. Optimizer,
+  scheduler, epoch, and global step start fresh.
+- `resume_from_checkpoint` restores a Lightning training checkpoint, including
+  optimizer, scheduler, epoch, and global step. Use it only to continue the
+  same phase/config.
+
+Training checkpoints are mid-epoch resumable. The checkpoint stores the next
+unprocessed training batch, and the reconstructed sampler skips exactly the
+completed prefix of the same seed/epoch permutation. Its reported length stays
+equal to the full epoch length; this is intentional so Lightning continues
+with the original epoch-global `batch_idx`; the progress-based scheduler then
+follows the same learning-rate sequence. In DDP, Lightning replaces
+the random sampler inside the skip batch sampler with its distributed sampler,
+while retaining the restored batch cursor. Keep the seed, dataset/manifests,
+batch size, world size, and sampler inputs unchanged when resuming.
+
+To resume, copy the original resolved YAML, add:
+
+```yaml
+resume_from_checkpoint: /absolute/path/to/run/checkpoints/last.ckpt
+```
+
+Keep `phase`, model topology, data ordering, world size, optimizer, and schedule
+unchanged. Inspect the stored contract before resuming:
+
+```bash
+python - /path/to/last.ckpt <<'PY'
+import sys
+import torch
+
+checkpoint = torch.load(sys.argv[1], map_location="cpu", weights_only=False)
+print(checkpoint["training_contract"])
+print("epoch", checkpoint["epoch"], "global_step", checkpoint["global_step"])
+PY
+```
+
+### Slurm preemption
+
+`system.save_on_preemption` defaults to `true`. On POSIX systems the trainer
+handles `SIGUSR1` by finishing the current batch, atomically publishing
+`checkpoints/last.ckpt`, marking W&B as preempting when supported, and exiting
+with status 1. Checkpointing is collective in DDP, but the host launcher only
+needs to forward the signal to rank zero; the callback synchronizes the
+decision across ranks. An outer Slurm script can then call `scontrol requeue`
+from the host. No Slurm executable or cluster-specific requeue logic is needed
+inside the training container.
+
+The data-cursor callback is registered before both periodic checkpoints and
+the signal checkpoint, so the just-completed batch is not replayed. A signal
+during validation restarts the validation loop from its beginning after
+resume; this is required because epoch-level metric accumulators cannot be
+recovered exactly in the middle of validation. Disable the handler only when
+another launcher owns `SIGUSR1`:
+
+```yaml
+system:
+  save_on_preemption: false
+```
+
+## No-auxiliary versus production-auxiliary training
+
+The production loss profile is strict: RGB, context distance, semantics, sky,
+render RGB/LPIPS, and render-background inputs must be present when their
+weights are nonzero. Only normal, render-distance, and velocity may be reported
+as unavailable and omitted. This prevents an apparently successful RGB-only
+run from silently claiming full-supervision equivalence.
+
+| Data | Active supervision | Intended use |
+| --- | --- | --- |
+| official Waymo-to-NCore conversion | RGB; calibration/trajectory; lidar/EXTERNAL cuboids | ingestion, camera-model, render, optimizer, checkpoint and resume validation with the explicit profile below |
+| RGB-only NCore fixture | RGB; masks/cuboids present in the base stores | loader and data-integrity smoke tests only |
+| production NCore plus adjacent derived aux | RGB, metric distance, semantic flags, derived normals, motion/cuboids | full reference loss profile and model-quality training |
+
+For a Waymo plumbing run, use this context-phase loss block:
+
+```yaml
+loss:
+  primitive_sky_cubemap: 0.0
+  primitive_rgb: 0.1
+  primitive_distance: 0.0
+  primitive_distance_gradient: 0.0
+  primitive_semantics: 0.0
+  primitive_normal: 0.0
+  primitive_velocity: 0.0
+  rgb: 0.0
+  lpips: 0.0
+  distance: 0.0
+  background: 0.0
+```
+
+In render phase keep context RGB plus image reconstruction, but leave all
+derived-label losses disabled:
+
+```yaml
+loss:
+  primitive_sky_cubemap: 0.0
+  primitive_rgb: 0.01
+  primitive_distance: 0.0
+  primitive_distance_gradient: 0.0
+  primitive_semantics: 0.0
+  primitive_normal: 0.0
+  primitive_velocity: 0.0
+  rgb: 1.0
+  lpips: 0.2
+  distance: 0.0
+  background: 0.0
+```
+
+Do not interpret an RGB-only run as a reproduction of the released model's
+quality. In particular, lidar points alone are not automatically rasterized to
+`CameraFrameLabels.metric_distance`, and Waymo's class labels are not
+automatically converted into per-pixel semantic flags. Those dense aux
+labels must be generated and attached in the same coordinate frame and mask
+conventions as the cameras.
+
+## Validation checklist
+
+Use this order; stop at the first failure:
+
+1. Parse both YAML files and confirm the reference profile.
+2. Open every NCore JSON and all referenced stores.
+3. Decode the configured camera, validate monotonic timestamps, finite
+   intrinsics/extrinsics, and overlapping rig-pose coverage.
+4. Materialize one batch and confirm context/supervision image counts and
+   resolutions.
+5. Run a CPU loss/optimizer unit test.
+6. Run one true CUDA context optimization step and save a checkpoint.
+7. Resume it and confirm the global step advances.
+8. Initialize render phase from that checkpoint and run one calibrated CUDA
+   render/backward step.
+9. Run one short validation epoch and inspect W&B for finite loss and, in
+   phase 2, the masked `val/psnr` metric.
+10. Only then remove batch limits and launch the 40-epoch phases.
+
+Useful gates from the repository root are:
+
+```bash
+pytest -q
+ruff check instant_nurec tests
+```
+
+The standalone loop now reproduces the official masked RGB PSNR. Compare model
+quality only when checkpoint, cameras, frames, masks, resolution, and metric
+protocol are the same; the paper's Waymo PSNR is a separate evaluation.
+
+## Supported scope and limitations
+
+No known unimplemented training-step, configured-loss, calibrated-renderer, or
+mixture-sampling blocker remains for the dense DAv3 front-camera two-phase
+recipe. Keep these bounded differences visible in experiment reports:
+
+- Random varying-camera/frame curricula, point-query training, and TokenGS
+  training are not exposed. Legacy TokenGS checkpoint-key conversion is also
+  absent; it is not used by the DAv3 context-to-render path.
+- Cuboid loading ranges tracks from context frames only and does not implement
+  the negative full-clip sentinel. With the stock 1 s extrapolation and
+  supervision window of +/-0.1 s, this does not truncate the front-camera recipe.
+- Apex FusedAdam is optional. The PyTorch Adam fallback and public CUDA kernels
+  are not bitwise substitutes for the reference optimizer and renderer stack.
+- CUDA sky filtering follows the nvdiffrast cube contract; the CPU-only utility
+  fallback samples faces independently and is not seam-equivalent. An
+  all-invalid rendered RGB mask preserves the reference NaN result, while an
+  all-invalid background mask is reported as skipped.
+- Lowercase Waymo `cyclist` is deliberately treated as dynamic, correcting the
+  converter/class-list mismatch present across the pinned repositories.
+- W&B logs losses, learning rate, and RGB PSNR, but not depth/media dashboards.
+
+The real-data verification completed bounded context, resume, and render
+optimization steps; it did not run both 40-epoch phases to convergence, did not
+download Waymo v1.4.3, and did not establish model-quality equivalence. Full
+production claims require disjoint manifests, complete auxiliary labels, the
+same initialization weights/hardware/optimizer, and end-to-end validation of
+the resulting checkpoints.
+
+Record the standalone Git commit, `resolved.yaml`, NCore converter version,
+Waymo object list or dataset revision, GPU count/type, optimizer implementation,
+and emitted checkpoint contract with every result.

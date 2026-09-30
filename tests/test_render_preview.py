@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 
 from enum import Enum
@@ -37,6 +38,23 @@ class _FakeRollingShutterType(Enum):
 class _FakeFThetaCameraDistortionParameters:
     def __init__(self, **kwargs: object) -> None:
         self.__dict__.update(kwargs)
+
+
+class _FakeUnscentedTransformParameters:
+    def __init__(self, **kwargs: object) -> None:
+        self.__dict__.update(kwargs)
+
+
+class _FakeRendererConfigParallelBatch:
+    pass
+
+
+class _FakeExternalDistortionReferencePolynomial(Enum):
+    PIXELDIST_TO_ANGLE = 0
+
+
+class _FakeBivariateWindshieldModelParameters:
+    MAX_COEFFS = 16
 
 
 def _ftheta_parameters(*, external_distortion: object | None = None) -> SimpleNamespace:
@@ -87,6 +105,30 @@ def _render_inputs(
         affine_matrix=torch.eye(3, 4).unsqueeze(0),
     )
     return primitive, context, rays, poses
+
+
+def test_gsplat_build_defaults_cover_rgb_and_rgb_distance(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("BUILD_3DGUT", raising=False)
+    monkeypatch.delenv("NUM_CHANNELS", raising=False)
+
+    render_preview_module._configure_gsplat_build()
+
+    assert os.environ["BUILD_3DGUT"] == "1"
+    assert os.environ["NUM_CHANNELS"] == "3,4"
+
+
+def test_gsplat_build_defaults_preserve_explicit_overrides(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("BUILD_3DGUT", "0")
+    monkeypatch.setenv("NUM_CHANNELS", "3,4,8")
+
+    render_preview_module._configure_gsplat_build()
+
+    assert os.environ["BUILD_3DGUT"] == "0"
+    assert os.environ["NUM_CHANNELS"] == "3,4,8"
 
 
 def test_transparent_foreground_reveals_sky() -> None:
@@ -167,6 +209,16 @@ def test_composited_frame_uses_calibrated_ftheta_rolling_shutter_and_exact_rays(
     )
     setattr(fake_gsplat_rendering, "FThetaPolynomialType", _FakeFThetaPolynomialType)
     setattr(fake_gsplat_rendering, "RollingShutterType", _FakeRollingShutterType)
+    setattr(
+        fake_gsplat_rendering,
+        "UnscentedTransformParameters",
+        _FakeUnscentedTransformParameters,
+    )
+    setattr(
+        fake_gsplat_rendering,
+        "RendererConfig_ParallelBatch",
+        _FakeRendererConfigParallelBatch,
+    )
     monkeypatch.setitem(sys.modules, "gsplat", fake_gsplat)
     monkeypatch.setitem(sys.modules, "gsplat.rendering", fake_gsplat_rendering)
     monkeypatch.setattr(render_preview_module, "tquat_to_se3_matrix", fake_tquat_to_se3_matrix)
@@ -179,6 +231,13 @@ def test_composited_frame_uses_calibrated_ftheta_rolling_shutter_and_exact_rays(
     assert kwargs["camera_model"] == "ftheta"
     assert kwargs["packed"] is False
     assert kwargs["with_ut"] is True
+    assert isinstance(kwargs["ut_params"], _FakeUnscentedTransformParameters)
+    assert kwargs["ut_params"].alpha == 1.0
+    assert kwargs["ut_params"].beta == 2.0
+    assert kwargs["ut_params"].kappa == 0.0
+    assert kwargs["ut_params"].in_image_margin_factor == 0.1
+    assert kwargs["ut_params"].require_all_sigma_points_valid is True
+    assert isinstance(kwargs["renderer_config"], _FakeRendererConfigParallelBatch)
     assert kwargs["with_eval3d"] is True
     assert kwargs["global_z_order"] is False
     assert kwargs["rolling_shutter"] is _FakeRollingShutterType.ROLLING_TOP_TO_BOTTOM
@@ -208,16 +267,39 @@ def test_composited_frame_uses_calibrated_ftheta_rolling_shutter_and_exact_rays(
     torch.testing.assert_close(composed, torch.full((2, 3, 3), 0.4))
 
 
-def test_composited_frame_rejects_ftheta_external_windshield_distortion(
+def test_ftheta_external_windshield_distortion_is_converted(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    primitive, context, _, _ = _render_inputs(_ftheta_parameters(external_distortion=SimpleNamespace()))
-    fake_gsplat = ModuleType("gsplat")
-    setattr(fake_gsplat, "rasterization", lambda **_: None)
-    monkeypatch.setitem(sys.modules, "gsplat", fake_gsplat)
+    external = SimpleNamespace(
+        reference_poly=SimpleNamespace(name="PIXELDIST_TO_ANGLE"),
+        horizontal_poly=(1.0, 2.0),
+        vertical_poly=(3.0, 4.0),
+        horizontal_poly_inverse=(5.0, 6.0),
+        vertical_poly_inverse=(7.0, 8.0),
+    )
+    fake_gsplat_rendering = ModuleType("gsplat.rendering")
+    setattr(
+        fake_gsplat_rendering,
+        "BivariateWindshieldModelParameters",
+        _FakeBivariateWindshieldModelParameters,
+    )
+    setattr(
+        fake_gsplat_rendering,
+        "ExternalDistortionReferencePolynomial",
+        _FakeExternalDistortionReferencePolynomial,
+    )
+    monkeypatch.setitem(sys.modules, "gsplat.rendering", fake_gsplat_rendering)
 
-    with pytest.raises(NotImplementedError, match="external windshield distortion"):
-        render_preview_module.render_composited_frame(primitive, context)
+    converted = render_preview_module._external_distortion_gsplat_parameters(
+        _ftheta_parameters(external_distortion=external)
+    )
+
+    assert isinstance(converted, _FakeBivariateWindshieldModelParameters)
+    assert converted.reference_poly is _FakeExternalDistortionReferencePolynomial.PIXELDIST_TO_ANGLE
+    torch.testing.assert_close(converted.horizontal_poly, torch.tensor([1.0, 2.0]))
+    torch.testing.assert_close(converted.vertical_poly, torch.tensor([3.0, 4.0]))
+    torch.testing.assert_close(converted.horizontal_poly_inverse, torch.tensor([5.0, 6.0]))
+    torch.testing.assert_close(converted.vertical_poly_inverse, torch.tensor([7.0, 8.0]))
 
 
 def test_composited_frame_rejects_non_ftheta_before_loading_gsplat(

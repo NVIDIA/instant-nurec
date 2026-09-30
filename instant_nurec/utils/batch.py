@@ -31,6 +31,7 @@ from ncore.impl.common.transformations import PoseInterpolator
 from ncore.sensors import (
     CameraModel,
     FThetaCameraModel,
+    OpenCVPinholeCameraModel,
 )
 from instant_nurec.utils.misc import assert_same_type, collate_fn, unpack_optional
 from instant_nurec.utils.sensors import SensorModelComputations
@@ -41,11 +42,12 @@ from instant_nurec.utils.sensors.ncore_sensors_converters import (
 )
 from instant_nurec.utils.types import (
     CuboidTracksDataPack,
+    RayFlags,
     RigTrajectories,
 )
 
 
-ConcreteCameraModelsUnion: TypeAlias = FThetaCameraModel
+ConcreteCameraModelsUnion: TypeAlias = FThetaCameraModel | OpenCVPinholeCameraModel
 ConcreteSensorModelParametersUnion: TypeAlias = ConcreteCameraModelParametersUnion
 
 
@@ -253,11 +255,41 @@ class CameraFrameLabels:
     """
 
     rgb: torch.Tensor | None = None
+    metric_distance: torch.Tensor | None = None
+    normals: torch.Tensor | None = None
+    flags: torch.Tensor | None = None
 
     def __post_init__(self):
         if self.rgb is not None:
             assert self.rgb.ndim == 4 and self.rgb.shape[3] == 3, "RGB must be a 4D tensor (B, height, width, 3)"
             assert self.rgb.dtype == torch.float32, "RGB must be a float32 tensor"
+        for name, channels in (("metric_distance", 1), ("normals", 3), ("flags", 1)):
+            value = getattr(self, name)
+            if value is not None:
+                assert value.ndim == 4 and value.shape[-1] == channels, (
+                    f"{name} must have shape (B, H, W, {channels})"
+                )
+        if self.metric_distance is not None:
+            assert self.metric_distance.dtype == torch.float32
+        if self.normals is not None:
+            assert self.normals.dtype == torch.float32
+        if self.flags is not None:
+            assert self.flags.dtype in (torch.int32, torch.int64)
+
+    def get_mask_flags_all(self, flags: RayFlags) -> torch.Tensor:
+        if self.flags is None:
+            if self.rgb is None:
+                raise ValueError("Cannot infer label shape without RGB or flags")
+            return torch.ones((*self.rgb.shape[:-1], 1), dtype=torch.bool, device=self.rgb.device)
+        flag_value = int(flags)
+        return (self.flags & flag_value) == flag_value
+
+    def get_mask_flags_none(self, flags: RayFlags) -> torch.Tensor:
+        if self.flags is None:
+            if self.rgb is None:
+                raise ValueError("Cannot infer label shape without RGB or flags")
+            return torch.ones((*self.rgb.shape[:-1], 1), dtype=torch.bool, device=self.rgb.device)
+        return (self.flags & int(flags)) == 0
 
     @classmethod
     def collate_fn(
@@ -265,13 +297,34 @@ class CameraFrameLabels:
         seq: List[Self],
         device: torch.device = torch.device("cpu"),
     ) -> Self:
+        # Match the reference data contract: a camera without depth contributes
+        # zero distance when collated with cameras that do have depth.  Depth
+        # losses already treat zero as invalid, while keeping one dense tensor
+        # lets real and synthetic supervision frames share a batch.
+        metric_distance_seq = [item.metric_distance for item in seq]
+        if (
+            first_not_none_distance := next(
+                (distance for distance in metric_distance_seq if distance is not None), None
+            )
+        ) is not None:
+            metric_distance_seq = [
+                torch.zeros_like(first_not_none_distance) if distance is None else distance
+                for distance in metric_distance_seq
+            ]
+
         return cls(
             rgb=collate_fn([item.rgb for item in seq], device),
+            metric_distance=collate_fn(metric_distance_seq, device),
+            normals=collate_fn([item.normals for item in seq], device),
+            flags=collate_fn([item.flags for item in seq], device),
         )
 
     def to(self, *args, **kwargs) -> Self:
         return self.__class__(
             rgb=self.rgb.to(*args, **kwargs) if self.rgb is not None else None,
+            metric_distance=self.metric_distance.to(*args, **kwargs) if self.metric_distance is not None else None,
+            normals=self.normals.to(*args, **kwargs) if self.normals is not None else None,
+            flags=self.flags.to(*args, **kwargs) if self.flags is not None else None,
         )
 
     def __getitem__(self, item: Union[int, slice, torch.Tensor]) -> Self:
@@ -281,6 +334,9 @@ class CameraFrameLabels:
 
         return self.__class__(
             rgb=self.rgb[item] if self.rgb is not None else None,
+            metric_distance=self.metric_distance[item] if self.metric_distance is not None else None,
+            normals=self.normals[item] if self.normals is not None else None,
+            flags=self.flags[item] if self.flags is not None else None,
         )
 
 
@@ -667,15 +723,23 @@ class InstantNuRecDataBatch:
     """
 
     context: list[DataAndRenderingBatch]
+    supervision: list[DataAndRenderingBatch] | None = None
     cuboid_tracks: list[CuboidTracksDataPack] | None = None
     context_rig: list[RigTrajectories] | None = None
+    supervision_rig: list[RigTrajectories] | None = None
     meta: list[dict[str, Any]] | None = None
 
     def __post_init__(self):
+        if self.supervision is not None:
+            assert len(self.context) == len(self.supervision), "Number of context and supervision batches must match"
         if self.cuboid_tracks is not None:
             assert len(self.context) == len(self.cuboid_tracks), "Number of context and cuboid tracks must match"
         if self.context_rig is not None:
             assert len(self.context) == len(self.context_rig), "Number of context and context_rig must match"
+        if self.supervision_rig is not None:
+            assert len(self.context) == len(self.supervision_rig), (
+                "Number of context and supervision_rig batches must match"
+            )
 
     def __getitem__(self, item: Union[int, slice]) -> Self:
         """Allows indexing into the dataclass to get a subset of the data."""
@@ -684,8 +748,10 @@ class InstantNuRecDataBatch:
 
         return self.__class__(
             context=self.context[item],
+            supervision=self.supervision[item] if self.supervision is not None else None,
             cuboid_tracks=self.cuboid_tracks[item] if self.cuboid_tracks is not None else None,
             context_rig=self.context_rig[item] if self.context_rig is not None else None,
+            supervision_rig=self.supervision_rig[item] if self.supervision_rig is not None else None,
             meta=self.meta[item] if self.meta is not None else None,
         )
 
@@ -710,8 +776,10 @@ class InstantNuRecDataBatch:
 
         return self.__class__(
             context=_move_list(self.context),
+            supervision=_move_list(self.supervision),
             cuboid_tracks=_move_list(self.cuboid_tracks),
             context_rig=_move_list(self.context_rig),
+            supervision_rig=_move_list(self.supervision_rig),
             meta=self.meta,
         )
 
@@ -721,18 +789,20 @@ class InstantNuRecDataBatch:
 
         if self.context_rig is None:
             return
-        for data, rig in zip(self.context, self.context_rig):
-            # Do not re-compute if rendering data already exists.
-            if data.rendering is not None:
+        for batches, rigs in ((self.context, self.context_rig), (self.supervision, self.supervision_rig)):
+            if batches is None or rigs is None:
                 continue
-            camera_rendering_data = (
-                CameraFreePoseViewGeometry.from_rig_trajectories(rig)
-                .to(device=device)
-                .to_rendering_data(data.data.camera.to(device))
-                if data.data.camera is not None
-                else None
-            )
-            data.rendering = RenderingBatch(camera=camera_rendering_data)
+            for data, rig in zip(batches, rigs):
+                if data.rendering is not None:
+                    continue
+                camera_rendering_data = (
+                    CameraFreePoseViewGeometry.from_rig_trajectories(rig)
+                    .to(device=device)
+                    .to_rendering_data(data.data.camera.to(device))
+                    if data.data.camera is not None
+                    else None
+                )
+                data.rendering = RenderingBatch(camera=camera_rendering_data)
 
     @classmethod
     def collate_fn(
@@ -761,7 +831,9 @@ class InstantNuRecDataBatch:
 
         return cls(
             context=unpack_optional(_collate_vals(*[batch.context for batch in seq])),
+            supervision=_collate_vals(*[batch.supervision for batch in seq]),
             cuboid_tracks=_collate_vals(*[batch.cuboid_tracks for batch in seq]),
             context_rig=_collate_vals(*[batch.context_rig for batch in seq]),
+            supervision_rig=_collate_vals(*[batch.supervision_rig for batch in seq]),
             meta=_collate_vals(*[batch.meta for batch in seq]),
         )

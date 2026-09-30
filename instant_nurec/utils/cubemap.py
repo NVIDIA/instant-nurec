@@ -111,6 +111,29 @@ def sample_sky_cubemap(cubemap: torch.Tensor, directions: torch.Tensor) -> torch
 
     if cubemap.ndim != 4 or cubemap.shape[0] != 6 or cubemap.shape[1] != cubemap.shape[2]:
         raise ValueError(f"Expected cubemap shape (6, H, H, C), got {tuple(cubemap.shape)}")
+    if cubemap.is_cuda:
+        try:
+            import nvdiffrast.torch as dr
+        except (ImportError, OSError) as exc:  # pragma: no cover - optional CUDA dependency
+            raise RuntimeError(
+                "CUDA sky rendering requires nvdiffrast for seam-correct cube filtering; "
+                "install the render or training extra"
+            ) from exc
+        original_shape = directions.shape[:-1]
+        flat = directions.reshape(-1, 3).float()
+        # nvdiffrast uses OpenGL's +Y/-Y cube-face convention; the image
+        # coordinates have the opposite Y axis.
+        opengl_directions = torch.stack([flat[:, 0], -flat[:, 1], flat[:, 2]], dim=-1)
+        sampled = dr.texture(
+            cubemap.float()[None],
+            opengl_directions[None, None],
+            filter_mode="linear",
+            boundary_mode="cube",
+        )
+        return sampled[0, 0].reshape(*original_shape, cubemap.shape[-1])
+
+    # CPU fallback used by data utilities and unit tests. Runtime rendering is
+    # CUDA-only and takes the seam-correct nvdiffrast path above.
     face, uv = directions_to_cubemap_face_uv(directions)
     flat_face = face.reshape(-1)
     flat_uv = uv.reshape(-1, 2)
@@ -436,5 +459,3 @@ def rotate_sky_cubemap(cubemap: torch.Tensor, rotation: torch.Tensor) -> torch.T
             out[mask] = sampled[0, :, 0].T
 
     return out.reshape(6, H, H, C)
-
-

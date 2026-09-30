@@ -83,17 +83,25 @@ source .venv/bin/activate
 
 `setup.sh` calls `uv sync --frozen`, which installs the locked
 dependency tree from `uv.lock`. The build backend is plain `setuptools`
-and every kernel is pure torch, so there are no compiled extensions to
-build.
+and the default inference environment has no additional compiled extensions.
+The optional render and training environments JIT-compile their pinned CUDA
+dependencies on first use.
 
 To bump a dependency, edit `pyproject.toml` and run `uv lock` to
 regenerate the lockfile, then commit both files together.
 
 ## Running tests
 
+The complete test environment includes nvdiffrast under NVIDIA's Source Code
+License (1-Way Commercial). Review `THIRD_PARTY_LICENSE.txt` before installation
+or redistribution.
+
 ```bash
+uv sync --frozen --extra training
 .venv/bin/python -m pytest tests/ -q
 ```
+
+The training extra is required to collect the complete test suite.
 
 Branch coverage is the bar for new functions. Please add a test (or set
 of tests) covering each branch of any new code.

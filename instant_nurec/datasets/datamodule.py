@@ -36,6 +36,7 @@ class InstantNuRecDataModule:
             frame_width=dataset_config.camera_subsampler.frame_width,
             frame_height=dataset_config.camera_subsampler.frame_height,
             n_frames_per_sample=dataset_config.frame_batch_sampler.n_frames_per_sample,
+            global_seed=self.instantnurec_config.seed,
         )
         return DataLoader(
             self.predict_dataset,

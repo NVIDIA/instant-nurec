@@ -30,10 +30,12 @@ from instant_nurec.model.backbone.decoders import KelvinDPTDecoder
 from instant_nurec.model.backbone.encoders import KelvinDAv3Encoder
 from instant_nurec.model.backbone.sky import CubemapDecoderSky
 from instant_nurec.model.post_processing import PerCameraAffinePostProcessing
+from instant_nurec.model.supervision import SupervisionPack
 from instant_nurec.primitives.kelvin_primitive import KelvinInstantNuRecPrimitive
 from instant_nurec.utils.motion import TimeRemapping
 from instant_nurec.utils.batch import DataAndRenderingBatch
 from instant_nurec.utils.misc import unpack_optional
+from instant_nurec.utils.types import RayFlags
 
 
 logger = logging.getLogger(__name__)
@@ -57,16 +59,49 @@ class KelvinInstantNuRec(nn.Module):
         self.encoder = KelvinDAv3Encoder(config.encoder, config)
         self.decoder = KelvinDPTDecoder(config.decoder, config)
         self.sky = CubemapDecoderSky(config.sky, config)
-        self.post_processing = PerCameraAffinePostProcessing(
-            embed_dim=config.encoder.embed_dim, init_token_scale=0.02
+        self.post_processing = (
+            PerCameraAffinePostProcessing(embed_dim=config.encoder.embed_dim, init_token_scale=0.02)
+            if config.post_processing.enabled
+            else None
         )
         self.scene_rescale = self.config.scene_rescale
         self.cuboids_dims_padding = torch.nn.Buffer(torch.tensor(self.config.track_padding_m, dtype=torch.float32))
+        if config.freeze_encoder:
+            for parameter in self.encoder.parameters():
+                parameter.requires_grad = False
 
     def prepare_context(
         self,
         context: list[DataAndRenderingBatch],
     ) -> list[DataAndRenderingBatch]:
+        for batch in context:
+            camera = batch.data.camera
+            rendering = batch.rendering.camera if batch.rendering is not None else None
+            if camera is None or rendering is None:
+                continue
+            labels = camera.labels
+            if labels.normals is not None or labels.metric_distance is None:
+                continue
+            points = rendering.rays[..., :3] + labels.metric_distance * rendering.rays[..., 3:]
+            normals = torch.zeros_like(points)
+            normals[:, 1:-1, 1:-1] = torch.nn.functional.normalize(
+                torch.cross(
+                    points[:, 2:, 1:-1] - points[:, :-2, 1:-1],
+                    points[:, 1:-1, 2:] - points[:, 1:-1, :-2],
+                    dim=-1,
+                ),
+                dim=-1,
+            )
+            valid = (
+                (labels.metric_distance[:, 2:, 1:-1] > 0)
+                & (labels.metric_distance[:, :-2, 1:-1] > 0)
+                & (labels.metric_distance[:, 1:-1, 2:] > 0)
+                & (labels.metric_distance[:, 1:-1, :-2] > 0)
+            )
+            normals[:, 1:-1, 1:-1][~valid.squeeze(-1)] = 0
+            labels.normals = normals
+            if labels.flags is not None:
+                labels.flags[:, 1:-1, 1:-1][valid] |= int(RayFlags.VALID_NORMAL)
         return context
 
     @staticmethod
@@ -101,6 +136,12 @@ class KelvinInstantNuRec(nn.Module):
         camera_idxs: torch.Tensor,
     ) -> torch.Tensor:
         # This affine transform is also used by the static PLY inference path.
+        if self.post_processing is None:
+            B = encoded_latent.deepest.shape[0]
+            n_cameras = torch.unique(camera_idxs[0]).numel()
+            affine = torch.zeros(B, n_cameras, 3, 4, device=encoded_latent.deepest.device, dtype=torch.float32)
+            affine[..., :3, :3] = torch.eye(3, device=affine.device)
+            return affine
         _, affine_latents = self.post_processing.transform_tokens(
             rearrange(encoded_latent.deepest, "B V h w C -> B (V h w) C"), camera_idxs
         )
@@ -130,7 +171,16 @@ class KelvinInstantNuRec(nn.Module):
         context: list[DataAndRenderingBatch],
         cuboid_tracks: list[CuboidTracks] | None,
     ) -> list[KelvinInstantNuRecPrimitive]:
-        # Add assertions about input context -- num_images and num_views should match
+        primitives, _ = self.reconstruct_with_supervision(context, cuboid_tracks)
+        return primitives
+
+    def reconstruct_with_supervision(
+        self,
+        context: list[DataAndRenderingBatch],
+        cuboid_tracks: list[CuboidTracks] | None,
+    ) -> tuple[list[KelvinInstantNuRecPrimitive], list[SupervisionPack]]:
+        """Reconstruct primitives and retain the dense training predictions."""
+
         num_imgs, num_views, camera_idxs, time_remappings = self._grab_metainfo(context)
 
         encoded_latent = self.encoder.encode(context, self.scene_rescale)
@@ -147,5 +197,13 @@ class KelvinInstantNuRec(nn.Module):
         sky_cubemaps = self.sky.decode(encoded_latent, context).contiguous()
 
         affine_matrix = self._compute_affine_matrix(encoded_latent, camera_idxs)
+        packs = [decoder_return.supervision_pack for decoder_return in decoder_returns]
+        for pack, sky_cubemap in zip(packs, sky_cubemaps):
+            pack.predicted_sky_cubemap = sky_cubemap
+        return self._build_primitives(context, decoder_returns, sky_cubemaps, affine_matrix), packs
 
-        return self._build_primitives(context, decoder_returns, sky_cubemaps, affine_matrix)
+    def update_step_train_batch_start(self, global_step: int) -> None:
+        if self.post_processing is not None:
+            self.post_processing.set_detach_linear_grad(
+                global_step < self.config.post_processing.optimization_start_global_step
+            )

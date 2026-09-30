@@ -98,6 +98,7 @@ def stubbed_batch(monkeypatch):
 
     sensors_ncore.CameraModel = CameraModel
     sensors_ncore.FThetaCameraModel = type("FTC", (CameraModel,), {})
+    sensors_ncore.OpenCVPinholeCameraModel = type("OCVP", (CameraModel,), {})
     sensors_ncore.BivariateWindshieldModel = type("BWM", (), {})
     ncore_mod.sensors = sensors_ncore
 
@@ -459,6 +460,51 @@ def test_cam_labels_collate_fn_with_all_none(stubbed_batch):
     b = stubbed_batch.CameraFrameLabels()
     out = stubbed_batch.CameraFrameLabels.collate_fn([a, b])
     assert out.rgb is None
+    assert out.metric_distance is None
+
+
+@pytest.mark.parametrize("synthetic_first", [False, True])
+def test_cam_labels_collate_fills_missing_synthetic_depth_with_zero(stubbed_batch, synthetic_first):
+    mod = stubbed_batch
+    real_depth = torch.full((1, 4, 5, 1), 12.5, dtype=torch.float32)
+    real = _make_cam_labels(
+        mod,
+        metric_distance=real_depth,
+        flags=torch.full((1, 4, 5, 1), int(mod.RayFlags.RGB_LABEL), dtype=torch.int32),
+    )
+    synthetic = _make_cam_labels(
+        mod,
+        metric_distance=None,
+        flags=torch.full(
+            (1, 4, 5, 1),
+            int(mod.RayFlags.RGB_LABEL | mod.RayFlags.SYNTHETIC),
+            dtype=torch.int32,
+        ),
+    )
+
+    out = mod.CameraFrameLabels.collate_fn([synthetic, real] if synthetic_first else [real, synthetic])
+
+    assert out.metric_distance is not None
+    assert out.metric_distance.shape == (2, 4, 5, 1)
+    real_index = 1 if synthetic_first else 0
+    synthetic_index = 0 if synthetic_first else 1
+    torch.testing.assert_close(out.metric_distance[real_index : real_index + 1], real_depth)
+    assert torch.count_nonzero(out.metric_distance[synthetic_index : synthetic_index + 1]) == 0
+    assert out.flags is not None
+    assert out.get_mask_flags_all(mod.RayFlags.SYNTHETIC)[synthetic_index : synthetic_index + 1].all()
+
+
+def test_cam_labels_collate_rejects_mismatched_frame_shapes(stubbed_batch):
+    real = _make_cam_labels(
+        stubbed_batch,
+        metric_distance=torch.ones((1, 4, 5, 1), dtype=torch.float32),
+    )
+    differently_sized_synthetic = stubbed_batch.CameraFrameLabels(
+        rgb=torch.zeros((1, 3, 5, 3), dtype=torch.float32),
+    )
+
+    with pytest.raises(RuntimeError):
+        stubbed_batch.CameraFrameLabels.collate_fn([real, differently_sized_synthetic])
 
 
 # ---------------------------------------------------------------------------

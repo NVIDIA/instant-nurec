@@ -142,6 +142,11 @@ class KelvinSkyCubemapDecoderConfig(BaseConfigSchema):
     checkpointing: bool = Field(default=True, description="Whether to use checkpointing for the cubemap decoder")
 
 
+class PostProcessingConfig(BaseConfigSchema):
+    enabled: bool = Field(default=True)
+    optimization_start_global_step: int = Field(default=0, ge=0)
+
+
 class KelvinModelConfig(BaseConfigSchema):
     """
     Configuration for the Kelvin model.
@@ -159,6 +164,12 @@ class KelvinModelConfig(BaseConfigSchema):
 
     scene_rescale: float = Field(default=0.15, description="Rescale scenes for model input and output")
     sky: KelvinSkyCubemapDecoderConfig = Field(default_factory=KelvinSkyCubemapDecoderConfig)
+    post_processing: PostProcessingConfig = Field(default_factory=PostProcessingConfig)
+    freeze_encoder: bool = Field(default=False)
+    init_weights_paths: dict[str, str] = Field(
+        default_factory=dict,
+        description="Component paths or a full phase-one checkpoint used to initialize training.",
+    )
 
     patch_shape: Tuple[int, int] = Field(default=(14, 14))
 

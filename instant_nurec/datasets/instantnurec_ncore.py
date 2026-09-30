@@ -14,15 +14,19 @@
 # limitations under the License.
 
 import dataclasses
+import hashlib
 import logging
 import math
+import os
 
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 from dataclasses import dataclass
+from typing import cast
 
 import numpy as np
 import torch
 
+from scipy import ndimage
 from upath import UPath
 
 import ncore.data
@@ -31,11 +35,17 @@ import instant_nurec.utils.ncore_utils as ncore_utils
 
 from instant_nurec.datasets.tracks import CuboidTracks, CuboidTracksDataPack, TrackFlags
 from instant_nurec.datasets.utils import compute_cuboid_df, consolidate_cuboid_tracks
-from instant_nurec.config_schema.dataset import NCoreInstantNuRecDatasetConfig
-from instant_nurec.datasets.instantnurec_base import CameraSubsampler, InstantNuRecDataError
+from instant_nurec.config_schema.dataset import ExternalSupervisionCameraIdConfig, NCoreInstantNuRecDatasetConfig
+from instant_nurec.datasets.instantnurec_base import (
+    BaseInstantNuRecIndexableDataset,
+    CameraSubsampler,
+    InstantNuRecDataError,
+)
 from instant_nurec.datasets.samplers import (
     AdaptiveSequentialFrameBatchSampler,
     SampledSensorFrameIdxs,
+    UniformFrameBatchSampler,
+    get_closest_frame_index,
 )
 from instant_nurec.utils.batch import (
     CameraFrameLabels,
@@ -47,7 +57,7 @@ from instant_nurec.utils.batch import (
 from instant_nurec.utils.files import parse_universal_path
 from instant_nurec.utils.geometry import se3_matrix_inverse
 from instant_nurec.utils.misc import to_torch, unpack_optional
-from instant_nurec.utils.types import FrameConversion, HalfClosedInterval, RigTrajectories
+from instant_nurec.utils.types import FrameConversion, HalfClosedInterval, RayFlags, RigTrajectories
 
 
 logger = logging.getLogger(__name__)
@@ -67,7 +77,7 @@ def interval_list_intersect(
     return intersected_intervals
 
 
-class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
+class NCoreInstantNuRecDataset(BaseInstantNuRecIndexableDataset[InstantNuRecDataBatch]):
     """
     The native ncore dataset loader
     """
@@ -85,6 +95,10 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
             "motorcycle",
             "motorcycle_with_rider",
             "cycle",
+            # Waymo v18.7 emits lowercase `cyclist`. The reference set has
+            # only uppercase `CYCLIST`; accepting both fixes that upstream
+            # integration bug while preserving existing labels.
+            "cyclist",
         ]
     )
 
@@ -95,31 +109,58 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
 
     @dataclass(frozen=True)
     class ExtendedCameraId:
-        """Camera id with a unique sensor index."""
+        """Camera id with optional sequence-relative external NCore source."""
 
         camera_id: str
         unique_sensor_idx: int
+        external_ncore_path: str | None = None
+        sample_ratio: float = 1.0
 
         @staticmethod
-        def from_config(camera_id: str, unique_sensor_idx: int = -1) -> "NCoreInstantNuRecDataset.ExtendedCameraId":
+        def from_config(
+            camera_id: str | ExternalSupervisionCameraIdConfig,
+            unique_sensor_idx: int = -1,
+        ) -> "NCoreInstantNuRecDataset.ExtendedCameraId":
+            if isinstance(camera_id, str):
+                return NCoreInstantNuRecDataset.ExtendedCameraId(
+                    camera_id=camera_id,
+                    unique_sensor_idx=unique_sensor_idx,
+                )
             return NCoreInstantNuRecDataset.ExtendedCameraId(
-                camera_id=camera_id, unique_sensor_idx=unique_sensor_idx
+                camera_id=camera_id.camera_id,
+                unique_sensor_idx=camera_id.unique_sensor_idx,
+                external_ncore_path=camera_id.ncore_path,
+                sample_ratio=camera_id.sample_ratio,
             )
 
         def __str__(self) -> str:
-            return self.camera_id
+            if self.external_ncore_path is None:
+                return self.camera_id
+            return f"{self.camera_id}-({self.external_ncore_path.replace('/', '_')})"
+
+        @property
+        def loader_key(self) -> str:
+            return self.main_loader_key() if self.external_ncore_path is None else self.external_ncore_path
+
+        @staticmethod
+        def main_loader_key() -> str:
+            return "main"
 
         @property
         def canonical_order(self) -> str:
             """Canonical order to be in rig trajectory and the data batch."""
-            return f"{self.unique_sensor_idx:03d}"
+            order = f"{self.unique_sensor_idx:03d}"
+            if self.external_ncore_path is not None:
+                order += f"-{self.external_ncore_path}"
+            return order
 
     @dataclass
     class LoadersAndSensorsResult:
-        """Result of loading sequence loader and camera sensors for an ncore sequence."""
+        """Result of loading sequence, optional labels, and camera sensors."""
 
-        T_rig_worlds_with_timestamps_us: tuple[np.ndarray, np.ndarray]
-        sequence_loader: ncore.data.SequenceLoaderProtocol
+        T_rig_worlds_with_timestamps_us: dict[str, tuple[np.ndarray, np.ndarray]]
+        sequence_loaders: dict[str, ncore.data.SequenceLoaderProtocol]
+        aux_loaders: dict[str, ncore_utils.AuxShardDataLoader]
         camera_sensors: dict["NCoreInstantNuRecDataset.ExtendedCameraId", ncore.data.CameraSensorProtocol]
 
     def __init__(
@@ -128,6 +169,8 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
         frame_width: int,
         frame_height: int,
         n_frames_per_sample: int,
+        global_seed: int | None = None,
+        retry_on_error: bool = False,
     ):
         # ``frame_width`` / ``frame_height`` / ``n_frames_per_sample`` are
         # passed in by the caller (typically ``instant_nurec.model.make``),
@@ -135,6 +178,8 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
         self._frame_width = frame_width
         self._frame_height = frame_height
         self._n_frames_per_sample = n_frames_per_sample
+        self._global_seed = global_seed
+        self._retry_on_error = retry_on_error
 
         self.open_consolidated = config.open_consolidated
         self.camera_max_fov_deg = config.camera_max_fov_deg
@@ -159,17 +204,79 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
 
         self.cuboid_tracks_params = config.cuboid_tracks_params
 
-        self.ncore_json_paths: list[UPath] = [parse_universal_path(p) for p in config.ncore_json_paths]
-        logger.info(f"Loaded {len(self.ncore_json_paths)} sequence(s).")
+        self.ncore_json_paths = self._resolve_ncore_json_paths(config)
+        logger.info("Loaded %d sequence(s).", len(self.ncore_json_paths))
 
         self.num_samples_per_sequence: int = config.frame_batch_sampler.n_samples_per_sequence
         self.config = config
+        # Match the reference dataset contract: train sampling is deterministic for
+        # (epoch, item index, global seed), while validation keeps rng_epoch=-1
+        # so its samples do not drift from epoch to epoch.
+        self._rng_epoch = -1
+        self._epoch = -1
 
-    def _build_frame_batch_sampler(self) -> AdaptiveSequentialFrameBatchSampler:
+    @staticmethod
+    def _resolve_ncore_json_paths(config: NCoreInstantNuRecDatasetConfig) -> list[UPath]:
+        """Resolve explicit paths or an official-style newline manifest."""
+
+        if config.ncore_json_paths:
+            if config.ncore_json_list_path is not None:
+                logger.warning(
+                    "Both ncore_json_paths and ncore_json_list_path are set; "
+                    "using the explicit ncore_json_paths override."
+                )
+            return [parse_universal_path(path) for path in config.ncore_json_paths]
+
+        manifest = parse_universal_path(unpack_optional(config.ncore_json_list_path))
+        base = parse_universal_path(config.ncore_json_base_path) if config.ncore_json_base_path else None
+        paths: list[UPath] = []
+        with manifest.open("r") as stream:
+            for raw_line in stream:
+                entry = raw_line.strip()
+                if not entry or entry.startswith("#"):
+                    continue
+                if base is not None and "://" not in entry and not entry.startswith("/"):
+                    paths.append(base / entry)
+                else:
+                    paths.append(parse_universal_path(entry))
+        if not paths:
+            raise ValueError(f"NCore manifest contains no sequence paths: {manifest}")
+        return paths
+
+    def _build_frame_batch_sampler(self) -> AdaptiveSequentialFrameBatchSampler | UniformFrameBatchSampler:
+        if self.config.frame_batch_sampler.name == "uniform":
+            return UniformFrameBatchSampler(
+                self.config.frame_batch_sampler,
+                n_frames_per_sample=self._n_frames_per_sample,
+            )
         return AdaptiveSequentialFrameBatchSampler(
             self.config.frame_batch_sampler,
             n_frames_per_sample=self._n_frames_per_sample,
         )
+
+    def set_rng_epoch(self, rng_epoch: int) -> None:
+        self._rng_epoch = rng_epoch
+
+    def set_epoch(self, epoch: int) -> None:
+        self._epoch = epoch
+
+    @property
+    def epoch(self) -> int:
+        return self._epoch
+
+    def _get_rng(self, batch_idx: int) -> np.random.Generator:
+        """Return the official per-item SHA256-derived NumPy generator."""
+
+        global_seed = getattr(self, "_global_seed", None)
+        if global_seed is None:
+            if "PL_GLOBAL_SEED" not in os.environ:
+                raise RuntimeError(
+                    "No dataset global seed was supplied and PL_GLOBAL_SEED is unset; "
+                    "pass global_seed or call pytorch_lightning.seed_everything() first"
+                )
+            global_seed = int(os.environ["PL_GLOBAL_SEED"])
+        digest = hashlib.sha256(f"{self._rng_epoch}_{batch_idx}_{global_seed}".encode()).digest()
+        return np.random.default_rng(seed=int.from_bytes(digest[:8], "big"))
 
     def _build_camera_subsampler(self):
         from instant_nurec.datasets.instantnurec_base import CameraSubsampler
@@ -312,6 +419,7 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
         camera_idx_mapping: dict[UniqueFrameId, int],
         camera_sensors: dict[ExtendedCameraId, ncore.data.CameraSensorProtocol],
         camera_subsampler: CameraSubsampler,
+        aux_loaders: dict[str, ncore_utils.AuxShardDataLoader],
     ) -> DataBatch:
         """
         Load actual data batch given the sampled frame batch. idx_mapping is used to determine the unique frame index for the frame meta.
@@ -334,15 +442,86 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
             if camera_id not in camera_sensors:
                 continue
             camera_sensor = camera_sensors[camera_id]
+            aux_loader = aux_loaders.get(camera_id.loader_key)
+            frame_height = camera_subsampler.frame_height
+            frame_width = camera_subsampler.frame_width
+
+            static_mask = ncore_utils.get_camera_sensor_mask(camera_sensor)
+            if static_mask is None:
+                static_invalid_mask = np.zeros((frame_height, frame_width), dtype=bool)
+            else:
+                static_mask = camera_subsampler.apply_frame_data(static_mask)
+                static_invalid_mask = cast(
+                    np.ndarray,
+                    ndimage.binary_dilation(
+                        static_mask,
+                        iterations=self.n_camera_mask_dilation_iterations,
+                    ),
+                )
 
             # Determine unique sensor index mapping
             unique_sensor_idx = camera_id.unique_sensor_idx
             for frame_idx in frame_idxs:
+                frame_end_timestamp_us = int(
+                    camera_sensor.get_frame_timestamp_us(frame_idx, ncore.data.FrameTimepoint.END)
+                )
                 # Collect labels data
                 labels = CameraFrameLabels()
                 frame_image_array = camera_sensor.get_frame_image_array(frame_idx).astype(np.float32) / 255.0
                 frame_image_array = camera_subsampler.apply_frame_data(frame_image_array)
                 labels.rgb = to_torch(frame_image_array, device="cpu").unsqueeze(0)
+                flags = torch.full(
+                    (frame_height, frame_width),
+                    int(RayFlags.RGB_LABEL),
+                    dtype=torch.int32,
+                )
+                if camera_id.external_ncore_path is not None:
+                    flags |= int(RayFlags.SYNTHETIC)
+                invalid_ego_mask = static_invalid_mask.copy()
+
+                if aux_loader is not None:
+                    data_camera_id = camera_id.camera_id
+                    sky_mask: np.ndarray | bool = False
+                    if self.config.aux_data.semantic_segmentation and aux_loader.has_semantic_segmentation(
+                        data_camera_id
+                    ):
+                        semantics = np.asarray(
+                            aux_loader.get_semantic_segmentation(data_camera_id, frame_end_timestamp_us)
+                        )
+                        classes = aux_loader.get_semantic_segmentation_meta(data_camera_id)["stuff_classes"]
+                        sky_mask = semantics == classes.index("sky") if "sky" in classes else False
+                        semantics = camera_subsampler.apply_frame_data(semantics)
+                        flags |= int(RayFlags.VALID_SEMANTIC)
+                        if "sky" in classes:
+                            flags[semantics == classes.index("sky")] |= int(RayFlags.SKY_SEMANTIC)
+                        if "road" in classes:
+                            flags[semantics == classes.index("road")] |= int(RayFlags.ROAD_SEMANTIC)
+                        for vehicle_class in ("car", "truck", "bus", "train", "motorcycle", "bicycle"):
+                            if vehicle_class in classes:
+                                flags[semantics == classes.index(vehicle_class)] |= int(RayFlags.VEHICLE_SEMANTIC)
+                        if "egocar" in classes:
+                            invalid_ego_mask |= semantics == classes.index("egocar")
+
+                    if self.config.aux_data.depth and aux_loader.has_depth(data_camera_id):
+                        metric_distance = aux_loader.get_depth(data_camera_id, frame_end_timestamp_us)
+                        metric_distance[~np.isfinite(metric_distance) | sky_mask] = 0.0
+                        metric_distance = camera_subsampler.apply_depth_data(metric_distance)
+                        labels.metric_distance = to_torch(metric_distance, device="cpu")[None, ..., None]
+
+                    if self.config.aux_data.egomask and aux_loader.has_egomask(data_camera_id):
+                        ego_mask = aux_loader.get_egomask(data_camera_id)
+                        ego_mask = camera_subsampler.apply_frame_data(ego_mask)
+                        invalid_ego_mask |= cast(
+                            np.ndarray,
+                            ndimage.binary_dilation(
+                                ego_mask,
+                                iterations=self.n_camera_mask_dilation_iterations,
+                            ),
+                        )
+
+                invalid_ego_mask_t = torch.from_numpy(invalid_ego_mask)
+                flags[invalid_ego_mask_t] |= int(RayFlags.INVALID | RayFlags.EGO_SEMANTIC)
+                labels.flags = flags[None, ..., None]
 
                 camera_batch_list.append(
                     DataBatch.Camera(
@@ -366,7 +545,7 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
         frame_batch: SampledSensorFrameIdxs,
         camera_sensors: dict[ExtendedCameraId, ncore.data.CameraSensorProtocol],
         T_world_ref: np.ndarray,
-        T_rig_worlds_with_timestamps_us: tuple[np.ndarray, np.ndarray],
+        T_rig_worlds_with_timestamps_us: dict[str, tuple[np.ndarray, np.ndarray]],
         camera_subsampler: CameraSubsampler,
     ) -> tuple[RigTrajectories, dict[UniqueFrameId, int]]:
         """
@@ -378,9 +557,9 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
         """
         ## Load cameras
 
-        # camera_id_name -> timestamps_us
+        # loader_key -> camera_id_name -> timestamps_us
         frame_timestamps_us_list: list[tuple[int, int]] = []
-        camera_frame_timestamps_us: dict[str, torch.Tensor] = {}
+        camera_frame_timestamps_us: dict[str, dict[str, torch.Tensor]] = defaultdict(dict)
         all_camera_model_parameters: dict[
             NCoreInstantNuRecDataset.ExtendedCameraId, ncore.data.ConcreteCameraModelParametersUnion
         ] = {}
@@ -416,45 +595,50 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
                 )
                 current_unique_frame_idx += 1
 
-            camera_frame_timestamps_us[str(camera_id)] = torch.tensor(
+            camera_frame_timestamps_us[camera_id.loader_key][str(camera_id)] = torch.tensor(
                 frame_timestamps_us_list, dtype=torch.int64, device="cpu"
             )
 
-        # Standalone predict has a single loader keyed `"main"` (no external archives).
-        T_rig_worlds, T_rig_world_timestamps_us = T_rig_worlds_with_timestamps_us
+        rig_trajectores: list[RigTrajectories.RigTrajectory] = []
+        for loader_key, (T_rig_worlds, T_rig_world_timestamps_us) in T_rig_worlds_with_timestamps_us.items():
+            loader_camera_timestamps = camera_frame_timestamps_us.get(loader_key)
+            if not loader_camera_timestamps:
+                continue
 
-        # In the new batch design the sensor poses can only obtained by interpolating rig poses.
-        # In cases where rig timestamps do not fully cover the sensor timestamps, we extend the rig using constant padding.
-        # This can happen, e.g., in Gen3C setting where rig timestamps are end-of-frame ones, so start-of-frame of the 1st frame
-        # is not covered.
-        sensor_min_timestamp_us = int(min((v.min().item() for v in camera_frame_timestamps_us.values()))) - 1
-        sensor_max_timestamp_us = int(max((v.max().item() for v in camera_frame_timestamps_us.values()))) + 1
-        if sensor_min_timestamp_us < int(T_rig_world_timestamps_us[0].item()):
-            T_rig_worlds = np.concatenate([T_rig_worlds[:1], T_rig_worlds], axis=0)
-            T_rig_world_timestamps_us = np.concatenate(
-                [[sensor_min_timestamp_us], T_rig_world_timestamps_us], axis=0
-            )
-        if sensor_max_timestamp_us > int(T_rig_world_timestamps_us[-1].item()):
-            T_rig_worlds = np.concatenate([T_rig_worlds, T_rig_worlds[-1:]], axis=0)
-            T_rig_world_timestamps_us = np.concatenate(
-                [T_rig_world_timestamps_us, [sensor_max_timestamp_us]], axis=0
-            )
+            # Interpolation must cover each exposure boundary. Constant endpoint
+            # padding is the official behavior for both main and external rigs.
+            sensor_min_timestamp_us = int(min(v.min().item() for v in loader_camera_timestamps.values())) - 1
+            sensor_max_timestamp_us = int(max(v.max().item() for v in loader_camera_timestamps.values())) + 1
+            if sensor_min_timestamp_us < int(T_rig_world_timestamps_us[0]):
+                T_rig_worlds = np.concatenate([T_rig_worlds[:1], T_rig_worlds], axis=0)
+                T_rig_world_timestamps_us = np.concatenate(
+                    [[sensor_min_timestamp_us], T_rig_world_timestamps_us], axis=0
+                )
+            if sensor_max_timestamp_us > int(T_rig_world_timestamps_us[-1]):
+                T_rig_worlds = np.concatenate([T_rig_worlds, T_rig_worlds[-1:]], axis=0)
+                T_rig_world_timestamps_us = np.concatenate(
+                    [T_rig_world_timestamps_us, [sensor_max_timestamp_us]], axis=0
+                )
 
-        rig_trajectores: list[RigTrajectories.RigTrajectory] = [
-            RigTrajectories.RigTrajectory(
-                sequence_id=sequence_id_prefix + "main",
-                cameras_frame_timestamps_us=camera_frame_timestamps_us,
-                T_rig_worlds=to_torch(T_world_ref @ T_rig_worlds, device="cpu", dtype=torch.float64),
-                T_rig_world_timestamps_us=to_torch(T_rig_world_timestamps_us, device="cpu", dtype=torch.int64),
+            rig_trajectores.append(
+                RigTrajectories.RigTrajectory(
+                    sequence_id=sequence_id_prefix + loader_key,
+                    cameras_frame_timestamps_us=loader_camera_timestamps,
+                    T_rig_worlds=to_torch(T_world_ref @ T_rig_worlds, device="cpu", dtype=torch.float64),
+                    T_rig_world_timestamps_us=to_torch(
+                        T_rig_world_timestamps_us,
+                        device="cpu",
+                        dtype=torch.int64,
+                    ),
+                )
             )
-        ]
 
         camera_calibrations = OrderedDict(
             [
                 (
                     str(camera_id),
                     RigTrajectories.CameraCalibration(
-                        sequence_id=sequence_id_prefix + "main",
+                        sequence_id=sequence_id_prefix + camera_id.loader_key,
                         unique_sensor_idx=camera_id.unique_sensor_idx,
                         T_sensor_rig=to_torch(unpack_optional(camera_sensors[camera_id].T_sensor_rig), device="cpu"),
                         camera_model_parameters=all_camera_model_parameters[camera_id],
@@ -493,40 +677,80 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
             dataset_paths,
         ) = ncore_utils.parse_sequence_meta_file(ncore_json_path)
 
-        # ShardDataLoader is logging using root. Let's suppress this information.
-        (root_logger := logging.getLogger()).setLevel(logging.WARNING)
+        # Load each source archive once. External supervision archives carry
+        # their own calibrated cameras and rig trajectories but share the main
+        # clip's world coordinate frame.
+        root_logger = logging.getLogger()
+        previous_level = root_logger.level
+        root_logger.setLevel(logging.WARNING)
+        T_rig_worlds_with_timestamps_us: dict[str, tuple[np.ndarray, np.ndarray]] = {}
+        sequence_loaders: dict[str, ncore.data.SequenceLoaderProtocol] = {}
+        aux_loaders: dict[str, ncore_utils.AuxShardDataLoader] = {}
+        camera_sensors: dict[NCoreInstantNuRecDataset.ExtendedCameraId, ncore.data.CameraSensorProtocol] = {}
         try:
-            sequence_loader = ncore_utils.create_sequence_loader(
-                dataset_paths=dataset_paths,
-                open_consolidated=self.open_consolidated,
-                v4_poses_component_group="default",
-                v4_intrinsics_component_group="default",
-                v4_masks_component_group="default",
-                v4_cuboids_component_group="default",
-            )
-        except FileNotFoundError as e:
-            raise InstantNuRecDataError(f"Ncore files not found for dataset_paths {dataset_paths}.") from e
+            for camera_id in all_camera_ids:
+                current_dataset_paths = (
+                    dataset_paths
+                    if camera_id.external_ncore_path is None
+                    else [ncore_json_path.parent / camera_id.external_ncore_path]
+                )
+                loader_key = camera_id.loader_key
+                sequence_loader = sequence_loaders.get(loader_key)
+                if sequence_loader is None:
+                    try:
+                        sequence_loader = ncore_utils.create_sequence_loader(
+                            dataset_paths=current_dataset_paths,
+                            open_consolidated=self.open_consolidated,
+                            v4_poses_component_group="default",
+                            v4_intrinsics_component_group="default",
+                            v4_masks_component_group="default",
+                            v4_cuboids_component_group="default",
+                        )
+                    except FileNotFoundError as exc:
+                        raise InstantNuRecDataError(
+                            f"Ncore files not found for dataset_paths {current_dataset_paths}."
+                        ) from exc
+                    sequence_loaders[loader_key] = sequence_loader
+                    rig_world_edge: ncore_transformations.PoseGraphInterpolator.Edge = unpack_optional(
+                        sequence_loader.pose_graph.get_edge("rig", "world"),
+                        msg="Rig-to-world poses required for rig-trajectories",
+                    )
+                    T_rig_worlds_with_timestamps_us[loader_key] = (
+                        rig_world_edge.T_source_target,
+                        unpack_optional(
+                            rig_world_edge.timestamps_us,
+                            msg="Rig-to-world pose requires to be dynamic",
+                        ),
+                    )
+                    if self.config.aux_data.enabled:
+                        try:
+                            signal_override_paths: dict[str, UPath] = {}
+                            if isinstance(self.config.aux_data.depth, str):
+                                depth_override_path = parse_universal_path(
+                                    self.config.aux_data.depth.replace(
+                                        "{{clip_id}}", sequence_loader.sequence_id
+                                    )
+                                )
+                                if depth_override_path.exists():
+                                    signal_override_paths["depth"] = depth_override_path
+                            aux_loaders[loader_key] = ncore_utils.AuxShardDataLoader(
+                                sequence_id=sequence_loader.sequence_id,
+                                dataset_paths=current_dataset_paths,
+                                open_consolidated=self.open_consolidated,
+                                signal_override_paths=signal_override_paths,
+                            )
+                        except ValueError as exc:
+                            raise InstantNuRecDataError(
+                                f"Failed to load auxiliary labels for sequence {ncore_json_path.stem}."
+                            ) from exc
+                camera_sensors[camera_id] = sequence_loader.get_camera_sensor(camera_id.camera_id)
+        finally:
+            root_logger.setLevel(previous_level)
 
-        # NB [JH]: We should be very careful about the poses' timestamps_us -- it can be a large
-        # superset of sensor timestamps (e.g. 36s vs 10s).
-        # TODO: frame-pose-only data might fail here as there are no rig poses and might require refined logic.
-        rig_world_edge: ncore_transformations.PoseGraphInterpolator.Edge = unpack_optional(
-            sequence_loader.pose_graph.get_edge("rig", "world"),
-            msg="Rig-to-world poses required for rig-trajectories",
-        )
-        T_rig_worlds_with_timestamps_us = (
-            rig_world_edge.T_source_target,
-            unpack_optional(rig_world_edge.timestamps_us, msg="Rig-to-world pose requires to be dynamic"),
-        )
-
-        camera_sensors = {
-            camera_id: sequence_loader.get_camera_sensor(camera_id.camera_id) for camera_id in all_camera_ids
-        }
-
-        root_logger.setLevel(logging.INFO)
         return NCoreInstantNuRecDataset.LoadersAndSensorsResult(
             T_rig_worlds_with_timestamps_us=T_rig_worlds_with_timestamps_us,
-            sequence_loader=sequence_loader,
+            sequence_loaders=sequence_loaders,
+            aux_loaders=aux_loaders,
             camera_sensors=camera_sensors,
         )
 
@@ -608,7 +832,11 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
         # Full-video output must not outrun the scene reconstruction. Mirror the
         # sampler's interval/chunk calculation across every configured context
         # camera and fail explicitly when --max-chunks would truncate the clip.
-        rig_timestamps_us = np.asarray(loaders_sensors.T_rig_worlds_with_timestamps_us[1])
+        rig_timestamps_us = np.asarray(
+            loaders_sensors.T_rig_worlds_with_timestamps_us[
+                NCoreInstantNuRecDataset.ExtendedCameraId.main_loader_key()
+            ][1]
+        )
         sequence_start_timestamp_us = int(rig_timestamps_us.min())
         sequence_end_timestamp_us = int(rig_timestamps_us.max())
         for context_camera in self.all_context_camera_ids:
@@ -633,9 +861,12 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
             )
         if sequence_end_timestamp_us < sequence_start_timestamp_us:
             raise ValueError("Context-camera and rig-pose timestamp ranges do not overlap")
-        max_chunk_timespan_us = (
-            self.config.frame_batch_sampler.max_frame_gap_timestamp_us * self._n_frames_per_sample
+        gap_us = (
+            self.config.frame_batch_sampler.frame_gap_timestamp_us
+            if self.config.frame_batch_sampler.name == "uniform"
+            else self.config.frame_batch_sampler.max_frame_gap_timestamp_us
         )
+        max_chunk_timespan_us = gap_us * self._n_frames_per_sample
         required_chunks = max(
             1,
             math.ceil(
@@ -710,7 +941,11 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
             camera_calibrations=OrderedDict([(selected_camera_id, camera_calibration)]),
         )
 
-    def __getitem__(self, batch_idx: int) -> InstantNuRecDataBatch:
+    def getitem_allow_exceptions(
+        self,
+        batch_idx: int,
+        rng: np.random.Generator,
+    ) -> InstantNuRecDataBatch:
         # Disable fsspect INFO logs to not spam the logs.
         logging.getLogger("fsspec").setLevel(logging.WARNING)
 
@@ -743,16 +978,25 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
 
         loaders_sensors = self._get_loaders_and_sensors(ncore_json_path, supervision_camera_ids)
         T_rig_worlds_with_timestamps_us = loaders_sensors.T_rig_worlds_with_timestamps_us
-        sequence_loader = loaders_sensors.sequence_loader
+        sequence_loaders = loaders_sensors.sequence_loaders
+        aux_loaders = loaders_sensors.aux_loaders
         camera_sensors = loaders_sensors.camera_sensors
+        main_loader_key = NCoreInstantNuRecDataset.ExtendedCameraId.main_loader_key()
+        sequence_loader = sequence_loaders[main_loader_key]
 
         # Determine the timestamps interval to select frames from.
         context_camera_frame_timestamps_us: dict[str, np.ndarray] = {}
 
         # Standalone predict always selects the full sequence range; subranges
         # were a training-time control that the predict YAML never carried.
-        main_timestamps = T_rig_worlds_with_timestamps_us[1]
+        main_timestamps = T_rig_worlds_with_timestamps_us[main_loader_key][1]
         select_intervals = [HalfClosedInterval(int(main_timestamps.min()), int(main_timestamps.max()))]
+        for loader_key, (_, pose_timestamps_us) in T_rig_worlds_with_timestamps_us.items():
+            if loader_key != main_loader_key:
+                select_intervals = interval_list_intersect(
+                    select_intervals,
+                    HalfClosedInterval(int(pose_timestamps_us.min()), int(pose_timestamps_us.max())),
+                )
         # Intersect also with sensor timestamps (with +/- 0.1s tolerance)
         for camera_id in context_camera_ids:
             timestamps_us = camera_sensors[camera_id].get_frames_timestamps_us(ncore.data.FrameTimepoint.END)
@@ -766,6 +1010,7 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
             sample_idx,
             context_camera_frame_timestamps_us,
             select_intervals,
+            rng=rng,
         )
         if len(context_frame_batch) == 0:
             # If nothing is sampled (e.g. out of bounds), return 0-sized batch to be concatenated with other batches.
@@ -795,8 +1040,83 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
                 context_camera_mapping,
                 camera_sensors,
                 context_camera_subsampler,
+                aux_loaders if self.config.aux_data.enabled_context else {},
             )
         )
+
+        # Training samples novel supervision independently inside the temporal
+        # extent selected for this context chunk.  Predict profiles leave
+        # n_frames_per_camera at zero and retain the original behavior.
+        supervision = None
+        supervision_rig_trajectory = None
+        n_supervision_frames = self.config.supervision_frame_batch.n_frames_per_camera
+        if n_supervision_frames > 0:
+            context_times: list[int] = []
+            for camera_id in context_camera_ids:
+                frame_indices = context_frame_batch[str(camera_id)]
+                camera_times = camera_sensors[camera_id].get_frames_timestamps_us(ncore.data.FrameTimepoint.END)
+                context_times.extend(int(camera_times[index]) for index in frame_indices)
+            start_us, end_us = min(context_times), max(context_times)
+            supervision_frame_batch: SampledSensorFrameIdxs = {}
+            for camera_id in supervision_camera_ids:
+                camera_times = camera_sensors[camera_id].get_frames_timestamps_us(ncore.data.FrameTimepoint.END)
+                min_index = max(
+                    get_closest_frame_index(
+                        camera_times,
+                        start_us - self.config.supervision_frame_batch.prepend_timestamps_us,
+                    ),
+                    0,
+                )
+                max_index = min(
+                    get_closest_frame_index(
+                        camera_times,
+                        end_us + self.config.supervision_frame_batch.append_timestamps_us,
+                    ),
+                    len(camera_times) - 1,
+                )
+                candidates = np.arange(min_index, max_index + 1)
+                if self.config.supervision_frame_batch.sample_strategy == "random":
+                    indices = np.sort(
+                        rng.choice(candidates, size=n_supervision_frames, replace=True)
+                    ).tolist()
+                else:
+                    indices = []
+                    bins = np.linspace(0, len(candidates), n_supervision_frames + 1, dtype=int)
+                    for bin_start, bin_end in zip(bins[:-1], bins[1:]):
+                        if bin_start == bin_end:
+                            indices.append(int(candidates[bin_start]))
+                        else:
+                            indices.append(int(rng.choice(candidates[bin_start:bin_end])))
+                if camera_id.sample_ratio != 1.0:
+                    sampled_size = round(len(indices) * camera_id.sample_ratio)
+                    indices = np.sort(rng.choice(indices, size=sampled_size, replace=False)).tolist()
+                if self.config.supervision_frame_batch.include_context_frames and str(camera_id) in context_frame_batch:
+                    indices = sorted(set(indices) | set(context_frame_batch[str(camera_id)]))
+                if indices:
+                    supervision_frame_batch[str(camera_id)] = indices
+
+            supervision_subsampler_cfg = self.config.supervision_frame_batch.camera_subsampler
+            supervision_camera_subsampler = CameraSubsampler(
+                frame_width=supervision_subsampler_cfg.frame_width,
+                frame_height=supervision_subsampler_cfg.frame_height,
+            )
+            supervision_rig_trajectory, supervision_camera_mapping = self._get_rig_trajectory(
+                "supervision-",
+                supervision_frame_batch,
+                camera_sensors,
+                T_world_ref,
+                T_rig_worlds_with_timestamps_us,
+                supervision_camera_subsampler,
+            )
+            supervision = DataAndRenderingBatch(
+                data=self._load_data_batch(
+                    supervision_frame_batch,
+                    supervision_camera_mapping,
+                    camera_sensors,
+                    supervision_camera_subsampler,
+                    aux_loaders,
+                )
+            )
 
         cuboid_tracks = self._compute_cuboid_tracks(
             context_frame_batch,
@@ -812,7 +1132,9 @@ class NCoreInstantNuRecDataset(torch.utils.data.Dataset[InstantNuRecDataBatch]):
 
         instantnurec_data_batch = InstantNuRecDataBatch(
             context=[context],
+            supervision=[supervision] if supervision is not None else None,
             context_rig=[context_rig_trajectory],
+            supervision_rig=[supervision_rig_trajectory] if supervision_rig_trajectory is not None else None,
             cuboid_tracks=[cuboid_tracks],
             meta=[meta],
         )

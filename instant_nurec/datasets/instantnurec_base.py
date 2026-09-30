@@ -17,7 +17,8 @@ from __future__ import annotations
 
 import logging
 
-from typing import Tuple
+from abc import abstractmethod
+from typing import Tuple, TypeVar
 
 import numpy as np
 import torch
@@ -136,9 +137,75 @@ class CameraSubsampler:
 class InstantNuRecDataError(Exception):
     """Raised when an error occurs while loading InstantNuRec data.
 
-    Propagated directly to the caller — predict fails loud on a bad sample.
+    Prediction propagates this directly to the caller. Training opts into the
+    official bounded replacement-sampling recovery in the indexable wrapper.
     """
 
     def __init__(self, message: str = "An error occurred while loading InstantNuRec data"):
         super().__init__(message)
         self.message = message
+
+
+_DataBatchT = TypeVar("_DataBatchT")
+
+
+class BaseInstantNuRecIndexableDataset(torch.utils.data.Dataset[_DataBatchT]):
+    """Indexable dataset with the official opt-in training recovery contract."""
+
+    MAX_GETITEM_ATTEMPTS = 10
+
+    # Prediction deliberately keeps the one-shot, fail-loud behavior. Training
+    # constructors opt in to retries explicitly.
+    _retry_on_error = False
+
+    def __getitem__(self, batch_idx: int) -> _DataBatchT:
+        if not self._retry_on_error:
+            return self.getitem_allow_exceptions(batch_idx, self._get_rng(batch_idx))
+
+        current_batch_idx = batch_idx
+        failed_batch_indices: list[int] = []
+
+        while len(failed_batch_indices) < self.MAX_GETITEM_ATTEMPTS:
+            rng = self._get_rng(current_batch_idx)
+            try:
+                return self.getitem_allow_exceptions(current_batch_idx, rng)
+            except Exception as error:
+                failed_batch_indices.append(current_batch_idx)
+
+                # Match the reference implementation: replacement sampling uses
+                # the failed item's RNG and never revisits a failed index.
+                while (new_batch_idx := int(rng.integers(0, len(self)))) in failed_batch_indices:
+                    pass
+
+                if isinstance(error, InstantNuRecDataError):
+                    logger.warning(
+                        "Known InstantNuRecDataError occurred while getting item %d in %s. "
+                        "Reason: %s. Switching to a random index %d.",
+                        current_batch_idx,
+                        self.__class__.__name__,
+                        error.message,
+                        new_batch_idx,
+                    )
+                else:
+                    logger.error(
+                        "Unexpected error occurred while getting item %d in %s. "
+                        "Switching to a random index %d.",
+                        current_batch_idx,
+                        self.__class__.__name__,
+                        new_batch_idx,
+                    )
+                    logger.exception(error)
+
+                current_batch_idx = new_batch_idx
+
+        raise InstantNuRecDataError(
+            f"{self.__class__.__name__} tried out {len(failed_batch_indices)} attempts = "
+            f"{failed_batch_indices} and none of them worked. Please check the dataset integrity "
+            "and ensure that the data is not corrupted."
+        )
+
+    @abstractmethod
+    def _get_rng(self, batch_idx: int) -> np.random.Generator: ...
+
+    @abstractmethod
+    def getitem_allow_exceptions(self, batch_idx: int, rng: np.random.Generator) -> _DataBatchT: ...

@@ -269,6 +269,9 @@ class KelvinDynamicLayer(KelvinLayer):
     max_densities: torch.Tensor
     keyframe_positions: torch.Tensor
     keyframe_timestamps_us: torch.Tensor
+    falloff: bool = True
+
+    FALLOFF_GAUSSIAN_EXP = 10.0
 
     def __post_init__(self):
         super().__post_init__()
@@ -315,11 +318,63 @@ class KelvinDynamicLayer(KelvinLayer):
 
     @classmethod
     def concatenate(cls, layers: Sequence[Self]) -> Self:
+        if not layers:
+            raise ValueError("Cannot concatenate an empty dynamic-layer sequence")
+        if any(layer.falloff != layers[0].falloff for layer in layers[1:]):
+            raise ValueError("All concatenated dynamic layers must use the same falloff setting")
         return cls(
             max_densities=torch.cat([layer.max_densities for layer in layers], dim=0),
             keyframe_positions=torch.cat([layer.keyframe_positions for layer in layers], dim=0),
             keyframe_timestamps_us=torch.cat([layer.keyframe_timestamps_us for layer in layers], dim=0),
+            falloff=layers[0].falloff,
             **asdict(KelvinLayer._concatenate_base(layers)),
+        )
+
+    def interpolate(self, timestamp_us: int) -> KelvinStaticLayer:
+        """Interpolate piecewise motion and apply edge-segment falloff."""
+
+        if timestamp_us < 0:
+            raise ValueError("Timestamp must be non-negative")
+        query = torch.full(
+            (len(self), 1),
+            timestamp_us,
+            dtype=self.keyframe_timestamps_us.dtype,
+            device=self.device(),
+        )
+        indices = torch.searchsorted(self.keyframe_timestamps_us, query).clamp(1, self.n_keyframes - 1)
+        left_timestamps = torch.gather(self.keyframe_timestamps_us, 1, indices - 1)
+        right_timestamps = torch.gather(self.keyframe_timestamps_us, 1, indices)
+        alpha = (query - left_timestamps) / (right_timestamps - left_timestamps)
+
+        left_positions = torch.gather(
+            self.keyframe_positions,
+            1,
+            (indices - 1).expand(-1, 3)[:, None],
+        )[:, 0]
+        right_positions = torch.gather(
+            self.keyframe_positions,
+            1,
+            indices.expand(-1, 3)[:, None],
+        )[:, 0]
+        positions = torch.lerp(left_positions, right_positions, alpha)
+
+        densities = self.max_densities
+        if self.falloff:
+            leftmost = torch.where(indices == 1)[0]
+            rightmost = torch.where(indices == self.n_keyframes - 1)[0]
+            factor = torch.ones_like(densities)
+            factor[leftmost] *= 1.0 - torch.exp(
+                -((1.0 + torch.clamp(alpha[leftmost], min=-1.0)) ** self.FALLOFF_GAUSSIAN_EXP)
+            )
+            factor[rightmost] *= torch.exp(-(alpha[rightmost] ** self.FALLOFF_GAUSSIAN_EXP))
+            densities = densities * factor
+
+        return KelvinStaticLayer(
+            positions=positions,
+            densities=densities,
+            rotations=self.rotations,
+            scales=self.scales,
+            rgb=self.rgb,
         )
 
 
