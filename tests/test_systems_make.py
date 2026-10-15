@@ -209,10 +209,12 @@ def test_make_builds_source_core_and_loads_weights(monkeypatch, tmp_path):
     class FakeCore:
         def __init__(self, config):
             calls["core_config"] = config
+            self.decoder = SimpleNamespace(cuboids_dims_padding=torch.zeros(3))
 
         def load_state_dict(self, loaded, *, strict):
             calls["loaded"] = loaded
             calls["strict"] = strict
+            self.decoder.cuboids_dims_padding.fill_(9)
 
     class FakeInference:
         def __init__(self, core, **kwargs):
@@ -220,7 +222,7 @@ def test_make_builds_source_core_and_loads_weights(monkeypatch, tmp_path):
             calls["inference_kwargs"] = kwargs
 
     sentinel_system = object()
-    model_config = SimpleNamespace(scene_rescale=0.15)
+    model_config = SimpleNamespace(scene_rescale=0.15, track_padding_m=[1.0, 2.0, 3.0])
     dataset_config = SimpleNamespace(
         context_camera_ids=["front", "left"],
         frame_batch_sampler=SimpleNamespace(n_frames_per_sample=9),
@@ -259,9 +261,12 @@ def test_make_builds_source_core_and_loads_weights(monkeypatch, tmp_path):
     assert calls["core_config"] is model_config
     assert calls["loaded"] is state_dict
     assert calls["strict"] is True
+    torch.testing.assert_close(calls["inference_core"].decoder.cuboids_dims_padding, torch.tensor([1.0, 2.0, 3.0]))
     assert calls["inference_kwargs"] == {
         "scene_rescale": 0.15,
         "expected_frames": 18,
         "expected_height": 448,
         "expected_width": 784,
+        "include_dynamic": False,
+        "motion_source": "tracks",
     }

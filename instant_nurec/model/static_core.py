@@ -41,13 +41,11 @@ from instant_nurec.utils.cubemap import build_observed_sky_cubemap_with_mask
 
 
 @dataclass(kw_only=True, slots=True)
-class KelvinPointQueryStaticOutput:
-    """Sparse point-query Gaussians and their source-pixel alignment.
+class KelvinStaticOutput:
+    """Unmasked dense or sparse Gaussians from the shared inference heads.
 
-    ``source_indices`` indexes the flattened ``(V, H, W)`` input grid.  The
-    inference wrapper uses it to gather the corresponding rays and rolling-
-    shutter timestamps before applying the same cuboid-track filtering as the
-    dense pixel-aligned path.
+    Sparse outputs carry source-pixel indices for timestamp alignment. Encoder
+    features are retained only when learned motion is requested.
     """
 
     positions: torch.Tensor
@@ -58,9 +56,10 @@ class KelvinPointQueryStaticOutput:
     semantic_class: torch.Tensor
     normals: torch.Tensor
     affine_matrix: torch.Tensor
-    source_indices: torch.Tensor
     sky_cubemap: torch.Tensor
     sky_cubemap_mask: torch.Tensor
+    source_indices: torch.Tensor | None = None
+    encoded_latent: KelvinMultiscaleFeaturesLatent | None = None
 
 
 class KelvinStaticCore(nn.Module):
@@ -98,21 +97,9 @@ class KelvinStaticCore(nn.Module):
         rays: torch.Tensor,
         distance_to_depth_scale: torch.Tensor,
         camera_idxs: torch.Tensor,
-    ) -> (
-        tuple[
-            torch.Tensor,  # gs_xyz             (B, V, H, W, 3)
-            torch.Tensor,  # gs_rotations       (B, V, H, W, 4)
-            torch.Tensor,  # gs_scales          (B, V, H, W, 3)
-            torch.Tensor,  # gs_densities       (B, V, H, W, 1)
-            torch.Tensor,  # gs_rgb             (B, V, H, W, 3)
-            torch.Tensor,  # semantic_argmax    (B, V, H, W)   int64
-            torch.Tensor,  # normals            (B, V, H, W, 3)
-            torch.Tensor,  # affine             (B, n_affine_tokens, 3, 4)
-            torch.Tensor,  # sky_cubemap        (B, 6, S, S, 3)
-            torch.Tensor,  # sky_cubemap_mask   (B, 6, S, S, 1)
-        ]
-        | KelvinPointQueryStaticOutput
-    ):
+        *,
+        retain_features: bool = False,
+    ) -> KelvinStaticOutput:
         """Run the static model heads on pre-extracted tensors.
 
         Inputs (B=1):
@@ -123,10 +110,9 @@ class KelvinStaticCore(nn.Module):
             distance_to_depth_scale: (1, V, H, W, 1)
             camera_idxs:             (1, V) int64
 
-        Returns the *unmasked* Gaussian fields plus the affine matrix. The
-        DPT decoder returns the dense tuple layout; the point-query
-        decoder returns :class:`KelvinPointQueryStaticOutput`. Static/dynamic
-        split and cuboid-track-based mask refinement happen in
+        Returns the *unmasked* Gaussian fields plus the affine matrix.
+        Dense and point-query decoders share :class:`KelvinStaticOutput`.
+        Static/dynamic split and cuboid-track-based mask refinement happen in
         ``KelvinInferenceModel``.
         """
         scene_rescale = self.scene_rescale
@@ -142,7 +128,7 @@ class KelvinStaticCore(nn.Module):
         # retains its FP16 path.
         encoder_dtype = torch.bfloat16 if is_point_query else torch.float16
         with torch.autocast("cuda", enabled=True, dtype=encoder_dtype):
-            img_feats, _ = self.encoder.vit.get_intermediate_features(
+            img_feats, cls_tokens = self.encoder.vit.get_intermediate_features(
                 x,
                 block_indices=self.encoder.take_block_indices,
                 global_cls_token=camera_encodings.unsqueeze(2),
@@ -234,8 +220,12 @@ class KelvinStaticCore(nn.Module):
         affine_matrix_3, affine_bias = self.post_processing.decode_affine(affine_latents)
         affine_matrix = torch.cat([affine_matrix_3, affine_bias[..., None]], dim=-1)
 
+        encoded_latent = (
+            KelvinMultiscaleFeaturesLatent(features=img_feats, cls_tokens=cls_tokens) if retain_features else None
+        )
         if point_query_output is not None:
-            return KelvinPointQueryStaticOutput(
+            return KelvinStaticOutput(
+                encoded_latent=encoded_latent,
                 positions=point_query_output.positions,
                 rotations=point_query_output.rotations,
                 scales=point_query_output.scales,
@@ -249,15 +239,16 @@ class KelvinStaticCore(nn.Module):
                 sky_cubemap_mask=sky_cubemap_mask,
             )
 
-        return (
-            gs_xyz,
-            gs_world_quaternion,
-            gs_scale,
-            gs_opacity,
-            context_rgb,
-            semantic_argmax,
-            context_world_normal,
-            affine_matrix,
-            sky_cubemap,
-            sky_cubemap_mask,
+        return KelvinStaticOutput(
+            positions=gs_xyz,
+            rotations=gs_world_quaternion,
+            scales=gs_scale,
+            densities=gs_opacity,
+            rgb=context_rgb,
+            semantic_class=semantic_argmax,
+            normals=context_world_normal,
+            affine_matrix=affine_matrix,
+            sky_cubemap=sky_cubemap,
+            sky_cubemap_mask=sky_cubemap_mask,
+            encoded_latent=encoded_latent,
         )

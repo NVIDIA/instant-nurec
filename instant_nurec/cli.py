@@ -73,6 +73,17 @@ def make_parser() -> argparse.ArgumentParser:
         help="Directory for PLY and sky-output bundles.",
     )
     parser.add_argument(
+        "--include-dynamic",
+        action="store_true",
+        help="Retain dynamic Gaussians and write .dynamic.npz motion keyframes (PA profiles only).",
+    )
+    parser.add_argument(
+        "--motion-source",
+        choices=("tracks", "learned"),
+        default="tracks",
+        help="Dynamic motion source: NCore cuboid tracks (default) or learned motion. Learned requires --include-dynamic.",
+    )
+    parser.add_argument(
         "--merge",
         action="store_true",
         help=(
@@ -176,6 +187,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     logging.basicConfig(level=getattr(logging, args.log_level.upper()))
 
+    if args.include_dynamic and args.model == "pq-front":
+        parser.error("--include-dynamic currently requires pa-front or pa-multiview")
+    if args.motion_source == "learned" and not args.include_dynamic:
+        parser.error("--motion-source learned requires --include-dynamic")
+
     if args.render_video and not args.merge:
         parser.error("--render-video requires --merge so one complete scene is rendered")
     if args.max_chunks <= 0:
@@ -270,6 +286,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             ),
         ),
         predict=PredictConfig(
+            include_dynamic=args.include_dynamic,
+            motion_source=args.motion_source,
             primitive_merge=PrimitiveMergeConfig(
                 enabled=args.merge,
                 enable_voxelization=args.merge,

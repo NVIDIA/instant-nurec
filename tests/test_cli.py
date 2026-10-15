@@ -53,6 +53,29 @@ def test_parser_default_merge_is_false() -> None:
     from instant_nurec.cli import make_parser
     args = make_parser().parse_args(["--ncore-path", "/x", "--output-dir", "/y"])
     assert args.merge is False
+    assert args.motion_source == "tracks"
+
+
+@pytest.mark.parametrize("source", ["tracks", "learned"])
+def test_main_selects_motion_source(monkeypatch, tmp_path, source):
+    from instant_nurec.cli import main
+
+    run = _install_runtime_stubs(monkeypatch)
+    path = _make_json_path(tmp_path)
+    assert main(["--model", "pa-multiview", "--ncore-path", str(path), "--output-dir", str(tmp_path),
+                 "--include-dynamic", "--motion-source", source]) == 0
+    config = run.call_args.args[0]
+    assert config.predict.motion_source == source
+    assert config.predict.include_dynamic is True
+
+
+def test_learned_motion_requires_dynamic_before_loading_data(capsys):
+    from instant_nurec.cli import main
+
+    with pytest.raises(SystemExit) as exc:
+        main(["--ncore-path", "missing.json", "--output-dir", "/tmp/out", "--motion-source", "learned"])
+    assert exc.value.code == 2
+    assert "requires --include-dynamic" in capsys.readouterr().err
 
 
 def test_parser_defaults_to_pa_front() -> None:

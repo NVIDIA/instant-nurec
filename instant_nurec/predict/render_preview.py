@@ -15,7 +15,7 @@ import torch
 
 from PIL import Image
 
-from instant_nurec.primitives.kelvin_primitive import KelvinInstantNuRecPrimitive
+from instant_nurec.primitives.kelvin_primitive import KelvinInstantNuRecPrimitive, KelvinStaticLayer
 from instant_nurec.utils.batch import DataAndRenderingBatch
 from instant_nurec.utils.cubemap import sample_sky_cubemap
 from instant_nurec.utils.geometry import tquat_to_se3_matrix
@@ -239,6 +239,23 @@ def _reference_renderer_config() -> object:
 
 
 @torch.inference_mode()
+def gaussians_at_timestamp(primitive: KelvinInstantNuRecPrimitive, timestamp_us: int) -> KelvinStaticLayer:
+    """Combine static Gaussians with visible dynamic Gaussians at one instant."""
+    layers = [primitive.static_layer]
+    for dynamic in primitive.dynamic_layers:
+        if len(dynamic):
+            layer = dynamic.interpolate(timestamp_us)
+            visible = torch.isfinite(layer.positions).all(dim=-1) & (layer.densities[:, 0] > 1e-5)
+            layers.append(layer.mask(visible))
+    if len(layers) == 1:
+        return layers[0]
+    return KelvinStaticLayer(**{
+        name: torch.cat([getattr(layer, name) for layer in layers], dim=0)
+        for name in ("positions", "rotations", "scales", "densities", "rgb")
+    })
+
+
+@torch.inference_mode()
 def render_composited_frame(
     primitive: KelvinInstantNuRecPrimitive,
     context: DataAndRenderingBatch,
@@ -293,6 +310,10 @@ def render_composited_frame(
     world_to_camera_end = torch.linalg.inv(camera_to_world_end)
 
     static = primitive.static_layer
+    if any(len(layer) for layer in primitive.dynamic_layers):
+        timestamps = rendering.timestamps_startend_us_cpu[frame_index]
+        midpoint_us = (int(timestamps[0]) + int(timestamps[1])) // 2
+        static = gaussians_at_timestamp(primitive, midpoint_us)
     rendered_rgb, rendered_alpha, _ = rasterization(
         means=static.positions.float(),
         quats=static.rotations.float(),

@@ -211,6 +211,21 @@ runs only when the flag is set).
 To run another model on the same clip, select its profile, such as
 `--model pa-multiview` or `--model pq-front`.
 
+For `pa-front` or `pa-multiview`, add `--include-dynamic` to retain dynamic
+Gaussians. Motion uses NCore cuboid tracks by default; use
+`--motion-source learned` for model-predicted motion instead.
+
+```bash
+python run_inference.py \
+    --model pa-multiview \
+    --ncore-path /path/to/sequence.json \
+    --output-dir ./out \
+    --merge --include-dynamic
+```
+
+If no tracks are available, inference falls back to learned motion.
+Add `--render-video` to render the dynamic scene.
+
 ##### Sky outputs and rendered preview
 
 Every exported PLY has two sky files with the same stem. With `--merge`,
@@ -222,6 +237,7 @@ the stem is `<sequence_id>`; without it, each stem is
 | `<stem>.ply` | Static 3D Gaussian scene. |
 | `<stem>.sky.npz` | World-aligned cubemap, visibility mask, per-camera affine matrices, face order, and format metadata. Keep this machine-readable sidecar next to the PLY. |
 | `<stem>.sky.png` | 3×2 cubemap-face layout for a quick visual check; this is an atlas, not a camera render. |
+| `<stem>.dynamic.npz` | Dynamic Gaussians and motion keyframes. Written with `--include-dynamic` (dense PA profiles). |
 | `<stem>.render.png` | First context frame with the cubemap alpha-composited behind the Gaussians and the camera affine correction applied. Written only with `--render-preview`. |
 | `<stem>.render.mp4` | Every original frame from the first context camera, rendered at the profile resolution with its calibrated projection, exposure start/end trajectory, rolling shutter, sky, and camera affine. Written only with `--merge --render-video`. |
 
@@ -372,6 +388,8 @@ Output bundles are written under
 | `--n-gaussians` | `2000000` | Target number of static Gaussians after voxelization. Only consulted when `--merge` is set. The voxel size is searched iteratively via bracketed binary search to land the count in `[0.9 * target, target]`. |
 | `--camera-id` | profile-dependent | Override a context camera. Repeat once per camera in canonical order. `pa-front` requires 1; `pa-multiview` supports 1, 3, or 5; `pq-front` is fixed to `camera_front_wide_120fov`. |
 | `--max-chunks` | `8` | Maximum number of time-chunks processed per clip. One chunk spans up to 13.5 s, so the default covers 108 s. Longer clips are truncated and a `WARNING` logs the required value. |
+| `--include-dynamic` | absent (false) | Retain motion layers for `pa-front` / `pa-multiview`, export `<stem>.dynamic.npz`, and include moving Gaussians in optional renders. |
+| `--motion-source` | `tracks` | Choose `tracks` (NCore cuboid trajectories) or `learned` (model motion prediction, ignoring cuboid tracks). Learned requires `--include-dynamic`. |
 | `--render-preview` | absent (false) | Write `<stem>.render.png` for the first context frame of each exported PLY, using the calibrated NCore F-theta projection, exposure trajectory, and sky. Requires `uv sync --extra render`. |
 | `--render-video` | absent (false) | Write `<stem>.render.mp4` from every original frame of the first context camera, using calibrated NCore F-theta rays, rolling-shutter poses, sky, and camera affine. Requires one resolved sequence, `--merge`, enough `--max-chunks` for full coverage, `uv sync --extra render`, and `ffmpeg` with `libx264`. |
 | `--log-level` | `INFO` | `DEBUG` / `INFO` / `WARNING` / `ERROR` / `CRITICAL`. |

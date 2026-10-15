@@ -72,6 +72,19 @@ def test_compute_frame_gap_single_camera_three_frames():
     assert torch.equal(gap, torch.full_like(gap, 200))
 
 
+def test_compute_frame_gap_preserves_sensor_ids_for_context_subsets():
+    times = torch.tensor([[0, 0], [1_000_000, 1_000_000]])
+    gaps = TimeRemapping._compute_frame_gap(times, torch.tensor([2, 2]))
+    assert torch.equal(gaps, torch.full((2, 2), 1_000_000))
+
+
+def test_compute_frame_gap_groups_noncontiguous_interleaved_unsorted_cameras():
+    times = torch.tensor([[300, 300], [2_000, 2_000], [100, 100], [0, 0], [900, 900], [42, 42]])
+    gaps = TimeRemapping._compute_frame_gap(times, torch.tensor([2, 7, 2, 7, 2, 19]))
+    assert torch.equal(gaps, torch.tensor([[200, 600], [2000, 2000], [200, 200],
+                                         [2000, 2000], [600, 600], [500000, 500000]]))
+
+
 def test_compute_frame_gap_two_cameras_independent():
     """Two cameras, each with two frames. Each camera's frames should pair
     up among themselves — gaps are not crossed between cameras."""
@@ -292,6 +305,7 @@ class _FakePose:
 class _FakeWarpTracks:
     def __init__(self, target_offsets: list[torch.Tensor] | None = None):
         self.tracks_packinfo = torch.tensor([[0, 2]], dtype=torch.int32)
+        self.tracks_timestamps_us = torch.tensor([0, 10], dtype=torch.int64)
         self.target_offsets = target_offsets or []
         self.call_count = 0
 
@@ -347,3 +361,49 @@ def test_warp_points_requires_trailing_singleton_scalar_shapes():
     tracks_idx = torch.full((3, 1), -1, dtype=torch.int32)
     with pytest.raises(AssertionError):
         warp_points_with_cuboid_tracks(points, source, [target], _FakeWarpTracks(), tracks_idx)
+
+
+def test_warp_points_holds_each_actor_at_track_endpoints(monkeypatch):
+    import types
+
+    from instant_nurec.utils import se3 as lt
+
+    import instant_nurec.datasets.tracks as tracks_mod
+    from instant_nurec.utils.motion import warp_points_with_cuboid_tracks
+
+    # Exercise the actual pose interpolation, replacing only its CUDA search.
+    def searchsorted(timestamps, packinfo, queries, indices):
+        return torch.stack([
+            packinfo[i, 0] + torch.searchsorted(
+                timestamps[packinfo[i, 0] : packinfo[i].sum()], query, right=True
+            )
+            for query, i in zip(queries, indices, strict=True)
+        ])
+
+    monkeypatch.setattr(tracks_mod, "_packed_searchsorted_indexed_vals", searchsorted)
+    pose_vectors = torch.zeros(6, 7)
+    pose_vectors[:, 0] = torch.tensor([0.0, 10.0, 20.0, 0.0, 20.0, 40.0])
+    pose_vectors[:, 6] = 1.0
+    tracks = types.SimpleNamespace(
+        tracks_packinfo=torch.tensor([[0, 3], [3, 3]], dtype=torch.int32),
+        tracks_timestamps_us=torch.tensor([100, 200, 300, 1000, 2000, 3000]),
+        tracks_poses=lt.SE3(pose_vectors),
+    )
+    tracks.interpolate_tracks_poses = types.MethodType(tracks_mod.CuboidTracks.interpolate_tracks_poses, tracks)
+    points = torch.tensor([[5.0, 0.0, 0.0], [10.0, 0.0, 0.0], [7.0, 0.0, 0.0]])
+    source = torch.tensor([[150], [1500], [999]])
+    targets = [torch.tensor([[a], [b], [999]]) for a, b in (
+        (50, 500), (100, 1000), (250, 2500), (300, 3000), (400, 4000),
+    )]
+    original_targets = [t.clone() for t in targets]
+
+    dynamic_mask, warped = warp_points_with_cuboid_tracks(
+        points, source, targets, tracks, torch.tensor([[0], [1], [-1]], dtype=torch.int32)
+    )
+
+    assert torch.equal(dynamic_mask, torch.tensor([[True], [True], [False]]))
+    for result, expected in zip(warped, ([0, 0, 7], [0, 0, 7], [15, 30, 7], [20, 40, 7], [20, 40, 7]), strict=True):
+        torch.testing.assert_close(result[:, 0], torch.tensor(expected, dtype=torch.float32))
+        assert torch.equal(result[:, 1:], torch.zeros(3, 2))
+    for target, original in zip(targets, original_targets, strict=True):
+        assert torch.equal(target, original)
