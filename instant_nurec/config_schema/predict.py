@@ -15,6 +15,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from instant_nurec.config_schema.base_schema import BaseConfigSchema, Field
 
 
@@ -58,6 +60,14 @@ class PredictConfig(BaseConfigSchema):
     Configuration for inference functionality typically used only in "predict" mode.
     """
 
+    include_dynamic: bool = Field(
+        default=False,
+        description="Retain dense PA motion layers and export a world-aligned .dynamic.npz sidecar.",
+    )
+    motion_source: Literal["tracks", "learned"] = Field(
+        default="tracks",
+        description="Dynamic motion from NCore cuboid tracks or the model motion head. Learned mode ignores tracks.",
+    )
     primitive_merge: PrimitiveMergeConfig = Field(
         default_factory=PrimitiveMergeConfig, description="Configuration for primitive merging"
     )

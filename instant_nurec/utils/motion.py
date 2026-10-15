@@ -69,8 +69,7 @@ class TimeRemapping:
         next_gap_timestamps_us = torch.zeros_like(frames_timestamps_us)
 
         # Process for each camera
-        num_cameras: int = frames_camera_idxs.unique().shape[0]
-        for camera_idx in range(num_cameras):
+        for camera_idx in frames_camera_idxs.unique():
             camera_mask = torch.where(frames_camera_idxs == camera_idx)[0]
             sorted_time, sorted_idx = torch.sort(frames_timestamps_us[camera_mask])
             sorted_time_gap = sorted_time[1:] - sorted_time[:-1]
@@ -200,6 +199,14 @@ def associate_points_with_cuboid_tracks(
     return tracks_idx
 
 
+def cuboid_track_time_bounds_us(cuboid_tracks: CuboidTracks, tracks_idx: torch.Tensor) -> torch.Tensor:
+    """Return inclusive first/last timestamps for valid track indices."""
+    packinfo = cuboid_tracks.tracks_packinfo[tracks_idx.long()]
+    start = cuboid_tracks.tracks_timestamps_us[packinfo[..., 0].long()]
+    end = cuboid_tracks.tracks_timestamps_us[(packinfo.sum(dim=-1) - 1).long()]
+    return torch.stack([start, end], dim=-1)
+
+
 def warp_points_with_cuboid_tracks(
     points: torch.Tensor,
     source_timestamps_us: torch.Tensor,
@@ -211,6 +218,8 @@ def warp_points_with_cuboid_tracks(
 
     All per-point scalar tensors use a trailing singleton dimension. Track
     indices are expected to come from :func:`associate_points_with_cuboid_tracks`.
+    Targets outside an actor's track range hold its first or last pose; the
+    pose interpolator does not handle out-of-range timestamps itself.
     """
     data_shape = points.shape[:-1]
     expected_scalar_shape = data_shape + (1,)
@@ -238,10 +247,12 @@ def warp_points_with_cuboid_tracks(
         tracks_idx=sel_tracks_idx,
     ).inv()
 
+    time_bounds = cuboid_track_time_bounds_us(cuboid_tracks, sel_tracks_idx)
+
     warped_points_list = []
     for target_timestamps_us in target_timestamps_us_list:
         target_pose = cuboid_tracks.interpolate_tracks_poses(
-            timestamps_us=target_timestamps_us[sel],
+            timestamps_us=target_timestamps_us[sel].clamp(min=time_bounds[:, 0], max=time_bounds[:, 1]),
             tracks_idx=sel_tracks_idx,
         )
         new_points = points.clone()

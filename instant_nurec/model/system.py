@@ -32,6 +32,7 @@ from instant_nurec.datasets.datamodule import InstantNuRecDataModule
 from instant_nurec.model.inference import KelvinInferenceModel
 from instant_nurec.predict.export_ply import export_ply
 from instant_nurec.predict.export_sky import export_sky
+from instant_nurec.predict.export_dynamic import export_dynamic
 from instant_nurec.predict.primitive_merge import KelvinPrimitiveMerge
 from instant_nurec.predict.render_preview import render_reference_preview
 from instant_nurec.predict.render_video import render_reference_video
@@ -146,6 +147,10 @@ class GaussiansInstantNuRecSystem(nn.Module):
             print(f"Wrote 3DGS PLY ({n:,} gaussians): {path.resolve()}", flush=True)
             print(f"Wrote sky sidecar: {sidecar_path.resolve()}", flush=True)
             print(f"Wrote sky preview: {preview_path.resolve()}", flush=True)
+            if getattr(self.predict_config, "include_dynamic", False):
+                dynamic_path = export_dynamic(cast(KelvinInstantNuRecPrimitive, primitive), rig, path)
+                dynamic_count = sum(len(layer) for layer in primitive.dynamic_layers)
+                print(f"Wrote dynamic sidecar ({dynamic_count:,} gaussians): {dynamic_path.resolve()}", flush=True)
 
             render_stats = None
             if getattr(self.predict_config, "render_preview", False):

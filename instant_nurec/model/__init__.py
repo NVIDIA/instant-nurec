@@ -149,7 +149,14 @@ def make(config: "InstantNuRecConfig") -> GaussiansInstantNuRecSystem:
     Resolution: ``INSTANT_NUREC_FULL_PT`` env var takes priority; otherwise
     the artifact is fetched from Hugging Face.
     """
+    predict_config = getattr(config, "predict", None)
+    motion_source = getattr(predict_config, "motion_source", "tracks")
+    include_dynamic = getattr(predict_config, "include_dynamic", False)
+    if motion_source == "learned" and not include_dynamic:
+        raise ValueError("Learned motion requires predict.include_dynamic=True")
     profile = pretrained.get_model_profile(config.release_profile)
+    if include_dynamic and profile.decoder_kind != "pixel-aligned":
+        raise ValueError("Dynamic inference requires a dense PA profile")
     full_pt_path = _resolve_model_pt_path(config.release_profile)
     if not full_pt_path or not os.path.exists(full_pt_path):
         raise ModelNotFoundError(
@@ -185,5 +192,7 @@ def make(config: "InstantNuRecConfig") -> GaussiansInstantNuRecSystem:
         ),
         expected_height=dataset_config.camera_subsampler.frame_height,
         expected_width=dataset_config.camera_subsampler.frame_width,
+        include_dynamic=include_dynamic,
+        motion_source=motion_source,
     )
     return GaussiansInstantNuRecSystem(config, model)

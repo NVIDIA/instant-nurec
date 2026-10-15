@@ -16,6 +16,7 @@
 """Branch-coverage tests for KelvinStaticLayer.voxelize (kl-optimal)."""
 
 import torch
+import pytest
 
 from instant_nurec.config_schema.models import PrimitiveExportPreprocessConfig
 from instant_nurec.primitives.kelvin_primitive import (
@@ -190,3 +191,44 @@ def test_dynamic_interpolation_uses_piecewise_motion_and_edge_falloff() -> None:
     before = layer.interpolate(0)
     torch.testing.assert_close(before.positions, torch.tensor([[-1.0, 0.0, 0.0]]))
     torch.testing.assert_close(before.densities, torch.zeros(1, 1))
+
+
+@pytest.mark.parametrize('times,xs,bounds', [
+    ([100, 250, 300], [0., 15., 20.], [100, 300]),
+    ([250, 250, 300], [15., 15., 20.], [250, 300]),
+    ([100, 250, 250], [0., 15., 15.], [100, 250]),
+    ([250, 250, 250], [15., 15., 15.], [250, 250]),
+])
+def test_track_motion_holds_endpoints_and_handles_collapsed_keyframes(times, xs, bounds):
+    times = [t + 10_000 for t in times]
+    bounds = [t + 10_000 for t in bounds]
+    layer = KelvinDynamicLayer(
+        rotations=_identity_quat_wxyz(1), scales=torch.ones(1, 3), rgb=torch.zeros(1, 3),
+        max_densities=torch.ones(1, 1),
+        keyframe_positions=torch.tensor([[[x, 0., 0.] for x in xs]]),
+        keyframe_timestamps_us=torch.tensor([times]), motion_time_bounds_us=torch.tensor([bounds]),
+    )
+    for t, x in [(bounds[0] - 1, xs[0]), (bounds[0], xs[0]), (bounds[1], xs[-1]), (bounds[1] + 1, xs[-1])]:
+        snapshot = layer.interpolate(t)
+        torch.testing.assert_close(snapshot.positions[:, 0], torch.tensor([x]))
+        assert torch.isfinite(snapshot.densities).all()
+    torch.testing.assert_close(layer.interpolate(bounds[0] - 1000).densities, torch.zeros(1, 1))
+    torch.testing.assert_close(layer.interpolate(bounds[1] + 1000).densities, torch.zeros(1, 1))
+
+
+def test_motion_bounds_survive_mask_transforms_and_mixed_layer_merge():
+    from dataclasses import replace
+
+    tracked = KelvinDynamicLayer(
+        rotations=_identity_quat_wxyz(2), scales=torch.ones(2, 3), rgb=torch.zeros(2, 3),
+        max_densities=torch.ones(2, 1), falloff=False,
+        keyframe_positions=torch.tensor([[[0., 0., 0.], [1., 0., 0.], [2., 0., 0.]]] * 2),
+        keyframe_timestamps_us=torch.tensor([[10, 20, 30]] * 2),
+        motion_time_bounds_us=torch.tensor([[10, 30], [10, 30]]),
+    )
+    tracked = tracked.mask(torch.tensor([False, True])).rigid_transform(torch.eye(4)).ensure_minimum_density(.75)
+    assert tracked.motion_time_bounds_us.tolist() == [[10, 30]]
+    learned = replace(tracked, motion_time_bounds_us=None)
+    merged = KelvinDynamicLayer.concatenate([tracked, learned])
+    torch.testing.assert_close(merged.interpolate(40).positions[:, 0], torch.tensor([2., 3.]))
+    assert KelvinDynamicLayer.concatenate([learned, learned]).motion_time_bounds_us is None

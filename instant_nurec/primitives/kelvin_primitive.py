@@ -263,6 +263,9 @@ class KelvinDynamicLayer(KelvinLayer):
         - max_densities:            Maximum densities of each Gaussian                                    [n_gaussians, 1]
         - keyframe_positions:      Timed positions of the Gaussians (x, y, z)                         [n_gaussians, T, 3]
         - keyframe_timestamps_us:  Timestamps of each keyframe position (must be sorted)               [n_gaussians, T]
+        - motion_time_bounds_us:   Optional inclusive actor-track range for position queries         [n_gaussians, 2]
+    Track endpoints may produce coincident keyframes. Bounds constrain motion,
+    while opacity fade always uses the requested rendering time.
     Note that each layer can either represent a single actor or multiple actors.
     """
 
@@ -270,6 +273,8 @@ class KelvinDynamicLayer(KelvinLayer):
     keyframe_positions: torch.Tensor
     keyframe_timestamps_us: torch.Tensor
     falloff: bool = True
+    # Optional actor track range. None retains learned/legacy extrapolation.
+    motion_time_bounds_us: torch.Tensor | None = None
 
     FALLOFF_GAUSSIAN_EXP = 10.0
 
@@ -284,6 +289,9 @@ class KelvinDynamicLayer(KelvinLayer):
             "Keyframe timestamps must have shape (n_gaussians, T)"
         )
         assert not self.keyframe_timestamps_us.requires_grad, "Keyframe timestamps must not require gradients"
+        if self.motion_time_bounds_us is not None:
+            assert self.motion_time_bounds_us.shape == (len(self), 2), "Motion bounds must have shape (N, 2)"
+            assert self.motion_time_bounds_us.dtype == torch.int64, "Motion bounds must be int64 microseconds"
 
     @property
     def n_keyframes(self) -> int:
@@ -308,6 +316,7 @@ class KelvinDynamicLayer(KelvinLayer):
             max_densities=self.max_densities[mask],
             keyframe_positions=self.keyframe_positions[mask],
             keyframe_timestamps_us=self.keyframe_timestamps_us[mask],
+            motion_time_bounds_us=self.motion_time_bounds_us[mask] if self.motion_time_bounds_us is not None else None,
         )
 
     def ensure_minimum_density(self, minimum_density: float) -> Self:
@@ -322,13 +331,33 @@ class KelvinDynamicLayer(KelvinLayer):
             raise ValueError("Cannot concatenate an empty dynamic-layer sequence")
         if any(layer.falloff != layers[0].falloff for layer in layers[1:]):
             raise ValueError("All concatenated dynamic layers must use the same falloff setting")
+        time_bounds = None
+        if any(layer.motion_time_bounds_us is not None for layer in layers):
+            # A merged clip may contain tracked and learned-fallback chunks.
+            # Unbounded rows preserve the latter's original extrapolation.
+            unrestricted = torch.tensor(
+                [torch.iinfo(torch.int64).min, torch.iinfo(torch.int64).max], device=layers[0].device(), dtype=torch.int64
+            )
+            time_bounds = torch.cat([
+                layer.motion_time_bounds_us if layer.motion_time_bounds_us is not None
+                else unrestricted.expand(len(layer), 2) for layer in layers
+            ])
         return cls(
             max_densities=torch.cat([layer.max_densities for layer in layers], dim=0),
             keyframe_positions=torch.cat([layer.keyframe_positions for layer in layers], dim=0),
             keyframe_timestamps_us=torch.cat([layer.keyframe_timestamps_us for layer in layers], dim=0),
             falloff=layers[0].falloff,
+            motion_time_bounds_us=time_bounds,
             **asdict(KelvinLayer._concatenate_base(layers)),
         )
+
+    def _interpolation_segment(self, query: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        indices = torch.searchsorted(self.keyframe_timestamps_us, query.contiguous()).clamp(1, self.n_keyframes - 1)
+        left = torch.gather(self.keyframe_timestamps_us, 1, indices - 1)
+        right = torch.gather(self.keyframe_timestamps_us, 1, indices)
+        # Track clamping can collapse adjacent keyframes at an endpoint.
+        # Coincident positions are finite even when their time segment is zero.
+        return indices, (query - left) / (right - left).clamp_min(1)
 
     def interpolate(self, timestamp_us: int) -> KelvinStaticLayer:
         """Interpolate piecewise motion and apply edge-segment falloff."""
@@ -341,10 +370,10 @@ class KelvinDynamicLayer(KelvinLayer):
             dtype=self.keyframe_timestamps_us.dtype,
             device=self.device(),
         )
-        indices = torch.searchsorted(self.keyframe_timestamps_us, query).clamp(1, self.n_keyframes - 1)
-        left_timestamps = torch.gather(self.keyframe_timestamps_us, 1, indices - 1)
-        right_timestamps = torch.gather(self.keyframe_timestamps_us, 1, indices)
-        alpha = (query - left_timestamps) / (right_timestamps - left_timestamps)
+        motion_query = query
+        if self.motion_time_bounds_us is not None:
+            motion_query = query.clamp(min=self.motion_time_bounds_us[:, :1], max=self.motion_time_bounds_us[:, 1:])
+        indices, motion_alpha = self._interpolation_segment(motion_query)
 
         left_positions = torch.gather(
             self.keyframe_positions,
@@ -356,12 +385,17 @@ class KelvinDynamicLayer(KelvinLayer):
             1,
             indices.expand(-1, 3)[:, None],
         )[:, 0]
-        positions = torch.lerp(left_positions, right_positions, alpha)
+        positions = torch.lerp(left_positions, right_positions, motion_alpha)
 
         densities = self.max_densities
         if self.falloff:
-            leftmost = torch.where(indices == 1)[0]
-            rightmost = torch.where(indices == self.n_keyframes - 1)[0]
+            # Fade must use both the original time and its segment. Reusing
+            # clamped motion indices can prevent fade-out at a repeated endpoint.
+            fade_indices, alpha = indices, motion_alpha
+            if self.motion_time_bounds_us is not None:
+                fade_indices, alpha = self._interpolation_segment(query)
+            leftmost = torch.where(fade_indices == 1)[0]
+            rightmost = torch.where(fade_indices == self.n_keyframes - 1)[0]
             factor = torch.ones_like(densities)
             factor[leftmost] *= 1.0 - torch.exp(
                 -((1.0 + torch.clamp(alpha[leftmost], min=-1.0)) ** self.FALLOFF_GAUSSIAN_EXP)
